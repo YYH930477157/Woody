@@ -110,6 +110,14 @@ extraResources:
   # aioncore binary (pre-compiled per platform/arch, ships its own bun runtime)
   - from: resources/bundled-aioncore
     to: bundled-aioncore
+  # Vendored MCP server (chrome-devtools-mcp 0.16.0, self-contained rollup build)
+  # so the in-app browser MCP starts with zero network / zero npm cache.
+  # Also carries todo-mcp/ (zero-dependency node script backing the todo tools).
+  - from: resources/bundled-mcp
+    to: bundled-mcp
+  # Email source adapter script for the todo email scan (PowerShell + Outlook COM)
+  - from: resources/todo-email
+    to: todo-email
   - from: resources/hub
     to: hub
 win:

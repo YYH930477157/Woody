@@ -807,6 +807,51 @@ const handleAppReady = async (): Promise<void> => {
     }
   }
 
+  /**
+   * 发布安装包内置的 chrome-devtools-mcp 目录给内置浏览器 MCP（离线优先）。
+   *
+   * 与上面 CDP 端口/口令同一继承链：必须在 startBackendOrExit() 之前写 env，
+   * aioncore 及其子进程（内置浏览器 MCP）才能拿到。内置副本存在时 MCP 直接用
+   * node 运行它，跳过 npx —— 否则离线机器上 npx 首启联网解析失败，浏览器 MCP
+   * 整个起不来。开发模式或旧包没有该目录，env 不设，MCP 回落到 npx 路径。
+   *
+   * Publish the vendored chrome-devtools-mcp dir to the in-app browser MCP
+   * (offline-first). Same inheritance chain as the CDP port/token above: must
+   * be set before startBackendOrExit() for aioncore and its children to see
+   * it. When present the MCP runs the vendored copy with node and skips npx,
+   * which would otherwise fail its first-run network resolve on offline
+   * machines. Dev builds and older packages have no such dir, so env stays
+   * unset and the MCP falls back to npx.
+   */
+  if (app.isPackaged) {
+    const bundledMcpDir = path.join(process.resourcesPath, 'bundled-mcp');
+    if (fs.existsSync(bundledMcpDir)) {
+      process.env.AIONUI_BUILTIN_MCP_DIR = bundledMcpDir;
+      console.log(`[BundledMcp] Vendored chrome-devtools-mcp published at ${bundledMcpDir}`);
+    }
+  }
+
+  /**
+   * 发布待办数据目录给 todo MCP 子进程。todo.json / emails.json 由主进程与
+   * MCP 共享(同一 mkdir 锁 + 原子写协议);目录在发布前确保存在。与上面
+   * AIONUI_BUILTIN_MCP_DIR 同一继承链,必须在 backend 启动前设置。开发与
+   * 打包模式都生效(MCP 两种模式都要跑)。
+   *
+   * Publish the todo data dir to the todo MCP child. todo.json / emails.json
+   * are shared between the main process and the MCP (same mkdir-lock + atomic
+   * write protocol); the dir is ensured before publishing. Same inheritance
+   * chain as AIONUI_BUILTIN_MCP_DIR above — must be set before the backend
+   * starts. Active in dev and packaged builds alike (the MCP runs in both).
+   */
+  try {
+    const todoDir = path.join(app.getPath('userData'), 'todo');
+    fs.mkdirSync(todoDir, { recursive: true });
+    process.env.AIONUI_TODO_DIR = todoDir;
+    console.log(`[Todo] data dir published at ${todoDir}`);
+  } catch (error) {
+    console.error('[Todo] failed to publish data dir:', error);
+  }
+
   const debugBackendStartupFailure = resolveDebugBackendStartupFailure();
   if (debugBackendStartupFailure) {
     applyDebugBackendStartupFailure(debugBackendStartupFailure);

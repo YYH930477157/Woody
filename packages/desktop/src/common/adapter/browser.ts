@@ -126,18 +126,10 @@ if (win.electronAPI) {
 
   // 跳转到登录页（已在登录页则跳过，防止无限刷新循环）
   // Redirect to the login page (skipped when already there to avoid a reload loop).
+  // Patched for offline use: login is removed entirely, so never bounce the
+  // user back to /login — just close the socket and let reconnect logic retry.
   const redirectToLogin = () => {
-    if (window.location.pathname === '/login' || window.location.hash.includes('/login')) {
-      return;
-    }
-
-    // 短暂延迟以便展示 UI 反馈；用 hash 导航留在 SPA 内（HashRouter），
-    // 避免整页刷新落到空 hash 造成白屏
-    // Short delay to surface any UI feedback; hash navigation stays within the SPA
-    // (HashRouter) instead of a full reload that would land on an empty hash.
-    setTimeout(() => {
-      window.location.hash = '/login';
-    }, 1000);
+    return;
   };
 
   // 3.建立 WebSocket 连接（或复用已有的 OPEN/CONNECTING 状态）

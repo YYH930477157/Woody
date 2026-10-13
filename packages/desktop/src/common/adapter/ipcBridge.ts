@@ -17,6 +17,7 @@ import type { AcpSlashCommandApiItem } from '@/common/chat/slash/types';
 import { bridge } from '@/common/platform/bridge';
 import { buildListTasksPath } from './teamTaskPath';
 import type { OpenDialogOptions } from 'electron';
+import type { ITodoItem, TodoScanResult, TodoStatusInfo } from '../types/todo/todoTypes';
 import type {
   ICssTheme,
   IMcpServer,
@@ -1664,6 +1665,36 @@ export const cron = {
   onJobExecuted: wsEmitter<{ job_id: string; status: 'ok' | 'error' | 'skipped' | 'missed'; error?: string }>(
     'cron.job-executed'
   ),
+};
+
+// ---------------------------------------------------------------------------
+// Todo — Electron-only IPC (todo.json lives in the shell's userData; the same
+// file is shared with the todo MCP child, but the renderer always goes through
+// the main-process store here). WebUI browser mode has no provider for these
+// channels; the page shows an unavailable state there.
+// ---------------------------------------------------------------------------
+
+export type ITodoCreateParams = {
+  title: string;
+  notes?: string;
+  due_at?: number | null;
+};
+
+export type ITodoUpdateParams = {
+  id: string;
+  title?: string;
+  notes?: string;
+  due_at?: number | null;
+};
+
+export const todo = {
+  list: bridge.buildProvider<ITodoItem[], void>('todo.list'),
+  create: bridge.buildProvider<ITodoItem, ITodoCreateParams>('todo.create'),
+  update: bridge.buildProvider<ITodoItem | null, ITodoUpdateParams>('todo.update'),
+  setDone: bridge.buildProvider<ITodoItem | null, { id: string; done: boolean }>('todo.set-done'),
+  remove: bridge.buildProvider<boolean, { id: string }>('todo.remove'),
+  scanNow: bridge.buildProvider<TodoScanResult, void>('todo.scan-now'),
+  status: bridge.buildProvider<TodoStatusInfo, void>('todo.status'),
 };
 
 // ---------------------------------------------------------------------------

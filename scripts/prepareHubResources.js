@@ -14,6 +14,19 @@
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
+// Patched: honor HTTPS_PROXY/HTTP_PROXY (e.g. local clash) so downloads work
+// behind restricted networks — plain https.get ignores proxy env vars.
+const PROXY_URL = process.env.HTTPS_PROXY || process.env.HTTPS_PROXY || process.env.https_proxy || process.env.http_proxy;
+let proxyAgent;
+if (PROXY_URL) {
+  try {
+    const { HttpsProxyAgent } = require('https-proxy-agent');
+    proxyAgent = new HttpsProxyAgent(PROXY_URL);
+    console.log(`[hub] Using proxy: ${PROXY_URL}`);
+  } catch {
+    console.warn('[hub] https-proxy-agent unavailable, downloading directly');
+  }
+}
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const HUB_DIR = path.join(PROJECT_ROOT, 'resources', 'hub');
@@ -60,7 +73,8 @@ function downloadUrl(url, destPath) {
       }
 
       const get = url.startsWith('https') ? https.get : require('http').get;
-      get(url, (res) => {
+      const options = proxyAgent ? { agent: proxyAgent } : {};
+      get(url, options, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           follow(res.headers.location, redirectCount + 1);
           return;

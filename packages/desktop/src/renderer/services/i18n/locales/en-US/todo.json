@@ -1,0 +1,35 @@
+{
+  "title": "Todos",
+  "description": "Your todo list with deadlines on a calendar. Actionable emails are turned into todos automatically.",
+  "new": "New Todo",
+  "edit": "Edit",
+  "save": "Save",
+  "cancel": "Cancel",
+  "due": "Deadline",
+  "clearDue": "Clear",
+  "clearDayFilter": "Show all days",
+  "titlePlaceholder": "What needs to be done?",
+  "notesPlaceholder": "Notes (optional)",
+  "titleRequired": "Title is required",
+  "empty": "No todos yet. Create one, or scan your emails.",
+  "desktopOnly": "Todos are available in the desktop app only.",
+  "confirmDelete": "Delete this todo?",
+  "opFailed": "Operation failed",
+  "source": {
+    "email": "Email",
+    "agent": "Agent"
+  },
+  "group": {
+    "overdue": "Overdue",
+    "today": "Today",
+    "upcoming": "Next 7 days",
+    "later": "Later / no deadline",
+    "done": "Completed"
+  },
+  "scan": {
+    "button": "Scan Emails",
+    "started": "Scan started ({{count}} emails) — new todos appear in a moment",
+    "failed": "Email scan failed"
+  },
+  "lastScan": "Last email scan: {{time}} ({{status}})"
+}

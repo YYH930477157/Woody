@@ -49,7 +49,11 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const AUTH_USER_ENDPOINT = '/api/auth/user';
 
-const isDesktopRuntime = typeof window !== 'undefined' && Boolean(window.electronAPI);
+// Patched for offline/intranet use: always behave like the desktop runtime so
+// no mode ever demands a login. The backend is always spawned with --local
+// (see web-host backend-launcher), where business APIs accept cookieless
+// requests — mirroring how the desktop build already runs auth-free.
+const isDesktopRuntime = true;
 
 // Clear expired auth cache including cookies and localStorage
 // 清除过期的认证缓存，包括 Cookie 和 localStorage

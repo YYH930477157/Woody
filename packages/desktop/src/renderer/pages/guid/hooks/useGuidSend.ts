@@ -128,8 +128,25 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
       .map((server) => server.id);
     const assistantOverrideMcpIds =
       selectedMcpServerIds !== undefined ? selectedAllMcpServerIds : defaultSelectedMcpServerIds;
-    const selectedUserMcpServerIdsToSend =
+    let selectedUserMcpServerIdsToSend =
       selectedMcpServerIds !== undefined ? selectedUserMcpServerIds : defaultSelectedUserMcpServerIds;
+    /**
+     * aionui-todo 默认附加:后端把「空数组」视为显式零个 MCP,所以 enabled
+     * 状态不足以让 todo 工具进入会话。用户没动过 MCP 选择器时把 aionui-todo
+     * 的 id 补进发送列表;用户动过(哪怕全不勾)则完全尊重其选择。
+     *
+     * Auto-attach aionui-todo: the backend treats an empty selection array as
+     * an explicit zero, so the enabled flag alone never gets the todo tools
+     * into a conversation. When the user has not touched the MCP picker, append
+     * the aionui-todo id to the outgoing list; once the user has made any
+     * explicit selection (including none), respect it verbatim.
+     */
+    if (selectedMcpServerIds === undefined) {
+      const todoServer = availableMcpServers.find((server) => server.name === 'aionui-todo' && server.enabled);
+      if (todoServer && !selectedUserMcpServerIdsToSend.includes(todoServer.id)) {
+        selectedUserMcpServerIdsToSend = [...selectedUserMcpServerIdsToSend, todoServer.id];
+      }
+    }
     const selectedSessionMcpServersToSend =
       selectedMcpServerIds !== undefined
         ? selectedAllSessionMcpServers

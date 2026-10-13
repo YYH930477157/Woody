@@ -62,7 +62,10 @@ function ensureDirectory(dirPath) {
 }
 
 function removeDirectorySafe(dirPath) {
-  fs.rmSync(dirPath, { recursive: true, force: true });
+  // Windows: aioncore's prepare step leaves freshly-written files (node.exe copy,
+  // SQLite db) that Defender/indexer may hold briefly after process exit — a bare
+  // rmSync fails with EPERM. Node's built-in retry handles the transient lock.
+  fs.rmSync(dirPath, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 });
 }
 
 function copyFileSafe(sourcePath, targetPath) {

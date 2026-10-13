@@ -1,0 +1,35 @@
+{
+  "title": "待办事项",
+  "description": "带日历和截止节点的待办列表;邮件中的可执行任务会被自动识别为待办。",
+  "new": "新建待办",
+  "edit": "编辑",
+  "save": "保存",
+  "cancel": "取消",
+  "due": "截止日期",
+  "clearDue": "清除",
+  "clearDayFilter": "显示全部",
+  "titlePlaceholder": "要做什么?",
+  "notesPlaceholder": "备注(可选)",
+  "titleRequired": "标题不能为空",
+  "empty": "还没有待办。手动新建一个,或扫描邮件自动识别。",
+  "desktopOnly": "待办功能仅在桌面应用中可用。",
+  "confirmDelete": "删除这条待办?",
+  "opFailed": "操作失败",
+  "source": {
+    "email": "邮件",
+    "agent": "Agent"
+  },
+  "group": {
+    "overdue": "已逾期",
+    "today": "今天",
+    "upcoming": "未来 7 天",
+    "later": "更晚 / 无截止",
+    "done": "已完成"
+  },
+  "scan": {
+    "button": "扫描邮件",
+    "started": "扫描已启动(共 {{count}} 封邮件),新待办稍后出现",
+    "failed": "邮件扫描失败"
+  },
+  "lastScan": "上次邮件扫描:{{time}}({{status}})"
+}

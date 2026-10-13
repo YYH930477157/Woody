@@ -30,7 +30,31 @@
  */
 
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { buildMcpSpawnCommand, resolveBridgeToken, resolveBrowserUrl } from './browserServerPort';
+
+/**
+ * 安装包内置的 chrome-devtools-mcp 副本（离线优先）。
+ *
+ * 主进程在打包模式下把 resources/bundled-mcp 写进 AIONUI_BUILTIN_MCP_DIR，
+ * 经 aioncore 继承到这里。存在就直接用 node 跑内置副本，跳过 npx ——
+ * npx 首启要联网解析，离线机器上内置浏览器 MCP 会整个起不来。
+ * 找不到（开发模式 / 旧安装包）则回落到原来的 npx 路径。
+ *
+ * Vendored chrome-devtools-mcp copy (offline-first). The main process publishes
+ * resources/bundled-mcp via AIONUI_BUILTIN_MCP_DIR in packaged builds. When it
+ * resolves, run the vendored entry with node directly and skip npx entirely —
+ * npx needs the network on first resolve, which would leave the in-app browser
+ * MCP dead on offline machines. Falls back to the original npx path otherwise.
+ */
+const resolveBundledMcpEntry = (env: NodeJS.ProcessEnv): string | undefined => {
+  const dir = env.AIONUI_BUILTIN_MCP_DIR?.trim();
+  if (!dir) return undefined;
+  const entry = join(dir, 'chrome-devtools-mcp', 'build', 'src', 'index.js');
+  if (!existsSync(entry)) return undefined;
+  return entry;
+};
 
 /**
  * stdio MCP 服务器的 stdout 是协议通道，任何附加输出都会破坏握手。
@@ -147,10 +171,16 @@ const CHROME_DEVTOOLS_MCP_VERSION = '0.16.0';
  * cmd.exe /c is the approach Node's own docs recommend: each argument keeps its individual
  * escaping and DEP0190 is not triggered.
  */
+const bundledEntry = resolveBundledMcpEntry(process.env);
+if (bundledEntry) {
+  logDiagnostic(`Using vendored chrome-devtools-mcp at ${bundledEntry} (offline mode, npx skipped)`);
+}
+
 const spawnPlan = buildMcpSpawnCommand({
   platform: process.platform,
   version: CHROME_DEVTOOLS_MCP_VERSION,
   browserUrl,
+  bundledEntry,
 });
 
 const child = spawn(spawnPlan.command, spawnPlan.args, {
@@ -158,7 +188,13 @@ const child = spawn(spawnPlan.command, spawnPlan.args, {
   // Pass stdio straight through: this process is a forwarder, and the MCP
   // protocol stream must not be buffered or rewritten in between.
   stdio: 'inherit',
-  env: process.env,
+  env: {
+    ...process.env,
+    // 离线保险：官方文档明确的遥测关闭开关，无网时避免 Google 上报吃满 TCP 超时。
+    // Offline guard: the documented telemetry opt-out; prevents the Google
+    // report from eating a full TCP connect timeout on networkless machines.
+    CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: '1',
+  },
 });
 
 child.on('error', (error) => {

@@ -101,7 +101,34 @@ export const buildMcpSpawnCommand = (deps: {
   platform: string;
   version: string;
   browserUrl: string;
+  /**
+   * 安装包内自带的 chrome-devtools-mcp 入口脚本（resources/bundled-mcp）。
+   * 提供且存在时用它直接跑：跳过 npx，离线机器零网络、零 npm 缓存也能启动。
+   *
+   * Vendored chrome-devtools-mcp entry shipped inside the installer
+   * (resources/bundled-mcp). When present, spawn it directly with this
+   * process's own node executable — no npx, so fully offline machines with
+   * no npm cache can still start the in-app browser MCP.
+   */
+  bundledEntry?: string;
 }): { command: string; args: string[] } => {
+  if (deps.bundledEntry) {
+    // 本进程由 managed node 拉起，process.execPath 即该 node —— 直接执行 ESM 入口，
+    // 无 .cmd 批处理问题，也不依赖 PATH 里有没有 npx。
+    //
+    // --no-usage-statistics 是离线关键：默认开启的 Google 遥测在无网/墙内环境下
+    // 会吃满 TCP 连接超时（约 30 秒），恰好顶爆应用的 MCP 连接超时阈值，表现为
+    // 「测试连接超时」。命令行参数 + 环境变量双保险（后者见 browserServer.ts spawn env）。
+    //
+    // --no-usage-statistics is offline-critical: the default-on Google telemetry
+    // eats a full TCP connect timeout (~30s) with no route to Google, which is
+    // exactly the app's MCP connection timeout — surfacing as "test connection
+    // timed out". Belt and suspenders with the env var set in browserServer.ts.
+    return {
+      command: process.execPath,
+      args: [deps.bundledEntry, '--browser-url', deps.browserUrl, '--no-usage-statistics'],
+    };
+  }
   const mcpArgs = ['-y', `chrome-devtools-mcp@${deps.version}`, '--browser-url', deps.browserUrl];
   return deps.platform === 'win32'
     ? { command: 'cmd.exe', args: ['/c', 'npx', ...mcpArgs] }
