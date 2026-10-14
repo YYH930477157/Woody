@@ -27,7 +27,7 @@ const PROTOCOL_VERSION = '2024-11-05';
 const LOCK_STALE_MS = 10000;
 const LOCK_ACQUIRE_TIMEOUT_MS = 3000;
 const LOCK_RETRY_DELAY_MS = 50;
-const SNAPSHOT_MAX_EMAILS = 30;
+const SNAPSHOT_MAX_EMAILS = 15;
 
 const log = (message) => {
   process.stderr.write(`[aionui-todo] ${message}\n`);

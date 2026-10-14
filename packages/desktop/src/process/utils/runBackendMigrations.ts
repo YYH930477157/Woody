@@ -622,9 +622,16 @@ Steps:
 2. If it reports an error, or "No email snapshot available", reply with a one-line status and stop. Do not create anything.
 3. For each email decide: does it ask the user to DO something — a task, a review, an approval, a submission, a meeting with required prep, a delivery with a deadline? Pure notifications, newsletters, automated reports and spam are skipped.
 4. For each actionable email call \`todo_create\` with:
-   - title: one concise imperative line. Match the email's language (中文邮件用中文,英文邮件用英文), include the key object, e.g. "审批:XX系统上线申请".
+   - title: 具体动作+对象, 末尾用括号补充要求人和明确期限, 全长 ≤ 45 字, e.g. "回复 Virgo 06 样机 6 项客户反馈(钟琦晖, 今天内)". Match the email's language.
    - due_at: ONLY if the email states an explicit deadline (pass epoch ms or ISO string). Never guess or infer dates.
-   - notes: 1-3 lines of key context (who asked, what exactly).
+   - notes: MUST follow this exact structure (keep each 标签, values in the email's language):
+     要求人: <sender name, from the email>
+     截止: <deadline quoted from the email, verbatim; write 未明确 if absent>
+     要做什么: <one line: concrete action + deliverable/acceptance criterion>
+     关键点:
+     - <point extracted from the email: requirement, constraint, acceptance criteria, or decision to make>
+     (2–6 points, most important first; preserve numbers/codes/model names exactly)
+     原文关键句: "<one verbatim sentence from the email that best captures the ask>"
    - email_ref: pass the email's message_id / subject / from / received_at fields VERBATIM — this is the dedup key.
 5. If todo_create returns duplicate, that email is already tracked — skip it.
 6. Finish with a one-line summary: scanned N emails, created M todos, skipped K non-actionable.
@@ -633,6 +640,7 @@ Rules:
 - At most one todo per email, unless it genuinely contains multiple distinct tasks with different deadlines.
 - Never delete todos or mark them done.
 - A missing due_at is always better than a wrong one.
+- The todo must be actionable from the notes alone: a reader who never saw the email should know exactly what to do, by when, for whom.
 `;
 
 interface CronJobApiShape {

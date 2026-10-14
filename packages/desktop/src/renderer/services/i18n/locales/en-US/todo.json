@@ -29,7 +29,16 @@
   "scan": {
     "button": "Scan Emails",
     "started": "Scan started ({{count}} emails) — new todos appear in a moment",
+    "noJob": "Fetched {{count}} emails, but the scan job is not created yet: configure a model in Settings first, then restart the app",
     "failed": "Email scan failed"
   },
-  "lastScan": "Last email scan: {{time}} ({{status}})"
+  "lastScan": "Last email scan: {{time}} ({{status}})",
+  "detail": {
+    "title": "View Todo",
+    "pending": "Pending",
+    "due": "Due",
+    "created": "Created",
+    "emailSource": "Source email",
+    "close": "Close"
+  }
 }

@@ -29,7 +29,16 @@
   "scan": {
     "button": "扫描邮件",
     "started": "扫描已启动(共 {{count}} 封邮件),新待办稍后出现",
+    "noJob": "已抓到 {{count}} 封邮件,但邮件分析任务尚未创建:请先在 设置→模型 配置端点并重启应用",
     "failed": "邮件扫描失败"
   },
-  "lastScan": "上次邮件扫描:{{time}}({{status}})"
+  "lastScan": "上次邮件扫描:{{time}}({{status}})",
+  "detail": {
+    "title": "查看待办",
+    "pending": "进行中",
+    "due": "截止",
+    "created": "创建于",
+    "emailSource": "来源邮件",
+    "close": "关闭"
+  }
 }

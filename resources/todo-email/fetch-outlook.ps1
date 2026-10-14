@@ -43,8 +43,14 @@ try {
             $received = $item.ReceivedTime
             if ($received -lt $sinceLocal) { break } # sorted desc -> nothing older remains
 
+            # 邮件头 Message-ID:proptag 写法在中文版 Outlook 上可靠;schemas URN
+            # 在部分版本会报"属性未知";EntryID 仅作最后兜底(邮件移动文件夹后会变)。
+            # Internet Message-ID: the MAPI proptag form works on zh-CN Outlook
+            # builds where the schemas URN is rejected; EntryID is the last
+            # resort (it changes when the item moves between folders).
             $messageId = ''
-            try { $messageId = [string]$item.PropertyAccessor.GetProperty("urn:schemas:mailheader:message-id") } catch {}
+            try { $messageId = [string]$item.PropertyAccessor.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x1035001F") } catch {}
+            if (-not $messageId) { try { $messageId = [string]$item.PropertyAccessor.GetProperty("urn:schemas:mailheader:message-id") } catch {} }
             if (-not $messageId) { $messageId = "outlook-entryid:" + [string]$item.EntryID }
 
             $subject = ''

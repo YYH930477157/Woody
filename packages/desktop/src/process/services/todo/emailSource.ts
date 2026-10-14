@@ -32,7 +32,7 @@ export interface EmailFetchResult {
   emails: number;
 }
 
-const POWERSHELL_TIMEOUT_MS = 60_000;
+const POWERSHELL_TIMEOUT_MS = 180_000;
 
 export const resolveEmailScriptPath = (): string => {
   const baseDir = app.isPackaged ? process.resourcesPath : path.join(app.getAppPath(), 'resources');

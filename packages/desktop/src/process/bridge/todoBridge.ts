@@ -55,7 +55,9 @@ export function initTodoBridge(): void {
       const jobs = (await httpRequest<ICronJob[]>('GET', '/api/cron/jobs')) || [];
       const scanJob = jobs.find((job) => job.name === TODO_SCAN_JOB_NAME);
       if (!scanJob) {
-        return { ok: false, message: 'scan cron job not found (created on next app start)', emails_fetched: fetch.emails };
+        // 结构化代码而非拼接文案:渲染层按 i18n 本地化展示。
+        // A structured code, not prose: the renderer localizes it via i18n.
+        return { ok: false, message: 'no_scan_job', emails_fetched: fetch.emails };
       }
       await httpRequest('POST', `/api/cron/jobs/${scanJob.id}/run`);
       return { ok: true, message: 'scan started', emails_fetched: fetch.emails };

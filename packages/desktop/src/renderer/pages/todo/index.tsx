@@ -48,6 +48,7 @@ const TodoPage: React.FC = () => {
   const [monthCursor, setMonthCursor] = useState(() => dayjs().startOf('month'));
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [editor, setEditor] = useState<TodoEditorState>({ open: false, item: null });
+  const [detailItem, setDetailItem] = useState<ITodoItem | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -105,6 +106,8 @@ const TodoPage: React.FC = () => {
       const result = await ipcBridge.todo.scanNow.invoke();
       if (result?.ok) {
         Message.success(t('todo.scan.started', { count: result.emails_fetched ?? 0 }));
+      } else if (result?.message === 'no_scan_job') {
+        Message.warning(t('todo.scan.noJob', { count: result.emails_fetched ?? 0 }));
       } else {
         Message.warning(result?.message || t('todo.scan.failed'));
       }
@@ -205,11 +208,18 @@ const TodoPage: React.FC = () => {
   const sourceTag = (item: ITodoItem) => {
     if (item.source === 'email') {
       return (
-        <Tooltip content={item.email_ref?.subject || ''}>
+        <>
           <Tag size='small' className='shrink-0 cursor-default'>
             {t('todo.source.email')}
           </Tag>
-        </Tooltip>
+          {item.email_ref?.from && (
+            <Tooltip content={item.email_ref.subject || ''}>
+              <Tag size='small' color='arcoblue' className='shrink-0 cursor-default max-w-120px overflow-hidden text-ellipsis'>
+                {item.email_ref.from}
+              </Tag>
+            </Tooltip>
+          )}
+        </>
       );
     }
     if (item.source === 'agent') {
@@ -352,11 +362,15 @@ const TodoPage: React.FC = () => {
                             onChange={(checked) => void handleToggle(item, checked)}
                             className='mt-2px shrink-0'
                           />
-                          <div className='flex-1 min-w-0 cursor-pointer' onClick={() => setEditor({ open: true, item })}>
+                          <div className='flex-1 min-w-0 cursor-pointer' onClick={() => setDetailItem(item)}>
                             <div className={classNames('text-14px break-all', item.status === 'done' && 'line-through text-t-tertiary')}>
                               {item.title}
                             </div>
-                            {item.notes && <div className='text-12px text-t-tertiary mt-2px line-clamp-2 break-all'>{item.notes}</div>}
+                            {item.notes && (
+                              <div className='text-12px text-t-secondary mt-2px line-clamp-3 break-all whitespace-pre-line'>
+                                {item.notes}
+                              </div>
+                            )}
                           </div>
                           <div className='flex items-center gap-6px shrink-0 mt-2px'>
                             {sourceTag(item)}
@@ -397,7 +411,79 @@ const TodoPage: React.FC = () => {
         onCancel={() => setEditor({ open: false, item: null })}
         onSave={(title, notes, dueDate) => void handleEditorSave(title, notes, dueDate)}
       />
+
+      <TodoDetail
+        item={detailItem}
+        onClose={() => setDetailItem(null)}
+        onEdit={(item) => {
+          setDetailItem(null);
+          setEditor({ open: true, item });
+        }}
+      />
     </div>
+  );
+};
+
+const TodoDetail: React.FC<{
+  item: ITodoItem | null;
+  onClose: () => void;
+  onEdit: (item: ITodoItem) => void;
+}> = ({ item, onClose, onEdit }) => {
+  const { t } = useTranslation();
+  if (!item) return <Modal title={t('todo.detail.title')} visible={false} onCancel={onClose} footer={null} />;
+
+  const metaRow = (
+    <div className='flex flex-wrap items-center gap-6px'>
+      <Tag size='small' color={item.status === 'done' ? 'green' : 'arcoblue'}>
+        {item.status === 'done' ? t('todo.group.done') : t('todo.detail.pending')}
+      </Tag>
+      {item.due_at !== null && item.due_at !== undefined && (
+        <Tag size='small' color={item.status === 'pending' && item.due_at < dayjs().startOf('day').valueOf() ? 'red' : 'arcoblue'}>
+          {t('todo.detail.due')}: {dayjs(item.due_at).format('YYYY-MM-DD')}
+        </Tag>
+      )}
+      {item.source === 'email' && (
+        <Tag size='small'>
+          {t('todo.source.email')}
+          {item.email_ref?.from ? ` · ${item.email_ref.from}` : ''}
+        </Tag>
+      )}
+      {item.source === 'agent' && <Tag size='small'>{t('todo.source.agent')}</Tag>}
+      <span className='text-12px text-t-tertiary'>
+        {t('todo.detail.created')}: {dayjs(item.created_at).format('YYYY-MM-DD HH:mm')}
+      </span>
+    </div>
+  );
+
+  return (
+    <Modal title={t('todo.detail.title')} visible onCancel={onClose} footer={null} unmountOnExit>
+      <div className='flex flex-col gap-12px py-4px'>
+        <div className={classNames('text-16px font-[500] break-all', item.status === 'done' && 'line-through text-t-tertiary')}>
+          {item.title}
+        </div>
+        {metaRow}
+        {item.notes && (
+          <div className='text-13px text-t-primary break-all whitespace-pre-line bg-fill-2 rd-6px p-10px'>{item.notes}</div>
+        )}
+        {item.email_ref && (
+          <div className='text-12px text-t-secondary bg-fill-1 rd-6px p-10px flex flex-col gap-2px'>
+            <span className='text-t-tertiary'>{t('todo.detail.emailSource')}</span>
+            <span className='break-all'>{item.email_ref.subject}</span>
+            <span>
+              {item.email_ref.from} · {dayjs(item.email_ref.received_at).format('YYYY-MM-DD HH:mm')}
+            </span>
+          </div>
+        )}
+        <div className='flex justify-end gap-8px'>
+          <Button size='small' onClick={onClose}>
+            {t('todo.detail.close')}
+          </Button>
+          <Button size='small' type='primary' onClick={() => onEdit(item)}>
+            {t('todo.edit')}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 };
 
