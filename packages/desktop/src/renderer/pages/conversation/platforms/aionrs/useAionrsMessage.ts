@@ -18,9 +18,16 @@ import { beginConversationTurn, endConversationTurn } from '@/renderer/pages/con
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { processLocalCronResponse } from './localCronCommands';
 
-type TokenUsage = {
-  input_tokens?: number;
-  output_tokens?: number;
+/** Per-LLM-call usage frame from the aionrs engine (wire type `usage`). */
+export type AionrsUsageStats = {
+  input_tokens: number;
+  output_tokens: number;
+  cache_creation_tokens: number;
+  cache_read_tokens: number;
+  context_usage: number;
+  context_provider_reported: boolean;
+  context_window: number;
+  duration_ms: number;
 };
 
 export const useAionrsMessage = (
@@ -43,6 +50,16 @@ export const useAionrsMessage = (
     subject: '',
   });
   const [tokenUsage, setTokenUsage] = useState<TokenUsageData | null>(null);
+  // Per-LLM-call usage from the engine's `usage` frames; the latest frame
+  // describes the most recent provider call (final call of a finished turn).
+  const [usageStats, setUsageStats] = useState<AionrsUsageStats | null>(null);
+  const usageStatsRef = useRef<AionrsUsageStats | null>(null);
+  // First visible model output of the current turn (for tok/s + TTFT).
+  const [firstTokenAtMs, setFirstTokenAtMs] = useState<number | null>(null);
+  const firstTokenAtRef = useRef<number | null>(null);
+  // Frozen whole-turn duration once finish arrives (null while running).
+  const [finalElapsedMs, setFinalElapsedMs] = useState<number | null>(null);
+  const turnStartedAtMsRef = useRef<number | null>(null);
   // Turn start origin for the elapsed indicator; backed by the module-level
   // conversation turn clock so it survives unmount on conversation switches.
   const [turnStartedAtMs, setTurnStartedAtMs] = useState<number | null>(null);
@@ -143,6 +160,10 @@ export const useAionrsMessage = (
     setTurnStartedAtMs(null);
   }, [running, conversation_id]);
 
+  useEffect(() => {
+    turnStartedAtMsRef.current = turnStartedAtMs;
+  }, [turnStartedAtMs]);
+
   // Set current active message ID
   const setActiveMsgId = useCallback((msgId: string | null) => {
     activeMsgIdRef.current = msgId;
@@ -208,6 +229,15 @@ export const useAionrsMessage = (
         return;
       }
 
+      // First visible model output of the turn — anchors tok/s and TTFT.
+      if (
+        (message.type === 'content' || message.type === 'text' || message.type === 'thought') &&
+        !firstTokenAtRef.current
+      ) {
+        firstTokenAtRef.current = Date.now();
+        setFirstTokenAtMs(firstTokenAtRef.current);
+      }
+
       if (isErrorTipMessage(message)) {
         setStreamRunning(false);
         streamRunningRef.current = false;
@@ -262,22 +292,67 @@ export const useAionrsMessage = (
         case 'start':
           setStreamRunning(true);
           streamRunningRef.current = true;
+          // New turn: clear the previous turn's timing anchors.
+          firstTokenAtRef.current = null;
+          setFirstTokenAtMs(null);
+          setFinalElapsedMs(null);
           // Don't reset waitingResponse here - let tool completion flow handle it
           break;
+        case 'usage': {
+          // Per-LLM-call usage frame from the engine. Conversation-scoped side
+          // signal: consumed here, never forwarded to the message list.
+          const data = message.data as Partial<AionrsUsageStats> | undefined;
+          if (data && typeof data === 'object') {
+            const stats: AionrsUsageStats = {
+              input_tokens: data.input_tokens || 0,
+              output_tokens: data.output_tokens || 0,
+              cache_creation_tokens: data.cache_creation_tokens || 0,
+              cache_read_tokens: data.cache_read_tokens || 0,
+              context_usage: data.context_usage || 0,
+              context_provider_reported: Boolean(data.context_provider_reported),
+              context_window: data.context_window || 0,
+              duration_ms: data.duration_ms || 0,
+            };
+            usageStatsRef.current = stats;
+            setUsageStats(stats);
+            setTokenUsage({
+              total_tokens: stats.context_usage,
+              breakdown: {
+                input_tokens: stats.input_tokens,
+                output_tokens: stats.output_tokens,
+                ...(stats.cache_read_tokens ? { cached_read_tokens: stats.cache_read_tokens } : {}),
+                ...(stats.cache_creation_tokens ? { cached_write_tokens: stats.cache_creation_tokens } : {}),
+              },
+            });
+          }
+          break;
+        }
         case 'finish':
           {
             logStreamTerminalObserved(conversation_id, message.turn_id, 'aionrs', message.type);
-            // aionrs stream_end carries usage in data field
-            const usageData = message.data as TokenUsage | undefined;
-            if (usageData && typeof usageData === 'object' && 'input_tokens' in usageData) {
-              const newTokenUsage: TokenUsageData = {
-                total_tokens: (usageData.input_tokens || 0) + (usageData.output_tokens || 0),
-              };
-              setTokenUsage(newTokenUsage);
+            // Freeze the whole-turn duration for the status bar.
+            if (turnStartedAtMsRef.current) {
+              setFinalElapsedMs(Date.now() - turnStartedAtMsRef.current);
+            }
+            // Persist the engine's last per-call usage report so reopening the
+            // conversation restores the context ring.
+            const stats = usageStatsRef.current;
+            if (stats && stats.context_usage > 0) {
               void ipcBridge.conversation.update.invoke({
                 id: conversation_id,
                 updates: {
-                  extra: { last_token_usage: newTokenUsage } as TChatConversation['extra'],
+                  extra: {
+                    last_token_usage: {
+                      total_tokens: stats.context_usage,
+                      breakdown: {
+                        input_tokens: stats.input_tokens,
+                        output_tokens: stats.output_tokens,
+                        ...(stats.cache_read_tokens ? { cached_read_tokens: stats.cache_read_tokens } : {}),
+                        ...(stats.cache_creation_tokens ? { cached_write_tokens: stats.cache_creation_tokens } : {}),
+                      },
+                    },
+                    ...(stats.context_window ? { last_context_limit: stats.context_window } : {}),
+                  } as TChatConversation['extra'],
                 },
                 merge_extra: true,
               });
@@ -392,6 +467,11 @@ export const useAionrsMessage = (
 
     setThought({ subject: '', description: '' });
     setTokenUsage(null);
+    setUsageStats(null);
+    usageStatsRef.current = null;
+    firstTokenAtRef.current = null;
+    setFirstTokenAtMs(null);
+    setFinalElapsedMs(null);
     hasContentInTurnRef.current = false;
     setHasHydratedRunningState(false);
 
@@ -432,9 +512,23 @@ export const useAionrsMessage = (
       waitingResponseRef.current = isRunning;
       // Load persisted token usage stats
       if (res.type === 'aionrs' && res.extra?.last_token_usage) {
-        const { last_token_usage } = res.extra;
+        const { last_token_usage, last_context_limit } = res.extra;
         if (last_token_usage.total_tokens > 0) {
           setTokenUsage(last_token_usage);
+          // Rebuild a partial usage snapshot: occupancy numbers are real,
+          // per-call speed/cache fields are zeroed (unknown after reload).
+          const restored: AionrsUsageStats = {
+            input_tokens: last_token_usage.breakdown?.input_tokens ?? 0,
+            output_tokens: last_token_usage.breakdown?.output_tokens ?? 0,
+            cache_creation_tokens: last_token_usage.breakdown?.cached_write_tokens ?? 0,
+            cache_read_tokens: last_token_usage.breakdown?.cached_read_tokens ?? 0,
+            context_usage: last_token_usage.total_tokens,
+            context_provider_reported: true,
+            context_window: last_context_limit ?? 0,
+            duration_ms: 0,
+          };
+          usageStatsRef.current = restored;
+          setUsageStats(restored);
         }
       }
       setHasHydratedRunningState(true);
@@ -458,6 +552,15 @@ export const useAionrsMessage = (
     activeMsgIdRef.current = null;
   }, []);
 
+  /** Total streamed text length across the active turn — live tok/s estimate. */
+  const getLiveTextLength = useCallback(() => {
+    let total = 0;
+    for (const v of messageBufferRef.current.values()) {
+      total += v.length;
+    }
+    return total;
+  }, []);
+
   return {
     thought,
     setThought,
@@ -465,6 +568,10 @@ export const useAionrsMessage = (
     hasHydratedRunningState,
     turnStartedAtMs,
     tokenUsage,
+    usageStats,
+    firstTokenAtMs,
+    finalElapsedMs,
+    getLiveTextLength,
     setActiveMsgId,
     setWaitingResponse,
     resetState,

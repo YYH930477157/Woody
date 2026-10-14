@@ -481,6 +481,8 @@ export type TChatConversation =
         is_health_check?: boolean;
         /** Last token usage stats */
         last_token_usage?: TokenUsageData;
+        /** Context window capacity reported by the aionrs engine */
+        last_context_limit?: number;
         /** Cron job ID that spawned this conversation */
         cron_job_id?: string;
       }

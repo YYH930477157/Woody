@@ -782,5 +782,14 @@
     "progress": "{{completed}}/{{total}}",
     "expand": "展开计划",
     "collapse": "收起计划"
+  },
+  "statusBar": {
+    "speed": "生成速度",
+    "speedExact": "最近一次调用:{{output}} tokens / {{seconds}}",
+    "speedEstimate": "引擎上报前的粗略估算(按流式文本折算)",
+    "cacheHit": "缓存命中",
+    "cacheUnknown": "该模型未上报提示缓存用量",
+    "elapsed": "响应耗时",
+    "elapsedTip": "整回合耗时(含工具执行)"
   }
 }

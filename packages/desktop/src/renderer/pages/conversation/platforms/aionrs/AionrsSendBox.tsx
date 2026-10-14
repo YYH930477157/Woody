@@ -13,6 +13,7 @@ import MobileActionSheet, {
   type MobileActionSheetOption,
   useAttachEntry,
 } from '@/renderer/components/chat/MobileActionSheet';
+import ChatStatusBar from '@/renderer/components/chat/ChatStatusBar';
 import SendBox from '@/renderer/components/chat/SendBox';
 import ThoughtDisplay from '@/renderer/components/chat/ThoughtDisplay';
 import FileAttachButton from '@/renderer/components/media/FileAttachButton';
@@ -144,17 +145,25 @@ const AionrsSendBox: React.FC<{
   const teamPermission = useTeamPermission();
   const propagateMode = teamPermission?.propagateMode;
 
-  const { thought, running, turnStartedAtMs, setActiveMsgId, setWaitingResponse, resetState } = useAionrsMessage(
-    conversation_id,
-    {
-      onConfigChanged: (capabilities) => {
-        const modes = (capabilities as { modes?: string[] })?.modes;
-        if (modes && modes.length > 0) {
-          setDynamicModes(modeOptionsFromCapabilities(modes));
-        }
-      },
-    }
-  );
+  const {
+    thought,
+    running,
+    turnStartedAtMs,
+    firstTokenAtMs,
+    finalElapsedMs,
+    usageStats,
+    getLiveTextLength,
+    setActiveMsgId,
+    setWaitingResponse,
+    resetState,
+  } = useAionrsMessage(conversation_id, {
+    onConfigChanged: (capabilities) => {
+      const modes = (capabilities as { modes?: string[] })?.modes;
+      if (modes && modes.length > 0) {
+        setDynamicModes(modeOptionsFromCapabilities(modes));
+      }
+    },
+  });
   const runtimeView = useConversationRuntimeView(conversation_id);
   const { markSendStarted, markSendAccepted, markSendFailed } = runtimeView;
 
@@ -752,6 +761,15 @@ const AionrsSendBox: React.FC<{
         onRetryStart={teamRuntime?.onRetryStart ? () => void teamRuntime.onRetryStart?.() : undefined}
       />
       <CrossSessionDisabledBanner />
+      <ChatStatusBar
+        running={teamRuntime?.loading ?? running}
+        startedAtMs={turnStartedAtMs}
+        firstTokenAtMs={firstTokenAtMs}
+        finalElapsedMs={finalElapsedMs}
+        usageStats={usageStats}
+        getLiveTextLength={getLiveTextLength}
+        className='pb-2px px-2px'
+      />
       <SendBox
         data-testid='aionrs-sendbox'
         onMobilePlusClick={isMobile ? () => setIsMobileSheetOpen(true) : undefined}
