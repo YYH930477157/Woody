@@ -599,6 +599,8 @@ const TodoPage: React.FC = () => {
                   const dayMs = cell.startOf('day').valueOf();
                   const inMonth = cell.month() === monthCursor.month();
                   const isToday = dayMs === dayjs().startOf('day').valueOf();
+                  // 本月已过去的日子(今天之前)整体降一点存在感;今天高亮成胶囊。
+                  const isPast = dayMs < dayjs().startOf('day').valueOf();
                   const isSelected = selectedDay === dayMs;
                   const groups = dayGroups.get(dayMs);
                   return (
@@ -606,16 +608,23 @@ const TodoPage: React.FC = () => {
                       type='button'
                       key={dayMs}
                       className={classNames(
-                        'relative h-32px rd-6px text-11px flex flex-col items-center justify-center border-none transition-colors cursor-pointer',
-                        inMonth ? 'text-t-primary' : 'text-t-tertiary op-40',
-                        isSelected ? 'bg-primary-6 text-white font-bold' : 'hover:bg-fill-2'
+                        'relative h-32px rd-6px text-11px flex flex-col items-center justify-center border border-solid transition-colors cursor-pointer',
+                        isSelected
+                          ? 'bg-primary-6 border-primary-6 text-white font-bold'
+                          : isToday
+                            ? 'bg-primary-1 border-primary-6 text-primary-6 font-bold'
+                            : isPast && inMonth
+                              ? 'border-transparent text-t-tertiary op-70 hover:bg-fill-2'
+                              : inMonth
+                                ? 'border-transparent text-t-primary hover:bg-fill-2'
+                                : 'border-transparent text-t-tertiary op-40 hover:bg-fill-2'
                       )}
                       onClick={() => {
                         setSelectedDay((prev) => (prev === dayMs ? null : dayMs));
                         if (selectedDay !== dayMs) setActiveTab('all');
                       }}
                     >
-                      <span className={classNames(isToday && !isSelected && 'text-primary-6 font-bold')}>{cell.date()}</span>
+                      <span>{cell.date()}</span>
                       <span className='flex items-center gap-2px mt-1px h-4px'>
                         {groups?.has('overdue') && <i className={classNames('w-4px h-4px rd-full', isSelected ? 'bg-white' : 'bg-danger-6')} />}
                         {groups?.has('today') && <i className={classNames('w-4px h-4px rd-full', isSelected ? 'bg-white' : 'bg-warning-5')} />}
