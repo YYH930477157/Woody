@@ -788,5 +788,14 @@
     "progress": "{{completed}}/{{total}}",
     "expand": "Expandir plano",
     "collapse": "Recolher plano"
+  },
+  "statusBar": {
+    "speed": "Speed",
+    "speedExact": "Last call: {{output}} tokens in {{seconds}}",
+    "speedEstimate": "Rough estimate from streamed text until the engine reports usage",
+    "cacheHit": "Cache",
+    "cacheUnknown": "Provider reports no prompt-cache usage",
+    "elapsed": "Time",
+    "elapsedTip": "Whole turn, tools included"
   }
 }

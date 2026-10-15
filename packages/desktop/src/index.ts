@@ -6,6 +6,7 @@
 
 // configureChromium sets app name (dev isolation) and Chromium flags — must run before
 // ANY module that calls app.getPath('userData'), because Electron caches the path on first call.
+import './brandPins';
 import './process/utils/configureChromium';
 import { installGpuCrashHandler } from './process/utils/gpuRecovery';
 import { describeUncaughtError } from './process/utils/describeUncaughtError';
@@ -78,14 +79,6 @@ import {
 import { readCloseToTraySetting } from './process/utils/closeToTraySetting';
 // @ts-expect-error - electron-squirrel-startup doesn't have types
 import electronSquirrelStartup from 'electron-squirrel-startup';
-
-// ============ Brand rename data continuity ============
-// productName is "Woody" now, but every stored byte (conversations, todos,
-// providers, logs, backend DBs) lives under the historical %APPDATA%\AionUi
-// folder. Pin userData there so the rename never looks like a data reset.
-if (process.platform === 'win32') {
-  app.setPath('userData', require('node:path').join(app.getPath('appData'), 'AionUi'));
-}
 
 // ============ Single Instance Lock ============
 // Acquire lock early so the second instance quits before doing unnecessary work.

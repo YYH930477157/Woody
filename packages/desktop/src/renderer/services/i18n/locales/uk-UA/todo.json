@@ -1,0 +1,112 @@
+{
+  "title": "Todos",
+  "description": "Your todo list with deadlines on a calendar. Actionable emails are turned into todos automatically.",
+  "new": "New Todo",
+  "edit": "Edit",
+  "save": "Save",
+  "cancel": "Cancel",
+  "due": "Deadline",
+  "clearDue": "Clear",
+  "clearDayFilter": "Show all days",
+  "titlePlaceholder": "What needs to be done?",
+  "notesPlaceholder": "Notes (optional)",
+  "titleRequired": "Title is required",
+  "empty": "No todos yet. Create one, or scan your emails.",
+  "desktopOnly": "Todos are available in the desktop app only.",
+  "confirmDelete": "Delete this todo?",
+  "opFailed": "Operation failed",
+  "source": {
+    "email": "Email",
+    "agent": "Agent",
+    "manual": "Manual"
+  },
+  "group": {
+    "overdue": "Overdue · needs action now",
+    "today": "Today",
+    "upcoming": "Upcoming & unscheduled",
+    "later": "Later / no deadline",
+    "done": "Done archive",
+    "waiting": "Waiting for confirmation",
+    "todayFull": "Today · {{date}}"
+  },
+  "scan": {
+    "button": "Scan Emails",
+    "started": "Scan started ({{count}} emails) — new todos appear in a moment",
+    "noJob": "Fetched {{count}} emails, but the scan job is not created yet: configure a model in Settings first, then restart the app",
+    "failed": "Email scan failed"
+  },
+  "lastScan": "Last email scan: {{time}} ({{status}})",
+  "detail": {
+    "title": "View Todo",
+    "pending": "Pending",
+    "due": "Due",
+    "created": "Created",
+    "emailSource": "Source email",
+    "close": "Close"
+  },
+  "searchPlaceholder": "Search title, requester, email…",
+  "lastScanShort": "Last scan {{time}} ({{status}})",
+  "dueNone": "Unscheduled",
+  "delete": "Delete",
+  "unblock": "Confirmed — activate",
+  "unblockConfirm": "Confirmed, start now",
+  "unblockTip": "Prerequisite met? Click to activate",
+  "markDone": "Mark done",
+  "markUndone": "Mark as not done",
+  "senderFilter": "Filter by requester",
+  "senderClear": "Clear",
+  "senderEmpty": "No email-sourced todos yet",
+  "stat": {
+    "focus": "Today & overdue",
+    "waiting": "Waiting"
+  },
+  "tab": {
+    "all": "All",
+    "focus": "Today & overdue",
+    "waiting": "Waiting",
+    "upcoming": "Upcoming",
+    "done": "Done"
+  },
+  "cal": {
+    "today": "Today",
+    "focus": "Overdue/today",
+    "waiting": "Waiting",
+    "planned": "Planned"
+  },
+  "filter": {
+    "date": "Date",
+    "sender": "Requester",
+    "search": "Keyword",
+    "clearAll": "Clear all filters"
+  },
+  "emptyFiltered": {
+    "title": "No todos match the current filters",
+    "hint": "Clear the date, requester or keyword filter to restore the full list"
+  },
+  "editor": {
+    "requester": "Requester",
+    "requesterPlaceholder": "e.g. a colleague (optional)",
+    "statusGroup": "Status",
+    "statusActive": "Active",
+    "statusWaiting": "Waiting"
+  },
+  "drawer": {
+    "title": "Details & context",
+    "placeholder": "Click a todo to see details, steps and the source email",
+    "summary": "Goal & notes",
+    "subtasks": "Steps",
+    "subtasksHint": "Click to tick progress",
+    "subtaskProgress": "Step progress",
+    "requester": "Requester",
+    "email": "Source email",
+    "waiting": {
+      "title": "Waiting on a prerequisite",
+      "default": "Waiting for external confirmation"
+    },
+    "status": {
+      "pending": "Active",
+      "waiting": "Waiting",
+      "done": "Done"
+    }
+  }
+}

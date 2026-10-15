@@ -633,7 +633,7 @@ Steps:
      - <point extracted from the email: requirement, constraint, acceptance criteria, or decision to make>
      (2–6 points, most important first; preserve numbers/codes/model names exactly)
      原文关键句: "<one verbatim sentence from the email that best captures the ask>"
-   - email_ref: pass the email's message_id / subject / from / received_at fields VERBATIM — this is the dedup key.
+   - email_ref: pass the email's message_id / subject / received_at fields VERBATIM — this is the dedup key. For from, use the email's from_name field (fallback to from_address when from_name is empty); NEVER invent or leave it blank.
 5. If todo_create returns duplicate, that email is already tracked — skip it.
 6. Finish with a one-line summary: scanned N emails, created M todos, skipped K non-actionable.
 
@@ -748,12 +748,12 @@ async function ensureTodoScanCronJob(): Promise<void> {
     // Skill re-post on version bump so existing jobs pick up new instructions.
     try {
       const prefs = (await httpRequest<Record<string, unknown>>('GET', '/api/settings/client')) || {};
-      if (!prefs['migration.todoScanSkillV3']) {
+      if (!prefs['migration.todoScanSkillV4']) {
         const existing = jobs.find((job) => job.name === TODO_SCAN_JOB_NAME);
         if (existing?.id) {
           await httpRequest('POST', `/api/cron/jobs/${existing.id}/skill`, { content: TODO_SCAN_SKILL });
-          await httpRequest('PUT', '/api/settings/client', { 'migration.todoScanSkillV3': true });
-          console.info('[Migration] todo scan skill refreshed to v3');
+          await httpRequest('PUT', '/api/settings/client', { 'migration.todoScanSkillV4': true });
+          console.info('[Migration] todo scan skill refreshed to v4');
         }
       }
     } catch (error) {

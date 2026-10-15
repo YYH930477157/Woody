@@ -1,4 +1,4 @@
-# AionUi todo email source adapter (v1: desktop Outlook via COM).
+﻿# AionUi todo email source adapter (v1: desktop Outlook via COM).
 # Exports recent inbox mail to a JSON snapshot consumed by the todo MCP's
 # email_snapshot_read tool. ALWAYS exits 0 and writes a snapshot file - the
 # error field carries any failure reason (Outlook missing, profile locked...),
@@ -68,12 +68,14 @@ try {
             $receivedMs = [DateTimeOffset]::new($received).ToUnixTimeMilliseconds()
             $unread = $false
             try { $unread = [bool]$item.UnRead } catch {}
+            $senderAddress = ''
+            try { $senderAddress = [string]$item.SenderEmailAddress } catch {}
 
             [void]$emails.Add([ordered]@{
                 message_id    = $messageId
                 subject       = $subject
                 from_name     = $senderName
-                from_address  = ''
+                from_address  = $senderAddress
                 received_at   = $receivedMs
                 folder        = 'Inbox'
                 body_preview  = $body

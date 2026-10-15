@@ -406,30 +406,15 @@ const TodoPage: React.FC = () => {
         onClick={() => setSelectedId(item.id)}
       >
         <div className='flex items-start gap-10px'>
-          <button
-            type='button'
-            title={isDone ? t('todo.markUndone') : t('todo.markDone')}
-            className={classNames(
-              'mt-1px w-16px h-16px rd-4px border border-solid flex-center shrink-0 transition-colors cursor-pointer',
-              isDone
-                ? 'bg-success-6 border-success-6 text-white'
-                : isWaiting
-                  ? 'border-warning-6 bg-warning-1 text-warning-6'
-                  : 'border-border-2 bg-1 hover:border-primary-6'
-            )}
-            onClick={(event) => {
-              event.stopPropagation();
-              void handleToggle(item, !isDone);
-            }}
-          >
-            {isDone ? (
-              <svg className='w-10px h-10px' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth={3}>
-                <path strokeLinecap='round' strokeLinejoin='round' d='M5 13l4 4L19 7' />
-              </svg>
-            ) : isWaiting ? (
-              <span className='text-9px leading-none font-bold'>⏸</span>
-            ) : null}
-          </button>
+          <Tooltip content={isDone ? t('todo.markUndone') : t('todo.markDone')}>
+            <Checkbox
+              checked={isDone}
+              indeterminate={isWaiting}
+              onChange={(checked) => void handleToggle(item, checked)}
+              className='mt-1px shrink-0'
+              onClick={(event) => event.stopPropagation()}
+            />
+          </Tooltip>
 
           <div className='flex-1 min-w-0'>
             {/* 行 1:标题 + 右侧元信息 */}
@@ -464,9 +449,10 @@ const TodoPage: React.FC = () => {
               <p className='text-12px text-t-tertiary truncate'>{summaryOf(item)}</p>
               <div className='flex items-center gap-8px shrink-0'>
                 {isWaiting && (
-                  <button
-                    type='button'
-                    className='px-6px py-1px rd-4px text-11px font-[500] text-warning-6 bg-warning-1 border border-solid border-warning-5 hover:bg-warning-2 transition-colors cursor-pointer'
+                  <Button
+                    size='mini'
+                    type='outline'
+                    status='warning'
                     title={t('todo.unblockTip')}
                     onClick={(event) => {
                       event.stopPropagation();
@@ -474,7 +460,7 @@ const TodoPage: React.FC = () => {
                     }}
                   >
                     ⚡ {t('todo.unblock')}
-                  </button>
+                  </Button>
                 )}
                 {cardSubtaskPill(item)}
                 <Tooltip content={t('todo.edit')}>
@@ -543,10 +529,10 @@ const TodoPage: React.FC = () => {
         {!isMobile && (
           <aside className='w-232px shrink-0 bg-1 border-r border-solid border-border-2 overflow-y-auto p-12px flex flex-col gap-14px'>
             <div className='grid grid-cols-2 gap-8px'>
-              <button
-                type='button'
+              <Button
+                type='text'
                 className={classNames(
-                  'text-left p-10px rd-10px border border-solid transition-colors cursor-pointer',
+                  '!h-auto !p-10px !block text-left !rd-10px border border-solid',
                   activeTab === 'focus' ? 'border-danger-6 bg-danger-1' : 'border-danger-5 bg-danger-1 hover:bg-danger-2'
                 )}
                 onClick={() => setActiveTab('focus')}
@@ -556,11 +542,11 @@ const TodoPage: React.FC = () => {
                   <span className='w-6px h-6px rd-full bg-danger-6' />
                 </div>
                 <div className='text-18px font-bold text-t-primary mt-2px'>{focusCount}</div>
-              </button>
-              <button
-                type='button'
+              </Button>
+              <Button
+                type='text'
                 className={classNames(
-                  'text-left p-10px rd-10px border border-solid transition-colors cursor-pointer',
+                  '!h-auto !p-10px !block text-left !rd-10px border border-solid',
                   activeTab === 'waiting' ? 'border-warning-6 bg-warning-1' : 'border-warning-5 bg-warning-1 hover:bg-warning-2'
                 )}
                 onClick={() => setActiveTab('waiting')}
@@ -570,7 +556,7 @@ const TodoPage: React.FC = () => {
                   <span className='w-6px h-6px rd-full bg-warning-6' />
                 </div>
                 <div className='text-18px font-bold text-t-primary mt-2px'>{waitingCount}</div>
-              </button>
+              </Button>
             </div>
 
             {/* 月历 */}
@@ -604,20 +590,21 @@ const TodoPage: React.FC = () => {
                   const isSelected = selectedDay === dayMs;
                   const groups = dayGroups.get(dayMs);
                   return (
-                    <button
-                      type='button'
+                    <Button
+                      type='text'
+                      size='mini'
                       key={dayMs}
                       className={classNames(
-                        'relative h-32px rd-6px text-11px flex flex-col items-center justify-center border border-solid transition-colors cursor-pointer',
+                        '!h-32px !w-full !p-0 relative !rd-6px text-11px flex flex-col items-center justify-center border border-solid',
                         isSelected
                           ? 'bg-primary-6 border-primary-6 text-white font-bold'
                           : isToday
                             ? 'bg-primary-1 border-primary-6 text-primary-6 font-bold'
                             : isPast && inMonth
-                              ? 'border-transparent text-t-tertiary op-70 hover:bg-fill-2'
+                              ? 'border-transparent text-t-tertiary op-70'
                               : inMonth
-                                ? 'border-transparent text-t-primary hover:bg-fill-2'
-                                : 'border-transparent text-t-tertiary op-40 hover:bg-fill-2'
+                                ? 'border-transparent text-t-primary'
+                                : 'border-transparent text-t-tertiary op-40'
                       )}
                       onClick={() => {
                         setSelectedDay((prev) => (prev === dayMs ? null : dayMs));
@@ -631,7 +618,7 @@ const TodoPage: React.FC = () => {
                         {groups?.has('waiting') && <i className={classNames('w-4px h-4px rd-full', isSelected ? 'bg-white' : 'bg-warning-6')} />}
                         {groups?.has('upcoming') && <i className={classNames('w-4px h-4px rd-full', isSelected ? 'bg-white' : 'bg-primary-6')} />}
                       </span>
-                    </button>
+                    </Button>
                   );
                 })}
               </div>
@@ -672,12 +659,13 @@ const TodoPage: React.FC = () => {
                 {senders.slice(0, 12).map((sender) => {
                   const active = selectedSender === sender.name;
                   return (
-                    <button
-                      type='button'
+                    <Button
+                      type='text'
+                      size='mini'
                       key={sender.name}
                       className={classNames(
-                        'w-full flex items-center justify-between px-8px py-4px rd-6px text-12px transition-colors cursor-pointer border border-solid',
-                        active ? 'bg-primary-1 border-primary-6 text-primary-6 font-[600]' : 'border-transparent text-t-secondary hover:bg-fill-2'
+                        '!w-full !justify-between !px-8px !py-4px !rd-6px text-12px border border-solid',
+                        active ? 'bg-primary-1 border-primary-6 text-primary-6 font-[600]' : 'border-transparent text-t-secondary'
                       )}
                       onClick={() => setSelectedSender((prev) => (prev === sender.name ? null : sender.name))}
                     >
@@ -688,7 +676,7 @@ const TodoPage: React.FC = () => {
                         <span className='truncate'>{sender.name}</span>
                       </span>
                       <span className={classNames('text-11px px-6px rd-full', active ? 'bg-primary-6 text-white' : 'bg-fill-2 text-t-tertiary')}>{sender.count}</span>
-                    </button>
+                    </Button>
                   );
                 })}
                 {senders.length === 0 && <span className='text-11px text-t-tertiary px-8px'>{t('todo.senderEmpty')}</span>}
@@ -702,12 +690,13 @@ const TodoPage: React.FC = () => {
           <div className='shrink-0 bg-1 border-b border-solid border-border-2 px-20px py-6px flex items-center justify-between gap-8px overflow-x-auto'>
             <div className='inline-flex items-center gap-2px bg-fill-2 p-2px rd-8px'>
               {tabs.map((tab) => (
-                <button
-                  type='button'
+                <Button
+                  type='text'
+                  size='mini'
                   key={tab.key}
                   className={classNames(
-                    'px-10px py-3px rd-6px text-11px font-[500] transition-colors flex items-center gap-4px border-none cursor-pointer whitespace-nowrap',
-                    activeTab === tab.key ? 'bg-1 text-t-primary shadow-sm' : 'text-t-secondary hover:text-t-primary'
+                    '!px-10px !py-3px !rd-6px text-11px font-[500] whitespace-nowrap',
+                    activeTab === tab.key ? 'bg-1 text-t-primary shadow-sm' : 'text-t-secondary'
                   )}
                   onClick={() => setActiveTab(tab.key)}
                 >
@@ -716,7 +705,7 @@ const TodoPage: React.FC = () => {
                   {tab.key === 'upcoming' && <span className='w-4px h-4px rd-full bg-primary-6' />}
                   {tab.label}
                   <span className={classNames('px-4px rd-full text-10px', activeTab === tab.key ? 'bg-fill-2 text-t-secondary' : 'text-t-tertiary')}>{tab.count}</span>
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -725,39 +714,30 @@ const TodoPage: React.FC = () => {
             <div className='shrink-0 bg-primary-1 border-b border-solid border-primary-2 px-20px py-4px flex items-center justify-between gap-8px text-11px text-primary-6'>
               <div className='flex items-center gap-6px flex-wrap'>
                 {selectedDay !== null && (
-                  <span className='inline-flex items-center gap-4px px-8px py-2px rd-full bg-primary-6 text-white font-[500]'>
+                  <Tag closable size='small' color='arcoblue' onClose={() => setSelectedDay(null)}>
                     📅 {t('todo.filter.date')}: {dayjs(selectedDay).format('M月D日')}
-                    <button type='button' className='cursor-pointer' onClick={() => setSelectedDay(null)}>
-                      ✕
-                    </button>
-                  </span>
+                  </Tag>
                 )}
                 {selectedSender && (
-                  <span className='inline-flex items-center gap-4px px-8px py-2px rd-full bg-warning-6 text-white font-[500]'>
+                  <Tag closable size='small' color='orange' onClose={() => setSelectedSender(null)}>
                     👤 {t('todo.filter.sender')}: {selectedSender}
-                    <button type='button' className='cursor-pointer' onClick={() => setSelectedSender(null)}>
-                      ✕
-                    </button>
-                  </span>
+                  </Tag>
                 )}
                 {searchQuery.trim() && (
-                  <span className='inline-flex items-center gap-4px px-8px py-2px rd-full bg-fill-2 text-t-primary font-[500]'>
+                  <Tag
+                    closable
+                    size='small'
+                    onClose={() => {
+                      setSearchQuery('');
+                    }}
+                  >
                     🔍 {t('todo.filter.search')}: {searchQuery.trim()}
-                    <button
-                      type='button'
-                      className='cursor-pointer'
-                      onClick={() => {
-                        setSearchQuery('');
-                      }}
-                    >
-                      ✕
-                    </button>
-                  </span>
+                  </Tag>
                 )}
               </div>
-              <button type='button' className='px-8px py-2px rd-4px bg-1 border border-solid border-primary-3 text-primary-6 font-[500] cursor-pointer shrink-0' onClick={resetAllFilters}>
+              <Button size='mini' type='outline' className='shrink-0' onClick={resetAllFilters}>
                 {t('todo.filter.clearAll')}
-              </button>
+              </Button>
             </div>
           )}
 

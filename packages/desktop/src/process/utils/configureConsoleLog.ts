@@ -59,7 +59,11 @@ function resolveMessageDate(message?: LogPathMessage): Date {
 // Daily log file: e.g. 2026/03/12/2026-03-12.log
 log.transports.file.fileName = buildDatedLogFileName();
 log.transports.file.resolvePathFn = (variables, message?: LogPathMessage) => {
-  const filePath = path.join(variables.libraryDefaultDir, buildDatedLogFileName(resolveMessageDate(message)));
+  // libraryDefaultDir follows app.name (= product name). After the Woody
+  // rename that would split logs into %APPDATA%\Woody\logs while everything
+  // else stays in the pinned userData home — anchor to userData instead.
+  const logRoot = app.getPath('userData');
+  const filePath = path.join(logRoot, 'logs', buildDatedLogFileName(resolveMessageDate(message)));
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   return filePath;
 };

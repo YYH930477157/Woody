@@ -209,9 +209,11 @@ export const createTodoStoreService = () => ({
       if (input.due_at !== undefined) item.due_at = input.due_at;
       if (input.requester !== undefined) item.requester = input.requester.trim() || undefined;
       if (input.subtasks !== undefined) item.subtasks = sanitizeSubtasks(input.subtasks) ?? undefined;
-      // done 须经 setDone 切换(维护 completed_at);update 只允许 pending ↔ waiting。
+      // update 允许 pending ↔ waiting,也允许从 done 重开(清 completed_at);
+      // 置为 done 仍须经 setDone(要写完成时间戳)。
       if (input.status === 'waiting' || input.status === 'pending') {
-        if (item.status !== 'done') item.status = input.status;
+        item.status = input.status;
+        item.completed_at = null;
       }
       if (input.blocked_reason !== undefined) {
         item.blocked_reason = input.blocked_reason?.trim() || undefined;

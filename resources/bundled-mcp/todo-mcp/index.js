@@ -223,9 +223,11 @@ async function toolTodoUpdate(params) {
     if (params.due_at !== undefined) item.due_at = normalizeDueAt(params.due_at);
     if (params.requester !== undefined) item.requester = String(params.requester).trim() || undefined;
     if (params.subtasks !== undefined) item.subtasks = sanitizeSubtasks(params.subtasks) || undefined;
-    // done 只经 todo_complete 切换;此处仅允许 pending ↔ waiting。
+    // pending ↔ waiting 互转;从 done 重开也允许(清 completed_at)。
+    // 置为 done 仍须经 todo_complete(要写完成时间戳)。
     if (params.status === 'waiting' || params.status === 'pending') {
-      if (item.status !== 'done') item.status = params.status;
+      item.status = params.status;
+      item.completed_at = null;
     }
     if (params.blocked_reason !== undefined) {
       item.blocked_reason = String(params.blocked_reason || '').trim() || undefined;
