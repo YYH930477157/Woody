@@ -1678,6 +1678,10 @@ export type ITodoCreateParams = {
   title: string;
   notes?: string;
   due_at?: number | null;
+  requester?: string;
+  status?: 'pending' | 'waiting';
+  blocked_reason?: string;
+  subtasks?: { id: string; text: string; done: boolean }[];
 };
 
 export type ITodoUpdateParams = {
@@ -1685,6 +1689,11 @@ export type ITodoUpdateParams = {
   title?: string;
   notes?: string;
   due_at?: number | null;
+  requester?: string;
+  status?: 'pending' | 'waiting';
+  /** null clears the blocked reason. */
+  blocked_reason?: string | null;
+  subtasks?: { id: string; text: string; done: boolean }[];
 };
 
 export const todo = {

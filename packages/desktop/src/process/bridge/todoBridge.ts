@@ -27,11 +27,13 @@ export function initTodoBridge(): void {
 
   ipcBridge.todo.list.provider(() => store.list());
 
-  ipcBridge.todo.create.provider(({ title, notes, due_at }) =>
-    store.create({ title, notes, due_at, source: 'manual' })
+  ipcBridge.todo.create.provider(({ title, notes, due_at, requester, status, blocked_reason, subtasks }) =>
+    store.create({ title, notes, due_at, requester, status, blocked_reason, subtasks, source: 'manual' })
   );
 
-  ipcBridge.todo.update.provider(({ id, title, notes, due_at }) => store.update({ id, title, notes, due_at }));
+  ipcBridge.todo.update.provider(({ id, title, notes, due_at, requester, status, blocked_reason, subtasks }) =>
+    store.update({ id, title, notes, due_at, requester, status, blocked_reason, subtasks })
+  );
 
   ipcBridge.todo.setDone.provider(({ id, done }) => store.setDone({ id, done }));
 

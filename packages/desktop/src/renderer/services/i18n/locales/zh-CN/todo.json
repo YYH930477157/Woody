@@ -17,14 +17,17 @@
   "opFailed": "操作失败",
   "source": {
     "email": "邮件",
-    "agent": "Agent"
+    "agent": "Agent",
+    "manual": "手动"
   },
   "group": {
-    "overdue": "已逾期",
+    "overdue": "已逾期 · 需立即处理",
     "today": "今天",
-    "upcoming": "未来 7 天",
+    "upcoming": "近期计划与待排期",
     "later": "更晚 / 无截止",
-    "done": "已完成"
+    "done": "已完成归档",
+    "waiting": "等待前置确认",
+    "todayFull": "今日待办 · {{date}}"
   },
   "scan": {
     "button": "扫描邮件",
@@ -40,5 +43,70 @@
     "created": "创建于",
     "emailSource": "来源邮件",
     "close": "关闭"
+  },
+  "searchPlaceholder": "搜索标题、要求人、邮件…",
+  "lastScanShort": "上次扫描 {{time}}({{status}})",
+  "dueNone": "待排期",
+  "delete": "删除",
+  "unblock": "标记已确认并激活",
+  "unblockConfirm": "已确认,开始执行",
+  "unblockTip": "前置条件已满足?点击转为进行中",
+  "markDone": "完成该待办",
+  "markUndone": "恢复为未完成",
+  "senderFilter": "按要求人筛选",
+  "senderClear": "清除",
+  "senderEmpty": "暂无邮件来源待办",
+  "stat": {
+    "focus": "今日与逾期",
+    "waiting": "等待前置确认"
+  },
+  "tab": {
+    "all": "全部待办",
+    "focus": "今日与逾期",
+    "waiting": "等待确认",
+    "upcoming": "近期与待排期",
+    "done": "已完成"
+  },
+  "cal": {
+    "today": "回到今天",
+    "focus": "逾期/今日",
+    "waiting": "等待中",
+    "planned": "计划"
+  },
+  "filter": {
+    "date": "日历筛选",
+    "sender": "要求人",
+    "search": "关键词",
+    "clearAll": "清除全部筛选"
+  },
+  "emptyFiltered": {
+    "title": "当前筛选条件下没有匹配的待办",
+    "hint": "清除日期、要求人或关键词过滤,恢复全量列表"
+  },
+  "editor": {
+    "requester": "要求人",
+    "requesterPlaceholder": "如:李国强(可选)",
+    "statusGroup": "状态",
+    "statusActive": "进行中",
+    "statusWaiting": "等待前置确认"
+  },
+  "drawer": {
+    "title": "任务详情与上下文",
+    "placeholder": "点击左侧待办查看详情、执行步骤与来源邮件",
+    "summary": "执行目标与说明",
+    "subtasks": "执行步骤",
+    "subtasksHint": "点击勾选进度",
+    "subtaskProgress": "步骤进度",
+    "requester": "要求人",
+    "email": "来源邮件",
+    "waiting": {
+      "title": "当前处于「等待前置确认」",
+      "default": "等待外部确认后再执行"
+    },
+    "status": {
+      "pending": "进行中",
+      "waiting": "等待前置确认",
+      "done": "已完成"
+    }
   }
 }

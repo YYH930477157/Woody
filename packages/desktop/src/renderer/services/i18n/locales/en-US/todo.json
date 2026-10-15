@@ -17,14 +17,17 @@
   "opFailed": "Operation failed",
   "source": {
     "email": "Email",
-    "agent": "Agent"
+    "agent": "Agent",
+    "manual": "Manual"
   },
   "group": {
-    "overdue": "Overdue",
+    "overdue": "Overdue · needs action now",
     "today": "Today",
-    "upcoming": "Next 7 days",
+    "upcoming": "Upcoming & unscheduled",
     "later": "Later / no deadline",
-    "done": "Completed"
+    "done": "Done archive",
+    "waiting": "Waiting for confirmation",
+    "todayFull": "Today · {{date}}"
   },
   "scan": {
     "button": "Scan Emails",
@@ -40,5 +43,70 @@
     "created": "Created",
     "emailSource": "Source email",
     "close": "Close"
+  },
+  "searchPlaceholder": "Search title, requester, email…",
+  "lastScanShort": "Last scan {{time}} ({{status}})",
+  "dueNone": "Unscheduled",
+  "delete": "Delete",
+  "unblock": "Confirmed — activate",
+  "unblockConfirm": "Confirmed, start now",
+  "unblockTip": "Prerequisite met? Click to activate",
+  "markDone": "Mark done",
+  "markUndone": "Mark as not done",
+  "senderFilter": "Filter by requester",
+  "senderClear": "Clear",
+  "senderEmpty": "No email-sourced todos yet",
+  "stat": {
+    "focus": "Today & overdue",
+    "waiting": "Waiting"
+  },
+  "tab": {
+    "all": "All",
+    "focus": "Today & overdue",
+    "waiting": "Waiting",
+    "upcoming": "Upcoming",
+    "done": "Done"
+  },
+  "cal": {
+    "today": "Today",
+    "focus": "Overdue/today",
+    "waiting": "Waiting",
+    "planned": "Planned"
+  },
+  "filter": {
+    "date": "Date",
+    "sender": "Requester",
+    "search": "Keyword",
+    "clearAll": "Clear all filters"
+  },
+  "emptyFiltered": {
+    "title": "No todos match the current filters",
+    "hint": "Clear the date, requester or keyword filter to restore the full list"
+  },
+  "editor": {
+    "requester": "Requester",
+    "requesterPlaceholder": "e.g. a colleague (optional)",
+    "statusGroup": "Status",
+    "statusActive": "Active",
+    "statusWaiting": "Waiting"
+  },
+  "drawer": {
+    "title": "Details & context",
+    "placeholder": "Click a todo to see details, steps and the source email",
+    "summary": "Goal & notes",
+    "subtasks": "Steps",
+    "subtasksHint": "Click to tick progress",
+    "subtaskProgress": "Step progress",
+    "requester": "Requester",
+    "email": "Source email",
+    "waiting": {
+      "title": "Waiting on a prerequisite",
+      "default": "Waiting for external confirmation"
+    },
+    "status": {
+      "pending": "Active",
+      "waiting": "Waiting",
+      "done": "Done"
+    }
   }
 }
