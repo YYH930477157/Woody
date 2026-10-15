@@ -761,15 +761,6 @@ const AionrsSendBox: React.FC<{
         onRetryStart={teamRuntime?.onRetryStart ? () => void teamRuntime.onRetryStart?.() : undefined}
       />
       <CrossSessionDisabledBanner />
-      <ChatStatusBar
-        running={teamRuntime?.loading ?? running}
-        startedAtMs={turnStartedAtMs}
-        firstTokenAtMs={firstTokenAtMs}
-        finalElapsedMs={finalElapsedMs}
-        usageStats={usageStats}
-        getLiveTextLength={getLiveTextLength}
-        className='pb-2px px-2px'
-      />
       <SendBox
         data-testid='aionrs-sendbox'
         onMobilePlusClick={isMobile ? () => setIsMobileSheetOpen(true) : undefined}
@@ -817,6 +808,16 @@ const AionrsSendBox: React.FC<{
             openFileSelector={openFileSelector}
             onLocalFilesAdded={handleFilesAdded}
             loadedMcpStatuses={loadedMcpStatuses}
+          />
+        }
+        bottomTools={
+          <ChatStatusBar
+            running={teamRuntime?.loading ?? running}
+            startedAtMs={turnStartedAtMs}
+            firstTokenAtMs={firstTokenAtMs}
+            finalElapsedMs={finalElapsedMs}
+            usageStats={usageStats}
+            getLiveTextLength={getLiveTextLength}
           />
         }
         rightTools={

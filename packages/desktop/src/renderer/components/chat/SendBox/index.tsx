@@ -248,6 +248,9 @@ const SendBox: React.FC<{
   className?: string;
   tools?: React.ReactNode;
   rightTools?: React.ReactNode;
+  /** Content rendered in the multi-line bottom row between the left tool
+   *  group and the right actions (e.g. the aionrs usage status bar). */
+  bottomTools?: React.ReactNode;
   prefix?: React.ReactNode;
   placeholder?: string;
   onFilesAdded?: (files: FileMetadata[]) => void;
@@ -305,6 +308,7 @@ const SendBox: React.FC<{
   loading,
   tools,
   rightTools,
+  bottomTools,
   disabled,
   sendDisabled = false,
   placeholder,
@@ -2232,6 +2236,7 @@ const SendBox: React.FC<{
                 {draftActionButton}
               </span>
             </div>
+            {bottomTools && <div className='flex-1 flex items-center min-w-0 overflow-hidden'>{bottomTools}</div>}
             <div className='sendbox-actions flex items-center gap-1'>
               {renderedRightTools}
               {renderedSpeechButton}
