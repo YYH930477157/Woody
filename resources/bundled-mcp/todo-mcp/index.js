@@ -127,6 +127,20 @@ const normalizeDueAt = (value) => {
   return null;
 };
 
+// 与主进程 todoStore.sanitizeSubtasks 同规则:补 id、去空文本、限量。
+const sanitizeSubtasks = (value) => {
+  if (!Array.isArray(value)) return undefined;
+  return value
+    .filter((entry) => entry && typeof entry === 'object')
+    .map((entry) => ({
+      id: typeof entry.id === 'string' && entry.id ? entry.id : newId(),
+      text: String(entry.text ?? '').trim().slice(0, 300),
+      done: Boolean(entry.done),
+    }))
+    .filter((entry) => entry.text)
+    .slice(0, 30);
+};
+
 // ---------------------------------------------------------------------------
 // Tool implementations
 // ---------------------------------------------------------------------------
@@ -134,7 +148,7 @@ const normalizeDueAt = (value) => {
 function toolTodoList(params) {
   const { status, due_before, due_after, limit } = params || {};
   let todos = readStore().todos;
-  if (status === 'pending' || status === 'done') todos = todos.filter((todo) => todo.status === status);
+  if (status === 'pending' || status === 'waiting' || status === 'done') todos = todos.filter((todo) => todo.status === status);
   if (typeof due_before === 'number') todos = todos.filter((todo) => todo.due_at !== null && todo.due_at !== undefined && todo.due_at <= due_before);
   if (typeof due_after === 'number') todos = todos.filter((todo) => todo.due_at === null || todo.due_at === undefined || todo.due_at >= due_after);
   todos = [...todos].sort((a, b) => {
@@ -144,7 +158,8 @@ function toolTodoList(params) {
     return (b.created_at || 0) - (a.created_at || 0);
   });
   const capped = typeof limit === 'number' && limit > 0 ? todos.slice(0, limit) : todos;
-  return `${capped.length} todo(s), ${readStore().todos.filter((todo) => todo.status === 'pending').length} pending total\n${JSON.stringify(capped, null, 2)}`;
+  const open = readStore().todos.filter((todo) => todo.status !== 'done').length;
+  return `${capped.length} todo(s), ${open} open total\n${JSON.stringify(capped, null, 2)}`;
 }
 
 async function toolTodoCreate(params) {
@@ -173,12 +188,16 @@ async function toolTodoCreate(params) {
       }
     }
     const now = Date.now();
+    const status = params && params.status === 'waiting' ? 'waiting' : 'pending';
     const item = {
       id: newId(),
       title,
       notes: String((params && params.notes) || '').trim() || undefined,
       due_at: normalizeDueAt(params && params.due_at),
-      status: 'pending',
+      status,
+      blocked_reason: status === 'waiting' ? String((params && params.blocked_reason) || '').trim() || undefined : undefined,
+      requester: String((params && params.requester) || '').trim() || undefined,
+      subtasks: sanitizeSubtasks(params && params.subtasks) || undefined,
       completed_at: null,
       source: emailRef ? 'email' : 'agent',
       email_ref: emailRef,
@@ -202,6 +221,16 @@ async function toolTodoUpdate(params) {
     }
     if (params.notes !== undefined) item.notes = String(params.notes).trim() || undefined;
     if (params.due_at !== undefined) item.due_at = normalizeDueAt(params.due_at);
+    if (params.requester !== undefined) item.requester = String(params.requester).trim() || undefined;
+    if (params.subtasks !== undefined) item.subtasks = sanitizeSubtasks(params.subtasks) || undefined;
+    // done 只经 todo_complete 切换;此处仅允许 pending ↔ waiting。
+    if (params.status === 'waiting' || params.status === 'pending') {
+      if (item.status !== 'done') item.status = params.status;
+    }
+    if (params.blocked_reason !== undefined) {
+      item.blocked_reason = String(params.blocked_reason || '').trim() || undefined;
+    }
+    if (item.status !== 'waiting') item.blocked_reason = undefined;
     item.updated_at = Date.now();
     return { updated: true, todo: item };
   });
@@ -277,6 +306,14 @@ const TOOLS = [
         title: { type: 'string', description: 'Short imperative task title.' },
         notes: optionalString('Details, context or links.'),
         due_at: { description: 'Deadline: epoch ms or ISO 8601 string; omit when unknown.' },
+        requester: { type: 'string', description: 'Display name of the person asking for this task (prefer the Chinese name when the email has one).' },
+        status: { type: 'string', enum: ['pending', 'waiting'], description: '"waiting" when the task is blocked on an external confirmation (client reply, lab data...).' },
+        blocked_reason: { type: 'string', description: 'Why it waits, e.g. "待客户确认固件方案后再执行".' },
+        subtasks: {
+          type: 'array',
+          description: 'Concrete execution steps (2-5, short imperative lines) when the email lists them.',
+          items: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
+        },
         email_ref: {
           type: 'object',
           description: 'Origin email for dedup/traceability.',
@@ -294,7 +331,7 @@ const TOOLS = [
   },
   {
     name: 'todo_update',
-    description: 'Update a todo (title / notes / due_at) by id.',
+    description: 'Update a todo (title / notes / due_at / requester / status / subtasks) by id.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -302,6 +339,14 @@ const TOOLS = [
         title: { type: 'string' },
         notes: { type: 'string' },
         due_at: { description: 'Epoch ms or ISO 8601 string; null clears.' },
+        requester: { type: 'string' },
+        status: { type: 'string', enum: ['pending', 'waiting'] },
+        blocked_reason: { type: 'string', description: 'Empty string clears.' },
+        subtasks: {
+          type: 'array',
+          description: 'Replaces the whole step list.',
+          items: { type: 'object', properties: { id: { type: 'string' }, text: { type: 'string' }, done: { type: 'boolean' } }, required: ['text'] },
+        },
       },
       required: ['id'],
     },

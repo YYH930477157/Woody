@@ -18,8 +18,15 @@
  * the dependency-free MCP script mirrors it by hand.
  */
 
-export type TodoStatus = 'pending' | 'done';
+export type TodoStatus = 'pending' | 'waiting' | 'done';
 export type TodoSource = 'manual' | 'email' | 'agent';
+
+/** 执行步骤拆解:卡片显示进度,详情抽屉里可直接勾选。 */
+export interface ITodoSubtask {
+  id: string;
+  text: string;
+  done: boolean;
+}
 
 /** 邮件来源引用:由邮件扫描创建的待办携带,用于溯源与按 Message-ID 去重。 */
 export interface TodoEmailRef {
@@ -36,6 +43,12 @@ export interface ITodoItem {
   /** 截止/完成节点,epoch 毫秒;无日期为 null。 */
   due_at?: number | null;
   status: TodoStatus;
+  /** status=waiting 时的阻塞原因(待客户/上下游回复等),详情抽屉展示。 */
+  blocked_reason?: string;
+  /** 要求人/发起人显示名;邮件待办缺省取 email_ref.from。 */
+  requester?: string;
+  /** 执行步骤拆解。 */
+  subtasks?: ITodoSubtask[];
   completed_at?: number | null;
   source: TodoSource;
   email_ref?: TodoEmailRef | null;

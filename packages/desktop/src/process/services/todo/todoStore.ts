@@ -130,6 +130,26 @@ const readStore = (): TodoStoreData => {
 
 const newId = (): string => `todo_${Date.now().toString(36)}_${randomUUID().slice(0, 8)}`;
 
+const newSubtaskId = (): string => `st_${Date.now().toString(36)}_${randomUUID().slice(0, 8)}`;
+
+/** 清洗 subtasks 输入(双侧写入方共用同一上限/规则):去空文本、补 id、限量。 */
+export const sanitizeSubtasks = (
+  input: unknown
+): { id: string; text: string; done: boolean }[] | undefined => {
+  if (input === undefined) return undefined;
+  if (!Array.isArray(input)) return undefined;
+  const cleaned = input
+    .filter((entry): entry is Record<string, unknown> => typeof entry === 'object' && entry !== null)
+    .map((entry) => ({
+      id: typeof entry.id === 'string' && entry.id ? entry.id : newSubtaskId(),
+      text: String(entry.text ?? '').trim().slice(0, 300),
+      done: Boolean(entry.done),
+    }))
+    .filter((entry) => entry.text)
+    .slice(0, 30);
+  return cleaned;
+};
+
 export const createTodoStoreService = () => ({
   list(): ITodoItem[] {
     return readStore().todos;
@@ -139,18 +159,26 @@ export const createTodoStoreService = () => ({
     title: string;
     notes?: string;
     due_at?: number | null;
+    requester?: string;
+    status?: 'pending' | 'waiting';
+    blocked_reason?: string;
+    subtasks?: { id: string; text: string; done: boolean }[];
     source?: ITodoItem['source'];
     email_ref?: ITodoItem['email_ref'];
   }): Promise<ITodoItem> {
     const title = input.title.trim();
     if (!title) throw new Error('title is required');
     const now = Date.now();
+    const status = input.status === 'waiting' ? 'waiting' : 'pending';
     const item: ITodoItem = {
       id: newId(),
       title,
       notes: input.notes?.trim() || undefined,
       due_at: input.due_at ?? null,
-      status: 'pending',
+      status,
+      blocked_reason: status === 'waiting' ? input.blocked_reason?.trim() || undefined : undefined,
+      requester: input.requester?.trim() || undefined,
+      subtasks: sanitizeSubtasks(input.subtasks) ?? undefined,
       completed_at: null,
       source: input.source ?? 'manual',
       email_ref: input.email_ref ?? null,
@@ -163,13 +191,32 @@ export const createTodoStoreService = () => ({
     return item;
   },
 
-  async update(input: { id: string; title?: string; notes?: string; due_at?: number | null }): Promise<ITodoItem | null> {
+  async update(input: {
+    id: string;
+    title?: string;
+    notes?: string;
+    due_at?: number | null;
+    requester?: string;
+    status?: 'pending' | 'waiting';
+    blocked_reason?: string | null;
+    subtasks?: { id: string; text: string; done: boolean }[];
+  }): Promise<ITodoItem | null> {
     return withLock((store) => {
       const item = store.todos.find((todo) => todo.id === input.id);
       if (!item) return null;
       if (input.title !== undefined) item.title = input.title.trim() || item.title;
       if (input.notes !== undefined) item.notes = input.notes.trim() || undefined;
       if (input.due_at !== undefined) item.due_at = input.due_at;
+      if (input.requester !== undefined) item.requester = input.requester.trim() || undefined;
+      if (input.subtasks !== undefined) item.subtasks = sanitizeSubtasks(input.subtasks) ?? undefined;
+      // done 须经 setDone 切换(维护 completed_at);update 只允许 pending ↔ waiting。
+      if (input.status === 'waiting' || input.status === 'pending') {
+        if (item.status !== 'done') item.status = input.status;
+      }
+      if (input.blocked_reason !== undefined) {
+        item.blocked_reason = input.blocked_reason?.trim() || undefined;
+      }
+      if (item.status !== 'waiting') item.blocked_reason = undefined;
       item.updated_at = Date.now();
       return { ...item };
     });
