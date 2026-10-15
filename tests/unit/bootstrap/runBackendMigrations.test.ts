@@ -26,6 +26,14 @@ vi.mock('@/common/adapter/httpBridge', () => ({
   httpRequest: httpRequestMock,
 }));
 
+vi.mock('electron', () => ({
+  app: { isPackaged: false, getAppPath: () => process.cwd() },
+}));
+
+vi.mock('@/process/bridge/todoBridge', () => ({
+  TODO_SCAN_JOB_NAME: 'Todo email scan',
+}));
+
 vi.mock('@/common/adapter/ipcBridge', () => ({
   mcpService: {
     listServers: { invoke: listServersMock },
@@ -214,5 +222,71 @@ describe('runBackendMigrations', () => {
       'yes',
       'yes'
     );
+  });
+
+  it.each([
+    {
+      detail: {
+        defaults: { mcps: { mode: 'auto', value: ['unused'] } },
+        preferences: { last_mcp_ids: ['mail', 'mail'] },
+      },
+      expected: ['mail', 'todo'],
+    },
+    { detail: { defaults: {}, preferences: { last_mcp_ids: [] } }, expected: ['todo'] },
+    {
+      detail: { defaults: { mcps: { mode: 'auto' } }, preferences: { last_mcp_ids: ['mail', 'todo'] } },
+      expected: ['mail', 'todo'],
+    },
+  ])('preserves effective MCP choices when enabling Todo scanning: $detail', async ({ detail, expected }) => {
+    listServersMock.mockResolvedValue([imageServer()]);
+    httpRequestMock.mockImplementation(async (method: string, path: string) => {
+      if (method !== 'GET') return undefined;
+      if (path === '/api/assistants') return [{ id: 'assistant', enabled: true, agent: { type: 'aionrs' } }];
+      if (path === '/api/assistants/assistant') return detail;
+      if (path === '/api/mcp/servers') return [{ id: 'todo', name: 'aionui-todo' }];
+      if (path === '/api/cron/jobs') return [{ id: 'scan', name: 'Todo email scan' }];
+      if (path === '/api/settings/client') return { 'migration.todoScanSkillV4': true };
+      return [];
+    });
+
+    await runBackendMigrations(configFile as never);
+
+    expect(httpRequestMock).toHaveBeenCalledWith('PUT', '/api/assistants/assistant', {
+      defaults: { mcps: { mode: 'fixed', value: expected } },
+    });
+  });
+
+  it('respects an explicit fixed MCP selection without Todo', async () => {
+    listServersMock.mockResolvedValue([imageServer()]);
+    httpRequestMock.mockImplementation(async (method: string, path: string) => {
+      if (method !== 'GET') return undefined;
+      if (path === '/api/assistants') return [{ id: 'assistant', enabled: true, agent: { type: 'aionrs' } }];
+      if (path === '/api/assistants/assistant') return { defaults: { mcps: { mode: 'fixed', value: ['mail'] } } };
+      if (path === '/api/mcp/servers') return [{ id: 'todo', name: 'aionui-todo' }];
+      if (path === '/api/cron/jobs') return [{ id: 'scan', name: 'Todo email scan' }];
+      if (path === '/api/settings/client') return { 'migration.todoScanSkillV4': true };
+      return [];
+    });
+
+    await runBackendMigrations(configFile as never);
+
+    expect(httpRequestMock).not.toHaveBeenCalledWith('PUT', '/api/assistants/assistant', expect.anything());
+  });
+
+  it('does not overwrite MCP choices when loading assistant details fails', async () => {
+    listServersMock.mockResolvedValue([imageServer()]);
+    httpRequestMock.mockImplementation(async (method: string, path: string) => {
+      if (method !== 'GET') return undefined;
+      if (path === '/api/assistants') return [{ id: 'assistant', enabled: true, agent: { type: 'aionrs' } }];
+      if (path === '/api/assistants/assistant') throw new Error('backend unavailable');
+      if (path === '/api/mcp/servers') return [{ id: 'todo', name: 'aionui-todo' }];
+      if (path === '/api/cron/jobs') return [{ id: 'scan', name: 'Todo email scan' }];
+      if (path === '/api/settings/client') return { 'migration.todoScanSkillV4': true };
+      return [];
+    });
+
+    await runBackendMigrations(configFile as never);
+
+    expect(httpRequestMock).not.toHaveBeenCalledWith('PUT', '/api/assistants/assistant', expect.anything());
   });
 });

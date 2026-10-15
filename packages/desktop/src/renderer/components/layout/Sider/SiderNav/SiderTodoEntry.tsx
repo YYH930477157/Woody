@@ -19,7 +19,13 @@ interface SiderTodoEntryProps {
   onClick: () => void;
 }
 
-const SiderTodoEntry: React.FC<SiderTodoEntryProps> = ({ isMobile, isActive, collapsed, siderTooltipProps, onClick }) => {
+const SiderTodoEntry: React.FC<SiderTodoEntryProps> = ({
+  isMobile,
+  isActive,
+  collapsed,
+  siderTooltipProps,
+  onClick,
+}) => {
   const { t } = useTranslation();
 
   if (collapsed) {

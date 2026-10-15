@@ -65,7 +65,17 @@ export const fetchEmailSnapshot = async (options?: { days?: number }): Promise<E
   return await new Promise<EmailFetchResult>((resolve) => {
     execFile(
       'powershell.exe',
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath, '-OutFile', snapshotPath, '-Days', String(days)],
+      [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        scriptPath,
+        '-OutFile',
+        snapshotPath,
+        '-Days',
+        String(days),
+      ],
       { timeout: POWERSHELL_TIMEOUT_MS, windowsHide: true },
       (error, stdout) => {
         if (error) {

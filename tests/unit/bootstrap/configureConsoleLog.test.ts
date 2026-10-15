@@ -62,7 +62,10 @@ const createLogMock = (): LogMock => ({
   },
 });
 
-const loadConfigureConsoleLog = async (isPackaged: boolean): Promise<LogMock> => {
+const loadConfigureConsoleLog = async (
+  isPackaged: boolean,
+  userDataPath = path.join(os.tmpdir(), 'aionui-log-test')
+): Promise<LogMock> => {
   vi.resetModules();
 
   const logMock = createLogMock();
@@ -70,6 +73,7 @@ const loadConfigureConsoleLog = async (isPackaged: boolean): Promise<LogMock> =>
   vi.doMock('electron', () => ({
     app: {
       isPackaged,
+      getPath: vi.fn(() => userDataPath),
     },
   }));
 
@@ -104,19 +108,19 @@ describe('configureConsoleLog', () => {
   });
 
   it('routes cross-day frontend log writes into the matching date directory', async () => {
-    const log = await loadConfigureConsoleLog(false);
     const logsRoot = mkdtempSync(path.join(os.tmpdir(), 'aionui-log-test-'));
 
     try {
+      const log = await loadConfigureConsoleLog(false, logsRoot);
       const resolvedPath = log.transports.file.resolvePathFn?.(
         {
-          libraryDefaultDir: logsRoot,
+          libraryDefaultDir: path.join(os.tmpdir(), 'ignored-library-default'),
           fileName: '2026/07/02/2026-07-02.log',
         },
         { date: new Date(2026, 6, 3, 0, 1) }
       );
 
-      expect(resolvedPath).toBe(path.join(logsRoot, '2026/07/03/2026-07-03.log'));
+      expect(resolvedPath).toBe(path.join(logsRoot, 'logs/2026/07/03/2026-07-03.log'));
     } finally {
       rmSync(logsRoot, { recursive: true, force: true });
     }

@@ -45,7 +45,13 @@ if (!dbPath) {
 // Store — mirrors process/services/todo/todoStore.ts (see contract note above)
 // ---------------------------------------------------------------------------
 
-const emptyStore = () => ({ version: 1, todos: [], processed_message_ids: [], last_scan_at: null, last_scan_status: null });
+const emptyStore = () => ({
+  version: 1,
+  todos: [],
+  processed_message_ids: [],
+  last_scan_at: null,
+  last_scan_status: null,
+});
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -134,7 +140,9 @@ const sanitizeSubtasks = (value) => {
     .filter((entry) => entry && typeof entry === 'object')
     .map((entry) => ({
       id: typeof entry.id === 'string' && entry.id ? entry.id : newId(),
-      text: String(entry.text ?? '').trim().slice(0, 300),
+      text: String(entry.text ?? '')
+        .trim()
+        .slice(0, 300),
       done: Boolean(entry.done),
     }))
     .filter((entry) => entry.text)
@@ -148,9 +156,12 @@ const sanitizeSubtasks = (value) => {
 function toolTodoList(params) {
   const { status, due_before, due_after, limit } = params || {};
   let todos = readStore().todos;
-  if (status === 'pending' || status === 'waiting' || status === 'done') todos = todos.filter((todo) => todo.status === status);
-  if (typeof due_before === 'number') todos = todos.filter((todo) => todo.due_at !== null && todo.due_at !== undefined && todo.due_at <= due_before);
-  if (typeof due_after === 'number') todos = todos.filter((todo) => todo.due_at === null || todo.due_at === undefined || todo.due_at >= due_after);
+  if (status === 'pending' || status === 'waiting' || status === 'done')
+    todos = todos.filter((todo) => todo.status === status);
+  if (typeof due_before === 'number')
+    todos = todos.filter((todo) => todo.due_at !== null && todo.due_at !== undefined && todo.due_at <= due_before);
+  if (typeof due_after === 'number')
+    todos = todos.filter((todo) => todo.due_at === null || todo.due_at === undefined || todo.due_at >= due_after);
   todos = [...todos].sort((a, b) => {
     const aDue = a.due_at ?? Number.POSITIVE_INFINITY;
     const bDue = b.due_at ?? Number.POSITIVE_INFINITY;
@@ -165,12 +176,15 @@ function toolTodoList(params) {
 async function toolTodoCreate(params) {
   const title = String((params && params.title) || '').trim();
   if (!title) throw new Error('title is required');
-  const emailRef = params && params.email_ref ? {
-    message_id: String(params.email_ref.message_id || ''),
-    subject: String(params.email_ref.subject || ''),
-    from: String(params.email_ref.from || ''),
-    received_at: Number(params.email_ref.received_at) || Date.now(),
-  } : null;
+  const emailRef =
+    params && params.email_ref
+      ? {
+          message_id: String(params.email_ref.message_id || ''),
+          subject: String(params.email_ref.subject || ''),
+          from: String(params.email_ref.from || ''),
+          received_at: Number(params.email_ref.received_at) || Date.now(),
+        }
+      : null;
 
   return withLock((store) => {
     // 邮件来源去重:同一封邮件无论派生几个任务,只在首个到达时登记
@@ -181,9 +195,12 @@ async function toolTodoCreate(params) {
       if (store.processed_message_ids.includes(emailRef.message_id)) {
         return { created: false, reason: 'duplicate', message_id: emailRef.message_id };
       }
-      const alreadyReferenced = store.todos.some((todo) => todo.email_ref && todo.email_ref.message_id === emailRef.message_id);
+      const alreadyReferenced = store.todos.some(
+        (todo) => todo.email_ref && todo.email_ref.message_id === emailRef.message_id
+      );
       if (alreadyReferenced) {
-        if (!store.processed_message_ids.includes(emailRef.message_id)) store.processed_message_ids.push(emailRef.message_id);
+        if (!store.processed_message_ids.includes(emailRef.message_id))
+          store.processed_message_ids.push(emailRef.message_id);
         return { created: false, reason: 'duplicate', message_id: emailRef.message_id };
       }
     }
@@ -195,7 +212,8 @@ async function toolTodoCreate(params) {
       notes: String((params && params.notes) || '').trim() || undefined,
       due_at: normalizeDueAt(params && params.due_at),
       status,
-      blocked_reason: status === 'waiting' ? String((params && params.blocked_reason) || '').trim() || undefined : undefined,
+      blocked_reason:
+        status === 'waiting' ? String((params && params.blocked_reason) || '').trim() || undefined : undefined,
       requester: String((params && params.requester) || '').trim() || undefined,
       subtasks: sanitizeSubtasks(params && params.subtasks) || undefined,
       completed_at: null,
@@ -246,6 +264,7 @@ async function toolTodoComplete(params) {
     if (!item) return { updated: false, reason: 'not found' };
     item.status = done ? 'done' : 'pending';
     item.completed_at = done ? Date.now() : null;
+    if (!done) item.blocked_reason = undefined;
     item.updated_at = Date.now();
     return { updated: true, todo: item };
   });
@@ -291,7 +310,11 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        status: { type: 'string', enum: ['pending', 'done'], description: 'Filter by status; omit for all.' },
+        status: {
+          type: 'string',
+          enum: ['pending', 'waiting', 'done'],
+          description: 'Filter by status; omit for all.',
+        },
         due_before: { type: 'number', description: 'Epoch ms — only todos due at or before this time.' },
         due_after: { type: 'number', description: 'Epoch ms — only todos due at or after this time.' },
         limit: { type: 'number', description: 'Max items to return.' },
@@ -308,8 +331,16 @@ const TOOLS = [
         title: { type: 'string', description: 'Short imperative task title.' },
         notes: optionalString('Details, context or links.'),
         due_at: { description: 'Deadline: epoch ms or ISO 8601 string; omit when unknown.' },
-        requester: { type: 'string', description: 'Display name of the person asking for this task (prefer the Chinese name when the email has one).' },
-        status: { type: 'string', enum: ['pending', 'waiting'], description: '"waiting" when the task is blocked on an external confirmation (client reply, lab data...).' },
+        requester: {
+          type: 'string',
+          description:
+            'Display name of the person asking for this task (prefer the Chinese name when the email has one).',
+        },
+        status: {
+          type: 'string',
+          enum: ['pending', 'waiting'],
+          description: '"waiting" when the task is blocked on an external confirmation (client reply, lab data...).',
+        },
         blocked_reason: { type: 'string', description: 'Why it waits, e.g. "待客户确认固件方案后再执行".' },
         subtasks: {
           type: 'array',
@@ -347,7 +378,11 @@ const TOOLS = [
         subtasks: {
           type: 'array',
           description: 'Replaces the whole step list.',
-          items: { type: 'object', properties: { id: { type: 'string' }, text: { type: 'string' }, done: { type: 'boolean' } }, required: ['text'] },
+          items: {
+            type: 'object',
+            properties: { id: { type: 'string' }, text: { type: 'string' }, done: { type: 'boolean' } },
+            required: ['text'],
+          },
         },
       },
       required: ['id'],
@@ -420,12 +455,21 @@ const handleRequest = async (message) => {
     }
     try {
       const result = await handler(params.arguments || {});
-      send({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: typeof result === 'string' ? result : JSON.stringify(result, null, 2) }] } });
+      send({
+        jsonrpc: '2.0',
+        id,
+        result: {
+          content: [{ type: 'text', text: typeof result === 'string' ? result : JSON.stringify(result, null, 2) }],
+        },
+      });
     } catch (error) {
       send({
         jsonrpc: '2.0',
         id,
-        result: { content: [{ type: 'text', text: `error: ${error && error.message ? error.message : String(error)}` }], isError: true },
+        result: {
+          content: [{ type: 'text', text: `error: ${error && error.message ? error.message : String(error)}` }],
+          isError: true,
+        },
       });
     }
     return;

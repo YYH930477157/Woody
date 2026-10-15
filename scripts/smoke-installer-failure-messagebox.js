@@ -49,7 +49,7 @@ const INSTALLER_ERROR_SCENARIOS = [
     code: 'E1010',
     message: 'AionUi could not extract the application files correctly.',
     action: 'Download a fresh installer and run it again.',
-    diagnostics: 'scenario=extract-failed phase=extract method=zip missing=AionUi.exe',
+    diagnostics: 'scenario=extract-failed phase=extract method=zip missing=Woody.exe',
   },
   {
     id: 'disk-insufficient',

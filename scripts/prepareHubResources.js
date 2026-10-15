@@ -16,7 +16,8 @@ const path = require('path');
 const https = require('https');
 // Patched: honor HTTPS_PROXY/HTTP_PROXY (e.g. local clash) so downloads work
 // behind restricted networks — plain https.get ignores proxy env vars.
-const PROXY_URL = process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.https_proxy || process.env.http_proxy;
+const PROXY_URL =
+  process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.https_proxy || process.env.http_proxy;
 let proxyAgent;
 if (PROXY_URL) {
   try {

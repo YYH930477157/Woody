@@ -20,6 +20,7 @@ describe('resolveFeedbackModule', () => {
     ['/team/team-1', 'agent-team'],
     ['/scheduled', 'scheduled-task'],
     ['/scheduled/job-42', 'scheduled-task'],
+    ['/todo', 'scheduled-task'],
     ['/assistants', 'assistant-preset'],
     ['/settings/agent', 'agent-detection'],
     ['/settings/agent/claude/repair', 'agent-detection'],

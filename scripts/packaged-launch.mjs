@@ -30,7 +30,7 @@ function resolvePackagedApp(projectRoot) {
 
   if (process.platform === 'win32') {
     for (const dir of ['win-unpacked', 'win-x64-unpacked', 'win-arm64-unpacked']) {
-      const exe = path.join(outDir, dir, 'AionUi.exe');
+      const exe = path.join(outDir, dir, 'Woody.exe');
       if (fs.existsSync(exe)) return { executablePath: exe, cwd: path.join(outDir, dir) };
     }
   } else if (process.platform === 'darwin') {
@@ -70,7 +70,7 @@ async function main() {
   }
 
   if (shouldClean) {
-    await killProcessByName('AionUi.exe');
+    await killProcessByName('Woody.exe');
     await killProcessByName('AionUi');
     await killProcessByName('electron.exe');
     await killProcessByName('electron');

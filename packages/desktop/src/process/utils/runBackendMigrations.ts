@@ -307,7 +307,11 @@ function buildDefaultMcpServers(): McpImportServer[] {
         command: todoSpawn.command,
         args: todoSpawn.args,
       },
-      original_json: JSON.stringify({ mcpServers: { [TODO_MCP_NAME]: { command: todoSpawn.command, args: todoSpawn.args } } }, null, 2),
+      original_json: JSON.stringify(
+        { mcpServers: { [TODO_MCP_NAME]: { command: todoSpawn.command, args: todoSpawn.args } } },
+        null,
+        2
+      ),
     });
   }
   return servers;
@@ -670,6 +674,9 @@ interface AssistantDetailApiShape {
       value?: string[];
     };
   };
+  preferences?: {
+    last_mcp_ids?: string[];
+  };
 }
 
 interface McpServerApiShape {
@@ -680,15 +687,16 @@ interface McpServerApiShape {
 
 /**
  * 邮件扫描定时任务的期望态保障:① 默认 aionrs 助手的 defaults.mcps 对齐为
- * fixed [aionui-todo](cron 会话的 MCP 取自助手快照,enabled 状态挂不上);
+ * fixed 并保留当前集合、追加 aionui-todo(cron 会话的 MCP 取自助手快照,
+ * enabled 状态挂不上);
  * ② "Todo email scan" 任务缺失时创建(每小时,new_conversation 模式,带
  * 技能文件),用户已建/改名/改频率/停用则不动。新装机还没配模型时本轮
  * 跳过,下次启动重试(本步骤每启动都跑,天然自愈)。
  *
  * Desired-state guarantees for the email scan: (1) align the default aionrs
- * assistant's defaults.mcps to fixed [aionui-todo] — cron conversations take
- * their MCP selection from the assistant snapshot, which the enabled flag
- * alone never satisfies; (2) create the "Todo email scan" job when missing
+ * assistant's defaults.mcps to fixed while preserving the current effective set
+ * and appending aionui-todo — cron conversations take their MCP selection from
+ * the assistant snapshot, which the enabled flag alone never satisfies; (2) create the "Todo email scan" job when missing
  * (hourly, new_conversation mode, with its skill file) — user renames /
  * schedule edits / disabling are never touched. Fresh installs without a
  * configured model defer to the next startup (the step runs every start).
@@ -714,15 +722,16 @@ async function ensureTodoScanCronJob(): Promise<void> {
   /**
    * cron 会话的 MCP 选择取自 assistant 快照(auto 模式空历史 = 显式零个),
    * enabled 状态挂不上 todo MCP。把默认 aionrs 助手的 defaults.mcps 设为
-   * fixed [todo id] 后,扫描会话(及所有经该助手创建的会话)都会解析出
-   * todo MCP。仅在 auto 模式时改写;用户自设过 fixed 集合则完全尊重。
+   * fixed 并保留原有集合、追加 todo id 后,扫描会话(及所有经该助手创建的
+   * 会话)都会解析出 todo MCP。仅在 auto 模式时改写;用户自设过 fixed 集合则完全尊重。
    *
    * Cron conversations resolve their MCP selection from the assistant
    * snapshot (auto mode with no history = explicit zero), so the enabled flag
    * alone never attaches the todo MCP. Setting the default aionrs assistant's
-   * defaults.mcps to fixed [todo id] makes the scan conversation — and every
-   * other assistant-backed conversation — resolve it. Only rewrites when the
-   * mode is auto; a user-authored fixed set is respected verbatim.
+   * defaults.mcps to fixed while preserving the existing set and appending the
+   * todo id makes the scan conversation — and every other assistant-backed
+   * conversation — resolve it. Only rewrites when the mode is auto; a
+   * user-authored fixed set is respected verbatim.
    */
   if (aionrs && todoMcp) {
     try {
@@ -730,12 +739,20 @@ async function ensureTodoScanCronJob(): Promise<void> {
       const mcps = detail?.defaults?.mcps;
       const isFixedWithoutTodo = mcps?.mode === 'fixed' && !(mcps.value || []).includes(todoMcp.id);
       if (mcps?.mode !== 'fixed') {
+        const currentMcpIds =
+          mcps?.mode === 'auto'
+            ? detail?.preferences?.last_mcp_ids || []
+            : Array.isArray(mcps?.value)
+              ? mcps.value
+              : [];
         await httpRequest('PUT', `/api/assistants/${aionrs.id}`, {
-          defaults: { mcps: { mode: 'fixed', value: [todoMcp.id] } },
+          defaults: { mcps: { mode: 'fixed', value: [...new Set([...currentMcpIds, todoMcp.id])] } },
         });
-        console.info('[Migration] default assistant mcps set to fixed [aionui-todo]');
+        console.info('[Migration] default assistant mcps pinned to include [aionui-todo]');
       } else if (isFixedWithoutTodo) {
-        console.info('[Migration] default assistant has a user-defined fixed mcp set without aionui-todo — respected as-is');
+        console.info(
+          '[Migration] default assistant has a user-defined fixed mcp set without aionui-todo — respected as-is'
+        );
       }
     } catch (error) {
       console.warn('[Migration] failed to set default assistant mcps:', error);

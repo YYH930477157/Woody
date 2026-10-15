@@ -80,8 +80,11 @@ const ChatStatusBar: React.FC<ChatStatusBarProps> = ({
       ? (usageStats.output_tokens / usageStats.duration_ms) * 1000
       : null;
   const estimateSpeed =
-    running && firstTokenAtMs && now > firstTokenAtMs ? getLiveTextLength() / CHARS_PER_TOKEN / ((now - firstTokenAtMs) / 1000) : null;
-  const speedText = exactSpeed !== null ? formatSpeed(exactSpeed) : estimateSpeed !== null ? `~${formatSpeed(estimateSpeed)}` : '--';
+    running && firstTokenAtMs && now > firstTokenAtMs
+      ? getLiveTextLength() / CHARS_PER_TOKEN / ((now - firstTokenAtMs) / 1000)
+      : null;
+  const speedText =
+    exactSpeed !== null ? formatSpeed(exactSpeed) : estimateSpeed !== null ? `~${formatSpeed(estimateSpeed)}` : '--';
 
   // Cache hit: share of the latest call's prompt served from the provider's
   // prompt cache. Zero-denominator (provider reports nothing) → `--`.
@@ -94,12 +97,7 @@ const ChatStatusBar: React.FC<ChatStatusBarProps> = ({
   const elapsedMs = finalElapsedMs ?? (running && startedAtMs && now > startedAtMs ? now - startedAtMs : null);
 
   const segment = (icon: React.ReactNode, label: string, value: React.ReactNode, tooltip: React.ReactNode) => (
-    <Tooltip
-      content={tooltip}
-      position='top'
-      mini
-      className='chat-status-bar-tooltip'
-    >
+    <Tooltip content={tooltip} position='top' mini className='chat-status-bar-tooltip'>
       <span className='flex items-center gap-4px whitespace-nowrap cursor-default'>
         <span className='inline-flex items-center text-14px leading-none'>{icon}</span>
         <span>{label}</span>
@@ -119,7 +117,10 @@ const ChatStatusBar: React.FC<ChatStatusBarProps> = ({
               output: usageStats?.output_tokens ?? 0,
               seconds: formatSeconds(usageStats?.duration_ms ?? 0),
             })
-          : t('conversation.statusBar.speedEstimate', 'Rough estimate from streamed text until the engine reports usage')
+          : t(
+              'conversation.statusBar.speedEstimate',
+              'Rough estimate from streamed text until the engine reports usage'
+            )
       )}
       {segment(
         <BookOpen theme='outline' size='13' fill='currentColor' />,

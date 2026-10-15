@@ -149,18 +149,15 @@ describe('browser WebSocket realtime error handling', () => {
   it.each([
     { name: 'realtime.error', data: { code: 'REALTIME_AUTH_MISSING', message: 'Missing auth', recoverable: false } },
     { name: 'realtime.error', data: { code: 'REALTIME_AUTH_EXPIRED', message: 'Expired auth', recoverable: false } },
-  ])('treats $name auth payload as terminal and redirects to login when refresh fails', async (payload) => {
+  ])('stops reconnecting after $name auth errors without navigating away in offline mode', async (payload) => {
     const { adapter, location, socket } = await loadBrowserAdapter();
     const emit = vi.fn();
     adapter.on({ emit });
 
     socket.dispatchMessage(payload);
 
-    // The socket is closed synchronously; the redirect now lives behind a silent
-    // refresh attempt. In this node env `document` is absent, so refreshSession()
-    // short-circuits to false and we fall through to the login redirect — but the
-    // scheduling happens on a microtask, so timers must advance asynchronously to
-    // let that promise settle first.
+    // Without a DOM the refresh fails. Offline mode keeps the current page while
+    // terminal auth errors still suppress reconnect attempts.
     expect(socket.close).toHaveBeenCalledTimes(1);
     expect(emit).not.toHaveBeenCalled();
 
@@ -171,7 +168,7 @@ describe('browser WebSocket realtime error handling', () => {
     expect(FakeWebSocket.instances).toHaveLength(socketCountAfterClose);
 
     await vi.advanceTimersByTimeAsync(1000);
-    expect(location.hash).toBe('/login');
+    expect(location.hash).toBe('');
   });
 
   it('emits non-auth realtime errors without closing or redirecting', async () => {

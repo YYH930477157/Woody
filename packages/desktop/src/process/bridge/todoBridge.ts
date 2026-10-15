@@ -86,7 +86,11 @@ export function initTodoBridge(): void {
       last_scan_at: data.last_scan_at ?? null,
       last_scan_status: data.last_scan_status ?? null,
       source_ready: scriptReady && snapshotFresh,
-      source_message: scriptReady ? (snapshotFresh ? 'outlook' : 'outlook (no snapshot yet)') : 'email source script missing',
+      source_message: scriptReady
+        ? snapshotFresh
+          ? 'outlook'
+          : 'outlook (no snapshot yet)'
+        : 'email source script missing',
     };
   });
 }

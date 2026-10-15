@@ -6,7 +6,19 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Checkbox, Empty, Input, Message, Modal, Popconfirm, Select, Spin, Tag, Tooltip } from '@arco-design/web-react';
+import {
+  Button,
+  Checkbox,
+  Empty,
+  Input,
+  Message,
+  Modal,
+  Popconfirm,
+  Select,
+  Spin,
+  Tag,
+  Tooltip,
+} from '@arco-design/web-react';
 import { Calendar, Delete, Edit, Mail, Plus, Search } from '@icon-park/react';
 import classNames from 'classnames';
 import dayjs from 'dayjs';
@@ -28,7 +40,8 @@ type GroupKey = 'overdue' | 'today' | 'waiting' | 'upcoming' | 'done';
 const startOfDayMs = (value: number | null | undefined): number | null =>
   value === null || value === undefined ? null : dayjs(value).startOf('day').valueOf();
 
-const isSameDay = (a: number | null | undefined, b: number): boolean => startOfDayMs(a) === dayjs(b).startOf('day').valueOf();
+const isSameDay = (a: number | null | undefined, b: number): boolean =>
+  startOfDayMs(a) === dayjs(b).startOf('day').valueOf();
 
 /** 语义分组:done > waiting > 按截止日(逾期/今天/其余含无截止)。 */
 const groupOf = (item: ITodoItem): GroupKey => {
@@ -63,8 +76,7 @@ const requesterOf = (item: ITodoItem): string | null => {
 const TodoPage: React.FC = () => {
   const { t } = useTranslation();
   const isMobile = useLayoutContext()?.isMobile ?? false;
-  const isDesktop =
-    typeof window !== 'undefined' && Boolean((window as { electronAPI?: unknown }).electronAPI);
+  const isDesktop = typeof window !== 'undefined' && Boolean((window as { electronAPI?: unknown }).electronAPI);
 
   const [todos, setTodos] = useState<ITodoItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -129,7 +141,11 @@ const TodoPage: React.FC = () => {
     async (item: ITodoItem) => {
       const today = dayjs().startOf('day').valueOf();
       const due_at = item.due_at && item.due_at >= today ? item.due_at : today;
-      setTodos((prev) => prev.map((todo) => (todo.id === item.id ? { ...todo, status: 'pending', due_at, blocked_reason: undefined } : todo)));
+      setTodos((prev) =>
+        prev.map((todo) =>
+          todo.id === item.id ? { ...todo, status: 'pending', due_at, blocked_reason: undefined } : todo
+        )
+      );
       try {
         await ipcBridge.todo.update.invoke({ id: item.id, status: 'pending', due_at, blocked_reason: '' });
       } catch (error) {
@@ -162,7 +178,9 @@ const TodoPage: React.FC = () => {
   /** 子任务勾选:整包替换(subtasks 契约为全量写)。 */
   const handleSubtaskToggle = useCallback(
     async (item: ITodoItem, subtaskId: string, done: boolean) => {
-      const subtasks: ITodoSubtask[] = (item.subtasks || []).map((sub) => (sub.id === subtaskId ? { ...sub, done } : sub));
+      const subtasks: ITodoSubtask[] = (item.subtasks || []).map((sub) =>
+        sub.id === subtaskId ? { ...sub, done } : sub
+      );
       setTodos((prev) => prev.map((todo) => (todo.id === item.id ? { ...todo, subtasks } : todo)));
       try {
         await ipcBridge.todo.update.invoke({ id: item.id, subtasks });
@@ -207,7 +225,13 @@ const TodoPage: React.FC = () => {
   }, [refresh, t]);
 
   const handleEditorSave = useCallback(
-    async (payload: { title: string; notes: string; dueDate: string; requester: string; statusGroup: 'pending' | 'waiting' }) => {
+    async (payload: {
+      title: string;
+      notes: string;
+      dueDate: string;
+      requester: string;
+      statusGroup: 'pending' | 'waiting';
+    }) => {
       const due_at = payload.dueDate ? dayjs(payload.dueDate).valueOf() : null;
       try {
         if (editor.item) {
@@ -369,7 +393,8 @@ const TodoPage: React.FC = () => {
       );
     }
     const group = groupOf(item);
-    const color = group === 'overdue' ? 'red' : group === 'today' ? 'orange' : group === 'waiting' ? 'gold' : 'arcoblue';
+    const color =
+      group === 'overdue' ? 'red' : group === 'today' ? 'orange' : group === 'waiting' ? 'gold' : 'arcoblue';
     return (
       <Tag size='small' color={color} className='shrink-0 cursor-default'>
         {dayjs(item.due_at).format(isMobile ? 'M/D' : 'MM-DD')}
@@ -382,7 +407,10 @@ const TodoPage: React.FC = () => {
     if (!total) return null;
     const finished = item.subtasks!.filter((sub) => sub.done).length;
     return (
-      <span className='inline-flex items-center gap-4px text-11px text-t-tertiary shrink-0' title={t('todo.drawer.subtaskProgress')}>
+      <span
+        className='inline-flex items-center gap-4px text-11px text-t-tertiary shrink-0'
+        title={t('todo.drawer.subtaskProgress')}
+      >
         <span className='tabular-nums'>
           {finished}/{total}
         </span>
@@ -420,7 +448,12 @@ const TodoPage: React.FC = () => {
             {/* 行 1:标题 + 右侧元信息 */}
             <div className='flex items-center justify-between gap-8px'>
               <div className='flex items-center gap-8px min-w-0'>
-                <span className={classNames('text-13px font-[600] truncate', isDone ? 'line-through text-t-tertiary' : 'text-t-primary')}>
+                <span
+                  className={classNames(
+                    'text-13px font-[600] truncate',
+                    isDone ? 'line-through text-t-tertiary' : 'text-t-primary'
+                  )}
+                >
                   {item.title}
                 </span>
                 {item.source === 'email' && (
@@ -496,7 +529,12 @@ const TodoPage: React.FC = () => {
   return (
     <div className='w-full h-full min-h-0 box-border bg-1 flex flex-col overflow-hidden'>
       {/* 顶栏:标题 + 搜索 + 扫描 + 新建 */}
-      <div className={classNames('shrink-0 bg-1 border-b border-solid border-border-2 flex items-center justify-between gap-12px', isMobile ? 'px-16px py-8px' : 'px-24px py-8px')}>
+      <div
+        className={classNames(
+          'shrink-0 bg-1 border-b border-solid border-border-2 flex items-center justify-between gap-12px',
+          isMobile ? 'px-16px py-8px' : 'px-24px py-8px'
+        )}
+      >
         <div className='flex items-baseline gap-8px min-w-0'>
           <span className='text-14px font-bold text-t-primary shrink-0'>{t('todo.title')}</span>
           {!isMobile && lastScanText && (
@@ -518,7 +556,12 @@ const TodoPage: React.FC = () => {
           <Button size='small' loading={scanning} onClick={() => void handleScan()}>
             {t('todo.scan.button')}
           </Button>
-          <Button size='small' type='primary' icon={<Plus theme='outline' size='13' />} onClick={() => setEditor({ open: true, item: null })}>
+          <Button
+            size='small'
+            type='primary'
+            icon={<Plus theme='outline' size='13' />}
+            onClick={() => setEditor({ open: true, item: null })}
+          >
             {!isMobile && t('todo.new')}
           </Button>
         </div>
@@ -533,7 +576,9 @@ const TodoPage: React.FC = () => {
                 type='text'
                 className={classNames(
                   '!h-auto !p-10px !block text-left !rd-10px border border-solid',
-                  activeTab === 'focus' ? 'border-danger-6 bg-danger-1' : 'border-danger-5 bg-danger-1 hover:bg-danger-2'
+                  activeTab === 'focus'
+                    ? 'border-danger-6 bg-danger-1'
+                    : 'border-danger-5 bg-danger-1 hover:bg-danger-2'
                 )}
                 onClick={() => setActiveTab('focus')}
               >
@@ -547,7 +592,9 @@ const TodoPage: React.FC = () => {
                 type='text'
                 className={classNames(
                   '!h-auto !p-10px !block text-left !rd-10px border border-solid',
-                  activeTab === 'waiting' ? 'border-warning-6 bg-warning-1' : 'border-warning-5 bg-warning-1 hover:bg-warning-2'
+                  activeTab === 'waiting'
+                    ? 'border-warning-6 bg-warning-1'
+                    : 'border-warning-5 bg-warning-1 hover:bg-warning-2'
                 )}
                 onClick={() => setActiveTab('waiting')}
               >
@@ -564,13 +611,30 @@ const TodoPage: React.FC = () => {
               <div className='flex items-center justify-between mb-6px'>
                 <span className='text-12px font-[600] text-t-primary'>{monthCursor.format('YYYY-MM')}</span>
                 <div className='flex items-center gap-2px'>
-                  <Button size='mini' type='text' onClick={() => setMonthCursor((prev) => prev.subtract(1, 'month'))} aria-label='previous month'>
+                  <Button
+                    size='mini'
+                    type='text'
+                    onClick={() => setMonthCursor((prev) => prev.subtract(1, 'month'))}
+                    aria-label='previous month'
+                  >
                     ‹
                   </Button>
-                  <Button size='mini' type='text' onClick={() => setMonthCursor((prev) => prev.add(1, 'month'))} aria-label='next month'>
+                  <Button
+                    size='mini'
+                    type='text'
+                    onClick={() => setMonthCursor((prev) => prev.add(1, 'month'))}
+                    aria-label='next month'
+                  >
                     ›
                   </Button>
-                  <Button size='mini' type='text' onClick={() => { setMonthCursor(dayjs().startOf('month')); setSelectedDay(dayjs().startOf('day').valueOf()); }}>
+                  <Button
+                    size='mini'
+                    type='text'
+                    onClick={() => {
+                      setMonthCursor(dayjs().startOf('month'));
+                      setSelectedDay(dayjs().startOf('day').valueOf());
+                    }}
+                  >
                     {t('todo.cal.today')}
                   </Button>
                 </div>
@@ -613,10 +677,18 @@ const TodoPage: React.FC = () => {
                     >
                       <span>{cell.date()}</span>
                       <span className='flex items-center gap-2px mt-1px h-4px'>
-                        {groups?.has('overdue') && <i className={classNames('w-4px h-4px rd-full', isSelected ? 'bg-white' : 'bg-danger-6')} />}
-                        {groups?.has('today') && <i className={classNames('w-4px h-4px rd-full', isSelected ? 'bg-white' : 'bg-warning-5')} />}
-                        {groups?.has('waiting') && <i className={classNames('w-4px h-4px rd-full', isSelected ? 'bg-white' : 'bg-warning-6')} />}
-                        {groups?.has('upcoming') && <i className={classNames('w-4px h-4px rd-full', isSelected ? 'bg-white' : 'bg-primary-6')} />}
+                        {groups?.has('overdue') && (
+                          <i className={classNames('w-4px h-4px rd-full', isSelected ? 'bg-white' : 'bg-danger-6')} />
+                        )}
+                        {groups?.has('today') && (
+                          <i className={classNames('w-4px h-4px rd-full', isSelected ? 'bg-white' : 'bg-warning-5')} />
+                        )}
+                        {groups?.has('waiting') && (
+                          <i className={classNames('w-4px h-4px rd-full', isSelected ? 'bg-white' : 'bg-warning-6')} />
+                        )}
+                        {groups?.has('upcoming') && (
+                          <i className={classNames('w-4px h-4px rd-full', isSelected ? 'bg-white' : 'bg-primary-6')} />
+                        )}
                       </span>
                     </Button>
                   );
@@ -648,7 +720,9 @@ const TodoPage: React.FC = () => {
             {/* 要求人筛选 */}
             <div>
               <div className='flex items-center justify-between mb-6px'>
-                <span className='text-11px font-[600] text-t-tertiary uppercase tracking-wider'>{t('todo.senderFilter')}</span>
+                <span className='text-11px font-[600] text-t-tertiary uppercase tracking-wider'>
+                  {t('todo.senderFilter')}
+                </span>
                 {selectedSender && (
                   <Button size='mini' type='text' onClick={() => setSelectedSender(null)}>
                     {t('todo.senderClear')}
@@ -665,7 +739,9 @@ const TodoPage: React.FC = () => {
                       key={sender.name}
                       className={classNames(
                         '!w-full !justify-between !px-8px !py-4px !rd-6px text-12px border border-solid',
-                        active ? 'bg-primary-1 border-primary-6 text-primary-6 font-[600]' : 'border-transparent text-t-secondary'
+                        active
+                          ? 'bg-primary-1 border-primary-6 text-primary-6 font-[600]'
+                          : 'border-transparent text-t-secondary'
                       )}
                       onClick={() => setSelectedSender((prev) => (prev === sender.name ? null : sender.name))}
                     >
@@ -675,11 +751,20 @@ const TodoPage: React.FC = () => {
                         </span>
                         <span className='truncate'>{sender.name}</span>
                       </span>
-                      <span className={classNames('text-11px px-6px rd-full', active ? 'bg-primary-6 text-white' : 'bg-fill-2 text-t-tertiary')}>{sender.count}</span>
+                      <span
+                        className={classNames(
+                          'text-11px px-6px rd-full',
+                          active ? 'bg-primary-6 text-white' : 'bg-fill-2 text-t-tertiary'
+                        )}
+                      >
+                        {sender.count}
+                      </span>
                     </Button>
                   );
                 })}
-                {senders.length === 0 && <span className='text-11px text-t-tertiary px-8px'>{t('todo.senderEmpty')}</span>}
+                {senders.length === 0 && (
+                  <span className='text-11px text-t-tertiary px-8px'>{t('todo.senderEmpty')}</span>
+                )}
               </div>
             </div>
           </aside>
@@ -704,7 +789,14 @@ const TodoPage: React.FC = () => {
                   {tab.key === 'waiting' && <span className='w-4px h-4px rd-full bg-warning-6' />}
                   {tab.key === 'upcoming' && <span className='w-4px h-4px rd-full bg-primary-6' />}
                   {tab.label}
-                  <span className={classNames('px-4px rd-full text-10px', activeTab === tab.key ? 'bg-fill-2 text-t-secondary' : 'text-t-tertiary')}>{tab.count}</span>
+                  <span
+                    className={classNames(
+                      'px-4px rd-full text-10px',
+                      activeTab === tab.key ? 'bg-fill-2 text-t-secondary' : 'text-t-tertiary'
+                    )}
+                  >
+                    {tab.count}
+                  </span>
                 </Button>
               ))}
             </div>
@@ -753,7 +845,15 @@ const TodoPage: React.FC = () => {
                 <Calendar theme='outline' size='28' className='text-t-tertiary' />
                 <p className='text-13px font-[600] text-t-primary mt-8px'>{t('todo.emptyFiltered.title')}</p>
                 <p className='text-12px text-t-tertiary mt-4px'>{t('todo.emptyFiltered.hint')}</p>
-                <Button size='small' type='primary' className='mt-12px' onClick={() => { resetAllFilters(); setActiveTab('all'); }}>
+                <Button
+                  size='small'
+                  type='primary'
+                  className='mt-12px'
+                  onClick={() => {
+                    resetAllFilters();
+                    setActiveTab('all');
+                  }}
+                >
                   {t('todo.filter.clearAll')}
                 </Button>
               </div>
@@ -763,12 +863,23 @@ const TodoPage: React.FC = () => {
                   <section key={section.key}>
                     <div className='flex items-center gap-6px mb-8px px-2px'>
                       <span className={classNames('w-6px h-6px rd-full', groupDotClass[section.key])} />
-                      <h2 className={classNames('text-12px font-[600] tracking-wide', section.key === 'overdue' && 'text-danger-6', section.key === 'waiting' && 'text-warning-6', section.key !== 'overdue' && section.key !== 'waiting' && 'text-t-secondary')}>
+                      <h2
+                        className={classNames(
+                          'text-12px font-[600] tracking-wide',
+                          section.key === 'overdue' && 'text-danger-6',
+                          section.key === 'waiting' && 'text-warning-6',
+                          section.key !== 'overdue' && section.key !== 'waiting' && 'text-t-secondary'
+                        )}
+                      >
                         {groupTitle(section.key)}
                       </h2>
-                      <span className='px-6px rd-full text-10px font-[600] bg-fill-2 text-t-secondary'>{section.items.length}</span>
+                      <span className='px-6px rd-full text-10px font-[600] bg-fill-2 text-t-secondary'>
+                        {section.items.length}
+                      </span>
                     </div>
-                    <div className={classNames('flex gap-6px', isMobile ? 'flex-col' : 'flex-col')}>{section.items.map(renderCard)}</div>
+                    <div className={classNames('flex gap-6px', isMobile ? 'flex-col' : 'flex-col')}>
+                      {section.items.map(renderCard)}
+                    </div>
                   </section>
                 ))}
               </div>
@@ -795,7 +906,7 @@ const TodoPage: React.FC = () => {
         open={editor.open}
         item={editor.item}
         onCancel={() => setEditor({ open: false, item: null })}
-        onSave={(payload) => void handleEditorSave(payload)}
+        onSave={handleEditorSave}
       />
     </div>
   );
@@ -823,16 +934,30 @@ const TodoDrawer: React.FC<{
     );
   }
 
-  const statusValue = item.status === 'done' ? 'done' : item.status === 'waiting' ? 'waiting' : groupOf(item) === 'today' || groupOf(item) === 'overdue' ? 'pending' : 'pending';
+  const statusValue =
+    item.status === 'done'
+      ? 'done'
+      : item.status === 'waiting'
+        ? 'waiting'
+        : groupOf(item) === 'today' || groupOf(item) === 'overdue'
+          ? 'pending'
+          : 'pending';
   const requester = requesterOf(item);
   const dueText = item.due_at ? dayjs(item.due_at).format('YYYY-MM-DD dddd') : t('todo.dueNone');
 
   const body = (
     <div className='flex-1 min-w-0 flex flex-col overflow-hidden'>
       <div className='px-16px py-8px border-b border-solid border-border-2 flex items-center justify-between gap-8px shrink-0 bg-fill-1'>
-        <span className='text-11px font-[600] text-t-tertiary uppercase tracking-wider truncate'>{t('todo.drawer.title')}</span>
+        <span className='text-11px font-[600] text-t-tertiary uppercase tracking-wider truncate'>
+          {t('todo.drawer.title')}
+        </span>
         <div className='flex items-center gap-6px shrink-0'>
-          <Select size='mini' value={statusValue} onChange={(value) => onStatusChange(value as 'pending' | 'waiting' | 'done')} className='w-130px'>
+          <Select
+            size='mini'
+            value={statusValue}
+            onChange={(value) => onStatusChange(value as 'pending' | 'waiting' | 'done')}
+            className='w-130px'
+          >
             <Select.Option value='pending'>{t('todo.drawer.status.pending')}</Select.Option>
             <Select.Option value='waiting'>{t('todo.drawer.status.waiting')}</Select.Option>
             <Select.Option value='done'>{t('todo.drawer.status.done')}</Select.Option>
@@ -856,7 +981,14 @@ const TodoDrawer: React.FC<{
             {item.source === 'agent' && <Tag size='small'>{t('todo.source.agent')}</Tag>}
             {item.source === 'manual' && <Tag size='small'>{t('todo.source.manual')}</Tag>}
           </div>
-          <h2 className={classNames('text-15px font-bold text-t-primary leading-snug break-all', item.status === 'done' && 'line-through text-t-tertiary')}>{item.title}</h2>
+          <h2
+            className={classNames(
+              'text-15px font-bold text-t-primary leading-snug break-all',
+              item.status === 'done' && 'line-through text-t-tertiary'
+            )}
+          >
+            {item.title}
+          </h2>
           <div className='mt-6px flex items-center gap-8px text-12px text-t-secondary'>
             <span>
               📅 {t('todo.detail.due')}: <strong className='text-t-primary'>{dueText}</strong>
@@ -868,7 +1000,9 @@ const TodoDrawer: React.FC<{
           <div className='p-10px rd-10px bg-warning-1 border border-solid border-warning-5 flex items-center justify-between gap-8px'>
             <div className='text-12px text-warning-6 min-w-0'>
               <div className='font-bold'>⏳ {t('todo.drawer.waiting.title')}</div>
-              <div className='text-11px mt-2px break-all'>{item.blocked_reason || t('todo.drawer.waiting.default')}</div>
+              <div className='text-11px mt-2px break-all'>
+                {item.blocked_reason || t('todo.drawer.waiting.default')}
+              </div>
             </div>
             <Button size='mini' type='primary' status='warning' className='shrink-0' onClick={onUnblock}>
               {t('todo.unblockConfirm')}
@@ -893,9 +1027,23 @@ const TodoDrawer: React.FC<{
             </div>
             <div className='border border-solid border-border-2 rd-10px p-4px flex flex-col'>
               {item.subtasks.map((sub) => (
-                <label key={sub.id} className='flex items-start gap-8px p-6px rd-6px hover:bg-fill-2 cursor-pointer transition-colors'>
-                  <Checkbox checked={sub.done} onChange={(checked) => onSubtaskToggle(sub.id, checked)} className='mt-1px shrink-0' />
-                  <span className={classNames('text-12px leading-relaxed break-all', sub.done ? 'line-through text-t-tertiary' : 'text-t-primary')}>{sub.text}</span>
+                <label
+                  key={sub.id}
+                  className='flex items-start gap-8px p-6px rd-6px hover:bg-fill-2 cursor-pointer transition-colors'
+                >
+                  <Checkbox
+                    checked={sub.done}
+                    onChange={(checked) => onSubtaskToggle(sub.id, checked)}
+                    className='mt-1px shrink-0'
+                  />
+                  <span
+                    className={classNames(
+                      'text-12px leading-relaxed break-all',
+                      sub.done ? 'line-through text-t-tertiary' : 'text-t-primary'
+                    )}
+                  >
+                    {sub.text}
+                  </span>
                 </label>
               ))}
             </div>
@@ -906,10 +1054,14 @@ const TodoDrawer: React.FC<{
           <div className='flex flex-col gap-4px'>
             <h3 className='text-11px font-[600] text-t-secondary'>{t('todo.drawer.requester')}</h3>
             <div className='flex items-center gap-8px px-10px py-6px rd-8px bg-fill-1 border border-solid border-border-2 text-12px'>
-              <span className='w-24px h-24px rd-full bg-fill-3 text-11px font-bold text-t-primary flex-center shrink-0'>{requester.slice(0, 1)}</span>
+              <span className='w-24px h-24px rd-full bg-fill-3 text-11px font-bold text-t-primary flex-center shrink-0'>
+                {requester.slice(0, 1)}
+              </span>
               <div className='min-w-0'>
                 <div className='font-[600] text-t-primary truncate'>{requester}</div>
-                {item.email_ref?.from && <div className='text-10px text-t-tertiary truncate'>{item.email_ref.from}</div>}
+                {item.email_ref?.from && (
+                  <div className='text-10px text-t-tertiary truncate'>{item.email_ref.from}</div>
+                )}
               </div>
             </div>
           </div>
@@ -921,14 +1073,18 @@ const TodoDrawer: React.FC<{
             <div className='p-10px rd-10px bg-fill-1 border border-solid border-border-2 flex flex-col gap-4px'>
               <div className='flex items-center justify-between gap-8px'>
                 <span className='text-12px font-[600] text-t-primary truncate'>{item.email_ref.from}</span>
-                <span className='text-10px text-t-tertiary shrink-0'>{dayjs(item.email_ref.received_at).format('YYYY-MM-DD HH:mm')}</span>
+                <span className='text-10px text-t-tertiary shrink-0'>
+                  {dayjs(item.email_ref.received_at).format('YYYY-MM-DD HH:mm')}
+                </span>
               </div>
               <div className='text-12px font-[500] text-t-primary break-all'>{item.email_ref.subject}</div>
             </div>
           </div>
         )}
 
-        <div className='text-11px text-t-tertiary'>{t('todo.detail.created')}: {dayjs(item.created_at).format('YYYY-MM-DD HH:mm')}</div>
+        <div className='text-11px text-t-tertiary'>
+          {t('todo.detail.created')}: {dayjs(item.created_at).format('YYYY-MM-DD HH:mm')}
+        </div>
 
         <div className='flex justify-end gap-8px pt-4px'>
           <Popconfirm title={t('todo.confirmDelete')} onOk={onRemove}>
@@ -945,11 +1101,7 @@ const TodoDrawer: React.FC<{
   );
 
   if (isMobile) {
-    return (
-      <div className='absolute inset-0 z-20 bg-1 flex flex-col'>
-        {body}
-      </div>
-    );
+    return <div className='absolute inset-0 z-20 bg-1 flex flex-col'>{body}</div>;
   }
 
   return <aside className='w-320px shrink-0 bg-1 border-l border-solid border-border-2 flex flex-col'>{body}</aside>;
@@ -960,7 +1112,13 @@ const TodoEditor: React.FC<{
   open: boolean;
   item: ITodoItem | null;
   onCancel: () => void;
-  onSave: (payload: { title: string; notes: string; dueDate: string; requester: string; statusGroup: 'pending' | 'waiting' }) => void;
+  onSave: (payload: {
+    title: string;
+    notes: string;
+    dueDate: string;
+    requester: string;
+    statusGroup: 'pending' | 'waiting';
+  }) => Promise<void>;
 }> = ({ open, item, onCancel, onSave }) => {
   const { t } = useTranslation();
   const [title, setTitle] = useState('');
@@ -981,13 +1139,16 @@ const TodoEditor: React.FC<{
   }, [open, item]);
 
   const handleOk = async () => {
+    if (saving) {
+      return;
+    }
     if (!title.trim()) {
       Message.warning(t('todo.titleRequired'));
       return;
     }
     setSaving(true);
     try {
-      onSave({
+      await onSave({
         title: title.trim(),
         notes: notes.trim(),
         dueDate,
@@ -1011,11 +1172,22 @@ const TodoEditor: React.FC<{
       unmountOnExit
     >
       <div className='flex flex-col gap-12px py-4px'>
-        <Input value={title} onChange={setTitle} placeholder={t('todo.titlePlaceholder')} maxLength={200} onPressEnter={() => void handleOk()} />
+        <Input
+          value={title}
+          onChange={setTitle}
+          placeholder={t('todo.titlePlaceholder')}
+          maxLength={200}
+          onPressEnter={() => void handleOk()}
+        />
         <div className='grid grid-cols-3 gap-8px'>
           <div className='flex flex-col gap-4px'>
             <span className='text-12px text-t-secondary'>{t('todo.editor.requester')}</span>
-            <Input value={requester} onChange={setRequester} placeholder={t('todo.editor.requesterPlaceholder')} maxLength={60} />
+            <Input
+              value={requester}
+              onChange={setRequester}
+              placeholder={t('todo.editor.requesterPlaceholder')}
+              maxLength={60}
+            />
           </div>
           <div className='flex flex-col gap-4px'>
             <span className='text-12px text-t-secondary'>{t('todo.due')}</span>
@@ -1030,7 +1202,13 @@ const TodoEditor: React.FC<{
             </Select>
           </div>
         </div>
-        <Input.TextArea value={notes} onChange={setNotes} placeholder={t('todo.notesPlaceholder')} maxLength={2000} autoSize={{ minRows: 3, maxRows: 8 }} />
+        <Input.TextArea
+          value={notes}
+          onChange={setNotes}
+          placeholder={t('todo.notesPlaceholder')}
+          maxLength={2000}
+          autoSize={{ minRows: 3, maxRows: 8 }}
+        />
       </div>
     </Modal>
   );

@@ -133,16 +133,16 @@ const newId = (): string => `todo_${Date.now().toString(36)}_${randomUUID().slic
 const newSubtaskId = (): string => `st_${Date.now().toString(36)}_${randomUUID().slice(0, 8)}`;
 
 /** 清洗 subtasks 输入(双侧写入方共用同一上限/规则):去空文本、补 id、限量。 */
-export const sanitizeSubtasks = (
-  input: unknown
-): { id: string; text: string; done: boolean }[] | undefined => {
+export const sanitizeSubtasks = (input: unknown): { id: string; text: string; done: boolean }[] | undefined => {
   if (input === undefined) return undefined;
   if (!Array.isArray(input)) return undefined;
   const cleaned = input
     .filter((entry): entry is Record<string, unknown> => typeof entry === 'object' && entry !== null)
     .map((entry) => ({
       id: typeof entry.id === 'string' && entry.id ? entry.id : newSubtaskId(),
-      text: String(entry.text ?? '').trim().slice(0, 300),
+      text: String(entry.text ?? '')
+        .trim()
+        .slice(0, 300),
       done: Boolean(entry.done),
     }))
     .filter((entry) => entry.text)
@@ -230,6 +230,7 @@ export const createTodoStoreService = () => ({
       if (!item) return null;
       item.status = input.done ? 'done' : 'pending';
       item.completed_at = input.done ? Date.now() : null;
+      if (!input.done) item.blocked_reason = undefined;
       item.updated_at = Date.now();
       return { ...item };
     });
