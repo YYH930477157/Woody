@@ -1,10 +1,10 @@
-appId: com.aionui.app
-productName: AionUi
-executableName: AionUi
+appId: com.woody.app
+productName: Woody
+executableName: Woody
 copyright: Copyright © 2024 AionUi
 
 protocols:
-  - name: AionUi Protocol
+  - name: Woody Protocol
     schemes:
       - aionui
 
