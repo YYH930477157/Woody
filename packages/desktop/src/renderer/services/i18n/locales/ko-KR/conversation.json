@@ -708,7 +708,8 @@
           "solution": "Solution",
           "impact": "Impact assessment",
           "tests": "Test steps"
-        },        "states": {
+        },
+        "states": {
           "idle": "Ready to start",
           "collecting": "Collecting changes",
           "message_draft": "Drafting commit message",
