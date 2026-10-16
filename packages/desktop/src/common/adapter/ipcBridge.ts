@@ -105,8 +105,15 @@ import type {
   GitOperationResult,
   GitPushResult,
   GitStatusSnapshot,
+  GitWorkflowPrepareRequest,
+  GitWorkflowSession,
 } from '@/common/types/sourceControl/gitWorkflowTypes';
-import type { StaticScanConfig, StaticScanResult } from '@/common/types/sourceControl/staticScanTypes';
+import type {
+  StaticScanConfig,
+  StaticScanMachineConfig,
+  StaticScanProjectConfig,
+  StaticScanResult,
+} from '@/common/types/sourceControl/staticScanTypes';
 import type { ProtocolDetectionRequest, ProtocolDetectionResponse } from '../utils/protocolDetector';
 import {
   buildCreateConversationBody,
@@ -1722,6 +1729,16 @@ export const sourceControl = {
     'source-control.commit'
   ),
   push: bridge.buildProvider<GitPushResult, { repoPath: string; branch: string }>('source-control.push'),
+  workflowPrepare: bridge.buildProvider<GitWorkflowSession, GitWorkflowPrepareRequest>(
+    'source-control.workflow.prepare'
+  ),
+  workflowCommit: bridge.buildProvider<
+    GitWorkflowSession,
+    { sessionId: string; messageFields: GitWorkflowPrepareRequest['messageFields'] }
+  >('source-control.workflow.commit'),
+  workflowRetryPush: bridge.buildProvider<GitWorkflowSession, { sessionId: string }>(
+    'source-control.workflow.retry-push'
+  ),
 };
 
 export const staticScan = {
@@ -1730,6 +1747,18 @@ export const staticScan = {
   ),
   test: bridge.buildProvider<StaticScanResult, { repoPath: string; selectedPaths: string[]; config: StaticScanConfig }>(
     'source-control.static-scan-test'
+  ),
+  getMachineConfig: bridge.buildProvider<StaticScanMachineConfig, void>(
+    'source-control.static-scan.config.machine.get'
+  ),
+  saveMachineConfig: bridge.buildProvider<boolean, StaticScanMachineConfig>(
+    'source-control.static-scan.config.machine.save'
+  ),
+  getProjectConfig: bridge.buildProvider<StaticScanProjectConfig, { repoPath: string }>(
+    'source-control.static-scan.config.project.get'
+  ),
+  saveProjectConfig: bridge.buildProvider<boolean, { repoPath: string; config: StaticScanProjectConfig }>(
+    'source-control.static-scan.config.project.save'
   ),
 };
 

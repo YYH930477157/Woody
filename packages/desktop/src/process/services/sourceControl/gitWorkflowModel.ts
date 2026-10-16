@@ -24,3 +24,15 @@ export const validateCommitMessage = (fields: CommitMessageFields): CommitMessag
   }
   return { ok: true };
 };
+
+export const formatCommitMessage = (fields: CommitMessageFields): string => {
+  const lines = [
+    `【修改原因】: ${fields.reason.trim()}`,
+    `【修改范围】: ${fields.scope.trim()}`,
+    `【修改方案】: ${fields.solution.trim()}`,
+    `【影响评估】: ${fields.impact.trim()}`,
+    `【测试步骤】: ${fields.tests.trim()}`,
+  ];
+  if (fields.largeChangeNote?.trim()) lines.push(`【强制推送】: ${fields.largeChangeNote.trim()}`);
+  return lines.join('\n');
+};

@@ -1,10 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { StaticScanService } from '@/process/services/sourceControl/staticScanService';
+import type { StaticScanConfigStore } from '@/process/services/sourceControl/staticScanConfigStore';
 
 const providers = vi.hoisted(() => ({
   scan: vi.fn(),
   test: vi.fn(),
+  getMachineConfig: vi.fn(),
+  saveMachineConfig: vi.fn(),
+  getProjectConfig: vi.fn(),
+  saveProjectConfig: vi.fn(),
 }));
 
 vi.mock('@/common', () => ({
@@ -12,6 +17,10 @@ vi.mock('@/common', () => ({
     staticScan: {
       scan: { provider: providers.scan },
       test: { provider: providers.test },
+      getMachineConfig: { provider: providers.getMachineConfig },
+      saveMachineConfig: { provider: providers.saveMachineConfig },
+      getProjectConfig: { provider: providers.getProjectConfig },
+      saveProjectConfig: { provider: providers.saveProjectConfig },
     },
   },
 }));
@@ -29,11 +38,21 @@ describe('static scan bridge', () => {
         exitCode: 0,
       })),
     };
+    const configStore: StaticScanConfigStore = {
+      getMachineConfig: () => ({ tools: {} }),
+      saveMachineConfig: vi.fn(async () => undefined),
+      getProjectConfig: vi.fn(async () => ({})),
+      saveProjectConfig: vi.fn(async () => undefined),
+    };
 
-    initStaticScanBridge(service);
+    initStaticScanBridge(service, configStore);
 
     expect(providers.scan).toHaveBeenCalledOnce();
     expect(providers.test).toHaveBeenCalledOnce();
+    expect(providers.getMachineConfig).toHaveBeenCalledOnce();
+    expect(providers.saveMachineConfig).toHaveBeenCalledOnce();
+    expect(providers.getProjectConfig).toHaveBeenCalledOnce();
+    expect(providers.saveProjectConfig).toHaveBeenCalledOnce();
     const handler = providers.test.mock.calls[0][0] as (params: {
       repoPath: string;
       selectedPaths: string[];
