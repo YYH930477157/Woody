@@ -684,6 +684,38 @@
         "repositories": "مخازن",
         "changes": "تغییرات"
       },
+      "commit": {
+        "action": "Commit and push",
+        "title": "Commit and push",
+        "start": "Start scan",
+        "repository": "Repository: {{repository}}",
+        "selectedFiles": "Selected files to process",
+        "selectFile": "Select this file for commit",
+        "repoPathUnavailable": "The local Git repository path is unavailable",
+        "readingGit": "Reading Git status…",
+        "scanPending": "Git status loaded; waiting for the static scan workflow",
+        "gitStatusFailed": "Couldn't read Git status",
+        "states": {
+          "idle": "Ready to start",
+          "collecting": "Collecting changes",
+          "message_draft": "Drafting commit message",
+          "scan": "Running static scan",
+          "repair": "Applying automatic repairs",
+          "rescan": "Running scan again",
+          "compile": "Compiling for verification",
+          "confirmation": "Waiting for confirmation",
+          "commit": "Creating commit",
+          "push": "Pushing changes",
+          "completed": "Completed",
+          "blocked": "Workflow blocked",
+          "failed": "Workflow failed"
+        }
+      },
+      "branch": {
+        "select": "Select branch",
+        "dirtyWorktree": "The worktree has uncommitted changes, so the branch cannot be switched",
+        "checkoutFailed": "Couldn't switch branches"
+      },
       "viewAsTree": "نمایش درختی",
       "viewAsList": "نمایش فهرستی",
       "worktree": "درخت‌کاری",

@@ -21,7 +21,7 @@
  * Read-only for this round: no stage/unstage/discard affordance (PR-4).
  */
 
-import { Button } from '@arco-design/web-react';
+import { Button, Checkbox } from '@arco-design/web-react';
 import { Minus, Plus, Undo } from '@icon-park/react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -104,6 +104,10 @@ export type ScmResourceRowProps = {
   resource: ScmResource;
   selected: boolean;
   onSelect: (resource: ScmResource) => void;
+  /** Whether this row is included in the pending Git submission. */
+  commitSelected?: boolean;
+  /** Toggle this row's inclusion in the pending Git submission. */
+  onCommitSelection?: (resource: ScmResource) => void;
   /**
    * Whether the owning repo has a staging area. Gates the stage/unstage buttons:
    * a provider without an index must show no staging affordance at all, and calling
@@ -134,6 +138,8 @@ export const ScmResourceRow: React.FC<ScmResourceRowProps> = ({
   resource,
   selected,
   onSelect,
+  commitSelected = false,
+  onCommitSelection,
   staging,
   onAction,
   busy = false,
@@ -169,6 +175,7 @@ export const ScmResourceRow: React.FC<ScmResourceRowProps> = ({
   //    (a flagless row has no side to move between);
   //  - discard additionally requires that this row is NOT the staged side.
   const actionable = onAction !== undefined && isActionable(resource);
+  const selectableForCommit = onCommitSelection !== undefined && isActionable(resource);
   const stagingActions = actionable && staging && resource.staged !== undefined;
 
   // `scm/discard` acts on the **unstaged side only** (protocol.md v11; the engine
@@ -239,6 +246,19 @@ export const ScmResourceRow: React.FC<ScmResourceRowProps> = ({
       style={indent ? { paddingInlineStart: 8 + indent } : undefined}
       title={hint ?? resource.repo_relative_path}
     >
+      {onCommitSelection && (
+        <Checkbox
+          checked={commitSelected}
+          disabled={!selectableForCommit || busy}
+          data-scm-commit-select
+          aria-label={t('conversation.explorer.scm.commit.selectFile')}
+          onChange={() => {
+            if (!selectableForCommit) return;
+            onCommitSelection(resource);
+          }}
+          onClick={(e) => e.stopPropagation()}
+        />
+      )}
       <span
         aria-label={t(`conversation.explorer.scm.state.${suffix}`)}
         className={`flex-shrink-0 w-14px text-center text-12px font-medium ${BADGE_CLASS[suffix]}`}

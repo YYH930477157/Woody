@@ -27,12 +27,15 @@
  * section drops in as a third with no framework change (see `ScmSectionStack`).
  */
 
-import { Button, Tooltip } from '@arco-design/web-react';
+import { Button, Message, Select, Tooltip } from '@arco-design/web-react';
 import { BranchTwo, FolderCode, FolderCodeOne, Plus, RightBranchOne, TreeList, Undo, ViewList } from '@icon-park/react';
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePreviewContext } from '../Preview';
+import { ipcBridge } from '@/common';
+import type { GitBranch, GitWorkflowState } from '@/common/types/sourceControl/gitWorkflowTypes';
+import { CommitWorkflowModal } from './CommitWorkflowModal';
 import { discardAllTargets, ScmChangesView, stageAllTargets } from './ScmChangesView';
 import { ScmSection, ScmSectionDivider } from './ScmSection';
 import {
@@ -57,6 +60,7 @@ import {
   type ScmViewMode,
 } from './scmUiStore';
 import { type ScmActionReport, useScmActions } from './useScmActions';
+import { clearUnavailableSelections, getSelectedResources, toggleResourceSelection } from './scmSelectionStore';
 
 /** Section ids — the persistence keys and the extensible section registry. */
 const SECTION_REPOSITORIES = 'repositories';
@@ -74,13 +78,21 @@ const SECTION_DEFAULT_FRACTION = 0.6;
 export type ScmPanelProps = {
   /** Owning project id — scopes the store's repositories + statuses. */
   projectId: string;
+  /** Absolute paths keyed by project-explorer id, used by the local Git bridge. */
+  repoPaths?: Record<string, string>;
 };
 
-export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId }) => {
+export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {} }) => {
   const { t } = useTranslation();
   const view = useScm();
   const ui = useScmUi();
   const actions = useScmActions();
+  const [commitSelections, setCommitSelections] = useState<Record<string, ReadonlySet<string>>>({});
+  const [workflowVisible, setWorkflowVisible] = useState(false);
+  const [workflowState, setWorkflowState] = useState<GitWorkflowState>('idle');
+  const [workflowMessage, setWorkflowMessage] = useState<string>();
+  const [branches, setBranches] = useState<Record<string, GitBranch[]>>({});
+  const [branchBusy, setBranchBusy] = useState(false);
 
   // Wire the WS runtime (idempotent) and declare the project. Deliberately no
   // cleanup: unmount here means "tab switched", not "project closed". The UI store
@@ -90,6 +102,50 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId }) => {
     void openScmProject(projectId);
     openScmUi(projectId);
   }, [projectId]);
+
+  // The repo whose changes the body shows. A stale or absent `selectedRepoId`
+  // (default on open, or after the selected repo was removed) resolves to the first
+  // repo — so the body never renders nothing while a repo exists.
+  const selectedRepo = useMemo(
+    () => view.repositories.find((r) => r.repo_id === view.selectedRepoId) ?? view.repositories[0],
+    [view.repositories, view.selectedRepoId]
+  );
+
+  const selectedRepoStatus = selectedRepo ? view.statuses[selectedRepo.repo_id] : undefined;
+  const selectedRepoPath = selectedRepo
+    ? (repoPaths[selectedRepo.repo_id] ?? repoPaths[selectedRepo.root.pe_id] ?? undefined)
+    : undefined;
+  const selectedResources = selectedRepo
+    ? getSelectedResources(selectedRepoStatus?.resources ?? [], commitSelections[selectedRepo.repo_id] ?? new Set())
+    : [];
+
+  useEffect(() => {
+    if (!selectedRepo) return;
+    const resources = view.statuses[selectedRepo.repo_id]?.resources ?? [];
+    setCommitSelections((previous) => {
+      const current = previous[selectedRepo.repo_id];
+      if (!current) return previous;
+      const next = clearUnavailableSelections(resources, current);
+      if (next.size === current.size && [...next].every((key) => current.has(key))) return previous;
+      return { ...previous, [selectedRepo.repo_id]: next };
+    });
+  }, [selectedRepo, view.statuses]);
+
+  useEffect(() => {
+    if (!selectedRepo || !selectedRepoPath || !ipcBridge.sourceControl?.branches) return;
+    let cancelled = false;
+    void ipcBridge.sourceControl.branches
+      .invoke({ repoPath: selectedRepoPath })
+      .then((result) => {
+        if (!cancelled) setBranches((previous) => ({ ...previous, [selectedRepo.repo_id]: result.branches }));
+      })
+      .catch(() => {
+        if (!cancelled) setBranches((previous) => ({ ...previous, [selectedRepo.repo_id]: [] }));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedRepo, selectedRepoPath]);
 
   // Focus refresh — the only signal that catches an external editor's write and a
   // `.gitignore` edit.
@@ -102,15 +158,6 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId }) => {
       window.removeEventListener('focus', onFocus);
     };
   }, []);
-
-  // The repo whose changes the body shows. A stale or absent `selectedRepoId`
-  // (default on open, or after the selected repo was removed) resolves to the first
-  // repo — so the body never renders nothing while a repo exists. Undefined only
-  // when there are no repos at all, which the guards below handle first.
-  const selectedRepo = useMemo(
-    () => view.repositories.find((r) => r.repo_id === view.selectedRepoId) ?? view.repositories[0],
-    [view.repositories, view.selectedRepoId]
-  );
 
   // Diff selection is scoped to the shown repo: only its rows are on screen, and a
   // repo switch clears `selectedResource` (see `setSelectedRepo`), so a resolved row
@@ -136,6 +183,58 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId }) => {
   }
 
   const multiRepo = view.repositories.length > 1;
+
+  const toggleCommitSelection = (resource: ScmResource): void => {
+    if (!selectedRepo) return;
+    setCommitSelections((previous) => ({
+      ...previous,
+      [selectedRepo.repo_id]: toggleResourceSelection(previous[selectedRepo.repo_id] ?? new Set(), resource),
+    }));
+  };
+
+  const openCommitWorkflow = (): void => {
+    if (selectedResources.length === 0) return;
+    setWorkflowState('idle');
+    setWorkflowMessage(undefined);
+    setWorkflowVisible(true);
+  };
+
+  const startCommitWorkflow = (): void => {
+    if (!selectedRepoPath || selectedResources.length === 0) {
+      setWorkflowState('blocked');
+      setWorkflowMessage(t('conversation.explorer.scm.commit.repoPathUnavailable'));
+      return;
+    }
+    setWorkflowState('collecting');
+    setWorkflowMessage(t('conversation.explorer.scm.commit.readingGit'));
+    void ipcBridge.sourceControl.status
+      .invoke({ repoPath: selectedRepoPath })
+      .then(() => {
+        setWorkflowState('scan');
+        setWorkflowMessage(t('conversation.explorer.scm.commit.scanPending'));
+      })
+      .catch(() => {
+        setWorkflowState('failed');
+        setWorkflowMessage(t('conversation.explorer.scm.commit.gitStatusFailed'));
+      });
+  };
+
+  const selectBranch = (branch: string): void => {
+    if (!selectedRepoPath || branchBusy || branch === selectedRepo.head?.name) return;
+    setBranchBusy(true);
+    void ipcBridge.sourceControl.checkout
+      .invoke({ repoPath: selectedRepoPath, branch })
+      .then((result) => {
+        if (result.ok === false) {
+          if (result.kind === 'dirty-worktree') Message.warning(t('conversation.explorer.scm.branch.dirtyWorktree'));
+          else Message.error(t('conversation.explorer.scm.branch.checkoutFailed'));
+          return;
+        }
+        void refreshAllRepos();
+      })
+      .catch(() => Message.error(t('conversation.explorer.scm.branch.checkoutFailed')))
+      .finally(() => setBranchBusy(false));
+  };
 
   return (
     <div data-scm-panel className='h-full flex flex-col min-h-0'>
@@ -163,6 +262,23 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId }) => {
         onAction={actions.run}
         busy={actions.busy}
         failedRowKeys={actions.report?.failedRowKeys ?? []}
+        commitSelection={commitSelections[selectedRepo.repo_id] ?? new Set()}
+        onCommitSelection={toggleCommitSelection}
+        selectedResources={selectedResources}
+        onCommitAndPush={openCommitWorkflow}
+        branches={branches[selectedRepo.repo_id] ?? []}
+        branchBusy={branchBusy}
+        onBranchChange={selectBranch}
+      />
+      <CommitWorkflowModal
+        visible={workflowVisible}
+        repo={selectedRepo}
+        branch={selectedRepo.head?.name}
+        resources={selectedResources}
+        state={workflowState}
+        statusMessage={workflowMessage}
+        onCancel={() => setWorkflowVisible(false)}
+        onStart={startCommitWorkflow}
       />
       {/* Selecting a change opens its diff in the shared preview panel (a `'diff'`
           tab, reusing the same `openPreview` mechanism the file tree uses) rather
@@ -200,7 +316,30 @@ const ScmSectionStack: React.FC<{
   onAction: (action: ScmActionKind, repoId: string, resources: ScmResource[]) => void;
   busy: boolean;
   failedRowKeys: string[];
-}> = ({ view, ui, selectedRepo, multiRepo, onRepoSelect, onAction, busy, failedRowKeys }) => {
+  commitSelection: ReadonlySet<string>;
+  onCommitSelection: (resource: ScmResource) => void;
+  selectedResources: ScmResource[];
+  onCommitAndPush: () => void;
+  branches: GitBranch[];
+  branchBusy: boolean;
+  onBranchChange: (branch: string) => void;
+}> = ({
+  view,
+  ui,
+  selectedRepo,
+  multiRepo,
+  onRepoSelect,
+  onAction,
+  busy,
+  failedRowKeys,
+  commitSelection,
+  onCommitSelection,
+  selectedResources,
+  onCommitAndPush,
+  branches,
+  branchBusy,
+  onBranchChange,
+}) => {
   const { t } = useTranslation();
   const reposCollapsed = ui.collapsed[SECTION_REPOSITORIES] === true;
   const changesCollapsed = ui.collapsed[SECTION_CHANGES] === true;
@@ -272,6 +411,12 @@ const ScmSectionStack: React.FC<{
       busy={busy}
       onStageAll={() => onAction('stage', selectedRepo.repo_id, stageTargets)}
       onDiscardAll={() => onAction('discard', selectedRepo.repo_id, discardTargets)}
+      commitCount={selectedResources.length}
+      onCommitAndPush={onCommitAndPush}
+      branches={branches}
+      currentBranch={selectedRepo.head?.name}
+      branchBusy={branchBusy}
+      onBranchChange={onBranchChange}
     />
   );
 
@@ -281,6 +426,8 @@ const ScmSectionStack: React.FC<{
         repo={selectedRepo}
         status={view.statuses[selectedRepo.repo_id]}
         selectedKey={view.selectedResource}
+        commitSelection={commitSelection}
+        onCommitSelection={onCommitSelection}
         onAction={onAction}
         busy={busy}
         failedRowKeys={failedRowKeys}
@@ -371,10 +518,61 @@ const ChangesHeaderActions: React.FC<{
   busy: boolean;
   onStageAll: () => void;
   onDiscardAll: () => void;
-}> = ({ mode, onChangeMode, stageTargets, discardTargets, busy, onStageAll, onDiscardAll }) => {
+  commitCount: number;
+  onCommitAndPush: () => void;
+  branches: GitBranch[];
+  currentBranch?: string;
+  branchBusy: boolean;
+  onBranchChange: (branch: string) => void;
+}> = ({
+  mode,
+  onChangeMode,
+  stageTargets,
+  discardTargets,
+  busy,
+  onStageAll,
+  onDiscardAll,
+  commitCount,
+  onCommitAndPush,
+  branches,
+  currentBranch,
+  branchBusy,
+  onBranchChange,
+}) => {
   const { t } = useTranslation();
   return (
     <>
+      {branches.length > 0 && (
+        <Select
+          size='mini'
+          value={currentBranch}
+          loading={branchBusy}
+          disabled={busy || branchBusy}
+          data-scm-branch-select
+          onChange={(value) => onBranchChange(value)}
+          aria-label={t('conversation.explorer.scm.branch.select')}
+          style={{ maxWidth: 140 }}
+        >
+          {branches.map((branch) => (
+            <Select.Option key={branch.name} value={branch.name}>
+              {branch.name}
+            </Select.Option>
+          ))}
+        </Select>
+      )}
+      <Tooltip content={t('conversation.explorer.scm.commit.action')} mini position='br'>
+        <Button
+          type='text'
+          size='mini'
+          disabled={busy || commitCount === 0}
+          data-scm-commit-and-push
+          className='flex-shrink-0'
+          aria-label={t('conversation.explorer.scm.commit.action')}
+          onClick={onCommitAndPush}
+        >
+          {t('conversation.explorer.scm.commit.action')}
+        </Button>
+      </Tooltip>
       {discardTargets.length > 0 && (
         <Tooltip content={t('conversation.explorer.scm.actions.discard')} mini position='br'>
           <Button

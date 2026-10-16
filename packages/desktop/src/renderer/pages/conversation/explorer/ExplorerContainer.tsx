@@ -471,6 +471,9 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
   // pe_id → folder name for the search result's `PE · REL` secondary label.
   const searchPeNames = Object.fromEntries(roots.map((root) => [root.pe_id, root.title]));
   const workspacePeId = detail?.explorer.workspace_pe_id;
+  const repoPaths = Object.fromEntries(
+    (detail?.explorer.entries ?? []).map((entry) => [entry.pe_id, entry.display_path])
+  );
   // Absolute path of the workspace root (derived display_path) for the
   // open-externally button.
   const workspacePath = detail?.explorer.entries.find((e) => e.pe_id === workspacePeId)?.display_path;
@@ -644,7 +647,7 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
       </div>
       {activeTab === 'changes' && (
         <div className='flex-1 min-h-0'>
-          <ScmPanel projectId={projectId} />
+          <ScmPanel projectId={projectId} repoPaths={repoPaths} />
         </div>
       )}
       <Modal

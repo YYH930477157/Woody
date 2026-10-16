@@ -84,6 +84,8 @@ export const discardAllTargets = (status: ScmStatus | undefined, staging: boolea
 
 type RowCallbacks = {
   selectedKey: string | null;
+  commitSelection: ReadonlySet<string>;
+  onCommitSelection: (resource: ScmResource) => void;
   staging: boolean;
   onRowAction: (action: ScmActionKind, resource: ScmResource) => void;
   busy: boolean;
@@ -101,6 +103,8 @@ const ListBody: React.FC<{ resources: ScmResource[]; cb: RowCallbacks }> = ({ re
           resource={resource}
           selected={cb.selectedKey === key}
           onSelect={(r) => selectScmResource(resourceKey(r))}
+          commitSelected={cb.commitSelection.has(key)}
+          onCommitSelection={cb.onCommitSelection}
           staging={cb.staging}
           onAction={cb.onRowAction}
           busy={cb.busy}
@@ -125,6 +129,8 @@ const TreeNode: React.FC<{
         resource={node.resource}
         selected={cb.selectedKey === node.key}
         onSelect={(r) => selectScmResource(resourceKey(r))}
+        commitSelected={cb.commitSelection.has(node.key)}
+        onCommitSelection={cb.onCommitSelection}
         staging={cb.staging}
         onAction={cb.onRowAction}
         busy={cb.busy}
@@ -202,12 +208,25 @@ export const ScmChangesView: React.FC<{
   repo: ScmRepository;
   status: ScmStatus | undefined;
   selectedKey: string | null;
+  commitSelection: ReadonlySet<string>;
+  onCommitSelection: (resource: ScmResource) => void;
   onAction: (action: ScmActionKind, repoId: string, resources: ScmResource[]) => void;
   busy: boolean;
   failedRowKeys: string[];
   viewMode: ScmViewMode;
   treeExpanded: string[];
-}> = ({ repo, status, selectedKey, onAction, busy, failedRowKeys, viewMode, treeExpanded }) => {
+}> = ({
+  repo,
+  status,
+  selectedKey,
+  commitSelection,
+  onCommitSelection,
+  onAction,
+  busy,
+  failedRowKeys,
+  viewMode,
+  treeExpanded,
+}) => {
   const { t } = useTranslation();
   // Grouping is a display-layer derivation from capabilities — the wire is flat and
   // never pre-grouped (source-control.md §变更清单).
@@ -248,6 +267,8 @@ export const ScmChangesView: React.FC<{
         const discardTargets = group.id === 'staged' ? [] : actionableResources(group.resources);
         const cb: RowCallbacks = {
           selectedKey,
+          commitSelection,
+          onCommitSelection,
           staging: repo.capabilities.staging,
           onRowAction: (action, r) => onAction(action, repo.repo_id, [r]),
           busy,

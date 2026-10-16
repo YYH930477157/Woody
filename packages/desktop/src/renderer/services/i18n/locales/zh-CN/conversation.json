@@ -684,6 +684,38 @@
         "repositories": "仓库",
         "changes": "变更"
       },
+      "commit": {
+        "action": "提交并推送",
+        "title": "提交并推送",
+        "start": "开始扫描",
+        "repository": "仓库：{{repository}}",
+        "selectedFiles": "将处理以下已选文件",
+        "selectFile": "选择此文件提交",
+        "repoPathUnavailable": "无法定位本地 Git 仓库路径",
+        "readingGit": "正在读取 Git 状态…",
+        "scanPending": "已读取 Git 状态，等待静态扫描流程",
+        "gitStatusFailed": "读取 Git 状态失败",
+        "states": {
+          "idle": "等待开始",
+          "collecting": "正在收集变更",
+          "message_draft": "正在生成提交说明",
+          "scan": "正在静态扫描",
+          "repair": "正在自动修复",
+          "rescan": "正在重新扫描",
+          "compile": "正在编译验证",
+          "confirmation": "等待确认",
+          "commit": "正在提交",
+          "push": "正在推送",
+          "completed": "已完成",
+          "blocked": "流程已阻止",
+          "failed": "流程失败"
+        }
+      },
+      "branch": {
+        "select": "选择分支",
+        "dirtyWorktree": "工作区有未提交改动，无法切换分支",
+        "checkoutFailed": "切换分支失败"
+      },
       "viewAsTree": "以树状视图显示",
       "viewAsList": "以列表视图显示",
       "worktree": "工作树",
