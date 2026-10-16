@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 import type { StaticScanService } from '@/process/services/sourceControl/staticScanService';
 import type { StaticScanConfigStore } from '@/process/services/sourceControl/staticScanConfigStore';
 
+vi.mock('electron', () => ({ app: { getPath: vi.fn(() => 'D:/user-data') } }));
+
 const providers = vi.hoisted(() => ({
   scan: vi.fn(),
   test: vi.fn(),

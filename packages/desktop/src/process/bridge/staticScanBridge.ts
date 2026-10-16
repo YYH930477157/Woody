@@ -1,4 +1,5 @@
 import { ipcBridge } from '@/common';
+import { app } from 'electron';
 import {
   createStaticScanService,
   type StaticScanRequest,
@@ -13,11 +14,7 @@ export function initStaticScanBridge(
   service: StaticScanService = createStaticScanService(),
   configStore?: StaticScanConfigStore
 ): void {
-  const resolvedConfigStore =
-    configStore ??
-    createStaticScanConfigStore(
-      (require('electron') as { app: { getPath: (name: 'userData') => string } }).app.getPath('userData')
-    );
+  const resolvedConfigStore = configStore ?? createStaticScanConfigStore(app.getPath('userData'));
   const run = (request: StaticScanRequest) => service.scan(request);
   ipcBridge.staticScan.scan.provider(run);
   ipcBridge.staticScan.test.provider(run);
