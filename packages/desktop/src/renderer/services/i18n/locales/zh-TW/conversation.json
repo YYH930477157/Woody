@@ -685,6 +685,7 @@
         "changes": "變更"
       },
       "commit": {
+        "snapshotChanged": "掃描後檔案內容或 Git 分支發生了變更，請重新掃描後再提交。",
         "action": "Commit and push",
         "title": "Commit and push",
         "start": "Start scan",

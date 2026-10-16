@@ -691,6 +691,7 @@
         "changes": "Alterações"
       },
       "commit": {
+        "snapshotChanged": "Os arquivos ou a branch Git mudaram após a análise. Execute a análise novamente antes de fazer o commit.",
         "action": "Commit and push",
         "title": "Commit and push",
         "start": "Start scan",

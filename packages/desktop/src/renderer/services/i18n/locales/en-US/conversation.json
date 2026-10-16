@@ -685,6 +685,7 @@
         "changes": "Changes"
       },
       "commit": {
+        "snapshotChanged": "Files or the Git branch changed after the scan. Run the scan again before committing.",
         "action": "Commit and push",
         "title": "Commit and push",
         "start": "Start scan",

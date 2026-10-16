@@ -685,6 +685,7 @@
         "changes": "تغییرات"
       },
       "commit": {
+        "snapshotChanged": "فایل‌ها یا شاخه Git پس از اسکن تغییر کرده‌اند. پیش از ثبت تغییرات، اسکن را دوباره اجرا کنید.",
         "action": "Commit and push",
         "title": "Commit and push",
         "start": "Start scan",

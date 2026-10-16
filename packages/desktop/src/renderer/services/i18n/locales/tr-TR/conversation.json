@@ -687,6 +687,7 @@
         "changes": "Değişiklikler"
       },
       "commit": {
+        "snapshotChanged": "Taramadan sonra dosyalar veya Git dalı değişti. Commit yapmadan önce taramayı yeniden çalıştırın.",
         "action": "Commit and push",
         "title": "Commit and push",
         "start": "Start scan",

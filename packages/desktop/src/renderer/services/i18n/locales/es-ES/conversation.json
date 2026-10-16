@@ -686,6 +686,7 @@
         "changes": "Cambios"
       },
       "commit": {
+        "snapshotChanged": "Los archivos o la rama de Git cambiaron después del análisis. Repita el análisis antes de confirmar.",
         "action": "Commit and push",
         "title": "Commit and push",
         "start": "Start scan",

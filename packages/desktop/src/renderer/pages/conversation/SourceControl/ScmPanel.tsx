@@ -61,7 +61,12 @@ import {
   type ScmViewMode,
 } from './scmUiStore';
 import { type ScmActionReport, useScmActions } from './useScmActions';
-import { clearUnavailableSelections, getSelectedResources, toggleResourceSelection } from './scmSelectionStore';
+import {
+  clearUnavailableSelections,
+  getSelectedResources,
+  resolveRepositoryPath,
+  toggleResourceSelection,
+} from './scmSelectionStore';
 
 /** Section ids — the persistence keys and the extensible section registry. */
 const SECTION_REPOSITORIES = 'repositories';
@@ -122,9 +127,7 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {} })
   );
 
   const selectedRepoStatus = selectedRepo ? view.statuses[selectedRepo.repo_id] : undefined;
-  const selectedRepoPath = selectedRepo
-    ? (repoPaths[selectedRepo.repo_id] ?? repoPaths[selectedRepo.root.pe_id] ?? undefined)
-    : undefined;
+  const selectedRepoPath = selectedRepo ? resolveRepositoryPath(selectedRepo, repoPaths) : undefined;
   const selectedResources = selectedRepo
     ? getSelectedResources(selectedRepoStatus?.resources ?? [], commitSelections[selectedRepo.repo_id] ?? new Set())
     : [];
@@ -220,7 +223,7 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {} })
     }
     setWorkflowState('collecting');
     setWorkflowMessage(t('conversation.explorer.scm.commit.readingGit'));
-    const selectedPaths = [...new Set(selectedResources.map((resource) => resource.file.relative_path))];
+    const selectedPaths = [...new Set(selectedResources.map((resource) => resource.repo_relative_path))];
     void Promise.all([
       ipcBridge.staticScan?.getProjectConfig.invoke({ repoPath: selectedRepoPath }),
       ipcBridge.staticScan?.getMachineConfig.invoke(),
@@ -249,7 +252,9 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {} })
         setWorkflowSessionId(session.id);
         setWorkflowState(session.state);
         setWorkflowDiagnostics(session.diagnostics);
-        setWorkflowMessage(session.reason);
+        setWorkflowMessage(
+          session.reasonCode ? t(`conversation.explorer.scm.commit.${session.reasonCode}`) : session.reason
+        );
       })
       .catch(() => {
         setWorkflowState('failed');
@@ -265,7 +270,9 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {} })
       .then((session) => {
         setWorkflowState(session.state);
         setWorkflowDiagnostics(session.diagnostics);
-        setWorkflowMessage(session.reason);
+        setWorkflowMessage(
+          session.reasonCode ? t(`conversation.explorer.scm.commit.${session.reasonCode}`) : session.reason
+        );
       })
       .catch(() => {
         setWorkflowState('failed');
@@ -280,7 +287,9 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {} })
       .invoke({ sessionId: workflowSessionId })
       .then((session) => {
         setWorkflowState(session.state);
-        setWorkflowMessage(session.reason);
+        setWorkflowMessage(
+          session.reasonCode ? t(`conversation.explorer.scm.commit.${session.reasonCode}`) : session.reason
+        );
       })
       .catch(() => {
         setWorkflowState('push');

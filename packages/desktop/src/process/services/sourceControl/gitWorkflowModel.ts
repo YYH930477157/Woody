@@ -1,8 +1,13 @@
 import type {
   CommitMessageFields,
   CommitMessageValidation,
+  GitCommitSnapshot,
   LargeChangeMetrics,
 } from '@/common/types/sourceControl/gitWorkflowTypes';
+
+/** Check that the selected tree, parent revision and branch still match the scan. */
+export const isSameCommitSnapshot = (left: GitCommitSnapshot, right: GitCommitSnapshot): boolean =>
+  left.head === right.head && left.branch === right.branch && left.tree === right.tree;
 
 const REQUIRED_FIELDS: Array<keyof Pick<CommitMessageFields, 'reason' | 'scope' | 'solution' | 'impact' | 'tests'>> = [
   'reason',

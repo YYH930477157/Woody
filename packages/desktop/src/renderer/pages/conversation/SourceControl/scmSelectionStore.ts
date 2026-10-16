@@ -1,6 +1,15 @@
-import { isActionable, resourceKey, type ScmResource } from './scmModel';
+import { isActionable, resourceKey, type ScmRepository, type ScmResource } from './scmModel';
 
 export type ScmSelection = ReadonlySet<string>;
+
+/** Resolve nested repositories relative to their owning explorer entry. */
+export const resolveRepositoryPath = (repo: ScmRepository, repoPaths: Record<string, string>): string | undefined => {
+  const explicitPath = repoPaths[repo.repo_id];
+  if (explicitPath) return explicitPath;
+  const rootPath = repoPaths[repo.root.pe_id];
+  if (!rootPath || !repo.root.relative_path) return rootPath;
+  return `${rootPath.replace(/[\\/]+$/, '')}/${repo.root.relative_path}`;
+};
 
 export const toggleResourceSelection = (selection: ScmSelection, resource: ScmResource): Set<string> => {
   const next = new Set(selection);

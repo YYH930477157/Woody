@@ -11,6 +11,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ScmRepository, ScmResource, ScmStatus } from '@/renderer/pages/conversation/SourceControl/scmModel';
 import type { ScmPort } from '@/renderer/pages/conversation/SourceControl/scmStore';
 
+const gitBridge = vi.hoisted(() => ({
+  branches: vi.fn(async () => ({ branches: [] })),
+  prepare: vi.fn(async () => ({ id: 'session', state: 'confirmation', diagnostics: [] })),
+}));
+
+vi.mock('@/common', () => ({
+  ipcBridge: {
+    sourceControl: {
+      branches: { invoke: gitBridge.branches },
+      workflowPrepare: { invoke: gitBridge.prepare },
+    },
+    staticScan: {
+      getMachineConfig: { invoke: async () => ({ tools: { 'clang-tidy': 'clang-tidy' } }) },
+      getProjectConfig: { invoke: async () => ({ clangTidy: { scope: 'selected', arguments: [] } }) },
+    },
+  },
+}));
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (k: string, vars?: Record<string, unknown>) => (vars ? `${k}:${Object.values(vars).join('→')}` : k),
@@ -100,6 +118,8 @@ beforeEach(() => {
   localStorage.clear();
   diffCalls.length = 0;
   openPreviewMock.mockClear();
+  gitBridge.branches.mockClear();
+  gitBridge.prepare.mockClear();
 });
 
 afterEach(() => {
@@ -137,6 +157,45 @@ describe('ScmPanel empty / failure states', () => {
     render(<ScmPanel projectId='p1' />);
 
     expect(await screen.findByText('conversation.explorer.scm.noChanges')).toBeInTheDocument();
+  });
+});
+
+describe('ScmPanel nested repository workflow', () => {
+  it('uses the worktree root and repository-relative files for scan and commit', async () => {
+    const nested = repo({
+      repo_id: 'scm:pe1/feature',
+      root: { pe_id: 'pe1', relative_path: 'feature' },
+      head: { name: 'feature' },
+    });
+    installPort({
+      repositories: [nested],
+      firstFrames: {
+        [nested.repo_id]: status(nested.repo_id, 1, [resource('feature/src/a.c', { repo_relative_path: 'src/a.c' })]),
+      },
+    });
+    render(<ScmPanel projectId='p1' repoPaths={{ pe1: 'C:/workspace' }} />);
+    await screen.findByText('a.c');
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'conversation.explorer.scm.commit.action' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.start' }));
+
+    await waitFor(() =>
+      expect(gitBridge.prepare).toHaveBeenCalledWith(
+        expect.objectContaining({
+          repoPath: 'C:/workspace/feature',
+          branch: 'feature',
+          selectedPaths: ['src/a.c'],
+        })
+      )
+    );
+    expect(gitBridge.branches).toHaveBeenCalledWith({ repoPath: 'C:/workspace/feature' });
+  });
+
+  it('does not query Git in another repository when the explorer root is missing', async () => {
+    installPort({ repositories: [repo()], firstFrames: { 'scm:pe1': status('scm:pe1', 1, [resource('a.c')]) } });
+    render(<ScmPanel projectId='p1' repoPaths={{ unrelated: 'C:/other' }} />);
+    await screen.findByText('a.c');
+    expect(gitBridge.branches).not.toHaveBeenCalled();
   });
 });
 

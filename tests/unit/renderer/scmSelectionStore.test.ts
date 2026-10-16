@@ -3,10 +3,15 @@ import { describe, expect, it } from 'vitest';
 import {
   clearUnavailableSelections,
   getSelectedResources,
+  resolveRepositoryPath,
   toggleResourceSelection,
   type ScmSelection,
 } from '@/renderer/pages/conversation/SourceControl/scmSelectionStore';
-import { resourceKey, type ScmResource } from '@/renderer/pages/conversation/SourceControl/scmModel';
+import {
+  resourceKey,
+  type ScmRepository,
+  type ScmResource,
+} from '@/renderer/pages/conversation/SourceControl/scmModel';
 
 const resource = (path: string, state: ScmResource['state'] = 'modified'): ScmResource => ({
   file: { pe_id: 'pe-1', relative_path: path },
@@ -45,5 +50,19 @@ describe('scmSelectionStore helpers', () => {
       new Set([resourceKey(resource('src/a.c'))])
     );
     expect(clearUnavailableSelections([resource('src/a.c', 'conflicted')], selected)).toEqual(new Set());
+  });
+
+  it('resolves a worktree under its explorer root and respects an explicit repository path', () => {
+    const repo: ScmRepository = {
+      repo_id: 'scm:pe-1/feature',
+      provider_id: 'git',
+      root: { pe_id: 'pe-1', relative_path: 'feature' },
+      label: 'feature',
+      capabilities: { staging: true, local_branches: true, history_graph: false, remote_ops: true },
+      state: 'idle',
+    };
+    expect(resolveRepositoryPath(repo, { 'pe-1': 'C:/workspace/' })).toBe('C:/workspace/feature');
+    expect(resolveRepositoryPath(repo, { [repo.repo_id]: 'C:/explicit', 'pe-1': 'C:/workspace' })).toBe('C:/explicit');
+    expect(resolveRepositoryPath(repo, {})).toBeUndefined();
   });
 });

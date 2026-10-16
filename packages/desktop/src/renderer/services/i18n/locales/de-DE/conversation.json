@@ -686,6 +686,7 @@
         "changes": "Änderungen"
       },
       "commit": {
+        "snapshotChanged": "Dateien oder der Git-Branch wurden nach der Prüfung geändert. Führen Sie vor dem Commit die Prüfung erneut aus.",
         "action": "Commit and push",
         "title": "Commit and push",
         "start": "Start scan",

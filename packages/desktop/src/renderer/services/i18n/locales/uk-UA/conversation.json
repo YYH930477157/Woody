@@ -693,6 +693,7 @@
         "changes": "Зміни"
       },
       "commit": {
+        "snapshotChanged": "Після перевірки файли або гілка Git змінилися. Повторіть перевірку перед комітом.",
         "action": "Commit and push",
         "title": "Commit and push",
         "start": "Start scan",

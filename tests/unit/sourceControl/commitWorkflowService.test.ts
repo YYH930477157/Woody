@@ -43,6 +43,9 @@ const fields = {
   tests: '运行单元测试',
 };
 
+const snapshot = { head: 'head-1', branch: 'main', tree: 'tree-1' };
+const getCommitSnapshot = () => vi.fn().mockResolvedValue(snapshot);
+
 describe('commit workflow service', () => {
   it('runs scan, repair, rescan and compile before confirmation', async () => {
     const scan = vi.fn().mockResolvedValueOnce(finding()).mockResolvedValueOnce(clean());
@@ -50,6 +53,7 @@ describe('commit workflow service', () => {
     const compile = vi.fn().mockResolvedValue({ ok: true });
     const states: string[] = [];
     const service = createCommitWorkflowService({
+      getCommitSnapshot: getCommitSnapshot(),
       createCommit: vi.fn(),
       push: vi.fn(),
     });
@@ -76,7 +80,11 @@ describe('commit workflow service', () => {
 
   it('blocks after two repair attempts when diagnostics remain', async () => {
     const repair = vi.fn().mockResolvedValue({ changedPaths: ['src/a.cpp'] });
-    const service = createCommitWorkflowService({ createCommit: vi.fn(), push: vi.fn() });
+    const service = createCommitWorkflowService({
+      getCommitSnapshot: getCommitSnapshot(),
+      createCommit: vi.fn(),
+      push: vi.fn(),
+    });
     const session = await service.prepare({
       repoPath: 'D:/repo',
       branch: 'main',
@@ -93,7 +101,11 @@ describe('commit workflow service', () => {
   });
 
   it('blocks when an AI repair changes an unselected path', async () => {
-    const service = createCommitWorkflowService({ createCommit: vi.fn(), push: vi.fn() });
+    const service = createCommitWorkflowService({
+      getCommitSnapshot: getCommitSnapshot(),
+      createCommit: vi.fn(),
+      push: vi.fn(),
+    });
     const session = await service.prepare({
       repoPath: 'D:/repo',
       branch: 'main',
@@ -114,7 +126,7 @@ describe('commit workflow service', () => {
       .fn()
       .mockResolvedValueOnce({ ok: false, retryable: true, stdout: '', stderr: 'remote unavailable' })
       .mockResolvedValueOnce({ ok: true, stdout: 'done', stderr: '' });
-    const service = createCommitWorkflowService({ createCommit, push });
+    const service = createCommitWorkflowService({ getCommitSnapshot: getCommitSnapshot(), createCommit, push });
     const session = await service.prepare({
       repoPath: 'D:/repo',
       branch: 'main',
@@ -130,5 +142,123 @@ describe('commit workflow service', () => {
     const afterRetry = await service.retryPush(session.id);
     expect(afterRetry.state).toBe('completed');
     expect(push).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    { exitCode: 1 },
+    { exitCode: 2 },
+    { executableMissing: true },
+    { timedOut: true },
+    { timedOut: true, diagnostics: finding().diagnostics },
+  ])('blocks confirmation when a scanner cannot complete: %j', async (failure) => {
+    const createCommit = vi.fn();
+    const service = createCommitWorkflowService({
+      getCommitSnapshot: getCommitSnapshot(),
+      createCommit,
+      push: vi.fn(),
+    });
+    const session = await service.prepare({
+      repoPath: 'D:/repo',
+      branch: 'main',
+      selectedPaths: ['src/a.cpp'],
+      scannerConfigs: [config],
+      generateMessage: async () => fields,
+      scan: async () => ({ ...clean(), ...failure }),
+    });
+
+    expect(session.state).toBe('failed');
+    expect(session.reasonCode).toBe('scanFailed');
+    await service.commitAndPush(session.id, fields);
+    expect(createCommit).not.toHaveBeenCalled();
+  });
+
+  it('does not hide a scanner failure behind diagnostics from another scanner', async () => {
+    const service = createCommitWorkflowService({
+      getCommitSnapshot: getCommitSnapshot(),
+      createCommit: vi.fn(),
+      push: vi.fn(),
+    });
+    const session = await service.prepare({
+      repoPath: 'D:/repo',
+      branch: 'main',
+      selectedPaths: ['src/a.cpp'],
+      scannerConfigs: [config, config],
+      generateMessage: async () => fields,
+      scan: vi
+        .fn()
+        .mockResolvedValueOnce(finding())
+        .mockResolvedValueOnce({ ...clean(), exitCode: 1 }),
+      repair: vi.fn(),
+    });
+    expect(session.state).toBe('failed');
+    expect(session.reasonCode).toBe('scanFailed');
+    expect(session.diagnostics).toEqual(finding().diagnostics);
+  });
+
+  it.each(['tree', 'head', 'branch'] as const)('blocks if %s changes during scanning', async (changedField) => {
+    const service = createCommitWorkflowService({
+      getCommitSnapshot: vi
+        .fn()
+        .mockResolvedValueOnce(snapshot)
+        .mockResolvedValue({ ...snapshot, [changedField]: 'changed' }),
+      createCommit: vi.fn(),
+      push: vi.fn(),
+    });
+    const session = await service.prepare({
+      repoPath: 'D:/repo',
+      branch: 'main',
+      selectedPaths: ['src/a.cpp'],
+      scannerConfigs: [config],
+      generateMessage: async () => fields,
+      scan: async () => clean(),
+    });
+    expect(session.state).toBe('blocked');
+    expect(session.reasonCode).toBe('snapshotChanged');
+  });
+
+  it('binds confirmation to the repaired files that passed the rescan', async () => {
+    const repairedSnapshot = { ...snapshot, tree: 'repaired-tree' };
+    const readSnapshot = vi.fn().mockResolvedValueOnce(snapshot).mockResolvedValue(repairedSnapshot);
+    const createCommit = vi.fn().mockResolvedValue({ ok: true, commit: 'abc123' });
+    const service = createCommitWorkflowService({
+      getCommitSnapshot: readSnapshot,
+      createCommit,
+      push: vi.fn().mockResolvedValue({ ok: true, stdout: '', stderr: '' }),
+    });
+    const session = await service.prepare({
+      repoPath: 'D:/repo',
+      branch: 'main',
+      selectedPaths: ['src/a.cpp'],
+      scannerConfigs: [config],
+      generateMessage: async () => fields,
+      scan: vi.fn().mockResolvedValueOnce(finding()).mockResolvedValue(clean()),
+      repair: async () => ({ changedPaths: ['src/a.cpp'] }),
+    });
+    await service.commitAndPush(session.id, fields);
+    expect(session.state).toBe('completed');
+    expect(createCommit).toHaveBeenCalledWith('D:/repo', ['src/a.cpp'], expect.any(String), repairedSnapshot);
+  });
+
+  it('blocks confirmation if compilation modifies a scanned file', async () => {
+    let currentSnapshot = snapshot;
+    const service = createCommitWorkflowService({
+      getCommitSnapshot: async () => currentSnapshot,
+      createCommit: vi.fn(),
+      push: vi.fn(),
+    });
+    const session = await service.prepare({
+      repoPath: 'D:/repo',
+      branch: 'main',
+      selectedPaths: ['src/a.cpp'],
+      scannerConfigs: [config],
+      generateMessage: async () => fields,
+      scan: async () => clean(),
+      compile: async () => {
+        currentSnapshot = { ...snapshot, tree: 'generated-file-tree' };
+        return { ok: true };
+      },
+    });
+    expect(session.state).toBe('blocked');
+    expect(session.reasonCode).toBe('snapshotChanged');
   });
 });

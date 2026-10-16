@@ -671,6 +671,7 @@ export type I18nKey =
   | 'conversation.explorer.scm.commit.scanPending'
   | 'conversation.explorer.scm.commit.selectFile'
   | 'conversation.explorer.scm.commit.selectedFiles'
+  | 'conversation.explorer.scm.commit.snapshotChanged'
   | 'conversation.explorer.scm.commit.start'
   | 'conversation.explorer.scm.commit.states.blocked'
   | 'conversation.explorer.scm.commit.states.collecting'

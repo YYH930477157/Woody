@@ -685,6 +685,7 @@
         "changes": "変更"
       },
       "commit": {
+        "snapshotChanged": "スキャン後にファイルまたは Git ブランチが変更されました。コミット前に再度スキャンしてください。",
         "action": "Commit and push",
         "title": "Commit and push",
         "start": "Start scan",

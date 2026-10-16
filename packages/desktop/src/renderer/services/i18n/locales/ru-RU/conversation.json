@@ -693,6 +693,7 @@
         "changes": "Изменения"
       },
       "commit": {
+        "snapshotChanged": "После проверки файлы или ветка Git изменились. Повторите проверку перед коммитом.",
         "action": "Commit and push",
         "title": "Commit and push",
         "start": "Start scan",

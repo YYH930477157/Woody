@@ -44,13 +44,21 @@ export type GitBranch = {
 
 export type GitBranchSnapshot = { branches: GitBranch[] };
 
+export type GitCommitSnapshot = {
+  head: string | null;
+  branch: string;
+  tree: string;
+};
+
+export type GitWorkflowReasonCode = 'scanFailed' | 'snapshotChanged';
+
 export type GitOperationResult =
   | { ok: true }
   | { ok: false; kind: 'dirty-worktree' | 'command-failed'; stdout?: string; stderr?: string };
 
 export type GitCommitResult =
   | { ok: true; commit: string }
-  | { ok: false; kind: 'command-failed' | 'staged-selection'; stdout: string; stderr: string };
+  | { ok: false; kind: 'command-failed' | 'staged-selection' | 'snapshot-changed'; stdout: string; stderr: string };
 
 export type GitPushResult =
   | { ok: true; stdout: string; stderr: string }
@@ -76,6 +84,7 @@ export type GitWorkflowSession = {
   commit?: string;
   push?: GitPushResult;
   reason?: string;
+  reasonCode?: GitWorkflowReasonCode;
 };
 
 export type GitWorkflowPrepareRequest = {

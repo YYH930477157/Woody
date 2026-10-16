@@ -30,6 +30,7 @@ describe('source control bridge', () => {
       getStatus: vi.fn(async () => ({ branch: 'main', changedPaths: [] })),
       getBranches: vi.fn(async () => ({ branches: [] })),
       checkoutBranch: vi.fn(async () => ({ ok: true })),
+      getCommitSnapshot: vi.fn(async () => ({ head: 'abc', branch: 'main', tree: 'tree' })),
       createCommit: vi.fn(async () => ({ ok: true, commit: 'abc' })),
       push: vi.fn(async () => ({ ok: true, stdout: '', stderr: '' })),
     };
