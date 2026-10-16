@@ -697,7 +697,20 @@
         "readingGit": "Reading Git status…",
         "scanPending": "Git status loaded; waiting for the static scan workflow",
         "gitStatusFailed": "Couldn't read Git status",
-        "states": {
+        "scanFailed": "Couldn't start the static scan workflow",
+        "commitFailed": "Couldn't create the commit",
+        "pushFailed": "Push failed; you can retry",
+        "retryPush": "Retry push",
+        "confirm": "Confirm commit and push",
+        "messageTitle": "Commit message",
+        "diagnostics": "Scan diagnostics",
+        "message": {
+          "reason": "Modification reason",
+          "scope": "Modification scope",
+          "solution": "Solution",
+          "impact": "Impact assessment",
+          "tests": "Test steps"
+        },        "states": {
           "idle": "Ready to start",
           "collecting": "Collecting changes",
           "message_draft": "Drafting commit message",

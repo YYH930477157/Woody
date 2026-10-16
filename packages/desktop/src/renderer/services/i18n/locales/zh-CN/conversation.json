@@ -694,7 +694,21 @@
         "repoPathUnavailable": "无法定位本地 Git 仓库路径",
         "readingGit": "正在读取 Git 状态…",
         "scanPending": "已读取 Git 状态，等待静态扫描流程",
+        "scanFailed": "静态扫描流程启动失败",
         "gitStatusFailed": "读取 Git 状态失败",
+        "commitFailed": "提交失败",
+        "pushFailed": "推送失败，可重试",
+        "retryPush": "重试推送",
+        "confirm": "确认提交并推送",
+        "messageTitle": "提交说明",
+        "diagnostics": "扫描诊断",
+        "message": {
+          "reason": "修改原因",
+          "scope": "修改范围",
+          "solution": "修改方案",
+          "impact": "影响评估",
+          "tests": "测试步骤"
+        },
         "states": {
           "idle": "等待开始",
           "collecting": "正在收集变更",

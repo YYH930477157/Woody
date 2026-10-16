@@ -34,7 +34,8 @@ import { useTranslation } from 'react-i18next';
 
 import { usePreviewContext } from '../Preview';
 import { ipcBridge } from '@/common';
-import type { GitBranch, GitWorkflowState } from '@/common/types/sourceControl/gitWorkflowTypes';
+import type { CommitMessageFields, GitBranch, GitWorkflowState } from '@/common/types/sourceControl/gitWorkflowTypes';
+import type { StaticScanConfig, StaticScanDiagnostic } from '@/common/types/sourceControl/staticScanTypes';
 import { CommitWorkflowModal } from './CommitWorkflowModal';
 import { discardAllTargets, ScmChangesView, stageAllTargets } from './ScmChangesView';
 import { ScmSection, ScmSectionDivider } from './ScmSection';
@@ -91,6 +92,15 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {} })
   const [workflowVisible, setWorkflowVisible] = useState(false);
   const [workflowState, setWorkflowState] = useState<GitWorkflowState>('idle');
   const [workflowMessage, setWorkflowMessage] = useState<string>();
+  const [workflowSessionId, setWorkflowSessionId] = useState<string>();
+  const [workflowDiagnostics, setWorkflowDiagnostics] = useState<StaticScanDiagnostic[]>([]);
+  const [messageFields, setMessageFields] = useState<CommitMessageFields>({
+    reason: '',
+    scope: '',
+    solution: '',
+    impact: '',
+    tests: '',
+  });
   const [branches, setBranches] = useState<Record<string, GitBranch[]>>({});
   const [branchBusy, setBranchBusy] = useState(false);
 
@@ -196,6 +206,9 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {} })
     if (selectedResources.length === 0) return;
     setWorkflowState('idle');
     setWorkflowMessage(undefined);
+    setWorkflowSessionId(undefined);
+    setWorkflowDiagnostics([]);
+    setMessageFields({ reason: '', scope: '', solution: '', impact: '', tests: '' });
     setWorkflowVisible(true);
   };
 
@@ -207,15 +220,71 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {} })
     }
     setWorkflowState('collecting');
     setWorkflowMessage(t('conversation.explorer.scm.commit.readingGit'));
-    void ipcBridge.sourceControl.status
-      .invoke({ repoPath: selectedRepoPath })
-      .then(() => {
-        setWorkflowState('scan');
-        setWorkflowMessage(t('conversation.explorer.scm.commit.scanPending'));
+    const selectedPaths = [...new Set(selectedResources.map((resource) => resource.file.relative_path))];
+    void Promise.all([
+      ipcBridge.staticScan?.getProjectConfig.invoke({ repoPath: selectedRepoPath }),
+      ipcBridge.staticScan?.getMachineConfig.invoke(),
+    ])
+      .then(([projectConfig, machineConfig]) => {
+        if (!projectConfig || !machineConfig) throw new Error('Static scan configuration is unavailable');
+        const scannerConfigs: StaticScanConfig[] = [];
+        const clang = projectConfig.clangTidy;
+        const clangExecutable = clang?.executablePath ?? machineConfig.tools['clang-tidy'];
+        if (clang && clangExecutable)
+          scannerConfigs.push({ ...clang, tool: 'clang-tidy', executablePath: clangExecutable });
+        const pcLint = projectConfig.pcLint;
+        const pcLintExecutable = pcLint?.executablePath ?? machineConfig.tools['pc-lint'];
+        if (pcLint && pcLintExecutable)
+          scannerConfigs.push({ ...pcLint, tool: 'pc-lint', executablePath: pcLintExecutable });
+        if (scannerConfigs.length === 0) throw new Error('No static scanner configured');
+        return ipcBridge.sourceControl.workflowPrepare.invoke({
+          repoPath: selectedRepoPath,
+          branch: selectedRepo.head?.name ?? '',
+          selectedPaths,
+          scannerConfigs,
+          messageFields,
+        });
+      })
+      .then((session) => {
+        setWorkflowSessionId(session.id);
+        setWorkflowState(session.state);
+        setWorkflowDiagnostics(session.diagnostics);
+        setWorkflowMessage(session.reason);
       })
       .catch(() => {
         setWorkflowState('failed');
-        setWorkflowMessage(t('conversation.explorer.scm.commit.gitStatusFailed'));
+        setWorkflowMessage(t('conversation.explorer.scm.commit.scanFailed'));
+      });
+  };
+
+  const commitWorkflow = (): void => {
+    if (!workflowSessionId || !ipcBridge.sourceControl.workflowCommit) return;
+    setWorkflowState('commit');
+    void ipcBridge.sourceControl.workflowCommit
+      .invoke({ sessionId: workflowSessionId, messageFields })
+      .then((session) => {
+        setWorkflowState(session.state);
+        setWorkflowDiagnostics(session.diagnostics);
+        setWorkflowMessage(session.reason);
+      })
+      .catch(() => {
+        setWorkflowState('failed');
+        setWorkflowMessage(t('conversation.explorer.scm.commit.commitFailed'));
+      });
+  };
+
+  const retryWorkflowPush = (): void => {
+    if (!workflowSessionId || !ipcBridge.sourceControl.workflowRetryPush) return;
+    setWorkflowState('push');
+    void ipcBridge.sourceControl.workflowRetryPush
+      .invoke({ sessionId: workflowSessionId })
+      .then((session) => {
+        setWorkflowState(session.state);
+        setWorkflowMessage(session.reason);
+      })
+      .catch(() => {
+        setWorkflowState('push');
+        setWorkflowMessage(t('conversation.explorer.scm.commit.pushFailed'));
       });
   };
 
@@ -277,8 +346,13 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {} })
         resources={selectedResources}
         state={workflowState}
         statusMessage={workflowMessage}
+        messageFields={messageFields}
+        diagnostics={workflowDiagnostics}
         onCancel={() => setWorkflowVisible(false)}
         onStart={startCommitWorkflow}
+        onCommit={commitWorkflow}
+        onRetryPush={retryWorkflowPush}
+        onMessageFieldsChange={setMessageFields}
       />
       {/* Selecting a change opens its diff in the shared preview panel (a `'diff'`
           tab, reusing the same `openPreview` mechanism the file tree uses) rather

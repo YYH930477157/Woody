@@ -1,8 +1,9 @@
-import { Button, Modal, Spin } from '@arco-design/web-react';
+import { Button, Input, Modal, Spin } from '@arco-design/web-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { GitWorkflowState } from '@/common/types/sourceControl/gitWorkflowTypes';
+import type { CommitMessageFields, GitWorkflowState } from '@/common/types/sourceControl/gitWorkflowTypes';
+import type { StaticScanDiagnostic } from '@/common/types/sourceControl/staticScanTypes';
 
 import { resourceName, type ScmRepository, type ScmResource } from './scmModel';
 
@@ -13,8 +14,13 @@ export type CommitWorkflowModalProps = {
   resources: ScmResource[];
   state: GitWorkflowState;
   statusMessage?: string;
+  messageFields: CommitMessageFields;
+  diagnostics: StaticScanDiagnostic[];
   onCancel: () => void;
   onStart: () => void;
+  onCommit: () => void;
+  onRetryPush: () => void;
+  onMessageFieldsChange: (fields: CommitMessageFields) => void;
 };
 
 const isBusyState = (state: GitWorkflowState): boolean =>
@@ -27,11 +33,19 @@ export const CommitWorkflowModal: React.FC<CommitWorkflowModalProps> = ({
   resources,
   state,
   statusMessage,
+  messageFields,
+  diagnostics,
   onCancel,
   onStart,
+  onCommit,
+  onRetryPush,
+  onMessageFieldsChange,
 }) => {
   const { t } = useTranslation();
   const busy = isBusyState(state);
+  const updateField = (field: keyof CommitMessageFields, value: string): void => {
+    onMessageFieldsChange({ ...messageFields, [field]: value });
+  };
   return (
     <Modal
       title={t('conversation.explorer.scm.commit.title')}
@@ -40,9 +54,19 @@ export const CommitWorkflowModal: React.FC<CommitWorkflowModalProps> = ({
       footer={
         <>
           <Button onClick={onCancel}>{t('common.cancel')}</Button>
-          <Button type='primary' disabled={resources.length === 0 || busy} onClick={onStart}>
-            {t('conversation.explorer.scm.commit.start')}
-          </Button>
+          {state === 'push' ? (
+            <Button type='primary' onClick={onRetryPush}>
+              {t('conversation.explorer.scm.commit.retryPush')}
+            </Button>
+          ) : state === 'confirmation' ? (
+            <Button type='primary' onClick={onCommit}>
+              {t('conversation.explorer.scm.commit.confirm')}
+            </Button>
+          ) : (
+            <Button type='primary' disabled={resources.length === 0 || busy} onClick={onStart}>
+              {t('conversation.explorer.scm.commit.start')}
+            </Button>
+          )}
         </>
       }
       autoFocus
@@ -65,6 +89,32 @@ export const CommitWorkflowModal: React.FC<CommitWorkflowModalProps> = ({
           {busy && <Spin size={14} />}
           <span>{statusMessage ?? t(`conversation.explorer.scm.commit.states.${state}`)}</span>
         </div>
+        <div className='flex flex-col gap-6px'>
+          <div className='text-12px text-t-tertiary'>{t('conversation.explorer.scm.commit.messageTitle')}</div>
+          {(['reason', 'scope', 'solution', 'impact', 'tests'] as const).map((field) => (
+            <Input.TextArea
+              key={field}
+              autoSize={{ minRows: 1, maxRows: 3 }}
+              value={messageFields[field]}
+              placeholder={t(`conversation.explorer.scm.commit.message.${field}`)}
+              onChange={(value) => updateField(field, value)}
+              disabled={busy || state === 'completed'}
+              aria-label={t(`conversation.explorer.scm.commit.message.${field}`)}
+            />
+          ))}
+        </div>
+        {diagnostics.length > 0 && (
+          <div data-scm-commit-diagnostics className='flex flex-col gap-3px'>
+            <div className='text-12px text-danger'>{t('conversation.explorer.scm.commit.diagnostics')}</div>
+            {diagnostics.map((diagnostic, index) => (
+              <div key={`${diagnostic.file}:${diagnostic.line}:${index}`} className='text-12px text-t-secondary'>
+                {diagnostic.file}:{diagnostic.line}
+                {diagnostic.column ? `:${diagnostic.column}` : ''} · {diagnostic.message}
+                {diagnostic.rule ? ` [${diagnostic.rule}]` : ''}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </Modal>
   );
