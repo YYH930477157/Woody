@@ -106,6 +106,7 @@ import type {
   GitPushResult,
   GitStatusSnapshot,
 } from '@/common/types/sourceControl/gitWorkflowTypes';
+import type { StaticScanConfig, StaticScanResult } from '@/common/types/sourceControl/staticScanTypes';
 import type { ProtocolDetectionRequest, ProtocolDetectionResponse } from '../utils/protocolDetector';
 import {
   buildCreateConversationBody,
@@ -1721,6 +1722,15 @@ export const sourceControl = {
     'source-control.commit'
   ),
   push: bridge.buildProvider<GitPushResult, { repoPath: string; branch: string }>('source-control.push'),
+};
+
+export const staticScan = {
+  scan: bridge.buildProvider<StaticScanResult, { repoPath: string; selectedPaths: string[]; config: StaticScanConfig }>(
+    'source-control.static-scan'
+  ),
+  test: bridge.buildProvider<StaticScanResult, { repoPath: string; selectedPaths: string[]; config: StaticScanConfig }>(
+    'source-control.static-scan-test'
+  ),
 };
 
 // ---------------------------------------------------------------------------
