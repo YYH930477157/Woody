@@ -30,3 +30,28 @@ export type LargeChangeMetrics = {
 };
 
 export type CommitMessageValidation = { ok: true } | { ok: false; field: keyof CommitMessageFields };
+
+export type GitStatusSnapshot = {
+  branch: string;
+  changedPaths: string[];
+};
+
+export type GitBranch = {
+  name: string;
+  upstream?: string;
+  current: boolean;
+};
+
+export type GitBranchSnapshot = { branches: GitBranch[] };
+
+export type GitOperationResult =
+  | { ok: true }
+  | { ok: false; kind: 'dirty-worktree' | 'command-failed'; stdout?: string; stderr?: string };
+
+export type GitCommitResult =
+  | { ok: true; commit: string }
+  | { ok: false; kind: 'command-failed' | 'staged-selection'; stdout: string; stderr: string };
+
+export type GitPushResult =
+  | { ok: true; stdout: string; stderr: string }
+  | { ok: false; retryable: true; stdout: string; stderr: string };

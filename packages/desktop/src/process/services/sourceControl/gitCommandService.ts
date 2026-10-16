@@ -1,6 +1,15 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
+import type {
+  GitBranch,
+  GitBranchSnapshot,
+  GitCommitResult,
+  GitOperationResult,
+  GitPushResult,
+  GitStatusSnapshot,
+} from '@/common/types/sourceControl/gitWorkflowTypes';
+
 import { createTemporaryGitIndex } from './gitIndexWorkspace';
 
 const execFileAsync = promisify(execFile);
@@ -8,28 +17,6 @@ const execFileAsync = promisify(execFile);
 type GitRunnerOptions = { cwd: string; env?: NodeJS.ProcessEnv };
 type GitCommandOutput = { stdout: string; stderr: string; exitCode: number };
 type GitCommandRunner = (args: string[], options: GitRunnerOptions) => Promise<GitCommandOutput>;
-
-type GitStatusSnapshot = {
-  branch: string;
-  changedPaths: string[];
-};
-
-type GitBranch = {
-  name: string;
-  upstream?: string;
-  current: boolean;
-};
-
-type GitBranchSnapshot = { branches: GitBranch[] };
-type GitOperationResult =
-  | { ok: true }
-  | { ok: false; kind: 'dirty-worktree' | 'command-failed'; stdout?: string; stderr?: string };
-type GitCommitResult =
-  | { ok: true; commit: string }
-  | { ok: false; kind: 'command-failed' | 'staged-selection'; stdout: string; stderr: string };
-type GitPushResult =
-  | { ok: true; stdout: string; stderr: string }
-  | { ok: false; retryable: true; stdout: string; stderr: string };
 
 const defaultRunner: GitCommandRunner = async (args, options) => {
   try {

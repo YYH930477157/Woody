@@ -99,6 +99,13 @@ import type { AgentMetadata } from '@/renderer/utils/model/agentTypes';
 import type { Theme } from '@/common/theme/types';
 import type { AttachFolderRequest, ProjectDetailDto, ProjectEntryDto } from '@/common/types/project';
 import type { ChatFileRef, ContentEncoding } from '@/common/types/chatFile';
+import type {
+  GitBranchSnapshot,
+  GitCommitResult,
+  GitOperationResult,
+  GitPushResult,
+  GitStatusSnapshot,
+} from '@/common/types/sourceControl/gitWorkflowTypes';
 import type { ProtocolDetectionRequest, ProtocolDetectionResponse } from '../utils/protocolDetector';
 import {
   buildCreateConversationBody,
@@ -1704,6 +1711,16 @@ export const todo = {
   remove: bridge.buildProvider<boolean, { id: string }>('todo.remove'),
   scanNow: bridge.buildProvider<TodoScanResult, void>('todo.scan-now'),
   status: bridge.buildProvider<TodoStatusInfo, void>('todo.status'),
+};
+
+export const sourceControl = {
+  status: bridge.buildProvider<GitStatusSnapshot, { repoPath: string }>('source-control.status'),
+  branches: bridge.buildProvider<GitBranchSnapshot, { repoPath: string }>('source-control.branches'),
+  checkout: bridge.buildProvider<GitOperationResult, { repoPath: string; branch: string }>('source-control.checkout'),
+  commit: bridge.buildProvider<GitCommitResult, { repoPath: string; paths: string[]; message: string }>(
+    'source-control.commit'
+  ),
+  push: bridge.buildProvider<GitPushResult, { repoPath: string; branch: string }>('source-control.push'),
 };
 
 // ---------------------------------------------------------------------------
