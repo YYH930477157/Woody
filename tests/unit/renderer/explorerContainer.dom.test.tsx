@@ -149,10 +149,12 @@ describe('ExplorerContainer data integration', () => {
     // …and the explorer stays mounted (root still in the DOM, just hidden) — no rebuild.
     expect(screen.getByText('Root Alpha')).toBeInTheDocument();
 
-    // Switching back unmounts the SCM panel and keeps the tree.
+    // Keep SCM mounted so selections, workflow progress and turn subscriptions survive.
     fireEvent.click(screen.getByText('conversation.explorer.tabs.files'));
-    expect(screen.queryByText('conversation.explorer.scm.loadFailed')).not.toBeInTheDocument();
+    expect(screen.getByText('conversation.explorer.scm.loadFailed')).not.toBeVisible();
     expect(screen.getByText('Root Alpha')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('conversation.explorer.tabs.changes'));
+    expect(screen.getByText('conversation.explorer.scm.loadFailed')).toBeVisible();
   });
 
   it('refetches and re-projects when projectId changes', async () => {

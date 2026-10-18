@@ -10,10 +10,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ScmRepository, ScmResource, ScmStatus } from '@/renderer/pages/conversation/SourceControl/scmModel';
 import type { ScmPort } from '@/renderer/pages/conversation/SourceControl/scmStore';
+import type { GitWorkflowSession } from '@/common/types/sourceControl/gitWorkflowTypes';
+import type { IConversationTurnCompletedEvent } from '@/common/adapter/ipcBridge';
 
 const gitBridge = vi.hoisted(() => ({
   branches: vi.fn(async () => ({ branches: [] })),
-  prepare: vi.fn(async () => ({ id: 'session', state: 'confirmation', diagnostics: [] })),
+  softwareDirectory: vi.fn(async () => ({ isDirectory: true })),
+  prepare: vi.fn<(...args: unknown[]) => Promise<Partial<GitWorkflowSession>>>(async () => ({
+    id: 'session',
+    state: 'confirmation',
+    diagnostics: [],
+  })),
+  turnListeners: new Set<(event: IConversationTurnCompletedEvent) => void>(),
+  progressListeners: new Set<(event: { requestId: string; session: GitWorkflowSession }) => void>(),
 }));
 
 vi.mock('@/common', () => ({
@@ -21,10 +30,31 @@ vi.mock('@/common', () => ({
     sourceControl: {
       branches: { invoke: gitBridge.branches },
       workflowPrepare: { invoke: gitBridge.prepare },
+      workflowProgress: {
+        on: (fn: (event: { requestId: string; session: GitWorkflowSession }) => void) => {
+          gitBridge.progressListeners.add(fn);
+          return () => {
+            gitBridge.progressListeners.delete(fn);
+          };
+        },
+      },
+    },
+    conversation: {
+      turnCompleted: {
+        on: (fn: (event: IConversationTurnCompletedEvent) => void) => {
+          gitBridge.turnListeners.add(fn);
+          return () => {
+            gitBridge.turnListeners.delete(fn);
+          };
+        },
+      },
     },
     staticScan: {
       getMachineConfig: { invoke: async () => ({ tools: { 'clang-tidy': 'clang-tidy' } }) },
       getProjectConfig: { invoke: async () => ({ clangTidy: { scope: 'selected', arguments: [] } }) },
+    },
+    fs: {
+      getFileMetadata: { invoke: gitBridge.softwareDirectory },
     },
   },
 }));
@@ -58,6 +88,7 @@ import {
 } from '@/renderer/pages/conversation/SourceControl/scmStore';
 import {
   resetScmUiStoreForTest,
+  setScmMonitorScope,
   setSectionCollapsed,
   setSectionHeight,
 } from '@/renderer/pages/conversation/SourceControl/scmUiStore';
@@ -119,7 +150,10 @@ beforeEach(() => {
   diffCalls.length = 0;
   openPreviewMock.mockClear();
   gitBridge.branches.mockClear();
+  gitBridge.softwareDirectory.mockReset();
+  gitBridge.softwareDirectory.mockResolvedValue({ isDirectory: true });
   gitBridge.prepare.mockClear();
+  gitBridge.prepare.mockImplementation(async () => ({ id: 'session', state: 'confirmation', diagnostics: [] }));
 });
 
 afterEach(() => {
@@ -196,6 +230,88 @@ describe('ScmPanel nested repository workflow', () => {
     render(<ScmPanel projectId='p1' repoPaths={{ unrelated: 'C:/other' }} />);
     await screen.findByText('a.c');
     expect(gitBridge.branches).not.toHaveBeenCalled();
+  });
+});
+
+describe('ScmPanel automatic workflow', () => {
+  const finishTurn = (conversationId = 'current-chat', turnId = 'user-turn'): void => {
+    const event = {
+      session_id: conversationId,
+      turn_id: turnId,
+      state: 'ai_waiting_input',
+      status: 'finished',
+    } as IConversationTurnCompletedEvent;
+    for (const listener of gitBridge.turnListeners) listener(event);
+  };
+  const installSelected = async (): Promise<void> => {
+    installPort({ repositories: [repo()], firstFrames: { 'scm:pe1': status('scm:pe1', 1, [resource('a.c')]) } });
+    render(<ScmPanel projectId='p1' repoPaths={{ pe1: 'C:/workspace' }} conversationId='current-chat' />);
+    await screen.findByText('a.c');
+    fireEvent.click(screen.getByRole('checkbox'));
+  };
+
+  it('starts the selected scan when the active conversation finishes and fills in the AI draft', async () => {
+    const fields = {
+      reason: 'fix driver',
+      scope: 'a.c',
+      solution: 'null check',
+      impact: 'none',
+      tests: 'build passed',
+    };
+    gitBridge.prepare.mockResolvedValueOnce({
+      id: 'session',
+      state: 'confirmation',
+      diagnostics: [],
+      messageFields: fields,
+    });
+    await installSelected();
+    act(() => finishTurn());
+    await waitFor(() =>
+      expect(gitBridge.prepare).toHaveBeenCalledWith(
+        expect.objectContaining({
+          conversationId: 'current-chat',
+          selectedPaths: ['a.c'],
+          requestId: expect.any(String),
+        })
+      )
+    );
+    expect(await screen.findByDisplayValue('fix driver')).toBeInTheDocument();
+  });
+
+  it('ignores completion in another conversation', async () => {
+    await installSelected();
+    act(() => finishTurn('other-chat'));
+    expect(gitBridge.prepare).not.toHaveBeenCalled();
+  });
+
+  it('does not restart the workflow after its own AI draft completes', async () => {
+    gitBridge.prepare.mockResolvedValueOnce({
+      id: 'session',
+      state: 'confirmation',
+      diagnostics: [],
+      agentTurnIds: ['workflow-draft-turn'],
+    });
+    await installSelected();
+    act(() => finishTurn());
+    await screen.findByText('conversation.explorer.scm.commit.states.confirmation');
+    act(() => finishTurn('current-chat', 'workflow-draft-turn'));
+    expect(gitBridge.prepare).toHaveBeenCalledOnce();
+  });
+
+  it('shows build failure output and leaves the scan action available for manual retry', async () => {
+    gitBridge.prepare.mockResolvedValueOnce({
+      id: 'session',
+      state: 'blocked',
+      diagnostics: [],
+      reasonCode: 'buildFailed',
+      compileResult: { ok: false, stdout: 'building original project', stderr: 'compiler failed at a.c:5' },
+    });
+    await installSelected();
+    act(() => finishTurn());
+    expect(await screen.findByText('conversation.explorer.scm.commit.buildFailed')).toBeInTheDocument();
+    expect(document.querySelector('[data-scm-workflow-output]')?.textContent).toContain('compiler failed at a.c:5');
+    expect(screen.getByRole('button', { name: 'conversation.explorer.scm.commit.start' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'conversation.explorer.scm.commit.confirm' })).toBeNull();
   });
 });
 
@@ -742,6 +858,37 @@ describe('ScmPanel view-as-tree / view-as-list toggle', () => {
   });
 });
 
+describe('ScmPanel monitor scope', () => {
+  it('limits rows and bulk-action inputs to the software folder', async () => {
+    const resources = [resource('software/src/main.c'), resource('docs/readme.md')];
+    installPort({ repositories: [repo()], firstFrames: { 'scm:pe1': status('scm:pe1', 1, resources) } });
+    render(<ScmPanel projectId='p1' />);
+
+    await screen.findByText('main.c');
+    expect(screen.getByText('readme.md')).toBeInTheDocument();
+
+    setScmMonitorScope('software');
+
+    await waitFor(() => expect(screen.queryByText('readme.md')).toBeNull());
+    expect(screen.getByText('main.c')).toBeInTheDocument();
+    expect(document.querySelector('[data-scm-monitor-scope]')).not.toBeNull();
+  });
+
+  it('falls back to the whole project when the software folder is missing', async () => {
+    gitBridge.softwareDirectory.mockResolvedValue({ isDirectory: false });
+    const resources = [resource('software/src/main.c'), resource('docs/readme.md')];
+    installPort({ repositories: [repo()], firstFrames: { 'scm:pe1': status('scm:pe1', 1, resources) } });
+    render(<ScmPanel projectId='p1' repoPaths={{ 'scm:pe1': 'C:/workspace' }} />);
+
+    await screen.findByText('main.c');
+    expect(screen.getByText('readme.md')).toBeInTheDocument();
+    setScmMonitorScope('software');
+
+    await waitFor(() => expect(screen.getByText('readme.md')).toBeInTheDocument());
+    expect(gitBridge.softwareDirectory).toHaveBeenCalledWith({ path: 'C:/workspace/software' });
+  });
+});
+
 describe('ScmPanel worktree aggregation in the Repositories section', () => {
   // A primary repo with one nested worktree, plus a second plain repo so the
   // Repositories section renders (multi-repo) and the primary's own changes show.
@@ -877,6 +1024,10 @@ describe('ScmPanel Changes section header consolidates actions (VS Code parity)'
 
     await screen.findByText('a.ts');
     const header = document.querySelector('[data-scm-section-header="changes"]') as HTMLElement;
+    const commitButton = header.querySelector('[data-scm-commit-and-push]') as HTMLButtonElement;
+    expect(commitButton).not.toBeNull();
+    expect(commitButton.getAttribute('aria-label')).toBe('conversation.explorer.scm.commit.action');
+    expect(commitButton.disabled).toBe(true);
     // Stage-all and discard-all live inside the Changes header row…
     expect(header.querySelector('[data-scm-header-stage-all]')).not.toBeNull();
     expect(header.querySelector('[data-scm-header-discard-all]')).not.toBeNull();
@@ -885,6 +1036,17 @@ describe('ScmPanel Changes section header consolidates actions (VS Code parity)'
     // Refresh is NOT here anymore — it lives on the shared explorer top bar so a
     // single control can both re-discover repos and re-pull status.
     expect(header.querySelector('[data-scm-header-refresh]')).toBeNull();
+  });
+
+  it('enables the compact commit action after a resource is selected', async () => {
+    installPort({ repositories: [repo()], firstFrames: { 'scm:pe1': status('scm:pe1', 1, [resource('a.ts')]) } });
+    render(<ScmPanel projectId='p1' />);
+
+    await screen.findByText('a.ts');
+    fireEvent.click(screen.getByRole('checkbox'));
+
+    const commitButton = document.querySelector('[data-scm-commit-and-push]') as HTMLButtonElement;
+    expect(commitButton.disabled).toBe(false);
   });
 
   it('drops the duplicate gray "changes" group title row but keeps the rows', async () => {

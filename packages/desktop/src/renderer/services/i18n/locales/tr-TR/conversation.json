@@ -676,6 +676,11 @@
       "noChanges": "Değişiklik yok",
       "loading": "Değişiklikler yükleniyor…",
       "loadFailed": "Değişiklikler yüklenemedi",
+      "monitorScope": {
+        "label": "İzleme kapsamı",
+        "project": "Tüm proje",
+        "software": "software klasörü"
+      },
       "groups": {
         "staged": "Hazırlanan değişiklikler",
         "unstaged": "Değişiklikler",
@@ -726,7 +731,15 @@
           "completed": "Completed",
           "blocked": "Workflow blocked",
           "failed": "Workflow failed"
-        }
+        },
+        "conversationRequired": "İş akışını başlatmadan önce bir sohbet açın.",
+        "conversationBusy": "Sohbet veya depo meşgul. Tamamlanmasını bekleyip yeniden tarayın.",
+        "agentFailed": "Yapay zeka görevi başarısız oldu veya taslak geçersiz. Sohbeti kontrol edip yeniden deneyin.",
+        "repairOutsideSelection": "Seçim dışındaki bir dosya veya Git durumu değişti. Commit engellendi; yerel değişiklikler korundu.",
+        "repairLimit": "İki onarım denemesinden sonra tanılar sürüyor. Elle düzeltip yeniden tarayın.",
+        "buildConfigRequired": "IAR veya CMake projesi bulunamadı. Derlemeyi .woody/static-scan.json içinde yapılandırın.",
+        "buildAmbiguous": "Birden fazla derleme sistemi veya proje bulundu. .woody/static-scan.json içinde birini seçin.",
+        "buildFailed": "Derleme doğrulaması başarısız oldu. Çıktıyı inceleyin, sorunu giderip yeniden tarayın."
       },
       "branch": {
         "select": "Select branch",

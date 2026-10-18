@@ -29,6 +29,9 @@ const listeners = new Set<() => void>();
 /** How the Changes section lists resources. `list` is the flat status order; `tree` groups by directory. */
 export type ScmViewMode = 'list' | 'tree';
 
+/** Which part of the repository the Changes section exposes to the user. */
+export type ScmMonitorScope = 'project' | 'software';
+
 /** Immutable view handed to React via `useSyncExternalStore`. */
 export type ScmUiView = {
   projectId: string | null;
@@ -45,6 +48,7 @@ export type ScmUiView = {
    */
   repoCollapsed: string[];
   viewMode: ScmViewMode;
+  monitorScope: ScmMonitorScope;
 };
 
 type PersistedUi = {
@@ -53,6 +57,7 @@ type PersistedUi = {
   treeExpanded?: string[];
   repoCollapsed?: string[];
   viewMode?: ScmViewMode;
+  monitorScope?: ScmMonitorScope;
 };
 
 let projectId: string | null = null;
@@ -61,6 +66,7 @@ let heights: Map<string, number> = new Map();
 let treeExpanded: Set<string> | null = null; // null ⇒ "expand all" default, not yet overridden
 let repoCollapsed: Set<string> = new Set(); // only collapsed worktree parents; empty ⇒ all expanded
 let viewMode: ScmViewMode = 'list';
+let monitorScope: ScmMonitorScope = 'project';
 
 let snapshot: ScmUiView = {
   projectId: null,
@@ -69,6 +75,7 @@ let snapshot: ScmUiView = {
   treeExpanded: [],
   repoCollapsed: [],
   viewMode: 'list',
+  monitorScope: 'project',
 };
 
 // ── persistence (per-project) ────────────────────────────────────────────────
@@ -84,6 +91,7 @@ const getLocalStorage = (): Storage | null => {
 };
 
 const isViewMode = (v: unknown): v is ScmViewMode => v === 'list' || v === 'tree';
+const isMonitorScope = (v: unknown): v is ScmMonitorScope => v === 'project' || v === 'software';
 
 /** A plain record of primitive values, ignoring anything malformed. */
 const sanitizeRecord = <T>(raw: unknown, keep: (v: unknown) => v is T): Record<string, T> => {
@@ -117,6 +125,7 @@ const loadUi = (id: string): PersistedUi => {
         ? parsed.repoCollapsed.filter((k): k is string => typeof k === 'string')
         : undefined,
       viewMode: isViewMode(parsed.viewMode) ? parsed.viewMode : undefined,
+      monitorScope: isMonitorScope(parsed.monitorScope) ? parsed.monitorScope : undefined,
     };
   } catch {
     return {};
@@ -130,6 +139,7 @@ const persistUi = (): void => {
     collapsed: Object.fromEntries(collapsed),
     heights: Object.fromEntries(heights),
     viewMode,
+    monitorScope,
   };
   // Only persist an explicit tree expansion once the user has touched it; a null
   // set means "still on the expand-all default", which needs no stored override.
@@ -153,6 +163,7 @@ const rebuildSnapshot = (): void => {
     treeExpanded: treeExpanded ? [...treeExpanded] : [],
     repoCollapsed: [...repoCollapsed],
     viewMode,
+    monitorScope,
   };
 };
 
@@ -178,6 +189,7 @@ export const openScmUi = (id: string): void => {
   treeExpanded = ui.treeExpanded ? new Set(ui.treeExpanded) : null;
   repoCollapsed = new Set(ui.repoCollapsed ?? []);
   viewMode = ui.viewMode ?? 'list';
+  monitorScope = ui.monitorScope ?? 'project';
   commit();
 };
 
@@ -205,6 +217,13 @@ export const clearSectionHeight = (sectionId: string): void => {
 export const setScmViewMode = (mode: ScmViewMode): void => {
   if (viewMode === mode) return;
   viewMode = mode;
+  persistUi();
+  commit();
+};
+
+export const setScmMonitorScope = (scope: ScmMonitorScope): void => {
+  if (monitorScope === scope) return;
+  monitorScope = scope;
   persistUi();
   commit();
 };
@@ -249,6 +268,15 @@ export const resetScmUiStoreForTest = (): void => {
   treeExpanded = null;
   repoCollapsed = new Set();
   viewMode = 'list';
-  snapshot = { projectId: null, collapsed: {}, heights: {}, treeExpanded: [], repoCollapsed: [], viewMode: 'list' };
+  monitorScope = 'project';
+  snapshot = {
+    projectId: null,
+    collapsed: {},
+    heights: {},
+    treeExpanded: [],
+    repoCollapsed: [],
+    viewMode: 'list',
+    monitorScope: 'project',
+  };
   listeners.clear();
 };

@@ -11,6 +11,7 @@ import {
   actionSide,
   classifyResourceState,
   diffAnchors,
+  filterScmResources,
   failedRowKeys,
   groupResources,
   isActionable,
@@ -203,6 +204,33 @@ describe('resourceName / resourceDir (row labels)', () => {
     const r = res({ repo_relative_path: '', file: { pe_id: 'pe1', relative_path: 'deep/x.ts' } });
     expect(resourceName(r)).toBe('x.ts');
     expect(resourceDir(r)).toBe('deep');
+  });
+});
+
+describe('filterScmResources (monitor scope)', () => {
+  it('keeps only software path segments and includes renames touching software', () => {
+    const resources = [
+      res({ repo_relative_path: 'software/src/a.c', file: { pe_id: 'pe1', relative_path: 'software/src/a.c' } }),
+      res({ repo_relative_path: 'docs/readme.md', file: { pe_id: 'pe1', relative_path: 'docs/readme.md' } }),
+      res({ repo_relative_path: 'software-old/a.c', file: { pe_id: 'pe1', relative_path: 'software-old/a.c' } }),
+      res({
+        repo_relative_path: 'src/new.c',
+        rename_from: 'software/src/old.c',
+        file: { pe_id: 'pe1', relative_path: 'src/new.c' },
+      }),
+    ];
+
+    expect(filterScmResources(resources, 'software')).toEqual([resources[0], resources[3]]);
+  });
+
+  it('accepts Windows separators and returns the original list for project scope', () => {
+    const resource = res({
+      repo_relative_path: 'software\\src\\a.c',
+      file: { pe_id: 'pe1', relative_path: 'software\\src\\a.c' },
+    });
+    const resources = [resource];
+    expect(filterScmResources(resources, 'software')).toEqual(resources);
+    expect(filterScmResources(resources, 'project')).toBe(resources);
   });
 });
 

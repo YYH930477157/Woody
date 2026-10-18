@@ -75,7 +75,7 @@ describe('commit workflow service', () => {
     expect(repair).toHaveBeenCalledTimes(1);
     expect(compile).toHaveBeenCalledOnce();
     expect(session.diagnostics).toEqual([]);
-    expect(states).toEqual(['collecting', 'message_draft', 'scan', 'repair', 'rescan', 'compile', 'confirmation']);
+    expect(states).toEqual(['collecting', 'scan', 'repair', 'rescan', 'compile', 'message_draft', 'confirmation']);
   });
 
   it('blocks after two repair attempts when diagnostics remain', async () => {

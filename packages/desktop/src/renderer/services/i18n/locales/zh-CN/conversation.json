@@ -674,6 +674,11 @@
       "noChanges": "没有变更",
       "loading": "正在加载变更…",
       "loadFailed": "无法加载变更",
+      "monitorScope": {
+        "label": "监控范围",
+        "project": "整个项目",
+        "software": "software 文件夹"
+      },
       "groups": {
         "staged": "已暂存的变更",
         "unstaged": "变更",
@@ -724,7 +729,15 @@
           "completed": "已完成",
           "blocked": "流程已阻止",
           "failed": "流程失败"
-        }
+        },
+        "conversationRequired": "请先打开当前对话，再启动提交流程。",
+        "conversationBusy": "当前对话或仓库正在处理中，请等待结束后重新扫描。",
+        "agentFailed": "AI 任务失败或返回的草稿格式无效，请查看当前对话后重试。",
+        "repairOutsideSelection": "检测到允许范围外的文件或 Git 状态发生变化，已阻止提交并保留本地修改。",
+        "repairLimit": "两轮自动修复后仍有诊断，请手工处理后重新扫描。",
+        "buildConfigRequired": "未检测到 IAR 或 CMake 工程，请在 .woody/static-scan.json 中配置构建。",
+        "buildAmbiguous": "检测到多个构建系统或工程，请在 .woody/static-scan.json 中明确选择。",
+        "buildFailed": "编译验证失败，请查看输出，处理问题后重新扫描。"
       },
       "branch": {
         "select": "选择分支",

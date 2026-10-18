@@ -3,6 +3,7 @@ import type {
   CommitMessageValidation,
   GitCommitSnapshot,
   LargeChangeMetrics,
+  GitWorkflowReasonCode,
 } from '@/common/types/sourceControl/gitWorkflowTypes';
 
 /** Check that the selected tree, parent revision and branch still match the scan. */
@@ -41,3 +42,11 @@ export const formatCommitMessage = (fields: CommitMessageFields): string => {
   if (fields.largeChangeNote?.trim()) lines.push(`【强制推送】: ${fields.largeChangeNote.trim()}`);
   return lines.join('\n');
 };
+export class WorkflowBlockedError extends Error {
+  constructor(
+    readonly reasonCode: GitWorkflowReasonCode,
+    detail = ''
+  ) {
+    super(detail || reasonCode);
+  }
+}

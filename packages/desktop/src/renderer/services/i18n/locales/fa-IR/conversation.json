@@ -674,6 +674,11 @@
       "noChanges": "تغییری وجود ندارد",
       "loading": "در حال بارگیری تغییرات…",
       "loadFailed": "بارگیری تغییرات ممکن نشد",
+      "monitorScope": {
+        "label": "محدوده نظارت",
+        "project": "کل پروژه",
+        "software": "پوشه software"
+      },
       "groups": {
         "staged": "تغییرات آماده‌شده",
         "unstaged": "تغییرات",
@@ -724,7 +729,15 @@
           "completed": "Completed",
           "blocked": "Workflow blocked",
           "failed": "Workflow failed"
-        }
+        },
+        "conversationRequired": "پیش از شروع این فرایند، یک گفتگو باز کنید.",
+        "conversationBusy": "گفتگو یا مخزن مشغول است. منتظر پایان بمانید و دوباره اسکن کنید.",
+        "agentFailed": "کار هوش مصنوعی ناموفق بود یا پیش‌نویس نامعتبر است. گفتگو را بررسی و دوباره تلاش کنید.",
+        "repairOutsideSelection": "فایلی خارج از انتخاب یا وضعیت Git تغییر کرده است. ثبت تغییرات مسدود شد و تغییرات محلی حفظ شدند.",
+        "repairLimit": "پس از دو تلاش برای اصلاح، هنوز خطاهایی وجود دارد. دستی اصلاح و دوباره اسکن کنید.",
+        "buildConfigRequired": "پروژه IAR یا CMake پیدا نشد. ساخت را در .woody/static-scan.json تنظیم کنید.",
+        "buildAmbiguous": "چند سیستم ساخت یا پروژه پیدا شد. یکی را در .woody/static-scan.json انتخاب کنید.",
+        "buildFailed": "اعتبارسنجی ساخت ناموفق بود. خروجی را بررسی، مشکل را رفع و دوباره اسکن کنید."
       },
       "branch": {
         "select": "Select branch",

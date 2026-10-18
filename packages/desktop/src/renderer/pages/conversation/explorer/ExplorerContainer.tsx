@@ -253,6 +253,10 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
   // subscription is owned by its store per project, not by the component's mount
   // (see ScmPanel's lifecycle note) — a tab switch never drops the backend watch.
   const [activeTab, setActiveTab] = useState<'files' | 'changes'>('files');
+  const [changesVisited, setChangesVisited] = useState(false);
+  useEffect(() => {
+    if (activeTab === 'changes') setChangesVisited(true);
+  }, [activeTab]);
   // Busy flag for the top-bar refresh: spins the icon and disables re-click while a
   // refresh is in flight (so rapid clicks don't fan out redundant backend round-trips).
   const [refreshing, setRefreshing] = useState(false);
@@ -645,9 +649,9 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
           />
         </SearchPanel>
       </div>
-      {activeTab === 'changes' && (
-        <div className='flex-1 min-h-0'>
-          <ScmPanel projectId={projectId} repoPaths={repoPaths} />
+      {(activeTab === 'changes' || changesVisited) && (
+        <div className='flex-1 min-h-0' style={activeTab === 'changes' ? undefined : { display: 'none' }}>
+          <ScmPanel projectId={projectId} repoPaths={repoPaths} conversationId={activeConversationId} />
         </div>
       )}
       <Modal

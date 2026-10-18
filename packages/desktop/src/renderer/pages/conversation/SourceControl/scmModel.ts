@@ -100,6 +100,24 @@ export type ScmResource = {
   rename_from?: string;
 };
 
+export type ScmMonitorScope = 'project' | 'software';
+
+const normalizeResourcePath = (value: string): string =>
+  value.replaceAll('\\', '/').replace(/^\.\//, '').replace(/^\/+/, '').replace(/\/+$/, '');
+
+const isSoftwarePath = (value: string): boolean => {
+  const path = normalizeResourcePath(value);
+  return path === 'software' || path.startsWith('software/');
+};
+
+/** Filter resources by a repository-relative project scope without matching similarly named folders. */
+export const filterScmResources = (resources: ScmResource[], scope: ScmMonitorScope): ScmResource[] => {
+  if (scope === 'project') return resources;
+  return resources.filter((resource) =>
+    [resource.repo_relative_path, resource.file.relative_path, resource.rename_from ?? ''].some(isSoftwarePath)
+  );
+};
+
 export type ScmStatus = {
   /** Identity of the repo this snapshot belongs to — a pure reference, no state. */
   repository: { repo_id: string };

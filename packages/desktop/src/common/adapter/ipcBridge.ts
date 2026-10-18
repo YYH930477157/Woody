@@ -1739,6 +1739,9 @@ export const sourceControl = {
   workflowRetryPush: bridge.buildProvider<GitWorkflowSession, { sessionId: string }>(
     'source-control.workflow.retry-push'
   ),
+  workflowProgress: bridge.buildEmitter<{ requestId: string; session: GitWorkflowSession }>(
+    'source-control.workflow.progress'
+  ),
 };
 
 export const staticScan = {

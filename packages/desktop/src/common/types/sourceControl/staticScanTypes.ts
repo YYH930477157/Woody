@@ -36,6 +36,16 @@ export type StaticScanMachineConfig = {
 };
 
 export type StaticScanProjectConfig = {
+  build?: {
+    executable?: string;
+    arguments?: string[];
+    cwd?: string;
+    timeoutMs?: number;
+    system?: 'iar' | 'cmake';
+    project?: string;
+    configuration?: string;
+    buildDirectory?: string;
+  };
   clangTidy?: Omit<StaticScanConfig, 'tool' | 'executablePath'> & { executablePath?: string };
   pcLint?: Omit<StaticScanConfig, 'tool' | 'executablePath'> & { executablePath?: string };
 };

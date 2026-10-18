@@ -675,6 +675,11 @@
       "noChanges": "Keine Änderungen",
       "loading": "Änderungen werden geladen…",
       "loadFailed": "Änderungen konnten nicht geladen werden",
+      "monitorScope": {
+        "label": "Überwachungsbereich",
+        "project": "Gesamtes Projekt",
+        "software": "software-Ordner"
+      },
       "groups": {
         "staged": "Vorgemerkte Änderungen",
         "unstaged": "Änderungen",
@@ -725,7 +730,15 @@
           "completed": "Completed",
           "blocked": "Workflow blocked",
           "failed": "Workflow failed"
-        }
+        },
+        "conversationRequired": "Öffnen Sie vor dem Start einen Chat.",
+        "conversationBusy": "Chat oder Repository ist beschäftigt. Warten Sie und scannen Sie erneut.",
+        "agentFailed": "Die KI-Aufgabe ist fehlgeschlagen oder der Entwurf ist ungültig. Prüfen Sie den Chat und versuchen Sie es erneut.",
+        "repairOutsideSelection": "Eine Datei außerhalb der Auswahl oder der Git-Zustand wurde geändert. Der Commit ist blockiert; lokale Änderungen bleiben erhalten.",
+        "repairLimit": "Nach zwei Reparaturversuchen bestehen weiterhin Diagnosen. Beheben Sie diese manuell und scannen Sie erneut.",
+        "buildConfigRequired": "Kein IAR- oder CMake-Projekt gefunden. Konfigurieren Sie den Build in .woody/static-scan.json.",
+        "buildAmbiguous": "Mehrere Build-Systeme oder Projekte gefunden. Wählen Sie eines in .woody/static-scan.json.",
+        "buildFailed": "Die Build-Prüfung ist fehlgeschlagen. Prüfen Sie die Ausgabe und scannen Sie nach der Korrektur erneut."
       },
       "branch": {
         "select": "Select branch",

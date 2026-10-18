@@ -675,6 +675,11 @@
       "noChanges": "Sin cambios",
       "loading": "Cargando cambios…",
       "loadFailed": "No se pudieron cargar los cambios",
+      "monitorScope": {
+        "label": "Ámbito supervisado",
+        "project": "Proyecto completo",
+        "software": "carpeta software"
+      },
       "groups": {
         "staged": "Cambios preparados",
         "unstaged": "Cambios",
@@ -725,7 +730,15 @@
           "completed": "Completed",
           "blocked": "Workflow blocked",
           "failed": "Workflow failed"
-        }
+        },
+        "conversationRequired": "Abra una conversación antes de iniciar el proceso.",
+        "conversationBusy": "La conversación o el repositorio está ocupado. Espere y vuelva a analizar.",
+        "agentFailed": "La tarea de IA falló o el borrador no es válido. Revise la conversación y reintente.",
+        "repairOutsideSelection": "Cambió un archivo fuera de la selección o el estado de Git. Se bloqueó el commit y se conservaron los cambios locales.",
+        "repairLimit": "Persisten diagnósticos tras dos intentos de reparación. Corríjalos manualmente y repita el análisis.",
+        "buildConfigRequired": "No se detectó un proyecto IAR o CMake. Configure la compilación en .woody/static-scan.json.",
+        "buildAmbiguous": "Se encontraron varios sistemas de compilación o proyectos. Seleccione uno en .woody/static-scan.json.",
+        "buildFailed": "La verificación de compilación falló. Revise la salida, corrija el problema y repita el análisis."
       },
       "branch": {
         "select": "Select branch",

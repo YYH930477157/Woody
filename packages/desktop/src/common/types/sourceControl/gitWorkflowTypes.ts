@@ -50,7 +50,25 @@ export type GitCommitSnapshot = {
   tree: string;
 };
 
-export type GitWorkflowReasonCode = 'scanFailed' | 'snapshotChanged';
+export type GitWorkflowReasonCode =
+  | 'scanFailed'
+  | 'snapshotChanged'
+  | 'conversationRequired'
+  | 'conversationBusy'
+  | 'agentFailed'
+  | 'repairOutsideSelection'
+  | 'repairLimit'
+  | 'buildConfigRequired'
+  | 'buildAmbiguous'
+  | 'buildFailed';
+
+export type GitWorkflowCompileResult = {
+  ok: boolean;
+  stdout?: string;
+  stderr?: string;
+  reasonCode?: GitWorkflowReasonCode;
+  commands?: string[];
+};
 
 export type GitOperationResult =
   | { ok: true }
@@ -79,6 +97,9 @@ export type GitWorkflowSession = {
     message: string;
     rule?: string;
   }>;
+  compileResult?: GitWorkflowCompileResult;
+  scanResults?: import('./staticScanTypes').StaticScanResult[];
+  agentTurnIds?: string[];
   messageFields?: CommitMessageFields;
   message?: string;
   commit?: string;
@@ -88,6 +109,8 @@ export type GitWorkflowSession = {
 };
 
 export type GitWorkflowPrepareRequest = {
+  conversationId?: string;
+  requestId?: string;
   repoPath: string;
   branch: string;
   selectedPaths: string[];

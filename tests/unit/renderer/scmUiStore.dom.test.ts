@@ -18,6 +18,7 @@ import {
   getScmUiSnapshot,
   openScmUi,
   resetScmUiStoreForTest,
+  setScmMonitorScope,
   setScmTreeExpanded,
   setScmViewMode,
   setSectionCollapsed,
@@ -45,6 +46,7 @@ describe('scmUiStore defaults', () => {
     expect(s.collapsed).toEqual({});
     expect(s.heights).toEqual({});
     expect(s.treeExpanded).toEqual([]);
+    expect(s.monitorScope).toBe('project');
   });
 
   it('is idempotent on reopen of the same project (does not reset live state)', () => {
@@ -88,6 +90,17 @@ describe('scmUiStore persistence (per project)', () => {
     expect(getScmUiSnapshot().viewMode).toBe('tree');
   });
 
+  it('persists and restores the monitor scope per project', () => {
+    openScmUi('p1');
+    setScmMonitorScope('software');
+    expect(getScmUiSnapshot().monitorScope).toBe('software');
+    expect(readRaw('p1').monitorScope).toBe('software');
+
+    resetScmUiStoreForTest();
+    openScmUi('p1');
+    expect(getScmUiSnapshot().monitorScope).toBe('software');
+  });
+
   it('persists tree expansion only once the user overrides the expand-all default', () => {
     openScmUi('p1');
     // Untouched: no stored override (null default), snapshot is empty = "expand all".
@@ -128,6 +141,7 @@ describe('scmUiStore corrupt-record degradation', () => {
       JSON.stringify({
         heights: { repositories: -5, changes: 'tall' },
         viewMode: 'mosaic',
+        monitorScope: 'outside',
         collapsed: { repositories: 'yes' },
       })
     );
@@ -135,6 +149,7 @@ describe('scmUiStore corrupt-record degradation', () => {
     const s = getScmUiSnapshot();
     expect(s.heights).toEqual({}); // -5 and 'tall' both rejected
     expect(s.viewMode).toBe('list'); // 'mosaic' rejected
+    expect(s.monitorScope).toBe('project'); // 'outside' rejected
     expect(s.collapsed).toEqual({}); // 'yes' (non-boolean) rejected
   });
 

@@ -20,6 +20,7 @@ type BackendBinaryResolveDiagnostics = {
   envOverridePath?: string;
   envOverrideExists?: boolean;
   resourcesPath?: string;
+  fallbackResourcesPath?: string;
   runtimeKey: string;
   binaryName: string;
   checkedBundledPath?: string;
@@ -126,19 +127,30 @@ function bundledPath(
   diagnostics: BackendBinaryResolveDiagnostics
 ): string | null {
   const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
-  if (!resourcesPath) return null;
-  diagnostics.resourcesPath = resourcesPath;
+  if (resourcesPath) {
+    diagnostics.resourcesPath = resourcesPath;
+    const bundledDir = join(resourcesPath, 'bundled-aioncore');
+    const runtimeDir = join(bundledDir, runtimeKey);
+    const candidate = join(runtimeDir, binaryName);
+    diagnostics.checkedBundledPath = candidate;
+    diagnostics.bundledDirExists = existsSync(bundledDir);
+    diagnostics.runtimeDirExists = existsSync(runtimeDir);
+    diagnostics.resourcesDirEntries = listDirEntries(resourcesPath);
+    diagnostics.runtimeDirEntries = listDirEntries(runtimeDir);
 
-  const bundledDir = join(resourcesPath, 'bundled-aioncore');
-  const runtimeDir = join(bundledDir, runtimeKey);
-  const candidate = join(runtimeDir, binaryName);
-  diagnostics.checkedBundledPath = candidate;
-  diagnostics.bundledDirExists = existsSync(bundledDir);
-  diagnostics.runtimeDirExists = existsSync(runtimeDir);
-  diagnostics.resourcesDirEntries = listDirEntries(resourcesPath);
-  diagnostics.runtimeDirEntries = listDirEntries(runtimeDir);
+    if (existsSync(candidate)) return candidate;
+  }
 
-  if (existsSync(candidate)) return candidate;
+  // electron-vite development runs with Electron's own resourcesPath. The
+  // repository keeps the bundled backend under ./resources, so include that
+  // path before falling back to PATH.
+  const developmentResourcesPath = resolve(process.cwd(), 'resources');
+  if (developmentResourcesPath !== resourcesPath) {
+    diagnostics.fallbackResourcesPath = developmentResourcesPath;
+    const candidate = join(developmentResourcesPath, 'bundled-aioncore', runtimeKey, binaryName);
+    if (existsSync(candidate)) return candidate;
+  }
+
   return null;
 }
 

@@ -79,4 +79,18 @@ describe('resolveBinaryPath', () => {
       });
     }
   });
+
+  it('resolves the repository resources directory in electron-vite development mode', () => {
+    const electronResourcesPath = '/electron/resources';
+    const developmentResourcesPath = join(process.cwd(), 'resources');
+    const runtimeKey = `${process.platform}-${process.arch}`;
+    const binaryName = process.platform === 'win32' ? 'aioncore.exe' : 'aioncore';
+    const developmentBinaryPath = join(developmentResourcesPath, 'bundled-aioncore', runtimeKey, binaryName);
+
+    setResourcesPath(electronResourcesPath);
+    vi.mocked(existsSync).mockImplementation((path) => path === developmentBinaryPath);
+    vi.mocked(readdirSync).mockReturnValue([]);
+
+    expect(resolveBinaryPath()).toBe(developmentBinaryPath);
+  });
 });

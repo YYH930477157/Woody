@@ -28,24 +28,41 @@
  */
 
 import { Button, Message, Select, Tooltip } from '@arco-design/web-react';
-import { BranchTwo, FolderCode, FolderCodeOne, Plus, RightBranchOne, TreeList, Undo, ViewList } from '@icon-park/react';
-import React, { useEffect, useMemo, useState } from 'react';
+import {
+  BranchTwo,
+  FolderCode,
+  FolderCodeOne,
+  Plus,
+  RightBranchOne,
+  SendOne,
+  TreeList,
+  Undo,
+  ViewList,
+} from '@icon-park/react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePreviewContext } from '../Preview';
 import { ipcBridge } from '@/common';
-import type { CommitMessageFields, GitBranch, GitWorkflowState } from '@/common/types/sourceControl/gitWorkflowTypes';
+import type {
+  CommitMessageFields,
+  GitBranch,
+  GitWorkflowState,
+  GitWorkflowSession,
+} from '@/common/types/sourceControl/gitWorkflowTypes';
 import type { StaticScanConfig, StaticScanDiagnostic } from '@/common/types/sourceControl/staticScanTypes';
 import { CommitWorkflowModal } from './CommitWorkflowModal';
 import { discardAllTargets, ScmChangesView, stageAllTargets } from './ScmChangesView';
 import { ScmSection, ScmSectionDivider } from './ScmSection';
 import {
   diffAnchors,
+  filterScmResources,
   resourceKey,
   resourceName,
   type ScmActionKind,
   type ScmRepository,
   type ScmResource,
+  type ScmStatus,
 } from './scmModel';
 import { groupRepositories, type ScmRepoGroup } from './scmRepoTree';
 import { fetchScmDiff, openScmProject, refreshAllRepos, setSelectedRepo, useScm } from './scmStore';
@@ -54,11 +71,13 @@ import {
   clearSectionHeight,
   openScmUi,
   setRepoWorktreesCollapsed,
+  setScmMonitorScope,
   setScmViewMode,
   setSectionCollapsed,
   setSectionHeight,
   useScmUi,
   type ScmViewMode,
+  type ScmMonitorScope,
 } from './scmUiStore';
 import { type ScmActionReport, useScmActions } from './useScmActions';
 import {
@@ -86,9 +105,10 @@ export type ScmPanelProps = {
   projectId: string;
   /** Absolute paths keyed by project-explorer id, used by the local Git bridge. */
   repoPaths?: Record<string, string>;
+  conversationId?: string | null;
 };
 
-export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {} }) => {
+export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, conversationId }) => {
   const { t } = useTranslation();
   const view = useScm();
   const ui = useScmUi();
@@ -99,6 +119,15 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {} })
   const [workflowMessage, setWorkflowMessage] = useState<string>();
   const [workflowSessionId, setWorkflowSessionId] = useState<string>();
   const [workflowDiagnostics, setWorkflowDiagnostics] = useState<StaticScanDiagnostic[]>([]);
+  const [workflowOutput, setWorkflowOutput] = useState('');
+  const activeRequest = useRef<string | undefined>(undefined);
+  const workflowBusy = useRef(false);
+  const ownAgentTurns = useRef(new Set<string>());
+  const autoScanPending = useRef(false);
+  const [autoScanRevision, setAutoScanRevision] = useState(0);
+  const startWorkflowRef = useRef<() => void>(() => {});
+  const workflowTarget = useRef<{ repo: ScmRepository; resources: ScmResource[] } | undefined>(undefined);
+  startWorkflowRef.current = () => {};
   const [messageFields, setMessageFields] = useState<CommitMessageFields>({
     reason: '',
     scope: '',
@@ -108,6 +137,64 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {} })
   });
   const [branches, setBranches] = useState<Record<string, GitBranch[]>>({});
   const [branchBusy, setBranchBusy] = useState(false);
+  const [softwareDirectoryExists, setSoftwareDirectoryExists] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (autoScanRevision > 0) startWorkflowRef.current();
+  }, [autoScanRevision]);
+  const applyWorkflowSession = (session: GitWorkflowSession): void => {
+    session.agentTurnIds?.forEach((id) => ownAgentTurns.current.add(id));
+    setWorkflowSessionId(session.id);
+    setWorkflowState(session.state);
+    setWorkflowDiagnostics(session.diagnostics);
+    if (session.messageFields) setMessageFields(session.messageFields);
+    setWorkflowMessage(
+      session.reasonCode ? t(`conversation.explorer.scm.commit.${session.reasonCode}`) : session.reason
+    );
+    setWorkflowOutput(
+      [
+        ...(session.scanResults ?? []).map((result) =>
+          [result.tool, result.stdout, result.stderr].filter(Boolean).join('\n')
+        ),
+        ...(session.compileResult?.commands ?? []),
+        session.compileResult?.stdout,
+        session.compileResult?.stderr,
+        session.reason,
+      ]
+        .filter(Boolean)
+        .join('\n')
+    );
+  };
+
+  useEffect(
+    () =>
+      ipcBridge.sourceControl?.workflowProgress?.on((event) => {
+        if (event.requestId === activeRequest.current) applyWorkflowSession(event.session);
+      }),
+    [t]
+  );
+
+  useEffect(
+    () =>
+      ipcBridge.conversation?.turnCompleted?.on((event) => {
+        if (
+          event.session_id !== conversationId ||
+          event.status !== 'finished' ||
+          event.state !== 'ai_waiting_input' ||
+          workflowBusy.current ||
+          ownAgentTurns.current.has(event.turn_id)
+        )
+          return;
+        // The store refresh includes files created by the completed turn.
+        if (autoScanPending.current) return;
+        autoScanPending.current = true;
+        void refreshAllRepos()
+          .then(() => setAutoScanRevision((revision) => revision + 1))
+          .finally(() => {
+            autoScanPending.current = false;
+          });
+      }),
+    [conversationId]
+  );
 
   // Wire the WS runtime (idempotent) and declare the project. Deliberately no
   // cleanup: unmount here means "tab switched", not "project closed". The UI store
@@ -128,13 +215,47 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {} })
 
   const selectedRepoStatus = selectedRepo ? view.statuses[selectedRepo.repo_id] : undefined;
   const selectedRepoPath = selectedRepo ? resolveRepositoryPath(selectedRepo, repoPaths) : undefined;
+
+  useEffect(() => {
+    if (ui.monitorScope !== 'software') {
+      setSoftwareDirectoryExists(null);
+      return;
+    }
+    if (!selectedRepoPath || !ipcBridge.fs?.getFileMetadata) {
+      setSoftwareDirectoryExists(false);
+      return;
+    }
+    let cancelled = false;
+    const softwarePath = `${selectedRepoPath.replace(/[\\/]+$/, '')}/software`;
+    void ipcBridge.fs.getFileMetadata
+      .invoke({ path: softwarePath })
+      .then((metadata) => {
+        if (!cancelled) setSoftwareDirectoryExists(metadata.isDirectory === true);
+      })
+      .catch(() => {
+        if (!cancelled) setSoftwareDirectoryExists(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedRepoPath, ui.monitorScope]);
+
+  const effectiveMonitorScope =
+    ui.monitorScope === 'software' && softwareDirectoryExists !== false ? 'software' : 'project';
+  const selectedStatus = useMemo<ScmStatus | undefined>(() => {
+    if (!selectedRepoStatus) return undefined;
+    return {
+      ...selectedRepoStatus,
+      resources: filterScmResources(selectedRepoStatus.resources, effectiveMonitorScope),
+    };
+  }, [selectedRepoStatus, effectiveMonitorScope]);
   const selectedResources = selectedRepo
-    ? getSelectedResources(selectedRepoStatus?.resources ?? [], commitSelections[selectedRepo.repo_id] ?? new Set())
+    ? getSelectedResources(selectedStatus?.resources ?? [], commitSelections[selectedRepo.repo_id] ?? new Set())
     : [];
 
   useEffect(() => {
     if (!selectedRepo) return;
-    const resources = view.statuses[selectedRepo.repo_id]?.resources ?? [];
+    const resources = selectedStatus?.resources ?? [];
     setCommitSelections((previous) => {
       const current = previous[selectedRepo.repo_id];
       if (!current) return previous;
@@ -142,7 +263,7 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {} })
       if (next.size === current.size && [...next].every((key) => current.has(key))) return previous;
       return { ...previous, [selectedRepo.repo_id]: next };
     });
-  }, [selectedRepo, view.statuses]);
+  }, [selectedRepo, selectedStatus]);
 
   useEffect(() => {
     if (!selectedRepo || !selectedRepoPath || !ipcBridge.sourceControl?.branches) return;
@@ -178,11 +299,9 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {} })
   // resolves to null and closes the diff.
   const selected = useMemo(() => {
     if (!selectedRepo || !view.selectedResource) return null;
-    const resource = view.statuses[selectedRepo.repo_id]?.resources.find(
-      (r) => resourceKey(r) === view.selectedResource
-    );
+    const resource = selectedStatus?.resources.find((r) => resourceKey(r) === view.selectedResource);
     return resource ? { repo: selectedRepo, resource } : null;
-  }, [selectedRepo, view.statuses, view.selectedResource]);
+  }, [selectedRepo, selectedStatus, view.selectedResource]);
 
   if (view.loadState === 'loading' && view.repositories.length === 0) {
     return <PanelNotice text={t('conversation.explorer.scm.loading')} />;
@@ -207,20 +326,39 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {} })
 
   const openCommitWorkflow = (): void => {
     if (selectedResources.length === 0) return;
+    if (workflowBusy.current) {
+      setWorkflowVisible(true);
+      return;
+    }
+    workflowTarget.current = { repo: selectedRepo, resources: [...selectedResources] };
     setWorkflowState('idle');
     setWorkflowMessage(undefined);
     setWorkflowSessionId(undefined);
     setWorkflowDiagnostics([]);
+    setWorkflowOutput('');
     setMessageFields({ reason: '', scope: '', solution: '', impact: '', tests: '' });
     setWorkflowVisible(true);
   };
 
   const startCommitWorkflow = (): void => {
+    if (workflowBusy.current || selectedResources.length === 0) return;
+    if (workflowVisible && workflowTarget.current?.repo.repo_id !== selectedRepo.repo_id) {
+      setWorkflowState('blocked');
+      setWorkflowMessage(t('conversation.explorer.scm.commit.snapshotChanged'));
+      return;
+    }
     if (!selectedRepoPath || selectedResources.length === 0) {
       setWorkflowState('blocked');
       setWorkflowMessage(t('conversation.explorer.scm.commit.repoPathUnavailable'));
       return;
     }
+    workflowBusy.current = true;
+    const requestId = crypto.randomUUID();
+    activeRequest.current = requestId;
+    workflowTarget.current = { repo: selectedRepo, resources: [...selectedResources] };
+    setWorkflowVisible(true);
+    setWorkflowDiagnostics([]);
+    setWorkflowOutput('');
     setWorkflowState('collecting');
     setWorkflowMessage(t('conversation.explorer.scm.commit.readingGit'));
     const selectedPaths = [...new Set(selectedResources.map((resource) => resource.repo_relative_path))];
@@ -246,43 +384,47 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {} })
           selectedPaths,
           scannerConfigs,
           messageFields,
+          conversationId: conversationId ?? undefined,
+          requestId,
         });
       })
       .then((session) => {
-        setWorkflowSessionId(session.id);
-        setWorkflowState(session.state);
-        setWorkflowDiagnostics(session.diagnostics);
-        setWorkflowMessage(
-          session.reasonCode ? t(`conversation.explorer.scm.commit.${session.reasonCode}`) : session.reason
-        );
+        applyWorkflowSession(session);
+        void refreshAllRepos();
       })
       .catch(() => {
         setWorkflowState('failed');
         setWorkflowMessage(t('conversation.explorer.scm.commit.scanFailed'));
+      })
+      .finally(() => {
+        workflowBusy.current = false;
       });
   };
+  startWorkflowRef.current = startCommitWorkflow;
 
   const commitWorkflow = (): void => {
     if (!workflowSessionId || !ipcBridge.sourceControl.workflowCommit) return;
     setWorkflowState('commit');
+    workflowBusy.current = true;
     void ipcBridge.sourceControl.workflowCommit
       .invoke({ sessionId: workflowSessionId, messageFields })
       .then((session) => {
-        setWorkflowState(session.state);
-        setWorkflowDiagnostics(session.diagnostics);
-        setWorkflowMessage(
-          session.reasonCode ? t(`conversation.explorer.scm.commit.${session.reasonCode}`) : session.reason
-        );
+        applyWorkflowSession(session);
+        void refreshAllRepos();
       })
       .catch(() => {
         setWorkflowState('failed');
         setWorkflowMessage(t('conversation.explorer.scm.commit.commitFailed'));
+      })
+      .finally(() => {
+        workflowBusy.current = false;
       });
   };
 
   const retryWorkflowPush = (): void => {
     if (!workflowSessionId || !ipcBridge.sourceControl.workflowRetryPush) return;
     setWorkflowState('push');
+    workflowBusy.current = true;
     void ipcBridge.sourceControl.workflowRetryPush
       .invoke({ sessionId: workflowSessionId })
       .then((session) => {
@@ -294,6 +436,9 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {} })
       .catch(() => {
         setWorkflowState('push');
         setWorkflowMessage(t('conversation.explorer.scm.commit.pushFailed'));
+      })
+      .finally(() => {
+        workflowBusy.current = false;
       });
   };
 
@@ -335,10 +480,11 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {} })
         view={view}
         ui={ui}
         selectedRepo={selectedRepo}
+        selectedStatus={selectedStatus}
         multiRepo={multiRepo}
         onRepoSelect={setSelectedRepo}
         onAction={actions.run}
-        busy={actions.busy}
+        busy={actions.busy || workflowBusy.current}
         failedRowKeys={actions.report?.failedRowKeys ?? []}
         commitSelection={commitSelections[selectedRepo.repo_id] ?? new Set()}
         onCommitSelection={toggleCommitSelection}
@@ -350,13 +496,14 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {} })
       />
       <CommitWorkflowModal
         visible={workflowVisible}
-        repo={selectedRepo}
-        branch={selectedRepo.head?.name}
-        resources={selectedResources}
+        repo={workflowTarget.current?.repo ?? selectedRepo}
+        branch={(workflowTarget.current?.repo ?? selectedRepo).head?.name}
+        resources={workflowTarget.current?.resources ?? selectedResources}
         state={workflowState}
         statusMessage={workflowMessage}
         messageFields={messageFields}
         diagnostics={workflowDiagnostics}
+        output={workflowOutput}
         onCancel={() => setWorkflowVisible(false)}
         onStart={startCommitWorkflow}
         onCommit={commitWorkflow}
@@ -394,6 +541,7 @@ const ScmSectionStack: React.FC<{
   view: ReturnType<typeof useScm>;
   ui: ReturnType<typeof useScmUi>;
   selectedRepo: ScmRepository;
+  selectedStatus: ScmStatus | undefined;
   multiRepo: boolean;
   onRepoSelect: (repoId: string) => void;
   onAction: (action: ScmActionKind, repoId: string, resources: ScmResource[]) => void;
@@ -410,6 +558,7 @@ const ScmSectionStack: React.FC<{
   view,
   ui,
   selectedRepo,
+  selectedStatus,
   multiRepo,
   onRepoSelect,
   onAction,
@@ -481,7 +630,7 @@ const ScmSectionStack: React.FC<{
   };
 
   const viewMode: ScmViewMode = ui.viewMode;
-  const changesStatus = view.statuses[selectedRepo.repo_id];
+  const changesStatus = selectedStatus;
   const stageTargets = stageAllTargets(changesStatus, selectedRepo.capabilities.staging);
   const discardTargets = discardAllTargets(changesStatus, selectedRepo.capabilities.staging);
 
@@ -489,6 +638,8 @@ const ScmSectionStack: React.FC<{
     <ChangesHeaderActions
       mode={viewMode}
       onChangeMode={setScmViewMode}
+      monitorScope={ui.monitorScope}
+      onChangeMonitorScope={setScmMonitorScope}
       stageTargets={stageTargets}
       discardTargets={discardTargets}
       busy={busy}
@@ -507,7 +658,7 @@ const ScmSectionStack: React.FC<{
     <div className='flex-1 min-h-0 overflow-auto ps-4px pe-4px pb-8px'>
       <ScmChangesView
         repo={selectedRepo}
-        status={view.statuses[selectedRepo.repo_id]}
+        status={changesStatus}
         selectedKey={view.selectedResource}
         commitSelection={commitSelection}
         onCommitSelection={onCommitSelection}
@@ -596,6 +747,8 @@ const ScmSectionStack: React.FC<{
 const ChangesHeaderActions: React.FC<{
   mode: ScmViewMode;
   onChangeMode: (mode: ScmViewMode) => void;
+  monitorScope: ScmMonitorScope;
+  onChangeMonitorScope: (scope: ScmMonitorScope) => void;
   stageTargets: ScmResource[];
   discardTargets: ScmResource[];
   busy: boolean;
@@ -610,6 +763,8 @@ const ChangesHeaderActions: React.FC<{
 }> = ({
   mode,
   onChangeMode,
+  monitorScope,
+  onChangeMonitorScope,
   stageTargets,
   discardTargets,
   busy,
@@ -625,6 +780,18 @@ const ChangesHeaderActions: React.FC<{
   const { t } = useTranslation();
   return (
     <>
+      <Select
+        size='mini'
+        value={monitorScope}
+        disabled={busy}
+        data-scm-monitor-scope
+        onChange={(value) => onChangeMonitorScope(value as ScmMonitorScope)}
+        aria-label={t('conversation.explorer.scm.monitorScope.label')}
+        style={{ maxWidth: 130 }}
+      >
+        <Select.Option value='project'>{t('conversation.explorer.scm.monitorScope.project')}</Select.Option>
+        <Select.Option value='software'>{t('conversation.explorer.scm.monitorScope.software')}</Select.Option>
+      </Select>
       {branches.length > 0 && (
         <Select
           size='mini'
@@ -649,12 +816,12 @@ const ChangesHeaderActions: React.FC<{
           size='mini'
           disabled={busy || commitCount === 0}
           data-scm-commit-and-push
-          className='flex-shrink-0'
+          className='flex-shrink-0 !px-4px'
+          icon={<SendOne theme='outline' size='14' />}
           aria-label={t('conversation.explorer.scm.commit.action')}
+          title={t('conversation.explorer.scm.commit.action')}
           onClick={onCommitAndPush}
-        >
-          {t('conversation.explorer.scm.commit.action')}
-        </Button>
+        />
       </Tooltip>
       {discardTargets.length > 0 && (
         <Tooltip content={t('conversation.explorer.scm.actions.discard')} mini position='br'>

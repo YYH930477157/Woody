@@ -10,9 +10,15 @@ import type {
   GitPushResult,
   GitWorkflowReasonCode,
   GitWorkflowState,
+  GitWorkflowCompileResult,
 } from '@/common/types/sourceControl/gitWorkflowTypes';
 
-import { formatCommitMessage, isSameCommitSnapshot, validateCommitMessage } from './gitWorkflowModel';
+import {
+  formatCommitMessage,
+  isSameCommitSnapshot,
+  validateCommitMessage,
+  WorkflowBlockedError,
+} from './gitWorkflowModel';
 
 export type CommitWorkflowScan = (request: {
   repoPath: string;
@@ -30,7 +36,7 @@ export type CommitWorkflowRepair = (request: {
 export type CommitWorkflowCompile = (request: {
   repoPath: string;
   selectedPaths: string[];
-}) => Promise<{ ok: boolean; stdout?: string; stderr?: string }>;
+}) => Promise<GitWorkflowCompileResult>;
 
 export type CommitWorkflowGit = {
   getCommitSnapshot: (repoPath: string, paths: string[]) => Promise<GitCommitSnapshot>;
@@ -48,7 +54,7 @@ export type CommitWorkflowInput = {
   branch: string;
   selectedPaths: string[];
   scannerConfigs: StaticScanConfig[];
-  generateMessage: () => Promise<CommitMessageFields>;
+  generateMessage: (verification?: GitWorkflowCompileResult) => Promise<CommitMessageFields>;
   scan: CommitWorkflowScan;
   repair?: CommitWorkflowRepair;
   compile?: CommitWorkflowCompile;
@@ -62,6 +68,8 @@ export type CommitWorkflowSession = {
   branch: string;
   selectedPaths: string[];
   diagnostics: StaticScanDiagnostic[];
+  scanResults?: StaticScanResult[];
+  compileResult?: GitWorkflowCompileResult;
   messageFields?: CommitMessageFields;
   message?: string;
   commit?: string;
@@ -109,6 +117,12 @@ export const createCommitWorkflowService = (git: CommitWorkflowGit): CommitWorkf
       session.state = state;
       input.onStateChange?.(state, session);
     };
+    const fail = (error: unknown): CommitWorkflowSession => {
+      session.reason = error instanceof Error ? error.message : String(error);
+      if (error instanceof WorkflowBlockedError) session.reasonCode = error.reasonCode;
+      update(error instanceof WorkflowBlockedError ? 'blocked' : 'failed');
+      return session;
+    };
 
     if (session.selectedPaths.length === 0) {
       update('blocked');
@@ -122,15 +136,6 @@ export const createCommitWorkflowService = (git: CommitWorkflowGit): CommitWorkf
     }
 
     update('collecting');
-    update('message_draft');
-    try {
-      session.messageFields = await input.generateMessage();
-      session.message = formatCommitMessage(session.messageFields);
-    } catch (error) {
-      update('failed');
-      session.reason = error instanceof Error ? error.message : String(error);
-      return session;
-    }
 
     let diagnostics: StaticScanDiagnostic[] = [];
     let scannedSnapshot: GitCommitSnapshot | undefined;
@@ -145,11 +150,16 @@ export const createCommitWorkflowService = (git: CommitWorkflowGit): CommitWorkf
         }
         const results = await Promise.all(
           input.scannerConfigs.map((config) =>
-            input.scan({ repoPath: session.repoPath, selectedPaths: session.selectedPaths, config })
+            input.scan({
+              repoPath: session.repoPath,
+              selectedPaths: session.selectedPaths,
+              config: { ...config, scope: 'selected' },
+            })
           )
         );
         diagnostics = diagnosticsFrom(results);
         session.diagnostics = diagnostics;
+        session.scanResults = [...(session.scanResults ?? []), ...results];
         const failed = results.find(
           (result) =>
             result.timedOut || result.executableMissing || (result.exitCode !== 0 && result.diagnostics.length === 0)
@@ -161,15 +171,14 @@ export const createCommitWorkflowService = (git: CommitWorkflowGit): CommitWorkf
           return session;
         }
       } catch (error) {
-        update('failed');
-        session.reason = error instanceof Error ? error.message : String(error);
-        return session;
+        return fail(error);
       }
       session.diagnostics = diagnostics;
       if (diagnostics.length === 0) break;
       if (attempt === MAX_REPAIR_ATTEMPTS || !input.repair) {
-        update('blocked');
         session.reason = 'Static scan diagnostics remain';
+        session.reasonCode = 'repairLimit';
+        update('blocked');
         return session;
       }
       update('repair');
@@ -181,14 +190,13 @@ export const createCommitWorkflowService = (git: CommitWorkflowGit): CommitWorkf
           attempt: attempt + 1,
         });
         if (hasPathOutsideSelection(repair.changedPaths, session.selectedPaths)) {
-          update('blocked');
           session.reason = 'Automatic repair changed an unselected file';
+          session.reasonCode = 'repairOutsideSelection';
+          update('blocked');
           return session;
         }
       } catch (error) {
-        update('failed');
-        session.reason = error instanceof Error ? error.message : String(error);
-        return session;
+        return fail(error);
       }
     }
 
@@ -196,16 +204,33 @@ export const createCommitWorkflowService = (git: CommitWorkflowGit): CommitWorkf
     if (input.compile) {
       try {
         const compile = await input.compile({ repoPath: session.repoPath, selectedPaths: session.selectedPaths });
+        session.compileResult = compile;
         if (!compile.ok) {
-          update('blocked');
+          session.reasonCode = compile.reasonCode ?? 'buildFailed';
           session.reason = compile.stderr || 'Incremental compile failed';
+          update('blocked');
           return session;
         }
       } catch (error) {
-        update('failed');
-        session.reason = error instanceof Error ? error.message : String(error);
+        return fail(error);
+      }
+    }
+    try {
+      const builtSnapshot = await git.getCommitSnapshot(session.repoPath, session.selectedPaths);
+      if (!scannedSnapshot || !isSameCommitSnapshot(scannedSnapshot, builtSnapshot)) {
+        session.reasonCode = 'snapshotChanged';
+        update('blocked');
         return session;
       }
+    } catch (error) {
+      return fail(error);
+    }
+    update('message_draft');
+    try {
+      session.messageFields = await input.generateMessage(session.compileResult);
+      session.message = formatCommitMessage(session.messageFields);
+    } catch (error) {
+      return fail(error);
     }
     try {
       const currentSnapshot = await git.getCommitSnapshot(session.repoPath, session.selectedPaths);

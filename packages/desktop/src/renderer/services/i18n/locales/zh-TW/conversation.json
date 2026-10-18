@@ -674,6 +674,11 @@
       "noChanges": "沒有變更",
       "loading": "正在載入變更…",
       "loadFailed": "無法載入變更",
+      "monitorScope": {
+        "label": "監控範圍",
+        "project": "整個專案",
+        "software": "software 資料夾"
+      },
       "groups": {
         "staged": "已暫存的變更",
         "unstaged": "變更",
@@ -724,7 +729,15 @@
           "completed": "Completed",
           "blocked": "Workflow blocked",
           "failed": "Workflow failed"
-        }
+        },
+        "conversationRequired": "請先開啟目前對話，再啟動提交流程。",
+        "conversationBusy": "目前對話或儲存庫正在處理中，請等待結束後重新掃描。",
+        "agentFailed": "AI 任務失敗或傳回的草稿格式無效，請查看目前對話後重試。",
+        "repairOutsideSelection": "偵測到允許範圍外的檔案或 Git 狀態發生變化，已阻止提交並保留本機修改。",
+        "repairLimit": "兩輪自動修復後仍有診斷，請手動處理後重新掃描。",
+        "buildConfigRequired": "未偵測到 IAR 或 CMake 專案，請在 .woody/static-scan.json 中設定建置。",
+        "buildAmbiguous": "偵測到多個建置系統或專案，請在 .woody/static-scan.json 中明確選擇。",
+        "buildFailed": "編譯驗證失敗，請查看輸出，處理問題後重新掃描。"
       },
       "branch": {
         "select": "Select branch",

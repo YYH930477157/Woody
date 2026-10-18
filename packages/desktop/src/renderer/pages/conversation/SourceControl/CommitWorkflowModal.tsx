@@ -16,6 +16,7 @@ export type CommitWorkflowModalProps = {
   statusMessage?: string;
   messageFields: CommitMessageFields;
   diagnostics: StaticScanDiagnostic[];
+  output?: string;
   onCancel: () => void;
   onStart: () => void;
   onCommit: () => void;
@@ -35,6 +36,7 @@ export const CommitWorkflowModal: React.FC<CommitWorkflowModalProps> = ({
   statusMessage,
   messageFields,
   diagnostics,
+  output,
   onCancel,
   onStart,
   onCommit,
@@ -51,9 +53,10 @@ export const CommitWorkflowModal: React.FC<CommitWorkflowModalProps> = ({
       title={t('conversation.explorer.scm.commit.title')}
       visible={visible}
       onCancel={onCancel}
+      mask={!busy}
       footer={
         <>
-          <Button onClick={onCancel}>{t('common.cancel')}</Button>
+          <Button onClick={onCancel}>{t('common.close')}</Button>
           {state === 'push' ? (
             <Button type='primary' onClick={onRetryPush}>
               {t('conversation.explorer.scm.commit.retryPush')}
@@ -114,6 +117,14 @@ export const CommitWorkflowModal: React.FC<CommitWorkflowModalProps> = ({
               </div>
             ))}
           </div>
+        )}
+        {output && (
+          <pre
+            data-scm-workflow-output
+            className='max-h-240px overflow-auto whitespace-pre-wrap break-all text-12px text-t-secondary'
+          >
+            {output}
+          </pre>
         )}
       </div>
     </Modal>

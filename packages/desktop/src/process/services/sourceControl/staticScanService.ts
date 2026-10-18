@@ -26,13 +26,14 @@ export type StaticScanCommandRunner = (
   options: { cwd: string; timeoutMs: number }
 ) => Promise<StaticScanCommandOutput>;
 
-const defaultRunner: StaticScanCommandRunner = async (executable, args, options) => {
+export const runStaticScanCommand: StaticScanCommandRunner = async (executable, args, options) => {
   try {
     const result = await execFileAsync(executable, args, {
       cwd: options.cwd,
       encoding: 'utf8',
       timeout: options.timeoutMs,
       maxBuffer: 16 * 1024 * 1024,
+      windowsHide: true,
     });
     return { stdout: result.stdout, stderr: result.stderr, exitCode: 0 };
   } catch (error) {
@@ -78,7 +79,7 @@ export type StaticScanService = {
   scan: (request: StaticScanRequest) => Promise<StaticScanResult>;
 };
 
-export const createStaticScanService = (runner: StaticScanCommandRunner = defaultRunner): StaticScanService => ({
+export const createStaticScanService = (runner: StaticScanCommandRunner = runStaticScanCommand): StaticScanService => ({
   async scan(request) {
     const command = buildStaticScanCommand(request.config, request.repoPath, request.selectedPaths);
     const output = await runner(command.executable, command.args, {

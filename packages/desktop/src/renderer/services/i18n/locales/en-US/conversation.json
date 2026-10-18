@@ -674,6 +674,11 @@
       "noChanges": "No changes",
       "loading": "Loading changes…",
       "loadFailed": "Couldn't load changes",
+      "monitorScope": {
+        "label": "Monitor scope",
+        "project": "Entire project",
+        "software": "software folder"
+      },
       "groups": {
         "staged": "Staged changes",
         "unstaged": "Changes",
@@ -724,7 +729,15 @@
           "completed": "Completed",
           "blocked": "Workflow blocked",
           "failed": "Workflow failed"
-        }
+        },
+        "conversationRequired": "Open a conversation before starting this workflow.",
+        "conversationBusy": "The conversation or repository is busy. Wait for it to finish and scan again.",
+        "agentFailed": "The AI task failed or returned an invalid draft. Check the conversation and try again.",
+        "repairOutsideSelection": "A file outside the allowed selection, or Git state, changed. Commit is blocked; local changes are preserved.",
+        "repairLimit": "Diagnostics remain after two repair attempts. Fix them manually and scan again.",
+        "buildConfigRequired": "Configure the project build in .woody/static-scan.json; no IAR or CMake project was detected.",
+        "buildAmbiguous": "Multiple build systems or projects were found. Select one in .woody/static-scan.json.",
+        "buildFailed": "Build verification failed. Review the output, fix the problem, and scan again."
       },
       "branch": {
         "select": "Select branch",
