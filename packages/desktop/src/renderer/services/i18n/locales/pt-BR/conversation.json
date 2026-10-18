@@ -699,6 +699,10 @@
         "snapshotChanged": "Os arquivos ou a branch Git mudaram após a análise. Execute a análise novamente antes de fazer o commit.",
         "action": "Commit and push",
         "title": "Commit and push",
+        "generate": "Generate commit message",
+        "generating": "Generating commit message",
+        "draftFailed": "Couldn't generate the commit message",
+        "submitForScan": "Submit and start scan",
         "start": "Start scan",
         "repository": "Repository: {{repository}}",
         "selectedFiles": "Selected files to process",
@@ -723,6 +727,7 @@
         },
         "states": {
           "idle": "Ready to start",
+          "draft_ready": "Commit message ready for review",
           "collecting": "Collecting changes",
           "message_draft": "Drafting commit message",
           "scan": "Running static scan",

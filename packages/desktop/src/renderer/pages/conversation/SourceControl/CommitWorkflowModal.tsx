@@ -17,7 +17,9 @@ export type CommitWorkflowModalProps = {
   messageFields: CommitMessageFields;
   diagnostics: StaticScanDiagnostic[];
   output?: string;
+  draftReady: boolean;
   onCancel: () => void;
+  onDraft: () => void;
   onStart: () => void;
   onCommit: () => void;
   onRetryPush: () => void;
@@ -25,7 +27,12 @@ export type CommitWorkflowModalProps = {
 };
 
 const isBusyState = (state: GitWorkflowState): boolean =>
-  state !== 'idle' && state !== 'confirmation' && state !== 'blocked' && state !== 'failed' && state !== 'completed';
+  state !== 'idle' &&
+  state !== 'draft_ready' &&
+  state !== 'confirmation' &&
+  state !== 'blocked' &&
+  state !== 'failed' &&
+  state !== 'completed';
 
 export const CommitWorkflowModal: React.FC<CommitWorkflowModalProps> = ({
   visible,
@@ -37,7 +44,9 @@ export const CommitWorkflowModal: React.FC<CommitWorkflowModalProps> = ({
   messageFields,
   diagnostics,
   output,
+  draftReady,
   onCancel,
+  onDraft,
   onStart,
   onCommit,
   onRetryPush,
@@ -45,8 +54,16 @@ export const CommitWorkflowModal: React.FC<CommitWorkflowModalProps> = ({
 }) => {
   const { t } = useTranslation();
   const busy = isBusyState(state);
+  const templateLabel = (field: keyof CommitMessageFields): string =>
+    `【${t(`conversation.explorer.scm.commit.message.${field}`)}】`;
+  const displayedFieldValue = (field: keyof CommitMessageFields): string =>
+    `${templateLabel(field)}:${messageFields[field]}`;
+  const stripDisplayedLabel = (field: keyof CommitMessageFields, value: string): string => {
+    const prefix = `${templateLabel(field)}:`;
+    return value.startsWith(prefix) ? value.slice(prefix.length).trimStart() : value;
+  };
   const updateField = (field: keyof CommitMessageFields, value: string): void => {
-    onMessageFieldsChange({ ...messageFields, [field]: value });
+    onMessageFieldsChange({ ...messageFields, [field]: stripDisplayedLabel(field, value) });
   };
   return (
     <Modal
@@ -65,9 +82,13 @@ export const CommitWorkflowModal: React.FC<CommitWorkflowModalProps> = ({
             <Button type='primary' onClick={onCommit}>
               {t('conversation.explorer.scm.commit.confirm')}
             </Button>
-          ) : (
+          ) : draftReady ? (
             <Button type='primary' disabled={resources.length === 0 || busy} onClick={onStart}>
-              {t('conversation.explorer.scm.commit.start')}
+              {t('conversation.explorer.scm.commit.submitForScan')}
+            </Button>
+          ) : (
+            <Button type='primary' disabled={resources.length === 0 || busy} onClick={onDraft}>
+              {t('conversation.explorer.scm.commit.generate')}
             </Button>
           )}
         </>
@@ -98,7 +119,7 @@ export const CommitWorkflowModal: React.FC<CommitWorkflowModalProps> = ({
             <Input.TextArea
               key={field}
               autoSize={{ minRows: 1, maxRows: 3 }}
-              value={messageFields[field]}
+              value={displayedFieldValue(field)}
               placeholder={t(`conversation.explorer.scm.commit.message.${field}`)}
               onChange={(value) => updateField(field, value)}
               disabled={busy || state === 'completed'}

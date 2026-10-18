@@ -16,11 +16,15 @@
 import { ipcBridge } from '@/common';
 import { httpRequest } from '@/common/adapter/httpBridge';
 import { fetchEmailSnapshot, resolveEmailScriptPath } from '@process/services/todo/emailSource';
+import { mapTodoScanSession, type CronConversationApi } from '@process/services/todo/emailScanSessions';
 import { createTodoStoreService, getTodoSnapshotPath } from '@process/services/todo/todoStore';
 import fs from 'fs';
 import type { ICronJob } from '@/common/adapter/ipcBridge';
+import type { TodoScanSession } from '@/common/types/todo/todoTypes';
 
 export const TODO_SCAN_JOB_NAME = 'Todo email scan';
+
+let scanInFlight = false;
 
 export function initTodoBridge(): void {
   const store = createTodoStoreService();
@@ -40,35 +44,69 @@ export function initTodoBridge(): void {
   ipcBridge.todo.remove.provider(({ id }) => store.remove({ id }));
 
   ipcBridge.todo.scanNow.provider(async () => {
-    // 快照先行:即使 agent 执行失败,邮件也已在快照里,下次扫描仍能消化。
-    // Snapshot first: even if the agent turn fails, the emails are captured
-    // and the next scan still processes them.
-    const fetch = await fetchEmailSnapshot();
-    await store.withLock((data) => {
-      data.last_scan_at = Date.now();
-      data.last_scan_status = fetch.ok ? 'snapshot-ok' : `snapshot-failed: ${fetch.message}`;
-    });
-
-    if (!fetch.ok) {
-      return { ok: false, message: fetch.message, emails_fetched: 0 };
+    if (scanInFlight) {
+      return { ok: false, message: 'scan_in_progress', emails_fetched: 0 };
     }
+    scanInFlight = true;
 
+    try {
+      // 快照先行:即使 agent 执行失败,邮件也已在快照里,下次扫描仍能消化。
+      // Snapshot first: even if the agent turn fails, the emails are captured
+      // and the next scan still processes them.
+      const fetch = await fetchEmailSnapshot();
+      await store.withLock((data) => {
+        data.last_scan_at = Date.now();
+        data.last_scan_status = fetch.ok ? 'snapshot-ok' : `snapshot-failed: ${fetch.message}`;
+      });
+
+      if (!fetch.ok) {
+        return { ok: false, message: fetch.message, emails_fetched: 0 };
+      }
+
+      try {
+        const jobs = (await httpRequest<ICronJob[]>('GET', '/api/cron/jobs')) || [];
+        const scanJob = jobs.find((job) => job.name === TODO_SCAN_JOB_NAME);
+        if (!scanJob) {
+          // 结构化代码而非拼接文案:渲染层按 i18n 本地化展示。
+          // A structured code, not prose: the renderer localizes it via i18n.
+          return { ok: false, message: 'no_scan_job', emails_fetched: fetch.emails };
+        }
+        const runResult = await httpRequest<{ conversation_id?: string }>('POST', `/api/cron/jobs/${scanJob.id}/run`);
+        return {
+          ok: true,
+          message: 'scan started',
+          emails_fetched: fetch.emails,
+          conversation_id: runResult?.conversation_id,
+          job_id: scanJob.id,
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          message: `agent scan failed to start: ${error instanceof Error ? error.message : String(error)}`,
+          emails_fetched: fetch.emails,
+        };
+      }
+    } finally {
+      scanInFlight = false;
+    }
+  });
+
+  ipcBridge.todo.scanSessions.provider(async () => {
     try {
       const jobs = (await httpRequest<ICronJob[]>('GET', '/api/cron/jobs')) || [];
       const scanJob = jobs.find((job) => job.name === TODO_SCAN_JOB_NAME);
-      if (!scanJob) {
-        // 结构化代码而非拼接文案:渲染层按 i18n 本地化展示。
-        // A structured code, not prose: the renderer localizes it via i18n.
-        return { ok: false, message: 'no_scan_job', emails_fetched: fetch.emails };
-      }
-      await httpRequest('POST', `/api/cron/jobs/${scanJob.id}/run`);
-      return { ok: true, message: 'scan started', emails_fetched: fetch.emails };
+      if (!scanJob) return [];
+      const conversations =
+        (await httpRequest<CronConversationApi[]>(
+          'GET',
+          `/api/cron/jobs/${encodeURIComponent(scanJob.id)}/conversations`
+        )) || [];
+      return conversations
+        .map((conversation) => mapTodoScanSession(conversation, TODO_SCAN_JOB_NAME))
+        .filter((session): session is TodoScanSession => session !== null);
     } catch (error) {
-      return {
-        ok: false,
-        message: `agent scan failed to start: ${error instanceof Error ? error.message : String(error)}`,
-        emails_fetched: fetch.emails,
-      };
+      console.warn('[TodoBridge] failed to load scan sessions:', error);
+      return [];
     }
   });
 

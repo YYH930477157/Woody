@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createWorkflowAgentService, parseCommitDraft } from '@/process/services/sourceControl/workflowAgentService';
 
-const fields = { reason: 'fix', scope: 'driver', solution: 'nullptr', impact: 'none', tests: 'scan and build' };
+const fields = {
+  reason: '【OPT】fix',
+  scope: '【驱动】',
+  solution: 'nullptr',
+  impact: '【无影响】',
+  tests: 'scan and build',
+};
 const runtime = (processing = false, turnId: string | null = null) => ({
   runtime: { is_processing: processing, can_send_message: !processing, turn_id: turnId },
 });
@@ -38,6 +44,12 @@ describe('existing conversation workflow agent', () => {
       '/api/conversations/current-chat/messages',
       expect.objectContaining({
         content: expect.stringContaining('build passed'),
+        hidden: true,
+      })
+    );
+    expect(request.mock.calls[1]?.[2]).toEqual(
+      expect.objectContaining({
+        content: expect.stringContaining('【修改原因】:【BUG[x]|REQ[x]|OPT】说明修改原因'),
       })
     );
   });
@@ -117,6 +129,25 @@ describe('existing conversation workflow agent', () => {
     expect(() => parseCommitDraft('{"reason":"fix"}')).toThrow();
     expect(() => parseCommitDraft(JSON.stringify({ ...fields, tests: '' }))).toThrow();
     expect(parseCommitDraft('```json\n' + JSON.stringify(fields) + '\n```')).toEqual(fields);
+  });
+  it('strips outer template labels when the model echoes the full template', () => {
+    expect(
+      parseCommitDraft(
+        JSON.stringify({
+          reason: '【修改原因】: 【BUG[x]】修复空指针',
+          scope: '【修改范围】: 【驱动】',
+          solution: '【修改方案】: 补充空指针判断',
+          impact: '【影响评估】: 【无影响】',
+          tests: '【测试步骤】: 运行单元测试',
+        })
+      )
+    ).toEqual({
+      reason: '【BUG[x]】修复空指针',
+      scope: '【驱动】',
+      solution: '补充空指针判断',
+      impact: '【无影响】',
+      tests: '运行单元测试',
+    });
   });
   it('waits for its own active turn and then reads the final response', async () => {
     const request = backend();

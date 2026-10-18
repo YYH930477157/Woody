@@ -78,6 +78,35 @@ describe('commit workflow service', () => {
     expect(states).toEqual(['collecting', 'scan', 'repair', 'rescan', 'compile', 'message_draft', 'confirmation']);
   });
 
+  it('keeps the reviewed draft while scanning and does not regenerate it afterward', async () => {
+    const scan = vi.fn().mockResolvedValue(clean());
+    const compile = vi.fn().mockResolvedValue({ ok: true });
+    const generateMessage = vi.fn();
+    const states: string[] = [];
+    const service = createCommitWorkflowService({
+      getCommitSnapshot: getCommitSnapshot(),
+      createCommit: vi.fn(),
+      push: vi.fn(),
+    });
+
+    const session = await service.prepare({
+      repoPath: 'D:/repo',
+      branch: 'main',
+      selectedPaths: ['src/a.cpp'],
+      scannerConfigs: [config],
+      messageFields: fields,
+      generateMessage,
+      scan,
+      compile,
+      onStateChange: (state) => states.push(state),
+    });
+
+    expect(session.state).toBe('confirmation');
+    expect(session.messageFields).toEqual(fields);
+    expect(generateMessage).not.toHaveBeenCalled();
+    expect(states).toEqual(['collecting', 'scan', 'compile', 'confirmation']);
+  });
+
   it('blocks after two repair attempts when diagnostics remain', async () => {
     const repair = vi.fn().mockResolvedValue({ changedPaths: ['src/a.cpp'] });
     const service = createCommitWorkflowService({

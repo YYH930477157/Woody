@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { GitCommandService } from '@/process/services/sourceControl/gitCommandService';
-import type { GitWorkflowPrepareRequest, GitWorkflowSession } from '@/common/types/sourceControl/gitWorkflowTypes';
+import type {
+  GitWorkflowDraftRequest,
+  GitWorkflowPrepareRequest,
+  GitWorkflowSession,
+} from '@/common/types/sourceControl/gitWorkflowTypes';
 import { createCommitWorkflowService } from '@/process/services/sourceControl/commitWorkflowService';
 import type { CommitWorkflowScan } from '@/process/services/sourceControl/commitWorkflowService';
 
@@ -11,6 +15,7 @@ const providers = vi.hoisted(() => ({
   checkout: vi.fn(),
   commit: vi.fn(),
   push: vi.fn(),
+  draft: vi.fn(),
   prepare: vi.fn(),
   progress: vi.fn(),
   scan: vi.fn<CommitWorkflowScan>(async () => ({
@@ -34,6 +39,7 @@ vi.mock('@/common', () => ({
       checkout: { provider: providers.checkout },
       commit: { provider: providers.commit },
       push: { provider: providers.push },
+      workflowDraft: { provider: providers.draft },
       workflowPrepare: { provider: providers.prepare },
       workflowProgress: { emit: providers.progress },
     },
@@ -66,7 +72,7 @@ describe('source control bridge', () => {
     expect(service.getStatus).toHaveBeenCalledWith('D:/repo');
   });
 
-  it('connects real preparation to repair, compile, AI draft generation and progress', async () => {
+  it('connects confirmed draft fields to repair, compile and progress', async () => {
     const git: GitCommandService = {
       getStatus: vi.fn(),
       getBranches: vi.fn(),
@@ -75,7 +81,7 @@ describe('source control bridge', () => {
       createCommit: vi.fn(),
       push: vi.fn(),
     };
-    const fields = { reason: '', scope: '', solution: '', impact: '', tests: '' };
+    const fields = { reason: 'fixed', scope: 'a.cpp', solution: 'nullptr', impact: 'none', tests: 'build passed' };
     const draft = { reason: 'fixed', scope: 'a.cpp', solution: 'nullptr', impact: 'none', tests: 'build passed' };
     const repair = vi.fn(async () => ({ changedPaths: ['a.cpp'] }));
     const agent = { repair: vi.fn(() => repair), generateMessage: vi.fn(async () => ({ ...draft })) };
@@ -104,19 +110,42 @@ describe('source control bridge', () => {
     expect(result).toMatchObject({ state: 'confirmation', messageFields: draft, compileResult: { ok: true } });
     expect(repair).toHaveBeenCalledOnce();
     expect(builder.compile).toHaveBeenCalledWith({ repoPath: 'D:/repo', selectedPaths: ['a.cpp'] });
-    expect(agent.generateMessage).toHaveBeenCalledWith(
-      'existing-chat',
-      'D:/repo',
-      ['a.cpp'],
-      fields,
-      expect.stringContaining('build passed'),
-      expect.any(Function)
-    );
+    expect(agent.generateMessage).not.toHaveBeenCalled();
     expect(providers.scan).toHaveBeenCalledWith(
       expect.objectContaining({ config: expect.objectContaining({ scope: 'selected' }) })
     );
     expect(providers.progress).toHaveBeenLastCalledWith({ requestId: 'request-id', session: result });
     expect(git.createCommit).not.toHaveBeenCalled();
+  });
+
+  it('generates a draft before the static scan workflow starts', async () => {
+    providers.draft.mockClear();
+    providers.scan.mockClear();
+    const fields = { reason: '', scope: '', solution: '', impact: '', tests: '' };
+    const draft = { reason: 'fixed', scope: 'a.cpp', solution: 'nullptr', impact: 'none', tests: 'reviewed' };
+    const agent = { repair: vi.fn(() => vi.fn()), generateMessage: vi.fn(async () => ({ ...draft })) };
+    initSourceControlBridge({} as GitCommandService, undefined, agent);
+    const handler = providers.draft.mock.calls[0][0] as (
+      request: GitWorkflowDraftRequest
+    ) => Promise<GitWorkflowSession>;
+    const result = await handler({
+      repoPath: 'D:/repo',
+      branch: 'main',
+      selectedPaths: ['a.cpp'],
+      messageFields: fields,
+      conversationId: 'existing-chat',
+      requestId: 'draft-request',
+    });
+    expect(result).toMatchObject({ state: 'draft_ready', messageFields: draft });
+    expect(agent.generateMessage).toHaveBeenCalledWith(
+      'existing-chat',
+      'D:/repo',
+      ['a.cpp'],
+      fields,
+      '',
+      expect.any(Function)
+    );
+    expect(providers.scan).not.toHaveBeenCalled();
   });
 
   it('blocks missing conversation context before starting the scan', async () => {

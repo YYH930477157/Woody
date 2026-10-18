@@ -120,6 +120,7 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
   const [workflowSessionId, setWorkflowSessionId] = useState<string>();
   const [workflowDiagnostics, setWorkflowDiagnostics] = useState<StaticScanDiagnostic[]>([]);
   const [workflowOutput, setWorkflowOutput] = useState('');
+  const [draftReady, setDraftReady] = useState(false);
   const activeRequest = useRef<string | undefined>(undefined);
   const workflowBusy = useRef(false);
   const ownAgentTurns = useRef(new Set<string>());
@@ -145,6 +146,7 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
     session.agentTurnIds?.forEach((id) => ownAgentTurns.current.add(id));
     setWorkflowSessionId(session.id);
     setWorkflowState(session.state);
+    if (session.state === 'draft_ready' || session.messageFields) setDraftReady(true);
     setWorkflowDiagnostics(session.diagnostics);
     if (session.messageFields) setMessageFields(session.messageFields);
     setWorkflowMessage(
@@ -334,13 +336,58 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
     setWorkflowState('idle');
     setWorkflowMessage(undefined);
     setWorkflowSessionId(undefined);
+    setDraftReady(false);
     setWorkflowDiagnostics([]);
     setWorkflowOutput('');
     setMessageFields({ reason: '', scope: '', solution: '', impact: '', tests: '' });
     setWorkflowVisible(true);
   };
 
-  const startCommitWorkflow = (): void => {
+  const generateCommitDraft = (): void => {
+    if (workflowBusy.current || selectedResources.length === 0) return;
+    if (workflowVisible && workflowTarget.current?.repo.repo_id !== selectedRepo.repo_id) {
+      setWorkflowState('blocked');
+      setWorkflowMessage(t('conversation.explorer.scm.commit.snapshotChanged'));
+      return;
+    }
+    if (!selectedRepoPath || selectedResources.length === 0) {
+      setWorkflowState('blocked');
+      setWorkflowMessage(t('conversation.explorer.scm.commit.repoPathUnavailable'));
+      return;
+    }
+    workflowBusy.current = true;
+    const requestId = crypto.randomUUID();
+    activeRequest.current = requestId;
+    workflowTarget.current = { repo: selectedRepo, resources: [...selectedResources] };
+    setWorkflowVisible(true);
+    setWorkflowSessionId(undefined);
+    setWorkflowDiagnostics([]);
+    setWorkflowOutput('');
+    setDraftReady(false);
+    setWorkflowState('message_draft');
+    setWorkflowMessage(t('conversation.explorer.scm.commit.generating'));
+    const selectedPaths = [...new Set(selectedResources.map((resource) => resource.repo_relative_path))];
+    void ipcBridge.sourceControl.workflowDraft
+      .invoke({
+        repoPath: selectedRepoPath,
+        branch: selectedRepo.head?.name ?? '',
+        selectedPaths,
+        messageFields,
+        conversationId: conversationId ?? undefined,
+        requestId,
+      })
+      .then((session) => applyWorkflowSession(session))
+      .catch(() => {
+        setDraftReady(false);
+        setWorkflowState('failed');
+        setWorkflowMessage(t('conversation.explorer.scm.commit.draftFailed'));
+      })
+      .finally(() => {
+        workflowBusy.current = false;
+      });
+  };
+
+  const startStaticScanWorkflow = (): void => {
     if (workflowBusy.current || selectedResources.length === 0) return;
     if (workflowVisible && workflowTarget.current?.repo.repo_id !== selectedRepo.repo_id) {
       setWorkflowState('blocked');
@@ -400,7 +447,7 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
         workflowBusy.current = false;
       });
   };
-  startWorkflowRef.current = startCommitWorkflow;
+  startWorkflowRef.current = generateCommitDraft;
 
   const commitWorkflow = (): void => {
     if (!workflowSessionId || !ipcBridge.sourceControl.workflowCommit) return;
@@ -504,8 +551,10 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
         messageFields={messageFields}
         diagnostics={workflowDiagnostics}
         output={workflowOutput}
+        draftReady={draftReady}
         onCancel={() => setWorkflowVisible(false)}
-        onStart={startCommitWorkflow}
+        onDraft={generateCommitDraft}
+        onStart={startStaticScanWorkflow}
         onCommit={commitWorkflow}
         onRetryPush={retryWorkflowPush}
         onMessageFieldsChange={setMessageFields}

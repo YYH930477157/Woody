@@ -4,7 +4,7 @@ import { httpRequest } from '@/common/adapter/httpBridge';
 import type { CommitMessageFields } from '@/common/types/sourceControl/gitWorkflowTypes';
 import type { TConversationRuntimeSummary } from '@/common/config/storage';
 import type { CommitWorkflowRepair } from './commitWorkflowService';
-import { WorkflowBlockedError } from './gitWorkflowModel';
+import { COMMIT_MESSAGE_TEMPLATE, normalizeCommitMessageFields, WorkflowBlockedError } from './gitWorkflowModel';
 import { captureWorktree, changedWorktreePaths } from './worktreeGuard';
 
 type Conversation = { runtime?: TConversationRuntimeSummary };
@@ -49,7 +49,7 @@ export const parseCommitDraft = (answer: string): CommitMessageFields => {
     if (typeof item !== 'string' || !item.trim()) throw new WorkflowBlockedError('agentFailed');
     draft[field] = item.trim();
   }
-  return draft;
+  return normalizeCommitMessageFields(draft);
 };
 
 const readText = (content: unknown): string => {
@@ -153,6 +153,9 @@ export const createWorkflowAgentService = (dependencies: Partial<AgentDependenci
     try {
       const sent = await boundedRequest<{ turn_id: string; msg_id: string }>('POST', `${base}/messages`, {
         content: prompt,
+        // AionCore persists hidden user messages for agent context while
+        // excluding them from the normal conversation view.
+        hidden: true,
       });
       turnId = sent.turn_id;
       if (!turnId || !sent.msg_id) throw new WorkflowBlockedError('agentFailed');
@@ -224,8 +227,13 @@ export const createWorkflowAgentService = (dependencies: Partial<AgentDependenci
             `Repository: ${repoPath}`,
             `Selected files: ${JSON.stringify(selectedPaths)}`,
             'Do not modify any files, run builds, stage, commit, push, or change branches.',
+            'Follow this exact five-line commit template. The JSON values are the text after each colon; do not include the outer labels in the values.',
+            COMMIT_MESSAGE_TEMPLATE,
+            'For 修改原因, use exactly 【BUG[x]】, 【REQ[x]】, or 【OPT】 followed by a concise explanation. Use x when no PMS number exists.',
+            'For 修改范围, summarize the selected changes as exactly one functional module, never a file name, path, or list of files. Use one listed module; if none applies, use a custom functional type beginning with $, such as 【$技能标签】. For example, skills.py, models.py and seed.py together should become 【$技能标签】, not a file path.',
+            'For 影响评估, use exactly one of 【EEPROM】, 【DATAFLASH】, 【LEGAL】, 【兼容性】, 【效率】, 【其他】, or 【无影响】. For no impact, return only 【无影响】.',
             'Return only a JSON object with five nonempty string fields: reason, scope, solution, impact, tests.',
-            'Use the conversation language. Preserve any nonempty user draft fields.',
+            'Use the conversation language for the field content. Preserve any nonempty user draft fields, but remove duplicated outer template labels if present.',
             'Describe test evidence honestly; never claim tests you have not observed.',
             `User draft: ${JSON.stringify(fields)}`,
             `Workflow verification: ${verification}`,

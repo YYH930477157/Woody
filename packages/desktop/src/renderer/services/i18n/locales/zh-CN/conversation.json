@@ -693,6 +693,10 @@
         "snapshotChanged": "扫描后文件内容或 Git 分支发生了变化，请重新扫描后再提交。",
         "action": "提交并推送",
         "title": "提交并推送",
+        "generate": "生成提交说明",
+        "generating": "正在生成提交说明",
+        "draftFailed": "提交说明生成失败",
+        "submitForScan": "提交并开始扫描",
         "start": "开始扫描",
         "repository": "仓库：{{repository}}",
         "selectedFiles": "将处理以下已选文件",
@@ -717,6 +721,7 @@
         },
         "states": {
           "idle": "等待开始",
+          "draft_ready": "提交说明已生成，等待确认",
           "collecting": "正在收集变更",
           "message_draft": "正在生成提交说明",
           "scan": "正在静态扫描",

@@ -693,6 +693,10 @@
         "snapshotChanged": "검사 후 파일이나 Git 브랜치가 변경되었습니다. 커밋하기 전에 다시 검사하세요.",
         "action": "Commit and push",
         "title": "Commit and push",
+        "generate": "Generate commit message",
+        "generating": "Generating commit message",
+        "draftFailed": "Couldn't generate the commit message",
+        "submitForScan": "Submit and start scan",
         "start": "Start scan",
         "repository": "Repository: {{repository}}",
         "selectedFiles": "Selected files to process",
@@ -717,6 +721,7 @@
         },
         "states": {
           "idle": "Ready to start",
+          "draft_ready": "Commit message ready for review",
           "collecting": "Collecting changes",
           "message_draft": "Drafting commit message",
           "scan": "Running static scan",

@@ -33,7 +33,25 @@
     "button": "扫描邮件",
     "started": "扫描已启动(共 {{count}} 封邮件),新待办稍后出现",
     "noJob": "已抓到 {{count}} 封邮件,但邮件分析任务尚未创建:请先在 设置→模型 配置端点并重启应用",
+    "inProgress": "邮件扫描正在进行中",
     "failed": "邮件扫描失败"
+  },
+  "emailScan": {
+    "title": "邮件扫描",
+    "description": "扫描已配置的邮箱,每次扫描单独保存为一个会话。",
+    "source": "邮件来源",
+    "ready": "已就绪",
+    "needsSetup": "需要配置",
+    "unknownSource": "不可用",
+    "sourceHint": "当前桌面适配器会先生成 Outlook 快照,再交给助手分析。",
+    "lastScan": "上次扫描",
+    "never": "尚未扫描",
+    "waiting": "等待第一次扫描",
+    "sessions": "扫描会话",
+    "sessionsHint": "每次手动或定时扫描都会保存为独立会话。",
+    "openTodos": "打开待办列表",
+    "empty": "还没有扫描会话",
+    "openSession": "打开扫描会话"
   },
   "lastScan": "上次邮件扫描:{{time}}({{status}})",
   "detail": {

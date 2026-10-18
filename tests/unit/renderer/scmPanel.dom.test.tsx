@@ -16,6 +16,12 @@ import type { IConversationTurnCompletedEvent } from '@/common/adapter/ipcBridge
 const gitBridge = vi.hoisted(() => ({
   branches: vi.fn(async () => ({ branches: [] })),
   softwareDirectory: vi.fn(async () => ({ isDirectory: true })),
+  draft: vi.fn<(...args: unknown[]) => Promise<Partial<GitWorkflowSession>>>(async () => ({
+    id: 'draft-session',
+    state: 'draft_ready',
+    diagnostics: [],
+    messageFields: { reason: 'generated', scope: 'a.c', solution: 'update', impact: 'none', tests: 'reviewed' },
+  })),
   prepare: vi.fn<(...args: unknown[]) => Promise<Partial<GitWorkflowSession>>>(async () => ({
     id: 'session',
     state: 'confirmation',
@@ -29,6 +35,7 @@ vi.mock('@/common', () => ({
   ipcBridge: {
     sourceControl: {
       branches: { invoke: gitBridge.branches },
+      workflowDraft: { invoke: gitBridge.draft },
       workflowPrepare: { invoke: gitBridge.prepare },
       workflowProgress: {
         on: (fn: (event: { requestId: string; session: GitWorkflowSession }) => void) => {
@@ -150,6 +157,13 @@ beforeEach(() => {
   diffCalls.length = 0;
   openPreviewMock.mockClear();
   gitBridge.branches.mockClear();
+  gitBridge.draft.mockClear();
+  gitBridge.draft.mockImplementation(async () => ({
+    id: 'draft-session',
+    state: 'draft_ready',
+    diagnostics: [],
+    messageFields: { reason: 'generated', scope: 'a.c', solution: 'update', impact: 'none', tests: 'reviewed' },
+  }));
   gitBridge.softwareDirectory.mockReset();
   gitBridge.softwareDirectory.mockResolvedValue({ isDirectory: true });
   gitBridge.prepare.mockClear();
@@ -211,7 +225,10 @@ describe('ScmPanel nested repository workflow', () => {
     await screen.findByText('a.c');
     fireEvent.click(screen.getByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', { name: 'conversation.explorer.scm.commit.action' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.start' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.generate' }));
+    const submitButton = await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.submitForScan' });
+    await waitFor(() => expect(submitButton).toBeEnabled());
+    fireEvent.click(submitButton);
 
     await waitFor(() =>
       expect(gitBridge.prepare).toHaveBeenCalledWith(
@@ -250,7 +267,7 @@ describe('ScmPanel automatic workflow', () => {
     fireEvent.click(screen.getByRole('checkbox'));
   };
 
-  it('starts the selected scan when the active conversation finishes and fills in the AI draft', async () => {
+  it('generates the AI draft when the active conversation finishes before scanning', async () => {
     const fields = {
       reason: 'fix driver',
       scope: 'a.c',
@@ -258,16 +275,16 @@ describe('ScmPanel automatic workflow', () => {
       impact: 'none',
       tests: 'build passed',
     };
-    gitBridge.prepare.mockResolvedValueOnce({
-      id: 'session',
-      state: 'confirmation',
+    gitBridge.draft.mockResolvedValueOnce({
+      id: 'draft-session',
+      state: 'draft_ready',
       diagnostics: [],
       messageFields: fields,
     });
     await installSelected();
     act(() => finishTurn());
     await waitFor(() =>
-      expect(gitBridge.prepare).toHaveBeenCalledWith(
+      expect(gitBridge.draft).toHaveBeenCalledWith(
         expect.objectContaining({
           conversationId: 'current-chat',
           selectedPaths: ['a.c'],
@@ -275,7 +292,9 @@ describe('ScmPanel automatic workflow', () => {
         })
       )
     );
-    expect(await screen.findByDisplayValue('fix driver')).toBeInTheDocument();
+    expect(
+      await screen.findByDisplayValue('【conversation.explorer.scm.commit.message.reason】:fix driver')
+    ).toBeInTheDocument();
   });
 
   it('ignores completion in another conversation', async () => {
@@ -285,20 +304,26 @@ describe('ScmPanel automatic workflow', () => {
   });
 
   it('does not restart the workflow after its own AI draft completes', async () => {
-    gitBridge.prepare.mockResolvedValueOnce({
-      id: 'session',
-      state: 'confirmation',
+    gitBridge.draft.mockResolvedValueOnce({
+      id: 'draft-session',
+      state: 'draft_ready',
       diagnostics: [],
       agentTurnIds: ['workflow-draft-turn'],
     });
     await installSelected();
     act(() => finishTurn());
-    await screen.findByText('conversation.explorer.scm.commit.states.confirmation');
+    await screen.findByText('conversation.explorer.scm.commit.states.draft_ready');
     act(() => finishTurn('current-chat', 'workflow-draft-turn'));
-    expect(gitBridge.prepare).toHaveBeenCalledOnce();
+    expect(gitBridge.draft).toHaveBeenCalledOnce();
   });
 
   it('shows build failure output and leaves the scan action available for manual retry', async () => {
+    gitBridge.draft.mockResolvedValueOnce({
+      id: 'draft-session',
+      state: 'draft_ready',
+      diagnostics: [],
+      messageFields: { reason: 'generated', scope: 'a.c', solution: 'update', impact: 'none', tests: 'reviewed' },
+    });
     gitBridge.prepare.mockResolvedValueOnce({
       id: 'session',
       state: 'blocked',
@@ -308,9 +333,13 @@ describe('ScmPanel automatic workflow', () => {
     });
     await installSelected();
     act(() => finishTurn());
+    await screen.findByDisplayValue('【conversation.explorer.scm.commit.message.reason】:generated');
+    const submitButton = screen.getByRole('button', { name: 'conversation.explorer.scm.commit.submitForScan' });
+    await waitFor(() => expect(submitButton).toBeEnabled());
+    fireEvent.click(submitButton);
     expect(await screen.findByText('conversation.explorer.scm.commit.buildFailed')).toBeInTheDocument();
     expect(document.querySelector('[data-scm-workflow-output]')?.textContent).toContain('compiler failed at a.c:5');
-    expect(screen.getByRole('button', { name: 'conversation.explorer.scm.commit.start' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'conversation.explorer.scm.commit.submitForScan' })).toBeEnabled();
     expect(screen.queryByRole('button', { name: 'conversation.explorer.scm.commit.confirm' })).toBeNull();
   });
 });

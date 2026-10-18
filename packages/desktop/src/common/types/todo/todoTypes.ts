@@ -88,7 +88,18 @@ export type TodoScanResult = {
   ok: boolean;
   message: string;
   emails_fetched?: number;
+  conversation_id?: string;
+  job_id?: string;
 };
+
+/** A persisted conversation created by an email scan run. */
+export interface TodoScanSession {
+  id: string;
+  name: string;
+  created_at: number;
+  updated_at: number;
+  status?: string;
+}
 
 export type TodoStatusInfo = {
   last_scan_at: number | null;

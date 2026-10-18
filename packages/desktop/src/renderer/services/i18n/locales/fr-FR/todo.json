@@ -33,7 +33,25 @@
     "button": "Scan Emails",
     "started": "Scan started ({{count}} emails) — new todos appear in a moment",
     "noJob": "Fetched {{count}} emails, but the scan job is not created yet: configure a model in Settings first, then restart the app",
+    "inProgress": "An email scan is already running",
     "failed": "Email scan failed"
+  },
+  "emailScan": {
+    "title": "Email Scan",
+    "description": "Scan the configured mailbox and keep each scan in its own conversation.",
+    "source": "Email source",
+    "ready": "Ready",
+    "needsSetup": "Needs setup",
+    "unknownSource": "Unavailable",
+    "sourceHint": "The current desktop adapter reads the Outlook snapshot before the agent processes it.",
+    "lastScan": "Last scan",
+    "never": "Never",
+    "waiting": "Waiting for the first scan",
+    "sessions": "Scan conversations",
+    "sessionsHint": "Each manual or scheduled scan is saved as a separate conversation.",
+    "openTodos": "Open Todo list",
+    "empty": "No scan conversations yet",
+    "openSession": "Open scan conversation"
   },
   "lastScan": "Last email scan: {{time}} ({{status}})",
   "detail": {

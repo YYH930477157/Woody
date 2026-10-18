@@ -54,7 +54,8 @@ export type CommitWorkflowInput = {
   branch: string;
   selectedPaths: string[];
   scannerConfigs: StaticScanConfig[];
-  generateMessage: (verification?: GitWorkflowCompileResult) => Promise<CommitMessageFields>;
+  messageFields?: CommitMessageFields;
+  generateMessage?: (verification?: GitWorkflowCompileResult) => Promise<CommitMessageFields>;
   scan: CommitWorkflowScan;
   repair?: CommitWorkflowRepair;
   compile?: CommitWorkflowCompile;
@@ -225,12 +226,17 @@ export const createCommitWorkflowService = (git: CommitWorkflowGit): CommitWorkf
     } catch (error) {
       return fail(error);
     }
-    update('message_draft');
-    try {
-      session.messageFields = await input.generateMessage(session.compileResult);
-      session.message = formatCommitMessage(session.messageFields);
-    } catch (error) {
-      return fail(error);
+    if (input.messageFields) {
+      session.messageFields = input.messageFields;
+      session.message = formatCommitMessage(input.messageFields);
+    } else if (input.generateMessage) {
+      update('message_draft');
+      try {
+        session.messageFields = await input.generateMessage(session.compileResult);
+        session.message = formatCommitMessage(session.messageFields);
+      } catch (error) {
+        return fail(error);
+      }
     }
     try {
       const currentSnapshot = await git.getCommitSnapshot(session.repoPath, session.selectedPaths);

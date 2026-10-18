@@ -17,7 +17,7 @@ import type { AcpSlashCommandApiItem } from '@/common/chat/slash/types';
 import { bridge } from '@/common/platform/bridge';
 import { buildListTasksPath } from './teamTaskPath';
 import type { OpenDialogOptions } from 'electron';
-import type { ITodoItem, TodoScanResult, TodoStatusInfo } from '../types/todo/todoTypes';
+import type { ITodoItem, TodoScanResult, TodoScanSession, TodoStatusInfo } from '../types/todo/todoTypes';
 import type {
   ICssTheme,
   IMcpServer,
@@ -105,6 +105,7 @@ import type {
   GitOperationResult,
   GitPushResult,
   GitStatusSnapshot,
+  GitWorkflowDraftRequest,
   GitWorkflowPrepareRequest,
   GitWorkflowSession,
 } from '@/common/types/sourceControl/gitWorkflowTypes';
@@ -1718,6 +1719,7 @@ export const todo = {
   setDone: bridge.buildProvider<ITodoItem | null, { id: string; done: boolean }>('todo.set-done'),
   remove: bridge.buildProvider<boolean, { id: string }>('todo.remove'),
   scanNow: bridge.buildProvider<TodoScanResult, void>('todo.scan-now'),
+  scanSessions: bridge.buildProvider<TodoScanSession[], void>('todo.scan-sessions'),
   status: bridge.buildProvider<TodoStatusInfo, void>('todo.status'),
 };
 
@@ -1729,6 +1731,7 @@ export const sourceControl = {
     'source-control.commit'
   ),
   push: bridge.buildProvider<GitPushResult, { repoPath: string; branch: string }>('source-control.push'),
+  workflowDraft: bridge.buildProvider<GitWorkflowSession, GitWorkflowDraftRequest>('source-control.workflow.draft'),
   workflowPrepare: bridge.buildProvider<GitWorkflowSession, GitWorkflowPrepareRequest>(
     'source-control.workflow.prepare'
   ),

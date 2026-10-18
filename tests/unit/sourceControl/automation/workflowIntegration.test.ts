@@ -24,6 +24,13 @@ describe('submission workflow integration', () => {
       impact: 'none',
       tests: 'scan and original build passed',
     };
+    const normalizedFields = {
+      reason: '【OPT】fix null pointer',
+      scope: '【$a功能模块】',
+      solution: 'nullptr',
+      impact: '【其他】none',
+      tests: 'scan and original build passed',
+    };
     const prompts: string[] = [];
     let messageId = '';
     let answer = '';
@@ -129,7 +136,7 @@ describe('submission workflow integration', () => {
       });
       expect(session).toMatchObject({
         state: 'confirmation',
-        messageFields: fields,
+        messageFields: normalizedFields,
         compileResult: { ok: true, stdout: 'original build passed\n' },
       });
       expect(states).toEqual(['collecting', 'scan', 'repair', 'rescan', 'compile', 'message_draft', 'confirmation']);

@@ -2,6 +2,7 @@
 
 export type GitWorkflowState =
   | 'idle'
+  | 'draft_ready'
   | 'collecting'
   | 'message_draft'
   | 'scan'
@@ -122,5 +123,14 @@ export type GitWorkflowPrepareRequest = {
     compileCommandsPath?: string;
     timeoutMs?: number;
   }>;
+  messageFields: CommitMessageFields;
+};
+
+export type GitWorkflowDraftRequest = {
+  conversationId?: string;
+  requestId?: string;
+  repoPath: string;
+  branch: string;
+  selectedPaths: string[];
   messageFields: CommitMessageFields;
 };
