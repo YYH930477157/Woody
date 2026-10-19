@@ -83,7 +83,18 @@ const planBuild = async (repoPath: string, config: BuildConfig): Promise<BuildSt
   }
   const buildDirectory = insideRepository(repoPath, config.buildDirectory ?? 'build');
   return [
-    { executable: 'cmake', args: ['-S', project, '-B', buildDirectory], cwd, timeoutMs },
+    {
+      executable: 'cmake',
+      args: [
+        '-S',
+        project,
+        '-B',
+        buildDirectory,
+        ...(config.configuration ? [`-DCMAKE_BUILD_TYPE=${config.configuration}`] : []),
+      ],
+      cwd,
+      timeoutMs,
+    },
     {
       executable: 'cmake',
       args: ['--build', buildDirectory, ...(config.configuration ? ['--config', config.configuration] : [])],

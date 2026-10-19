@@ -56,7 +56,11 @@ describe('project build verification', () => {
     const result = await createProjectBuildService(run).compile({ repoPath: root });
     expect(result.ok).toBe(true);
     expect(run.mock.calls).toEqual([
-      ['cmake', ['-S', root, '-B', join(root, 'output')], expect.objectContaining({ cwd: root })],
+      [
+        'cmake',
+        ['-S', root, '-B', join(root, 'output'), '-DCMAKE_BUILD_TYPE=Debug'],
+        expect.objectContaining({ cwd: root }),
+      ],
       ['cmake', ['--build', join(root, 'output'), '--config', 'Debug'], expect.objectContaining({ cwd: root })],
     ]);
   });

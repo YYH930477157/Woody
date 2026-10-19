@@ -27,6 +27,16 @@ const gitBridge = vi.hoisted(() => ({
     state: 'confirmation',
     diagnostics: [],
   })),
+  commit: vi.fn<(...args: unknown[]) => Promise<Partial<GitWorkflowSession>>>(async () => ({
+    id: 'session',
+    state: 'completed',
+    diagnostics: [],
+  })),
+  retryPush: vi.fn<(...args: unknown[]) => Promise<Partial<GitWorkflowSession>>>(async () => ({
+    id: 'session',
+    state: 'completed',
+    diagnostics: [],
+  })),
   turnListeners: new Set<(event: IConversationTurnCompletedEvent) => void>(),
   progressListeners: new Set<(event: { requestId: string; session: GitWorkflowSession }) => void>(),
 }));
@@ -37,6 +47,8 @@ vi.mock('@/common', () => ({
       branches: { invoke: gitBridge.branches },
       workflowDraft: { invoke: gitBridge.draft },
       workflowPrepare: { invoke: gitBridge.prepare },
+      workflowCommit: { invoke: gitBridge.commit },
+      workflowRetryPush: { invoke: gitBridge.retryPush },
       workflowProgress: {
         on: (fn: (event: { requestId: string; session: GitWorkflowSession }) => void) => {
           gitBridge.progressListeners.add(fn);
@@ -168,6 +180,10 @@ beforeEach(() => {
   gitBridge.softwareDirectory.mockResolvedValue({ isDirectory: true });
   gitBridge.prepare.mockClear();
   gitBridge.prepare.mockImplementation(async () => ({ id: 'session', state: 'confirmation', diagnostics: [] }));
+  gitBridge.commit.mockReset();
+  gitBridge.commit.mockResolvedValue({ id: 'session', state: 'completed', diagnostics: [] });
+  gitBridge.retryPush.mockReset();
+  gitBridge.retryPush.mockResolvedValue({ id: 'session', state: 'completed', diagnostics: [] });
 });
 
 afterEach(() => {
@@ -315,6 +331,159 @@ describe('ScmPanel automatic workflow', () => {
     await screen.findByText('conversation.explorer.scm.commit.states.draft_ready');
     act(() => finishTurn('current-chat', 'workflow-draft-turn'));
     expect(gitBridge.draft).toHaveBeenCalledOnce();
+  });
+
+  it('regenerates AI fields while preserving only fields manually edited for this selection', async () => {
+    await installSelected();
+    act(() => finishTurn());
+    const submitButton = await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.submitForScan' });
+    await waitFor(() => expect(submitButton).toBeEnabled());
+    fireEvent.change(screen.getByRole('textbox', { name: 'conversation.explorer.scm.commit.message.reason' }), {
+      target: { value: 'user reason' },
+    });
+
+    act(() => finishTurn('current-chat', 'next-user-turn'));
+
+    await waitFor(() => expect(gitBridge.draft).toHaveBeenCalledTimes(2));
+    expect(gitBridge.draft).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        messageFields: { reason: 'user reason', scope: '', solution: '', impact: '', tests: '' },
+      })
+    );
+  });
+
+  it('discards the previous draft and its manual edits when the current conversation changes', async () => {
+    installPort({ repositories: [repo()], firstFrames: { 'scm:pe1': status('scm:pe1', 1, [resource('a.c')]) } });
+    const { rerender } = render(
+      <ScmPanel projectId='p1' repoPaths={{ pe1: 'C:/workspace' }} conversationId='current-chat' />
+    );
+    await screen.findByText('a.c');
+    fireEvent.click(screen.getByRole('checkbox'));
+    act(() => finishTurn());
+    const submitButton = await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.submitForScan' });
+    await waitFor(() => expect(submitButton).toBeEnabled());
+    fireEvent.change(screen.getByRole('textbox', { name: 'conversation.explorer.scm.commit.message.reason' }), {
+      target: { value: 'old conversation user reason' },
+    });
+    rerender(<ScmPanel projectId='p1' repoPaths={{ pe1: 'C:/workspace' }} conversationId='next-chat' />);
+
+    act(() => finishTurn('next-chat'));
+
+    await waitFor(() => expect(gitBridge.draft).toHaveBeenCalledTimes(2));
+    expect(gitBridge.draft).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        conversationId: 'next-chat',
+        messageFields: { reason: '', scope: '', solution: '', impact: '', tests: '' },
+      })
+    );
+  });
+
+  it('does not restore a draft that finishes after switching conversations', async () => {
+    let finishDraft!: (session: Partial<GitWorkflowSession>) => void;
+    gitBridge.draft.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishDraft = resolve;
+      })
+    );
+    installPort({ repositories: [repo()], firstFrames: { 'scm:pe1': status('scm:pe1', 1, [resource('a.c')]) } });
+    const { rerender } = render(
+      <ScmPanel projectId='p1' repoPaths={{ pe1: 'C:/workspace' }} conversationId='current-chat' />
+    );
+    await screen.findByText('a.c');
+    fireEvent.click(screen.getByRole('checkbox'));
+    act(() => finishTurn());
+    await waitFor(() => expect(gitBridge.draft).toHaveBeenCalledOnce());
+    rerender(<ScmPanel projectId='p1' repoPaths={{ pe1: 'C:/workspace' }} conversationId='next-chat' />);
+
+    await act(async () =>
+      finishDraft({
+        id: 'stale-draft',
+        state: 'draft_ready',
+        diagnostics: [],
+        messageFields: { reason: 'old draft', scope: 'a.c', solution: 'old', impact: 'none', tests: 'old' },
+      })
+    );
+
+    expect(screen.queryByDisplayValue('【conversation.explorer.scm.commit.message.reason】:old draft')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'conversation.explorer.scm.commit.submitForScan' })).toBeNull();
+  });
+
+  it('does not restore commit fields when a commit finishes in a previous conversation', async () => {
+    let finishCommit!: (session: Partial<GitWorkflowSession>) => void;
+    gitBridge.commit.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishCommit = resolve;
+      })
+    );
+    installPort({ repositories: [repo()], firstFrames: { 'scm:pe1': status('scm:pe1', 1, [resource('a.c')]) } });
+    const { rerender } = render(
+      <ScmPanel projectId='p1' repoPaths={{ pe1: 'C:/workspace' }} conversationId='current-chat' />
+    );
+    await screen.findByText('a.c');
+    fireEvent.click(screen.getByRole('checkbox'));
+    act(() => finishTurn());
+    const scan = await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.submitForScan' });
+    await waitFor(() => expect(scan).toBeEnabled());
+    fireEvent.click(scan);
+    fireEvent.click(await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.confirm' }));
+    await waitFor(() => expect(gitBridge.commit).toHaveBeenCalledOnce());
+    rerender(<ScmPanel projectId='p1' repoPaths={{ pe1: 'C:/workspace' }} conversationId='next-chat' />);
+
+    await act(async () =>
+      finishCommit({
+        id: 'old-commit',
+        state: 'completed',
+        diagnostics: [],
+        messageFields: { reason: 'old commit', scope: 'a.c', solution: 'old', impact: 'none', tests: 'old' },
+      })
+    );
+
+    expect(screen.queryByDisplayValue('【conversation.explorer.scm.commit.message.reason】:old commit')).toBeNull();
+  });
+
+  it('retains the push retry session when committed files disappear from status', async () => {
+    gitBridge.commit.mockResolvedValueOnce({ id: 'committed-session', state: 'push', diagnostics: [] });
+    await installSelected();
+    act(() => finishTurn());
+    const scan = await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.submitForScan' });
+    await waitFor(() => expect(scan).toBeEnabled());
+    fireEvent.click(scan);
+    fireEvent.click(await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.confirm' }));
+    await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.retryPush' });
+
+    act(() => applyScmNotification('scm/statusChanged', status('scm:pe1', 2, [])));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.retryPush' }));
+    await waitFor(() => expect(gitBridge.retryPush).toHaveBeenCalledWith({ sessionId: 'committed-session' }));
+  });
+
+  it('clears a pending push retry after switching conversations', async () => {
+    let finishRetry!: (session: Partial<GitWorkflowSession>) => void;
+    gitBridge.retryPush.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishRetry = resolve;
+      })
+    );
+    gitBridge.commit.mockResolvedValueOnce({ id: 'committed-session', state: 'push', diagnostics: [] });
+    installPort({ repositories: [repo()], firstFrames: { 'scm:pe1': status('scm:pe1', 1, [resource('a.c')]) } });
+    const { rerender } = render(
+      <ScmPanel projectId='p1' repoPaths={{ pe1: 'C:/workspace' }} conversationId='current-chat' />
+    );
+    await screen.findByText('a.c');
+    fireEvent.click(screen.getByRole('checkbox'));
+    act(() => finishTurn());
+    const scan = await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.submitForScan' });
+    await waitFor(() => expect(scan).toBeEnabled());
+    fireEvent.click(scan);
+    fireEvent.click(await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.confirm' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.retryPush' }));
+    await waitFor(() => expect(gitBridge.retryPush).toHaveBeenCalledOnce());
+    rerender(<ScmPanel projectId='p1' repoPaths={{ pe1: 'C:/workspace' }} conversationId='next-chat' />);
+
+    await act(async () => finishRetry({ id: 'old-session', state: 'completed', diagnostics: [] }));
+
+    expect(screen.queryByRole('button', { name: 'conversation.explorer.scm.commit.retryPush' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'conversation.explorer.scm.commit.generate' })).toBeEnabled();
   });
 
   it('shows build failure output and leaves the scan action available for manual retry', async () => {

@@ -14,6 +14,7 @@ type Message = {
   position?: string;
   type: string;
   status?: string;
+  hidden?: boolean;
   content: unknown;
 };
 type MessagePage = {
@@ -106,6 +107,7 @@ export const createWorkflowAgentService = (dependencies: Partial<AgentDependenci
         }
         if (!foundAnchor) continue;
         if (message.position === 'right') throw new WorkflowBlockedError('conversationBusy');
+        if (message.hidden) continue;
         if (message.status === 'error') throw new WorkflowBlockedError('agentFailed', readText(message.content));
         if (message.type === 'text' && message.position !== 'right') answers.push(readText(message.content));
       }

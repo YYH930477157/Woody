@@ -35,6 +35,23 @@ const backend = (answer = JSON.stringify(fields)) => {
 };
 
 describe('existing conversation workflow agent', () => {
+  it('ignores superseded hidden response text while retaining the hidden request anchor', async () => {
+    const request = backend();
+    request
+      .mockResolvedValueOnce(runtime())
+      .mockResolvedValueOnce({ turn_id: 'workflow-turn', msg_id: 'request-message' })
+      .mockResolvedValueOnce(runtime(false, 'workflow-turn'))
+      .mockResolvedValueOnce({
+        items: [
+          { id: 'request-message', type: 'text', position: 'right', hidden: true, content: {} },
+          { id: 'answer', type: 'text', position: 'left', content: { content: JSON.stringify(fields) } },
+          { id: 'superseded', type: 'text', position: 'left', hidden: true, content: { content: 'old text' } },
+        ],
+        has_more_after: false,
+      });
+    const service = createWorkflowAgentService({ request: request as Request, capture: async () => new Map() });
+    await expect(service.generateMessage('chat', 'repo', ['a.cpp'], fields, '')).resolves.toEqual(fields);
+  });
   it('generates a draft in the same conversation, using only the response to its own message', async () => {
     const request = backend();
     const service = createWorkflowAgentService({ request: request as Request, capture: async () => new Map() });

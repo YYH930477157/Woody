@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { lstat, readFile, readlink } from 'node:fs/promises';
-import { isAbsolute, relative, resolve } from 'node:path';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
@@ -34,6 +34,12 @@ export const captureWorktree = async (repoPath: string): Promise<Map<string, str
       .update(JSON.stringify([head, branch, index]))
       .digest('hex')
   );
+  const submodules = new Set(
+    index
+      .split('\0')
+      .filter((entry) => entry.startsWith('160000 '))
+      .map((entry) => entry.slice(entry.indexOf('\t') + 1))
+  );
   // Bound open file handles on large repositories.
   const paths = [...new Set(stdout.split('\0').filter(Boolean))];
   for (let offset = 0; offset < paths.length; offset += 32) {
@@ -52,6 +58,19 @@ export const captureWorktree = async (repoPath: string): Promise<Map<string, str
               ? await readFile(absolute)
               : '';
           snapshot.set(file, `${stat.mode}:${createHash('sha256').update(content).digest('hex')}`);
+          if (stat.isDirectory() && submodules.has(file)) {
+            // A deinitialized submodule has no .git entry; never fall back to
+            // querying the parent repository from an empty submodule directory.
+            try {
+              await lstat(join(absolute, '.git'));
+            } catch (error) {
+              if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
+              throw error;
+            }
+            for (const [nestedPath, value] of await captureWorktree(absolute)) {
+              snapshot.set(`${file}/${nestedPath}`, value);
+            }
+          }
         } catch (error) {
           if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
           snapshot.set(file, 'deleted');

@@ -100,6 +100,14 @@ const SECTION_MIN_BODY_PX = 40;
  *  panel height (the Changes section should open roomy, ~60%). */
 const SECTION_DEFAULT_FRACTION = 0.6;
 
+const emptyMessageFields = (): CommitMessageFields => ({
+  reason: '',
+  scope: '',
+  solution: '',
+  impact: '',
+  tests: '',
+});
+
 export type ScmPanelProps = {
   /** Owning project id — scopes the store's repositories + statuses. */
   projectId: string;
@@ -116,6 +124,8 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
   const [commitSelections, setCommitSelections] = useState<Record<string, ReadonlySet<string>>>({});
   const [workflowVisible, setWorkflowVisible] = useState(false);
   const [workflowState, setWorkflowState] = useState<GitWorkflowState>('idle');
+  const workflowStateRef = useRef(workflowState);
+  workflowStateRef.current = workflowState;
   const [workflowMessage, setWorkflowMessage] = useState<string>();
   const [workflowSessionId, setWorkflowSessionId] = useState<string>();
   const [workflowDiagnostics, setWorkflowDiagnostics] = useState<StaticScanDiagnostic[]>([]);
@@ -129,12 +139,10 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
   const startWorkflowRef = useRef<() => void>(() => {});
   const workflowTarget = useRef<{ repo: ScmRepository; resources: ScmResource[] } | undefined>(undefined);
   startWorkflowRef.current = () => {};
-  const [messageFields, setMessageFields] = useState<CommitMessageFields>({
-    reason: '',
-    scope: '',
-    solution: '',
-    impact: '',
-    tests: '',
+  const [messageFields, setMessageFields] = useState<CommitMessageFields>(emptyMessageFields);
+  const editedMessageFields = useRef<{ context: string; fields: Partial<CommitMessageFields> }>({
+    context: '',
+    fields: {},
   });
   const [branches, setBranches] = useState<Record<string, GitBranch[]>>({});
   const [branchBusy, setBranchBusy] = useState(false);
@@ -254,6 +262,46 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
   const selectedResources = selectedRepo
     ? getSelectedResources(selectedStatus?.resources ?? [], commitSelections[selectedRepo.repo_id] ?? new Set())
     : [];
+  const workflowOwnerContext = JSON.stringify([
+    projectId,
+    selectedRepo?.repo_id,
+    selectedRepoPath,
+    conversationId,
+    selectedRepo?.head?.name,
+  ]);
+  const previousOwnerContext = useRef(workflowOwnerContext);
+  const draftContext = JSON.stringify([
+    workflowOwnerContext,
+    [...new Set(selectedResources.map((resource) => resource.repo_relative_path))].sort(),
+  ]);
+
+  useEffect(() => {
+    const ownerChanged = previousOwnerContext.current !== workflowOwnerContext;
+    previousOwnerContext.current = workflowOwnerContext;
+    editedMessageFields.current = { context: draftContext, fields: {} };
+    // A commit removes its files from status before pushing finishes. Keep the
+    // committed workflow available for retry even when its selection disappears.
+    if (!ownerChanged && ['commit', 'push', 'completed'].includes(workflowStateRef.current)) return;
+    activeRequest.current = undefined;
+    workflowTarget.current = undefined;
+    setMessageFields(emptyMessageFields());
+    setDraftReady(false);
+    setWorkflowSessionId(undefined);
+    setWorkflowMessage(undefined);
+    setWorkflowDiagnostics([]);
+    setWorkflowOutput('');
+    if (!workflowBusy.current) setWorkflowState('idle');
+  }, [draftContext, workflowOwnerContext]);
+
+  const updateMessageFields = (fields: CommitMessageFields): void => {
+    if (editedMessageFields.current.context !== draftContext) {
+      editedMessageFields.current = { context: draftContext, fields: {} };
+    }
+    for (const key of Object.keys(fields) as (keyof CommitMessageFields)[]) {
+      if (fields[key] !== messageFields[key]) editedMessageFields.current.fields[key] = fields[key];
+    }
+    setMessageFields(fields);
+  };
 
   useEffect(() => {
     if (!selectedRepo) return;
@@ -339,13 +387,14 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
     setDraftReady(false);
     setWorkflowDiagnostics([]);
     setWorkflowOutput('');
-    setMessageFields({ reason: '', scope: '', solution: '', impact: '', tests: '' });
+    editedMessageFields.current = { context: draftContext, fields: {} };
+    setMessageFields(emptyMessageFields());
     setWorkflowVisible(true);
   };
 
   const generateCommitDraft = (): void => {
     if (workflowBusy.current || selectedResources.length === 0) return;
-    if (workflowVisible && workflowTarget.current?.repo.repo_id !== selectedRepo.repo_id) {
+    if (workflowVisible && workflowTarget.current && workflowTarget.current.repo.repo_id !== selectedRepo.repo_id) {
       setWorkflowState('blocked');
       setWorkflowMessage(t('conversation.explorer.scm.commit.snapshotChanged'));
       return;
@@ -367,29 +416,38 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
     setWorkflowState('message_draft');
     setWorkflowMessage(t('conversation.explorer.scm.commit.generating'));
     const selectedPaths = [...new Set(selectedResources.map((resource) => resource.repo_relative_path))];
+    const draftFields = {
+      ...emptyMessageFields(),
+      ...(editedMessageFields.current.context === draftContext ? editedMessageFields.current.fields : {}),
+    };
+    setMessageFields(draftFields);
     void ipcBridge.sourceControl.workflowDraft
       .invoke({
         repoPath: selectedRepoPath,
         branch: selectedRepo.head?.name ?? '',
         selectedPaths,
-        messageFields,
+        messageFields: draftFields,
         conversationId: conversationId ?? undefined,
         requestId,
       })
-      .then((session) => applyWorkflowSession(session))
+      .then((session) => {
+        if (activeRequest.current === requestId) applyWorkflowSession(session);
+      })
       .catch(() => {
+        if (activeRequest.current !== requestId) return;
         setDraftReady(false);
         setWorkflowState('failed');
         setWorkflowMessage(t('conversation.explorer.scm.commit.draftFailed'));
       })
       .finally(() => {
         workflowBusy.current = false;
+        if (activeRequest.current !== requestId) setWorkflowState('idle');
       });
   };
 
   const startStaticScanWorkflow = (): void => {
     if (workflowBusy.current || selectedResources.length === 0) return;
-    if (workflowVisible && workflowTarget.current?.repo.repo_id !== selectedRepo.repo_id) {
+    if (workflowVisible && workflowTarget.current && workflowTarget.current.repo.repo_id !== selectedRepo.repo_id) {
       setWorkflowState('blocked');
       setWorkflowMessage(t('conversation.explorer.scm.commit.snapshotChanged'));
       return;
@@ -436,56 +494,67 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
         });
       })
       .then((session) => {
+        if (activeRequest.current !== requestId) return;
         applyWorkflowSession(session);
         void refreshAllRepos();
       })
       .catch(() => {
+        if (activeRequest.current !== requestId) return;
         setWorkflowState('failed');
         setWorkflowMessage(t('conversation.explorer.scm.commit.scanFailed'));
       })
       .finally(() => {
         workflowBusy.current = false;
+        if (activeRequest.current !== requestId) setWorkflowState('idle');
       });
   };
   startWorkflowRef.current = generateCommitDraft;
 
   const commitWorkflow = (): void => {
     if (!workflowSessionId || !ipcBridge.sourceControl.workflowCommit) return;
+    const requestId = activeRequest.current;
     setWorkflowState('commit');
     workflowBusy.current = true;
     void ipcBridge.sourceControl.workflowCommit
       .invoke({ sessionId: workflowSessionId, messageFields })
       .then((session) => {
+        if (activeRequest.current !== requestId) return;
         applyWorkflowSession(session);
         void refreshAllRepos();
       })
       .catch(() => {
+        if (activeRequest.current !== requestId) return;
         setWorkflowState('failed');
         setWorkflowMessage(t('conversation.explorer.scm.commit.commitFailed'));
       })
       .finally(() => {
         workflowBusy.current = false;
+        if (activeRequest.current !== requestId) setWorkflowState('idle');
       });
   };
 
   const retryWorkflowPush = (): void => {
     if (!workflowSessionId || !ipcBridge.sourceControl.workflowRetryPush) return;
+    const requestId = activeRequest.current;
     setWorkflowState('push');
     workflowBusy.current = true;
     void ipcBridge.sourceControl.workflowRetryPush
       .invoke({ sessionId: workflowSessionId })
       .then((session) => {
+        if (activeRequest.current !== requestId) return;
         setWorkflowState(session.state);
         setWorkflowMessage(
           session.reasonCode ? t(`conversation.explorer.scm.commit.${session.reasonCode}`) : session.reason
         );
       })
       .catch(() => {
+        if (activeRequest.current !== requestId) return;
         setWorkflowState('push');
         setWorkflowMessage(t('conversation.explorer.scm.commit.pushFailed'));
       })
       .finally(() => {
         workflowBusy.current = false;
+        if (activeRequest.current !== requestId) setWorkflowState('idle');
       });
   };
 
@@ -557,7 +626,7 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
         onStart={startStaticScanWorkflow}
         onCommit={commitWorkflow}
         onRetryPush={retryWorkflowPush}
-        onMessageFieldsChange={setMessageFields}
+        onMessageFieldsChange={updateMessageFields}
       />
       {/* Selecting a change opens its diff in the shared preview panel (a `'diff'`
           tab, reusing the same `openPreview` mechanism the file tree uses) rather

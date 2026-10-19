@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { Button, Empty, Message, Spin, Tag } from '@arco-design/web-react';
@@ -23,23 +23,27 @@ const EmailScanPage: React.FC = () => {
   const [sessions, setSessions] = useState<TodoScanSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
+  const refreshRevision = useRef(0);
 
   const refresh = useCallback(async () => {
+    const revision = ++refreshRevision.current;
     try {
       const [statusInfo, scanSessions] = await Promise.all([
         ipcBridge.todo.status.invoke(),
         ipcBridge.todo.scanSessions.invoke(),
       ]);
+      if (revision !== refreshRevision.current) return;
       setStatus(statusInfo);
       setSessions(
         (scanSessions || []).toSorted((a, b) => (b.updated_at || b.created_at) - (a.updated_at || a.created_at))
       );
     } catch (error) {
+      if (revision !== refreshRevision.current) return;
       console.error('[EmailScanPage] failed to load scan state:', error);
       setStatus(null);
       setSessions([]);
     } finally {
-      setLoading(false);
+      if (revision === refreshRevision.current) setLoading(false);
     }
   }, []);
 
@@ -48,7 +52,19 @@ const EmailScanPage: React.FC = () => {
       setLoading(false);
       return;
     }
-    void refresh();
+    const onRefresh = (): void => {
+      void refresh();
+    };
+    const unsubscribeExecuted = ipcBridge.cron.onJobExecuted.on(onRefresh);
+    const unsubscribeUpdated = ipcBridge.cron.onJobUpdated.on(onRefresh);
+    const unsubscribeConversations = ipcBridge.conversation.listChanged.on(onRefresh);
+    onRefresh();
+    return () => {
+      ++refreshRevision.current;
+      unsubscribeExecuted();
+      unsubscribeUpdated();
+      unsubscribeConversations();
+    };
   }, [isDesktop, refresh]);
 
   const handleScan = useCallback(async () => {

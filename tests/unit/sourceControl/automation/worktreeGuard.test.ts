@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, rm, writeFile, unlink } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, writeFile, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { beforeEach, afterEach, describe, expect, it } from 'vitest';
@@ -44,5 +44,38 @@ describe('actual repair file boundaries', () => {
     const before = await captureWorktree(root);
     await exec('git', ['symbolic-ref', 'HEAD', 'refs/heads/other'], { cwd: root });
     expect(changedWorktreePaths(before, await captureWorktree(root))).toContain('\0git-state');
+  });
+  it.each([false, true])('detects submodule edits with a separate Git directory: %s', async (separate) => {
+    const modulePath = join(root, 'lib');
+    await mkdir(modulePath);
+    const gitDirectory = join(root, '.git', 'modules', 'lib');
+    if (separate) await mkdir(join(root, '.git', 'modules'));
+    await exec('git', ['init', '--initial-branch=main', ...(separate ? [`--separate-git-dir=${gitDirectory}`] : [])], {
+      cwd: modulePath,
+    });
+    await writeFile(join(modulePath, 'unselected.c'), 'original dependency');
+    await exec('git', ['add', '.'], { cwd: modulePath });
+    await exec('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-m', 'dependency'], {
+      cwd: modulePath,
+    });
+    const { stdout } = await exec('git', ['rev-parse', 'HEAD'], { cwd: modulePath });
+    await exec('git', ['update-index', '--add', '--cacheinfo', `160000,${stdout.trim()},lib`], { cwd: root });
+    const before = await captureWorktree(root);
+
+    await writeFile(join(modulePath, 'unselected.c'), 'agent edit');
+    await writeFile(join(modulePath, 'new.c'), 'unselected creation');
+
+    expect(changedWorktreePaths(before, await captureWorktree(root)).toSorted()).toEqual([
+      'lib/new.c',
+      'lib/unselected.c',
+    ]);
+  });
+
+  it('does not recurse into the parent repository for a deinitialized submodule', async () => {
+    await mkdir(join(root, 'lib'));
+    await exec('git', ['update-index', '--add', '--cacheinfo', `160000,${'1'.repeat(40)},lib`], { cwd: root });
+    const before = await captureWorktree(root);
+    expect(changedWorktreePaths(before, await captureWorktree(root))).toEqual([]);
+    expect([...before.keys()].some((path) => path.startsWith('lib/'))).toBe(false);
   });
 });
