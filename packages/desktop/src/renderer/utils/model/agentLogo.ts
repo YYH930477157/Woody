@@ -7,26 +7,22 @@
  * Unified Agent Logo utility
  *
  * Logo 真值由后端 `/api/agents/management` 提供（投影自 agent_metadata.icon/avatar）。
- * 前端不再维护任何 backend -> 资源路径的硬编码映射。
+ * 前端不再维护 backend -> 资源路径映射；旧内置品牌资源由头像解析器统一替换。
  *
  * 使用方式：组件用 {@link useAgentLogos} 取得 `backend -> url` 映射，再用纯函数
  * {@link resolveAgentLogo} 解析。非组件的工具函数应把映射作为参数传入。
  *
  * Logo truth lives in the backend (`/api/agents/management`, projected from
- * `agent_metadata.icon/avatar`); the frontend owns no path map. Components read the
+ * `agent_metadata.icon/avatar`); the frontend owns no backend path map.
+ * Legacy builtin brand assets are aliased by the shared avatar resolver. Components read the
  * `backend -> url` map via {@link useAgentLogos} and resolve with the pure
  * {@link resolveAgentLogo}; non-React utilities receive the map as an argument.
  */
 
 import { ipcBridge } from '@/common';
 import type { AssistantAvatar } from '@/renderer/utils/model/assistantAvatar';
-import {
-  isBackendRelativeAssetPath,
-  isLikelyLocalFilePath,
-  resolveAssistantAvatar,
-} from '@/renderer/utils/model/assistantAvatar';
+import { resolveAssistantAvatar } from '@/renderer/utils/model/assistantAvatar';
 import type { ManagedAgent } from '@/renderer/utils/model/agentTypes';
-import { resolveBackendAssetUrl } from '@/renderer/utils/platform';
 import useSWR from 'swr';
 
 /** Map of lowercased backend id -> logo URL. */
@@ -78,13 +74,8 @@ export function useAgentLogos(): AgentLogoMap {
 }
 
 function normalizeLogoUrl(logo: string): string | null {
-  const value = logo.trim();
-  if (!value || isLikelyLocalFilePath(value)) return null;
-  if (value.startsWith('/') && !isBackendRelativeAssetPath(value)) return null;
-
-  const resolved = resolveBackendAssetUrl(value) ?? value;
-  const isImage = /\.(svg|png|jpe?g|webp|gif)$/i.test(resolved) || /^(https?:|data:|\/)/i.test(resolved);
-  return isImage ? resolved : null;
+  const avatar = resolveAssistantAvatar(logo);
+  return avatar.kind === 'image' ? avatar.value : null;
 }
 
 function lookupBackendLogoValue(logos: AgentLogoMap, backend: string | undefined | null): string | null {

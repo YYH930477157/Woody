@@ -5,6 +5,7 @@
  */
 
 import { resolveBackendAssetUrl } from '@/renderer/utils/platform';
+import woodyLogo from '@/renderer/assets/logos/brand/app.png';
 
 export type AssistantAvatar =
   | { kind: 'image'; value: string }
@@ -27,6 +28,11 @@ export function isLikelyLocalFilePath(value: string): boolean {
 export function resolveAssistantAvatar(avatar: string | undefined): AssistantAvatar {
   const value = avatar?.trim();
   if (!value) return { kind: 'fallback' };
+
+  // Old catalogs and conversation snapshots retain the upstream builtin logo.
+  if (/^(?:https?:\/\/[^/]+)?\/api\/assets\/logos\/brand\/aion\.svg(?:[?#].*)?$/i.test(value)) {
+    return { kind: 'image', value: woodyLogo };
+  }
 
   if (isLikelyLocalFilePath(value)) {
     return { kind: 'fallback' };

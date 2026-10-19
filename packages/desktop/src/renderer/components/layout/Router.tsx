@@ -27,6 +27,7 @@ const TaskDetailPage = React.lazy(() => import('@renderer/pages/cron/ScheduledTa
 const TeamIndex = React.lazy(() => import('@renderer/pages/team'));
 const TodoPage = React.lazy(() => import('@renderer/pages/todo'));
 const EmailScanPage = React.lazy(() => import('@renderer/pages/emailScan'));
+const TerminalPage = React.lazy(() => import('@renderer/pages/terminal'));
 
 const withRouteFallback = (Component: React.LazyExoticComponent<React.ComponentType>) => (
   <Suspense fallback={<AppLoader />}>
@@ -114,6 +115,7 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
           <Route path='/scheduled/:job_id' element={withRouteFallback(TaskDetailPage)} />
           <Route path='/todo' element={withRouteFallback(TodoPage)} />
           <Route path='/email-scan' element={withRouteFallback(EmailScanPage)} />
+          <Route path='/terminal' element={withRouteFallback(TerminalPage)} />
         </Route>
         <Route path='*' element={<Navigate to={status === 'authenticated' ? '/guid' : '/login'} replace />} />
       </Routes>

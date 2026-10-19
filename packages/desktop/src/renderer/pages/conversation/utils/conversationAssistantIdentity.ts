@@ -1,6 +1,7 @@
 import type { TChatConversation } from '@/common/config/storage';
 import type { PresetAssistantInfo } from '@/renderer/hooks/agent/usePresetAssistantInfo';
 import { resolveAssistantAvatar } from '@/renderer/utils/model/assistantAvatar';
+import { resolveAgentDisplayName } from '@/renderer/utils/model/assistantDisplay';
 import { resolveAgentLogo } from '@/renderer/utils/model/agentLogo';
 import type { AgentLogoMap } from '@/renderer/utils/model/agentLogo';
 
@@ -88,7 +89,7 @@ export function resolveConversationLeadingMark(
   }
 
   if (conversation.assistant) {
-    const assistantLabel = conversation.assistant.name.trim() || conversation.assistant.id;
+    const assistantLabel = resolveAgentDisplayName(conversation.assistant.name.trim() || conversation.assistant.id);
     const assistantAvatar = resolveAssistantAvatar(conversation.assistant.avatar);
     if (assistantAvatar.kind === 'emoji') {
       return {

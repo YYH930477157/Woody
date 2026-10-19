@@ -22,6 +22,7 @@ describe('resolveFeedbackModule', () => {
     ['/scheduled/job-42', 'scheduled-task'],
     ['/todo', 'scheduled-task'],
     ['/assistants', 'assistant-preset'],
+    ['/terminal', 'mcp-tools'],
     ['/settings/agent', 'agent-detection'],
     ['/settings/agent/claude/repair', 'agent-detection'],
     ['/settings/model', 'model-auth'],

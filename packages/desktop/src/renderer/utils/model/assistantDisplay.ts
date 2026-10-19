@@ -8,6 +8,11 @@ import type { Assistant } from '@/common/types/agent/assistantTypes';
 
 type AssistantNameSource = Pick<Assistant, 'id' | 'name' | 'name_i18n'>;
 
+/** Present the legacy builtin engine name using the application's brand. */
+export function resolveAgentDisplayName(name: string): string {
+  return name === 'Aion CLI' ? 'Woody' : name;
+}
+
 export function resolveAssistantName(
   assistant: AssistantNameSource | null | undefined,
   localeKey: string,
@@ -18,5 +23,6 @@ export function resolveAssistantName(
   }
 
   const localizedName = assistant.name_i18n?.[localeKey] || assistant.name_i18n?.['en-US'];
-  return localizedName?.trim() || assistant.name?.trim() || assistant.id || fallback;
+  const name = localizedName?.trim() || assistant.name?.trim() || assistant.id || fallback;
+  return resolveAgentDisplayName(name);
 }

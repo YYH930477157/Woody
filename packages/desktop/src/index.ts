@@ -853,6 +853,14 @@ const handleAppReady = async (): Promise<void> => {
     console.error('[Todo] failed to publish data dir:', error);
   }
 
+  try {
+    const { getTerminalRuntime } = await import('./process/services/terminal/runtime');
+    await getTerminalRuntime();
+    console.log('[Terminal] Private Shell/Serial service ready');
+  } catch (error) {
+    console.error('[Terminal] Failed to start Shell/Serial service', error);
+  }
+
   const debugBackendStartupFailure = resolveDebugBackendStartupFailure();
   if (debugBackendStartupFailure) {
     applyDebugBackendStartupFailure(debugBackendStartupFailure);
@@ -1198,7 +1206,10 @@ installQuitCleanup({
   },
   // Stop aioncore subprocess — backend shutdown kills all agent children
   // transitively (no separate frontend workerTaskManager remains).
-  stopBackend: () => backendManager.stop(),
+  stopBackend: async () => {
+    const { closeTerminalRuntime } = await import('./process/services/terminal/runtime');
+    await Promise.allSettled([closeTerminalRuntime(), backendManager.stop()]);
+  },
   destroyPetWindow: async () => {
     const { destroyPetWindow } = await import('./process/pet/petManager');
     destroyPetWindow();

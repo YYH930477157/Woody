@@ -237,7 +237,7 @@ describe('AssistantSelectionArea', () => {
         .getAllByRole('button')
         .slice(0, 4)
         .map((node) => node.textContent?.trim())
-    ).toEqual(['Aion CLI', 'Early', 'Mid', 'Late']);
+    ).toEqual(['Woody', 'Early', 'Mid', 'Late']);
   });
 
   it('keeps a selected overflow assistant visible in the top pill row', () => {

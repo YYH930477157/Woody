@@ -15,6 +15,7 @@
 import type { IConfirmation } from '@/common/chat/chatLib';
 import type { AcpSlashCommandApiItem } from '@/common/chat/slash/types';
 import { bridge } from '@/common/platform/bridge';
+export { terminal } from './terminal';
 import { buildListTasksPath } from './teamTaskPath';
 import type { OpenDialogOptions } from 'electron';
 import type { ITodoItem, TodoScanResult, TodoScanSession, TodoStatusInfo } from '../types/todo/todoTypes';

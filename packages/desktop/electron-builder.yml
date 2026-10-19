@@ -28,6 +28,8 @@ files:
   - node_modules/better-sqlite3/**/*
   - node_modules/bcrypt/**/*
   - node_modules/node-pty/**/*
+  - node_modules/serialport/**/*
+  - node_modules/@serialport/**/*
   - node_modules/@mapbox/**/*
   - node_modules/detect-libc/**/*
   - node_modules/prebuild-install/**/*
@@ -197,6 +199,8 @@ asarUnpack:
   - '**/node_modules/better-sqlite3/**/*'
   - '**/node_modules/bcrypt/**/*'
   - '**/node_modules/node-pty/**/*'
+  - '**/node_modules/serialport/**/*'
+  - '**/node_modules/@serialport/**/*'
   - '**/node_modules/@mapbox/**/*'
   - '**/node_modules/detect-libc/**/*'
   - '**/node_modules/prebuild-install/**/*'

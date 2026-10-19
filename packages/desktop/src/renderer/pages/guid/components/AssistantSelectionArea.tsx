@@ -14,6 +14,7 @@ import { useManagedAgentRuntimeCatalog } from '@/renderer/hooks/agent/useManaged
 import { managedAgentSearchText } from '@/renderer/utils/model/agentTypes';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { resolveAssistantAvatar } from '@/renderer/utils/model/assistantAvatar';
+import { resolveAssistantName } from '@/renderer/utils/model/assistantDisplay';
 import ThemedLogo from '@/renderer/components/agent/ThemedLogo';
 import { selectableAssistants } from '@/renderer/utils/model/assistantSelection';
 import { useTranslation } from 'react-i18next';
@@ -32,6 +33,7 @@ export function assistantMatchesSearch(
   const searchableText = [
     assistant.name,
     assistant.name_i18n?.[localeKey],
+    resolveAssistantName(assistant, localeKey),
     assistant.description,
     assistant.description_i18n?.[localeKey],
     agentSearchText,
@@ -224,7 +226,7 @@ const AssistantSelectionArea: React.FC<AssistantSelectionAreaProps> = ({
   const renderAssistantPill = (assistant: Assistant, testId: string, fullWidth = false) => {
     const avatar = resolveAssistantAvatar(assistant.avatar);
     const isSelected = selectedId === assistant.id;
-    const label = assistant.name_i18n?.[localeKey] || assistant.name;
+    const label = resolveAssistantName(assistant, localeKey);
 
     return (
       <Button

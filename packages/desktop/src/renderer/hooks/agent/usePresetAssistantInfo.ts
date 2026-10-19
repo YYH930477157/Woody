@@ -13,6 +13,7 @@ import { resolveLocaleKey } from '@/common/utils';
 import type { AgentLogoMap } from '@/renderer/utils/model/agentLogo';
 import { resolveAgentLogo, useAgentLogos } from '@/renderer/utils/model/agentLogo';
 import { isLikelyLocalFilePath, resolveAssistantAvatar } from '@/renderer/utils/model/assistantAvatar';
+import { resolveAgentDisplayName } from '@/renderer/utils/model/assistantDisplay';
 import useSWR from 'swr';
 export interface PresetAssistantInfo {
   name: string;
@@ -213,7 +214,9 @@ function hasMatchingEnabledSkills(candidateSkills: string[] | undefined, enabled
  */
 function buildPresetInfoFromAssistant(assistant: Assistant, locale: string): PresetAssistantInfo {
   const localeKey = resolveLocaleKey(locale);
-  const name = assistant.name_i18n?.[localeKey] || assistant.name_i18n?.[locale] || assistant.name || assistant.id;
+  const name = resolveAgentDisplayName(
+    assistant.name_i18n?.[localeKey] || assistant.name_i18n?.[locale] || assistant.name || assistant.id
+  );
   const avatar = typeof assistant.avatar === 'string' ? assistant.avatar : '';
   const normalized = normalizeAvatar(avatar);
   return {
@@ -231,7 +234,7 @@ function buildPresetInfoFromConversationAssistant(
 ): PresetAssistantInfo {
   const normalized = normalizeAvatar(assistant.avatar);
   return {
-    name: assistant.name,
+    name: resolveAgentDisplayName(assistant.name),
     logo: normalized.logo,
     isEmoji: normalized.isEmoji,
     isFallback: normalized.isFallback,

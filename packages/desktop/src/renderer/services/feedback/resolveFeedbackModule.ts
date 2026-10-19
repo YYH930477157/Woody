@@ -23,6 +23,7 @@ const ROUTE_MODULE_MAP: ReadonlyArray<readonly [prefix: string, tag: FeedbackMod
   ['/todo', 'scheduled-task'],
   ['/email-scan', 'scheduled-task'],
   ['/assistants', 'assistant-preset'],
+  ['/terminal', 'mcp-tools'],
   ['/settings/agent', 'agent-detection'],
   ['/settings/model', 'model-auth'],
   ['/settings/skills', 'skills-plugin'],

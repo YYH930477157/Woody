@@ -14,6 +14,7 @@ import {
   SiderAssistantEntry,
   SiderTodoEntry,
   SiderEmailScanEntry,
+  SiderTerminalEntry,
 } from './SiderNav';
 import SiderFooter from './SiderFooter';
 import TeamSiderSection from './TeamSiderSection';
@@ -142,6 +143,17 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
     }
   };
 
+  const handleTerminalClick = () => {
+    cleanupSiderTooltips();
+    blurActiveElement();
+    closePreview();
+    setIsBatchMode(false);
+    Promise.resolve(navigate('/terminal')).catch((error) => {
+      console.error('Navigation failed:', error);
+    });
+    onSessionClick?.();
+  };
+
   const handleQuickThemeToggle = () => {
     void setTheme(theme === 'dark' ? 'light' : 'dark');
   };
@@ -263,6 +275,13 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
               collapsed={collapsed}
               siderTooltipProps={siderTooltipProps}
               onClick={handleEmailScanClick}
+            />
+            <SiderTerminalEntry
+              isMobile={isMobile}
+              isActive={pathname === '/terminal'}
+              collapsed={collapsed}
+              siderTooltipProps={siderTooltipProps}
+              onClick={handleTerminalClick}
             />
             {/* Divider between fixed top nav and scrollable content area */}
             <div

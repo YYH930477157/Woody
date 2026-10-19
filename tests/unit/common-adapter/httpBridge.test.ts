@@ -82,6 +82,26 @@ describe('httpBridge', () => {
     vi.unstubAllGlobals();
   });
 
+  it('omits capability-bearing request bodies from diagnostic logs', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response('{}', {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    );
+    const debug = vi.spyOn(console, 'debug').mockImplementation(() => {});
+    await httpRequest(
+      'POST',
+      '/api/conversations/chat/messages',
+      { content: 'private-terminal-ticket' },
+      { sensitiveBody: true }
+    );
+    expect(JSON.stringify(debug.mock.calls)).not.toContain('private-terminal-ticket');
+  });
+
   describe('getBaseUrl', () => {
     it('returns fallback URL in node environment with no globalThis.__backendPort', () => {
       const result = getBaseUrl();

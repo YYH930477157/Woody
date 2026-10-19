@@ -314,6 +314,25 @@ function buildDefaultMcpServers(): McpImportServer[] {
       ),
     });
   }
+  const terminalEntry = path.join(
+    app.isPackaged
+      ? path.join(process.resourcesPath, 'bundled-mcp')
+      : path.join(app.getAppPath(), 'resources', 'bundled-mcp'),
+    'terminal-mcp',
+    'index.cjs'
+  );
+  if (fs.existsSync(terminalEntry)) {
+    const config = { command: 'node', args: [terminalEntry] };
+    servers.push({
+      name: 'woody-terminal',
+      description:
+        'Shared local Shell and Serial connections. Select for a new chat, then grant access from the terminal panel.',
+      enabled: true,
+      builtin: true,
+      transport: { type: 'stdio', ...config },
+      original_json: JSON.stringify({ mcpServers: { 'woody-terminal': config } }, null, 2),
+    });
+  }
   return servers;
 }
 
@@ -403,6 +422,20 @@ async function ensureBootstrapMcpServersInDb(configFile: ConfigFile): Promise<vo
   logImageGenerationEnvResolution(imageEnvResolution, 'bootstrap');
   const imageServer = buildBuiltinImageGenerationServer(imageEnvResolution, imageConfig);
   const defaultServers = buildDefaultMcpServers();
+  const desiredTerminal = defaultServers.find((server) => server.name === 'woody-terminal');
+  const existingTerminal = existingByName.get('woody-terminal');
+  if (
+    desiredTerminal &&
+    existingTerminal &&
+    (!isSameStdioTransport(existingTerminal.transport, desiredTerminal.transport) ||
+      existingTerminal.builtin !== true ||
+      existingTerminal.original_json !== desiredTerminal.original_json)
+  ) {
+    await mcpService.updateServer.invoke({
+      id: existingTerminal.id,
+      data: { transport: desiredTerminal.transport, builtin: true, original_json: desiredTerminal.original_json },
+    });
+  }
   const missing = [...defaultServers, imageServer].filter((server) => !existingByName.has(server.name));
   let imageServerUpdated = false;
 
