@@ -44,6 +44,7 @@ function outputRelay() {
   let ended: { error?: string } | undefined;
   return {
     data(data: Buffer) {
+      if (ended) return;
       if (listener) listener(data);
       else if (pendingBytes + data.length <= 4 * 1024 * 1024) {
         pending.push(data);
@@ -51,6 +52,7 @@ function outputRelay() {
       }
     },
     end(error?: string) {
+      if (ended) return;
       ended = { error };
       closeListener?.(error);
     },
@@ -139,13 +141,37 @@ export async function createNativeTransport(profile: TerminalProfile): Promise<T
     xoff: profile.xoff,
     autoOpen: false,
   });
+  let closed = false;
+  let failure: Error | undefined;
+  let closing: Promise<void> | undefined;
+  const closeSerial = (): Promise<void> => {
+    if (closing) return closing;
+    if (!port.isOpen) return Promise.resolve();
+    // Install the shared promise before close can synchronously emit another error.
+    closing = Promise.resolve()
+      .then(() => new Promise<void>((resolve, reject) => port.close((error) => (error ? reject(error) : resolve()))))
+      .finally(() => {
+        closing = undefined;
+      });
+    return closing;
+  };
   port.on('data', (data: Buffer) => relay.data(Buffer.from(data)));
-  port.on('error', (error: Error) => relay.end(error.message));
-  port.on('close', () => relay.end());
+  port.on('error', (error: Error) => {
+    closed = true;
+    failure ??= error;
+    relay.end(failure.message);
+    // Preserve the transport failure; explicit close can retry failed cleanup.
+    void closeSerial().catch(() => {});
+  });
+  port.on('close', () => {
+    closed = true;
+    relay.end();
+  });
   try {
     await new Promise<void>((resolve, reject) => port.open((error) => (error ? reject(error) : resolve())));
+    if (failure) throw failure;
   } catch (error) {
-    if (port.isOpen) port.close();
+    await closeSerial().catch(() => {});
     throw error;
   }
   return {
@@ -153,6 +179,7 @@ export async function createNativeTransport(profile: TerminalProfile): Promise<T
     onClose: relay.onClose,
     write: (data) =>
       new Promise<number>((resolve, reject) => {
+        if (closed) return reject(new Error('terminal.disconnected'));
         port.write(data, (error) => {
           if (error) return reject(error);
           port.drain((drainError) =>
@@ -160,10 +187,9 @@ export async function createNativeTransport(profile: TerminalProfile): Promise<T
           );
         });
       }),
-    close: async () => {
-      if (port.isOpen) {
-        await new Promise<void>((resolve, reject) => port.close((error) => (error ? reject(error) : resolve())));
-      }
+    close: () => {
+      closed = true;
+      return closeSerial();
     },
   };
 }
