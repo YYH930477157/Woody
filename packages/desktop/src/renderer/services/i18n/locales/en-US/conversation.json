@@ -675,7 +675,8 @@
       "loading": "Loading changes…",
       "loadFailed": "Couldn't load changes",
       "monitorScope": {
-        "label": "Monitor scope",
+        "label": "Display scope",
+        "tooltip": "Filters displayed changes only; the entire project is still watched in the background. If the software folder is missing, the entire project is shown.",
         "project": "Entire project",
         "software": "software folder"
       },

@@ -675,7 +675,8 @@
       "loading": "Chargement des modifications…",
       "loadFailed": "Impossible de charger les modifications",
       "monitorScope": {
-        "label": "Périmètre surveillé",
+        "label": "Périmètre d’affichage",
+        "tooltip": "Filtre uniquement les modifications affichées ; le projet entier reste surveillé en arrière-plan. Si le dossier software est absent, le projet entier est affiché.",
         "project": "Projet entier",
         "software": "dossier software"
       },

@@ -675,7 +675,8 @@
       "loading": "변경 사항 불러오는 중…",
       "loadFailed": "변경 사항을 불러올 수 없습니다",
       "monitorScope": {
-        "label": "모니터링 범위",
+        "label": "표시 범위",
+        "tooltip": "표시되는 변경 사항만 필터링하며 백그라운드에서는 전체 프로젝트를 계속 모니터링합니다. software 폴더가 없으면 전체 프로젝트가 표시됩니다.",
         "project": "전체 프로젝트",
         "software": "software 폴더"
       },

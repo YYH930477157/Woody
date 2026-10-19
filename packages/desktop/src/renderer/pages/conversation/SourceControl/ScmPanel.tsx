@@ -146,7 +146,7 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
   });
   const [branches, setBranches] = useState<Record<string, GitBranch[]>>({});
   const [branchBusy, setBranchBusy] = useState(false);
-  const [softwareDirectoryExists, setSoftwareDirectoryExists] = useState<boolean | null>(null);
+  const [softwareDirectory, setSoftwareDirectory] = useState<{ repoPath: string; exists: boolean } | null>(null);
   useEffect(() => {
     if (autoScanRevision > 0) startWorkflowRef.current();
   }, [autoScanRevision]);
@@ -228,11 +228,11 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
 
   useEffect(() => {
     if (ui.monitorScope !== 'software') {
-      setSoftwareDirectoryExists(null);
+      setSoftwareDirectory(null);
       return;
     }
     if (!selectedRepoPath || !ipcBridge.fs?.getFileMetadata) {
-      setSoftwareDirectoryExists(false);
+      setSoftwareDirectory(null);
       return;
     }
     let cancelled = false;
@@ -240,16 +240,22 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
     void ipcBridge.fs.getFileMetadata
       .invoke({ path: softwarePath })
       .then((metadata) => {
-        if (!cancelled) setSoftwareDirectoryExists(metadata.isDirectory === true);
+        if (!cancelled) setSoftwareDirectory({ repoPath: selectedRepoPath, exists: metadata.isDirectory === true });
       })
       .catch(() => {
-        if (!cancelled) setSoftwareDirectoryExists(false);
+        if (!cancelled) setSoftwareDirectory({ repoPath: selectedRepoPath, exists: false });
       });
     return () => {
       cancelled = true;
     };
   }, [selectedRepoPath, ui.monitorScope]);
 
+  const softwareDirectoryExists =
+    !selectedRepoPath || !ipcBridge.fs?.getFileMetadata
+      ? false
+      : softwareDirectory?.repoPath === selectedRepoPath
+        ? softwareDirectory.exists
+        : null;
   const effectiveMonitorScope =
     ui.monitorScope === 'software' && softwareDirectoryExists !== false ? 'software' : 'project';
   const selectedStatus = useMemo<ScmStatus | undefined>(() => {
@@ -272,7 +278,7 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
   const previousOwnerContext = useRef(workflowOwnerContext);
   const draftContext = JSON.stringify([
     workflowOwnerContext,
-    [...new Set(selectedResources.map((resource) => resource.repo_relative_path))].sort(),
+    [...new Set(selectedResources.map((resource) => resource.repo_relative_path))].toSorted(),
   ]);
 
   useEffect(() => {
@@ -898,18 +904,20 @@ const ChangesHeaderActions: React.FC<{
   const { t } = useTranslation();
   return (
     <>
-      <Select
-        size='mini'
-        value={monitorScope}
-        disabled={busy}
-        data-scm-monitor-scope
-        onChange={(value) => onChangeMonitorScope(value as ScmMonitorScope)}
-        aria-label={t('conversation.explorer.scm.monitorScope.label')}
-        style={{ maxWidth: 130 }}
-      >
-        <Select.Option value='project'>{t('conversation.explorer.scm.monitorScope.project')}</Select.Option>
-        <Select.Option value='software'>{t('conversation.explorer.scm.monitorScope.software')}</Select.Option>
-      </Select>
+      <Tooltip content={t('conversation.explorer.scm.monitorScope.tooltip')} position='br'>
+        <Select
+          size='mini'
+          value={monitorScope}
+          disabled={busy}
+          data-scm-monitor-scope
+          onChange={(value) => onChangeMonitorScope(value as ScmMonitorScope)}
+          aria-label={t('conversation.explorer.scm.monitorScope.label')}
+          style={{ maxWidth: 130 }}
+        >
+          <Select.Option value='project'>{t('conversation.explorer.scm.monitorScope.project')}</Select.Option>
+          <Select.Option value='software'>{t('conversation.explorer.scm.monitorScope.software')}</Select.Option>
+        </Select>
+      </Tooltip>
       {branches.length > 0 && (
         <Select
           size='mini'

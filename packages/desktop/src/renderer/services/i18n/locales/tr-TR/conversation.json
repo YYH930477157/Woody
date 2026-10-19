@@ -677,7 +677,8 @@
       "loading": "Değişiklikler yükleniyor…",
       "loadFailed": "Değişiklikler yüklenemedi",
       "monitorScope": {
-        "label": "İzleme kapsamı",
+        "label": "Görüntüleme kapsamı",
+        "tooltip": "Yalnızca gösterilen değişiklikleri filtreler; projenin tamamı arka planda izlenmeye devam eder. software klasörü yoksa projenin tamamı gösterilir.",
         "project": "Tüm proje",
         "software": "software klasörü"
       },

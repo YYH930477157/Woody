@@ -675,7 +675,8 @@
       "loading": "正在加载变更…",
       "loadFailed": "无法加载变更",
       "monitorScope": {
-        "label": "监控范围",
+        "label": "显示范围",
+        "tooltip": "仅筛选显示的改动，后台仍监控整个项目。没有 software 文件夹时，显示整个项目。",
         "project": "整个项目",
         "software": "software 文件夹"
       },

@@ -675,7 +675,8 @@
       "loading": "正在載入變更…",
       "loadFailed": "無法載入變更",
       "monitorScope": {
-        "label": "監控範圍",
+        "label": "顯示範圍",
+        "tooltip": "僅篩選顯示的變更，背景仍監控整個專案。沒有 software 資料夾時，顯示整個專案。",
         "project": "整個專案",
         "software": "software 資料夾"
       },

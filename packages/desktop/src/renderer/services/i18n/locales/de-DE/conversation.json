@@ -676,7 +676,8 @@
       "loading": "Änderungen werden geladen…",
       "loadFailed": "Änderungen konnten nicht geladen werden",
       "monitorScope": {
-        "label": "Überwachungsbereich",
+        "label": "Anzeigebereich",
+        "tooltip": "Filtert nur die angezeigten Änderungen; das gesamte Projekt wird weiterhin im Hintergrund überwacht. Fehlt der software-Ordner, wird das gesamte Projekt angezeigt.",
         "project": "Gesamtes Projekt",
         "software": "software-Ordner"
       },

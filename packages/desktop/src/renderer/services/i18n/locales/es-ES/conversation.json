@@ -676,7 +676,8 @@
       "loading": "Cargando cambios…",
       "loadFailed": "No se pudieron cargar los cambios",
       "monitorScope": {
-        "label": "Ámbito supervisado",
+        "label": "Ámbito de visualización",
+        "tooltip": "Solo filtra los cambios mostrados; todo el proyecto sigue supervisándose en segundo plano. Si no existe la carpeta software, se muestra todo el proyecto.",
         "project": "Proyecto completo",
         "software": "carpeta software"
       },

@@ -1060,12 +1060,12 @@ describe('ScmPanel monitor scope', () => {
   it('limits rows and bulk-action inputs to the software folder', async () => {
     const resources = [resource('software/src/main.c'), resource('docs/readme.md')];
     installPort({ repositories: [repo()], firstFrames: { 'scm:pe1': status('scm:pe1', 1, resources) } });
-    render(<ScmPanel projectId='p1' />);
+    render(<ScmPanel projectId='p1' repoPaths={{ 'scm:pe1': 'C:/workspace' }} />);
 
     await screen.findByText('main.c');
     expect(screen.getByText('readme.md')).toBeInTheDocument();
 
-    setScmMonitorScope('software');
+    await act(async () => setScmMonitorScope('software'));
 
     await waitFor(() => expect(screen.queryByText('readme.md')).toBeNull());
     expect(screen.getByText('main.c')).toBeInTheDocument();
@@ -1080,10 +1080,60 @@ describe('ScmPanel monitor scope', () => {
 
     await screen.findByText('main.c');
     expect(screen.getByText('readme.md')).toBeInTheDocument();
-    setScmMonitorScope('software');
+    await act(async () => setScmMonitorScope('software'));
 
     await waitFor(() => expect(screen.getByText('readme.md')).toBeInTheDocument());
     expect(gitBridge.softwareDirectory).toHaveBeenCalledWith({ path: 'C:/workspace/software' });
+  });
+
+  it('does not reuse a missing-folder result while checking a different repository', async () => {
+    gitBridge.softwareDirectory.mockResolvedValueOnce({ isDirectory: false });
+    let finishCheck: ((value: { isDirectory: boolean }) => void) | undefined;
+    gitBridge.softwareDirectory.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishCheck = resolve;
+        })
+    );
+    const resources = [resource('software/src/main.c'), resource('docs/readme.md')];
+    installPort({
+      repositories: [repo(), repo({ repo_id: 'scm:pe2', root: { pe_id: 'pe2', relative_path: '' }, label: 'other' })],
+      firstFrames: {
+        'scm:pe1': status('scm:pe1', 1, resources),
+        'scm:pe2': status('scm:pe2', 1, resources),
+      },
+    });
+    render(<ScmPanel projectId='p1' repoPaths={{ 'scm:pe1': 'C:/first', 'scm:pe2': 'C:/second' }} />);
+    await screen.findByText('main.c');
+    await act(async () => setScmMonitorScope('software'));
+    expect(screen.getByText('readme.md')).toBeInTheDocument();
+
+    fireEvent.click(document.querySelector('[data-scm-repo-item="scm:pe2"]') as HTMLElement);
+    await waitFor(() => expect(finishCheck).toBeDefined());
+    expect(screen.queryByText('readme.md')).toBeNull();
+    await act(async () => finishCheck?.({ isDirectory: true }));
+    expect(screen.queryByText('readme.md')).toBeNull();
+  });
+
+  it('ignores a late folder lookup from the previous repository path', async () => {
+    let finishOldCheck: ((value: { isDirectory: boolean }) => void) | undefined;
+    gitBridge.softwareDirectory.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishOldCheck = resolve;
+        })
+    );
+    const resources = [resource('software/src/main.c'), resource('docs/readme.md')];
+    installPort({ repositories: [repo()], firstFrames: { 'scm:pe1': status('scm:pe1', 1, resources) } });
+    const { rerender } = render(<ScmPanel projectId='p1' repoPaths={{ 'scm:pe1': 'C:/old' }} />);
+    await screen.findByText('main.c');
+    await act(async () => setScmMonitorScope('software'));
+    await waitFor(() => expect(finishOldCheck).toBeDefined());
+    rerender(<ScmPanel projectId='p1' repoPaths={{ 'scm:pe1': 'C:/new' }} />);
+    await waitFor(() => expect(gitBridge.softwareDirectory).toHaveBeenCalledWith({ path: 'C:/new/software' }));
+    await act(async () => finishOldCheck?.({ isDirectory: false }));
+
+    expect(screen.queryByText('readme.md')).toBeNull();
   });
 });
 

@@ -681,7 +681,8 @@
       "loading": "Carregando alterações…",
       "loadFailed": "Não foi possível carregar as alterações",
       "monitorScope": {
-        "label": "Escopo monitorado",
+        "label": "Escopo de exibição",
+        "tooltip": "Filtra apenas as alterações exibidas; o projeto inteiro continua sendo monitorado em segundo plano. Se a pasta software não existir, o projeto inteiro será exibido.",
         "project": "Projeto inteiro",
         "software": "pasta software"
       },

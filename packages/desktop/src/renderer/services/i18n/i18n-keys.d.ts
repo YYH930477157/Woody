@@ -718,6 +718,7 @@ export type I18nKey =
   | 'conversation.explorer.scm.monitorScope.label'
   | 'conversation.explorer.scm.monitorScope.project'
   | 'conversation.explorer.scm.monitorScope.software'
+  | 'conversation.explorer.scm.monitorScope.tooltip'
   | 'conversation.explorer.scm.noChanges'
   | 'conversation.explorer.scm.notARepository'
   | 'conversation.explorer.scm.opaqueHint'
