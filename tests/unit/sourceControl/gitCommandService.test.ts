@@ -47,6 +47,19 @@ describe('git command service', () => {
     expect(status.changedPaths).toEqual(['a.c']);
   });
 
+  it('reports a staged rename by its destination without inventing a path from its source', async () => {
+    const repoPath = await makeRepo();
+    await writeFile(join(repoPath, 'module.c'), 'int value;\n', 'utf8');
+    await runGit(repoPath, ['add', 'module.c']);
+    await runGit(repoPath, ['commit', '-m', 'add module']);
+    await runGit(repoPath, ['mv', 'module.c', 'renamed.c']);
+    await writeFile(join(repoPath, 'a.c'), 'int main(void) { return 3; }\n', 'utf8');
+
+    const status = await createGitCommandService().getStatus(repoPath);
+
+    expect(status.changedPaths).toEqual(['a.c', 'renamed.c']);
+  });
+
   it('commits selected paths through a temporary index and preserves the real index', async () => {
     const repoPath = await makeRepo();
     await writeFile(join(repoPath, 'a.c'), 'int main(void) { return 1; }\n', 'utf8');

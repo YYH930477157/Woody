@@ -41,12 +41,14 @@ const defaultRunner: GitCommandRunner = async (args, options) => {
 
 const parsePorcelainPaths = (output: string): string[] => {
   const paths = new Set<string>();
-  for (const record of output.split('\0')) {
-    if (!record) continue;
+  const records = output.split('\0');
+  for (let index = 0; index < records.length; index += 1) {
+    const record = records[index];
     const payload = record.slice(3);
     if (!payload) continue;
-    const renameSeparator = payload.indexOf(' -> ');
-    paths.add(renameSeparator >= 0 ? payload.slice(renameSeparator + 4) : payload);
+    paths.add(payload);
+    // With -z, a rename or copy is followed by its source path as a separate, status-less record.
+    if (/[RC]/.test(record.slice(0, 2))) index += 1;
   }
   return [...paths].toSorted();
 };
