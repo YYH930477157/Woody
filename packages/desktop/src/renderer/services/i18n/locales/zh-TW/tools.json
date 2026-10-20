@@ -150,6 +150,26 @@
     "writePending": "底層傳送尚未結束，實際傳送位元組數仍待確認。請查看後續傳送記錄，避免重複傳送。",
     "description": "連接本機 Shell 或序列埠，收發資料並交給 AI 協助除錯。",
     "emptyOutput": "選擇設定並連接後，在這裡查看輸出。",
-    "waitingOutput": "已連接，等待接收資料。"
+    "waitingOutput": "已連接，等待接收資料。",
+    "inputMode": "輸入方式",
+    "inputMode_normal": "邊打邊發",
+    "inputMode_localEcho": "本地回顯",
+    "inputMode_readline": "按行傳送",
+    "inputMode_readlineHex": "十六進位行",
+    "inputHintNormal": "按鍵會立即傳送。Enter 依所選換行規則傳送。",
+    "inputHintReadline": "按 Enter 傳送這一行。Shift+Enter 在輸入框內換行。",
+    "newlineIn": "傳送換行",
+    "newlineOut": "接收換行",
+    "newline_keep": "保持原樣",
+    "newline_strip": "去掉換行",
+    "newline_cr": "強制 CR",
+    "newline_lf": "強制 LF",
+    "newline_crlf": "強制 CRLF",
+    "newline_implicitCr": "每個 LF 前補 CR",
+    "newline_implicitLf": "每個 CR 後補 LF",
+    "hexdump": "Hexdump",
+    "slowSend": "逐位元組傳送",
+    "reconnect": "重新連線",
+    "baudLive": "鮑率"
   }
 }

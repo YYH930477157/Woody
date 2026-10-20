@@ -150,6 +150,26 @@
     "writePending": "底层发送尚未结束，实际发送字节数仍待确认。请查看后续发送记录，避免重复发送。",
     "description": "连接本机 Shell 或串口，收发数据并交给 AI 协助调试。",
     "emptyOutput": "选择配置并连接后，在这里查看输出。",
-    "waitingOutput": "已连接，等待接收数据。"
+    "waitingOutput": "已连接，等待接收数据。",
+    "inputMode": "输入方式",
+    "inputMode_normal": "边打边发",
+    "inputMode_localEcho": "本地回显",
+    "inputMode_readline": "按行发送",
+    "inputMode_readlineHex": "十六进制行",
+    "inputHintNormal": "按键会立即发送。Enter 按所选换行规则发送。",
+    "inputHintReadline": "按 Enter 发送这一行。Shift+Enter 在输入框内换行。",
+    "newlineIn": "发送换行",
+    "newlineOut": "接收换行",
+    "newline_keep": "保持原样",
+    "newline_strip": "去掉换行",
+    "newline_cr": "强制 CR",
+    "newline_lf": "强制 LF",
+    "newline_crlf": "强制 CRLF",
+    "newline_implicitCr": "每个 LF 前补 CR",
+    "newline_implicitLf": "每个 CR 后补 LF",
+    "hexdump": "Hexdump",
+    "slowSend": "逐字节发送",
+    "reconnect": "重新连接",
+    "baudLive": "波特率"
   }
 }

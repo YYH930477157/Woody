@@ -191,5 +191,13 @@ export async function createNativeTransport(profile: TerminalProfile): Promise<T
       closed = true;
       return closeSerial();
     },
+    setBaud: (baudRate) =>
+      new Promise<void>((resolve, reject) => {
+        if (closed) {
+          reject(new Error('terminal.disconnected'));
+          return;
+        }
+        port.update({ baudRate }, (error) => (error ? reject(error) : resolve()));
+      }),
   };
 }

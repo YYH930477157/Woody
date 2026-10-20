@@ -150,6 +150,26 @@
     "writePending": "Native write is still pending; the sent byte count is not confirmed. Check subsequent output before sending again.",
     "description": "Connect to a local Shell or serial port and work with AI to debug your device.",
     "emptyOutput": "Select a profile and connect to view output here.",
-    "waitingOutput": "Connected. Waiting for incoming data."
+    "waitingOutput": "Connected. Waiting for incoming data.",
+    "inputMode": "Режим введення",
+    "inputMode_normal": "Одразу під час набору",
+    "inputMode_localEcho": "Локальна луна",
+    "inputMode_readline": "Рядок за рядком",
+    "inputMode_readlineHex": "Шістнадцятковий рядок",
+    "inputHintNormal": "Клавіші надсилаються одразу. Enter надсилає обраний переклад рядка.",
+    "inputHintReadline": "Enter надсилає рядок. Shift+Enter вставляє переклад у полі.",
+    "newlineIn": "Переклад під час надсилання",
+    "newlineOut": "Переклад під час приймання",
+    "newline_keep": "Залишити",
+    "newline_strip": "Прибрати",
+    "newline_cr": "Примусово CR",
+    "newline_lf": "Примусово LF",
+    "newline_crlf": "Примусово CRLF",
+    "newline_implicitCr": "CR перед кожним LF",
+    "newline_implicitLf": "LF після кожного CR",
+    "hexdump": "Hexdump",
+    "slowSend": "По одному байту",
+    "reconnect": "Перепідключити",
+    "baudLive": "Швидкість"
   }
 }

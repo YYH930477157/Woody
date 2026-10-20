@@ -150,6 +150,26 @@
     "writePending": "Native write is still pending; the sent byte count is not confirmed. Check subsequent output before sending again.",
     "description": "Connect to a local Shell or serial port and work with AI to debug your device.",
     "emptyOutput": "Select a profile and connect to view output here.",
-    "waitingOutput": "Connected. Waiting for incoming data."
+    "waitingOutput": "Connected. Waiting for incoming data.",
+    "inputMode": "Modo de entrada",
+    "inputMode_normal": "Ao digitar",
+    "inputMode_localEcho": "Eco local",
+    "inputMode_readline": "Linha a linha",
+    "inputMode_readlineHex": "Linha hexadecimal",
+    "inputHintNormal": "As teclas são enviadas na hora. Enter envia a quebra escolhida.",
+    "inputHintReadline": "Enter envia a linha. Shift+Enter insere uma quebra no campo.",
+    "newlineIn": "Quebras no envio",
+    "newlineOut": "Quebras na recepção",
+    "newline_keep": "Manter",
+    "newline_strip": "Remover",
+    "newline_cr": "Forçar CR",
+    "newline_lf": "Forçar LF",
+    "newline_crlf": "Forçar CRLF",
+    "newline_implicitCr": "CR antes de cada LF",
+    "newline_implicitLf": "LF depois de cada CR",
+    "hexdump": "Hexdump",
+    "slowSend": "Enviar byte a byte",
+    "reconnect": "Reconectar",
+    "baudLive": "Taxa de baud"
   }
 }

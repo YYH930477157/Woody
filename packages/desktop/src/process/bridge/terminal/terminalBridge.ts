@@ -41,6 +41,10 @@ export function initTerminalBridge(): void {
   api.close.provider(async (input) => {
     await (await getTerminalRuntime()).service.close(idSchema.parse(input).id);
   });
+  api.setBaud.provider(async (input) => {
+    const { id, baudRate } = idSchema.extend({ baudRate: z.number().int().positive().max(12_000_000) }).parse(input);
+    return (await getTerminalRuntime()).service.setBaud(id, baudRate);
+  });
   api.grant.provider(async (input) => {
     const { conversationId, connectionId, profileId, language } = z
       .object({

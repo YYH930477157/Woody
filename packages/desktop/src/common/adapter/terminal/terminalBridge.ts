@@ -45,6 +45,7 @@ export const terminal = {
   takeover: terminalProvider<void, { id: string }>('terminal.takeover'),
   interrupt: terminalProvider<void, { id: string }>('terminal.interrupt'),
   close: terminalProvider<void, { id: string }>('terminal.close'),
+  setBaud: terminalProvider<TerminalConnection, { id: string; baudRate: number }>('terminal.set-baud'),
   grant: terminalProvider<
     void,
     { conversationId: string; connectionId?: string; profileId?: string; language: string }

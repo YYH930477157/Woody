@@ -150,6 +150,26 @@
     "writePending": "Native write is still pending; the sent byte count is not confirmed. Check subsequent output before sending again.",
     "description": "Connect to a local Shell or serial port and work with AI to debug your device.",
     "emptyOutput": "Select a profile and connect to view output here.",
-    "waitingOutput": "Connected. Waiting for incoming data."
+    "waitingOutput": "Connected. Waiting for incoming data.",
+    "inputMode": "حالت ورودی",
+    "inputMode_normal": "همزمان با تایپ",
+    "inputMode_localEcho": "پژواک محلی",
+    "inputMode_readline": "خط به خط",
+    "inputMode_readlineHex": "خط شانزده‌شانزدهی",
+    "inputHintNormal": "کلیدها بلافاصله فرستاده می‌شوند. Enter طبق قانون خط جدید انتخاب‌شده می‌فرستد.",
+    "inputHintReadline": "Enter این خط را می‌فرستد. Shift+Enter در کادر خط جدید می‌گذارد.",
+    "newlineIn": "خط جدید هنگام ارسال",
+    "newlineOut": "خط جدید هنگام دریافت",
+    "newline_keep": "بدون تغییر",
+    "newline_strip": "حذف خط جدید",
+    "newline_cr": "اجبار CR",
+    "newline_lf": "اجبار LF",
+    "newline_crlf": "اجبار CRLF",
+    "newline_implicitCr": "CR پیش از هر LF",
+    "newline_implicitLf": "LF پس از هر CR",
+    "hexdump": "Hexdump",
+    "slowSend": "ارسال بایت‌به‌بایت",
+    "reconnect": "اتصال دوباره",
+    "baudLive": "نرخ باد"
   }
 }

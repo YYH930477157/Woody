@@ -34,6 +34,7 @@ class MockSerialPort extends EventEmitter {
   });
   write = vi.fn((_data: Buffer, callback: (error: Error | null) => void) => callback(null));
   drain = vi.fn((callback: (error: Error | null) => void) => callback(null));
+  update = vi.fn((_options: { baudRate: number }, callback: (error: Error | null) => void) => callback(null));
 }
 
 vi.mock('serialport', () => ({ SerialPort: MockSerialPort }));
@@ -55,6 +56,12 @@ const serialProfile: TerminalProfile = {
 describe('serial transport cleanup', () => {
   beforeEach(() => {
     MockSerialPort.deferOpen = false;
+  });
+
+  it('updates the baud rate on the open port', async () => {
+    const transport = await createNativeTransport(serialProfile);
+    await transport.setBaud?.(57600);
+    expect(MockSerialPort.current.update).toHaveBeenCalledWith({ baudRate: 57600 }, expect.any(Function));
   });
 
   it('releases the native handle after an error without a manual disconnect', async () => {

@@ -10,6 +10,7 @@ export const terminalSendSchema = z
     data: z.string().max(196608),
     encoding: z.enum(['hex', 'utf8']),
     ending: z.enum(['none', 'cr', 'lf', 'crlf']),
+    slow: z.boolean().optional(),
     wait: z
       .object({
         mode: z.enum(['count', 'pattern', 'idle']),

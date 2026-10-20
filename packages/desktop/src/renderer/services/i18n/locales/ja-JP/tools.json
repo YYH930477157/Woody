@@ -150,6 +150,26 @@
     "writePending": "Native write is still pending; the sent byte count is not confirmed. Check subsequent output before sending again.",
     "description": "Connect to a local Shell or serial port and work with AI to debug your device.",
     "emptyOutput": "Select a profile and connect to view output here.",
-    "waitingOutput": "Connected. Waiting for incoming data."
+    "waitingOutput": "Connected. Waiting for incoming data.",
+    "inputMode": "入力方式",
+    "inputMode_normal": "打鍵と同時に送信",
+    "inputMode_localEcho": "ローカルエコー",
+    "inputMode_readline": "行単位で送信",
+    "inputMode_readlineHex": "16進数の行",
+    "inputHintNormal": "キーはすぐ送信されます。Enter は選んだ改行規則で送ります。",
+    "inputHintReadline": "Enter でこの行を送信します。Shift+Enter で入力欄内の改行です。",
+    "newlineIn": "送信の改行",
+    "newlineOut": "受信の改行",
+    "newline_keep": "そのまま",
+    "newline_strip": "改行を除く",
+    "newline_cr": "CR に固定",
+    "newline_lf": "LF に固定",
+    "newline_crlf": "CRLF に固定",
+    "newline_implicitCr": "各 LF の前に CR",
+    "newline_implicitLf": "各 CR の後に LF",
+    "hexdump": "Hexdump",
+    "slowSend": "1バイトずつ送信",
+    "reconnect": "再接続",
+    "baudLive": "ボーレート"
   }
 }

@@ -171,6 +171,10 @@ export class TerminalConnectionService {
     const state = this.authorizeControl(id, actor);
     if (state.info.status !== 'open') throw new Error('Terminal connection is closed');
     if (state.queued >= 64) throw new Error('Terminal write queue limit reached');
+    if (options.slow !== undefined && typeof options.slow !== 'boolean') throw new Error('Invalid slow send flag');
+    if (options.slow && state.info.profile.kind !== 'serial') {
+      throw new Error('Slow send is only available for serial connections');
+    }
     const data = encodeTerminalData(options);
     if (state.info.profile.kind === 'shell' && !isUtf8(data)) {
       throw new Error('Shell connections support UTF-8 bytes only');
@@ -260,12 +264,22 @@ export class TerminalConnectionService {
         started = true;
         let errorText: string | undefined;
         try {
-          const actual = await state.transport.write(data);
-          if (!Number.isInteger(actual) || actual < 0 || actual > data.length) {
-            throw new Error('Transport returned an invalid written byte count');
+          const pieces =
+            options.slow && data.length > 0
+              ? Array.from({ length: data.length }, (_, index) => data.subarray(index, index + 1))
+              : [data];
+          for (const piece of pieces) {
+            if (done) break;
+            const actual = await state.transport.write(piece);
+            if (!Number.isInteger(actual) || actual < 0 || actual > piece.length) {
+              throw new Error('Transport returned an invalid written byte count');
+            }
+            writtenBytes += actual;
+            if (actual !== piece.length) {
+              errorText = 'Transport completed a partial write';
+              break;
+            }
           }
-          writtenBytes = actual;
-          if (actual !== data.length) errorText = 'Transport completed a partial write';
         } catch (error) {
           const actual = (error as { bytesWritten?: unknown })?.bytesWritten;
           if (typeof actual === 'number' && Number.isInteger(actual) && actual >= 0 && actual <= data.length) {
@@ -317,6 +331,18 @@ export class TerminalConnectionService {
     for (const operation of state.pending) {
       if (operation.actor) operation.cancel('taken-over');
     }
+    return this.snapshot(state);
+  }
+
+  /** Change baud on an open serial port without dropping the connection. */
+  async setBaud(id: string, baudRate: number, actor?: TerminalActor): Promise<TerminalConnection> {
+    const state = this.authorizeControl(id, actor);
+    if (state.info.status !== 'open') throw new Error('Terminal connection is closed');
+    if (state.info.profile.kind !== 'serial') throw new Error('Baud rate applies to serial connections only');
+    if (!Number.isInteger(baudRate) || baudRate < 1 || baudRate > 12_000_000) throw new Error('Invalid serial baud rate');
+    if (!state.transport.setBaud) throw new Error('Terminal transport does not support baud changes');
+    await state.transport.setBaud(baudRate);
+    state.info.profile = { ...state.info.profile, baudRate };
     return this.snapshot(state);
   }
 

@@ -1,9 +1,18 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Button, Empty, Input, InputNumber, Modal, Select, Space, Tag } from '@arco-design/web-react';
-import { Add, Clear, Download, Refresh, Terminal } from '@icon-park/react';
+import { Alert, Button, Input, InputNumber, Modal, Select, Switch } from '@arco-design/web-react';
+import { Add, Refresh, Terminal } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { ipcBridge } from '@/common';
-import type { TerminalProfile, TerminalSendRequest, TerminalWait } from '@/common/types/terminal';
+import {
+  applyNewlineMode,
+  TERMINAL_BAUD_RATES,
+  TERMINAL_INPUT_MODES,
+  TERMINAL_NEWLINE_MODES,
+  type TerminalInputMode,
+  type TerminalNewlineMode,
+  type TerminalOutputMode,
+} from '@/common/terminal/stream';
+import type { TerminalEvent, TerminalProfile, TerminalSendRequest, TerminalWait } from '@/common/types/terminal';
 import TerminalConfig, { newTerminalProfile } from './TerminalConfig';
 import { useTerminal } from './useTerminal';
 import { renderTerminalEvents } from './terminalView';
@@ -17,7 +26,13 @@ export default function TerminalPanel({ conversationId, cwd }: { conversationId?
   const [profileId, setProfileId] = useState<string>();
   const [input, setInput] = useState('');
   const [encoding, setEncoding] = useState<'hex' | 'utf8'>('hex');
-  const [hexView, setHexView] = useState(true);
+  const [outputMode, setOutputMode] = useState<TerminalOutputMode>('hex');
+  const [inputMode, setInputMode] = useState<TerminalInputMode>('readlineHex');
+  const [inputNewlines, setInputNewlines] = useState<TerminalNewlineMode>('crlf');
+  const [outputNewlines, setOutputNewlines] = useState<TerminalNewlineMode>('keep');
+  const [slowSend, setSlowSend] = useState(false);
+  const [echoes, setEchoes] = useState<TerminalEvent[]>([]);
+  const [liveBaud, setLiveBaud] = useState<number>();
   const [ending, setEnding] = useState<TerminalSendRequest['ending']>('none');
   const [waitMode, setWaitMode] = useState<'none' | TerminalWait['mode']>('none');
   const [waitValue, setWaitValue] = useState('1');
@@ -29,10 +44,16 @@ export default function TerminalPanel({ conversationId, cwd }: { conversationId?
   const outputRef = useRef<HTMLDivElement>(null);
   const followOutput = useRef(true);
   const profile = model.profiles.find((item) => item.id === profileId);
-  const display = useMemo(() => renderTerminalEvents(model.events, hexView), [model.events, hexView]);
+  const serialSession = model.selected?.profile.kind === 'serial' ? model.selected.profile : undefined;
+  const baudRate = liveBaud ?? serialSession?.baudRate;
+  const typing = Boolean(serialSession) && (inputMode === 'normal' || inputMode === 'localEcho');
+  const display = useMemo(
+    () => renderTerminalEvents([...model.events, ...echoes], outputMode === 'text' ? false : outputMode, outputNewlines),
+    [echoes, model.events, outputMode, outputNewlines]
+  );
   useEffect(() => {
     if (outputRef.current && followOutput.current) outputRef.current.scrollTop = outputRef.current.scrollHeight;
-  }, [model.events]);
+  }, [display]);
   const run = async (action: () => Promise<unknown>) => {
     model.setError('');
     try {
@@ -43,41 +64,101 @@ export default function TerminalPanel({ conversationId, cwd }: { conversationId?
   };
   const refreshPorts = () => run(async () => setPorts(await ipcBridge.terminal.ports.invoke()));
   useEffect(() => {
+    setEchoes([]);
+    setLiveBaud(undefined);
     if (model.selected?.profile.kind === 'shell') {
       setEncoding('utf8');
-      setHexView(false);
+      setOutputMode('text');
       setEnding('cr');
     } else {
       setEncoding('hex');
-      setHexView(true);
+      setOutputMode('hex');
+      setInputMode('readlineHex');
       setEnding('none');
     }
   }, [model.selectedId, model.selected?.profile.kind]);
+  const manualOpen = model.selected?.status === 'open' && model.selected.owner === 'manual';
+  const transmit = async (request: TerminalSendRequest, echoText?: string) => {
+    if (!model.selectedId) return;
+    const response = await ipcBridge.terminal.send.invoke({
+      id: model.selectedId,
+      request: slowSend && serialSession ? { ...request, slow: true } : request,
+    });
+    if (echoText !== undefined && inputMode === 'localEcho') {
+      const bytes = new TextEncoder().encode(echoText);
+      let binary = '';
+      for (const byte of bytes) binary += String.fromCharCode(byte);
+      setEchoes((previous) => [
+        ...previous,
+        {
+          cursor: -Date.now(),
+          timestamp: Date.now(),
+          direction: 'outgoing',
+          source: 'manual',
+          data: btoa(binary),
+          byteLength: bytes.length,
+        },
+      ]);
+    }
+    setResult(
+      `${label(response.status)} · ${response.writePending ? label('writePending') : t('tools.terminal.sentBytes', { count: response.writtenBytes })}${response.wait ? ` · ${label(response.wait.status)} · ${t('tools.terminal.receivedBytes', { count: response.wait.byteLength })}` : ''}${response.error ? ` · ${response.error}` : ''}`
+    );
+  };
+  const serialWait = (): TerminalWait | undefined =>
+    waitMode === 'none' || !serialSession
+      ? undefined
+      : {
+          mode: waitMode,
+          timeoutMs,
+          ...(waitMode === 'count'
+            ? { count: Number(waitValue) }
+            : waitMode === 'pattern'
+              ? { pattern: waitValue, patternEncoding: encoding }
+              : { idleMs: Number(waitValue) }),
+        };
   const send = async () => {
     if (!model.selectedId) return;
+    const request: TerminalSendRequest =
+      serialSession && inputMode === 'readline'
+        ? { data: applyNewlineMode(`${input}\n`, inputNewlines), encoding: 'utf8', ending: 'none', wait: serialWait() }
+        : { data: input, encoding, ending, wait: serialWait() };
     setSending(true);
     await run(async () => {
-      const wait: TerminalWait | undefined =
-        waitMode === 'none' || model.selected?.profile.kind === 'shell'
-          ? undefined
-          : {
-              mode: waitMode,
-              timeoutMs,
-              ...(waitMode === 'count'
-                ? { count: Number(waitValue) }
-                : waitMode === 'pattern'
-                  ? { pattern: waitValue, patternEncoding: encoding }
-                  : { idleMs: Number(waitValue) }),
-            };
-      const response = await ipcBridge.terminal.send.invoke({
-        id: model.selectedId!,
-        request: { data: input, encoding, ending, wait },
-      });
-      setResult(
-        `${label(response.status)} · ${response.writePending ? label('writePending') : t('tools.terminal.sentBytes', { count: response.writtenBytes })}${response.wait ? ` · ${label(response.wait.status)} · ${t('tools.terminal.receivedBytes', { count: response.wait.byteLength })}` : ''}${response.error ? ` · ${response.error}` : ''}`
-      );
+      await transmit(request, serialSession && inputMode === 'readline' ? request.data : undefined);
+      if (serialSession && inputMode === 'readline') setInput('');
     });
     setSending(false);
+  };
+  const sendKey = (text: string) => {
+    if (!manualOpen) return;
+    const data = applyNewlineMode(text, inputNewlines);
+    void run(() => transmit({ data, encoding: 'utf8', ending: 'none' }, data));
+  };
+  const changeBaud = (next: number) => {
+    if (!model.selectedId || !Number.isInteger(next) || next < 1) return;
+    const previous = baudRate;
+    setLiveBaud(next);
+    void run(async () => {
+      try {
+        const updated = await ipcBridge.terminal.setBaud.invoke({ id: model.selectedId!, baudRate: next });
+        if (updated.profile.kind === 'serial') setLiveBaud(updated.profile.baudRate);
+      } catch (error) {
+        setLiveBaud(previous);
+        throw error;
+      }
+    });
+  };
+  const reconnect = () => {
+    if (!model.selected || model.selected.profile.kind !== 'serial') return;
+    const profile = { ...model.selected.profile, ...(baudRate ? { baudRate } : {}) };
+    const previousId = model.selected.id;
+    const wasOpen = model.selected.status === 'open';
+    setWorking(true);
+    void run(async () => {
+      if (wasOpen) await ipcBridge.terminal.close.invoke({ id: previousId });
+      const connection = await ipcBridge.terminal.open.invoke(profile);
+      model.setSelectedId(connection.id);
+    }).finally(() => setWorking(false));
   };
   const exportLog = async () => {
     if (!model.selectedId) return;
@@ -128,79 +209,39 @@ export default function TerminalPanel({ conversationId, cwd }: { conversationId?
     });
     setWorking(false);
   };
+  const toolButton: React.CSSProperties = {
+    border: 0,
+    background: 'transparent',
+    color: '#c5cdd8',
+    height: 28,
+    padding: '0 8px',
+    borderRadius: 6,
+    cursor: 'pointer',
+    fontSize: 12,
+  };
+  const baudOptions = (
+    TERMINAL_BAUD_RATES.includes(baudRate || 0) || !baudRate ? TERMINAL_BAUD_RATES : [baudRate, ...TERMINAL_BAUD_RATES]
+  ).map((value) => ({ value, label: String(value) }));
   return (
-    <div className='h-full min-h-0 box-border overflow-y-auto flex flex-col gap-16px px-16px py-20px text-t-primary bg-1'>
-      <div className='flex items-start justify-between gap-16px shrink-0'>
-        <div className='min-w-0'>
-          <div className='flex items-center gap-8px text-18px font-bold text-t-primary'>
-            <Terminal theme='outline' size='20' />
-            <span>{label('title')}</span>
-          </div>
-          <p className='m-0 mt-6px text-13px text-t-secondary'>{label('description')}</p>
-        </div>
-        <Button
-          type='primary'
-          icon={<Add theme='outline' size='16' />}
-          onClick={() => setEditing(newTerminalProfile('shell', cwd))}
-        >
-          {label('newProfile')}
-        </Button>
-      </div>
-      <div className='shrink-0 border border-solid border-border-2 rd-8px p-14px flex flex-col gap-12px'>
-        <div className='flex flex-wrap items-center gap-8px'>
-          <span className='w-88px shrink-0 text-12px text-t-secondary'>{label('profiles')}</span>
+    <div className='h-full min-h-0 box-border overflow-hidden flex flex-col text-t-primary bg-1'>
+      <div className='shrink-0 flex flex-wrap items-center gap-8px px-16px py-10px border-b border-solid border-border-2'>
+        <Terminal theme='outline' size='18' />
+        <span className='text-15px font-[600] shrink-0' title={label('description')}>
+          {label('title')}
+        </span>
+        <Select
+          className='flex-1 min-w-160px max-w-280px'
+          size='small'
+          placeholder={label('profiles')}
+          aria-label={label('profiles')}
+          value={profileId}
+          onChange={setProfileId}
+          options={model.profiles.map((item) => ({ label: item.name, value: item.id }))}
+        />
+        {model.connections.length > 0 && (
           <Select
-            className='flex-1 min-w-180px'
-            placeholder={label('profiles')}
-            aria-label={label('profiles')}
-            value={profileId}
-            onChange={setProfileId}
-            options={model.profiles.map((item) => ({ label: item.name, value: item.id }))}
-          />
-          <Button
-            type='primary'
-            disabled={!profile || working}
-            onClick={() => {
-              if (!profile) return;
-              setWorking(true);
-              void run(async () => {
-                const connection = await ipcBridge.terminal.open.invoke(profile);
-                model.setSelectedId(connection.id);
-              }).finally(() => setWorking(false));
-            }}
-          >
-            {label('connect')}
-          </Button>
-          <Button disabled={!profile} onClick={() => setEditing(profile)}>
-            {label('edit')}
-          </Button>
-          <Button
-            type='text'
-            disabled={!profile}
-            onClick={() => {
-              void run(async () => {
-                await ipcBridge.terminal.removeProfile.invoke({ id: profileId! });
-                setProfileId(undefined);
-                await model.refreshProfiles();
-              });
-            }}
-          >
-            {label('removeProfile')}
-          </Button>
-          <Button
-            type='text'
-            icon={<Refresh theme='outline' size='15' />}
-            onClick={() => {
-              void refreshPorts();
-            }}
-          >
-            {label('refreshPorts')}
-          </Button>
-        </div>
-        <div className='flex flex-wrap items-center gap-8px'>
-          <span className='w-88px shrink-0 text-12px text-t-secondary'>{label('connections')}</span>
-          <Select
-            className='flex-1 min-w-180px'
+            className='min-w-180px max-w-320px'
+            size='small'
             placeholder={label('connections')}
             aria-label={label('connections')}
             value={model.selectedId}
@@ -210,96 +251,188 @@ export default function TerminalPanel({ conversationId, cwd }: { conversationId?
               label: `${connection.profile.name} · ${label(connection.status)} · ${label(connection.owner)}`,
             }))}
           />
-        </div>
-        {model.error && (
-          <Alert
-            type='error'
-            content={
-              model.error.includes('terminal.mcpNotSelected')
-                ? label('mcpNotSelected')
-                : model.error.includes('terminal.shellMissing')
-                  ? label('shellMissing')
-                  : model.error
-            }
-            closable
-            onClose={() => model.setError('')}
-          />
         )}
-        {model.lost && <Alert type='warning' content={label('historyLost')} />}
-        {model.selected && (
-          <Space wrap>
-            <Tag color={model.selected.status === 'open' ? 'green' : undefined}>{label(model.selected.status)}</Tag>
-            <Tag>{label(model.selected.owner)}</Tag>
-            <span className='text-12px text-t-secondary'>
-              {model.selected.profile.kind === 'serial'
-                ? `${model.selected.profile.path} · ${model.selected.profile.baudRate} · ${model.selected.profile.dataBits}/${label(model.selected.profile.parity)}/${model.selected.profile.stopBits}`
-                : `${model.selected.profile.executable || label('autoShell')} · ${model.selected.profile.cwd || cwd || ''}`}
+        <Button
+          size='small'
+          type='primary'
+          disabled={!profile || working}
+          onClick={() => {
+            if (!profile) return;
+            setWorking(true);
+            void run(async () => {
+              const connection = await ipcBridge.terminal.open.invoke(profile);
+              model.setSelectedId(connection.id);
+            }).finally(() => setWorking(false));
+          }}
+        >
+          {label('connect')}
+        </Button>
+        <Button size='small' disabled={!profile} onClick={() => setEditing(profile)}>
+          {label('edit')}
+        </Button>
+        <Button
+          size='small'
+          type='text'
+          disabled={!profile}
+          onClick={() => {
+            void run(async () => {
+              await ipcBridge.terminal.removeProfile.invoke({ id: profileId! });
+              setProfileId(undefined);
+              await model.refreshProfiles();
+            });
+          }}
+        >
+          {label('removeProfile')}
+        </Button>
+        <Button size='small' type='text' icon={<Refresh theme='outline' size='15' />} onClick={() => void refreshPorts()}>
+          {label('refreshPorts')}
+        </Button>
+        <Button
+          size='small'
+          type='primary'
+          icon={<Add theme='outline' size='14' />}
+          onClick={() => setEditing(newTerminalProfile('shell', cwd))}
+        >
+          {label('newProfile')}
+        </Button>
+      </div>
+      {(model.error || model.lost) && (
+        <div className='shrink-0 px-16px pt-8px flex flex-col gap-8px'>
+          {model.error && (
+            <Alert
+              type='error'
+              content={
+                model.error.includes('terminal.mcpNotSelected')
+                  ? label('mcpNotSelected')
+                  : model.error.includes('terminal.shellMissing')
+                    ? label('shellMissing')
+                    : model.error
+              }
+              closable
+              onClose={() => model.setError('')}
+            />
+          )}
+          {model.lost && <Alert type='warning' content={label('historyLost')} />}
+        </div>
+      )}
+      <div
+        className='flex-1 min-h-0 m-12px rd-12px overflow-hidden flex flex-col'
+        style={{ background: '#1c1e26', color: '#d7dde7', boxShadow: '0 16px 40px rgba(0,0,0,0.18)' }}
+      >
+        <div
+          className='shrink-0 flex flex-wrap items-center gap-8px px-12px'
+          style={{ minHeight: 40, background: 'rgba(255,255,255,0.04)' }}
+        >
+          <span
+            aria-hidden
+            className='inline-block w-8px h-8px rd-full shrink-0'
+            style={{ background: model.selected?.status === 'open' ? '#3dd68c' : '#f07178' }}
+          />
+          <span className='font-mono text-13px font-[600]'>
+            {serialSession
+              ? `${serialSession.path} (${baudRate ?? serialSession.baudRate})`
+              : model.selected
+                ? model.selected.profile.name
+                : label('title')}
+          </span>
+          {model.selected && (
+            <span className='text-12px' style={{ color: '#8b95a7' }}>
+              {label(model.selected.status)} · {label(model.selected.owner)}
             </span>
-            <Button
-              size='small'
+          )}
+          <span className='flex-1' />
+          {serialSession && (
+            <Select
+              size='mini'
+              aria-label={label('baudLive')}
+              style={{ width: 108 }}
+              value={baudRate}
+              disabled={!manualOpen}
+              onChange={(value) => changeBaud(Number(value))}
+              options={baudOptions}
+            />
+          )}
+          <Select
+            size='mini'
+            aria-label={label('output')}
+            value={outputMode}
+            style={{ width: 108 }}
+            onChange={(value) => setOutputMode(value as TerminalOutputMode)}
+            options={[
+              { value: 'text', label: label('text') },
+              { value: 'hex', label: label('hex') },
+              { value: 'hexdump', label: label('hexdump') },
+            ]}
+          />
+          {model.selected && (
+            <button
+              type='button'
+              style={toolButton}
               onClick={() => {
                 void run(() => ipcBridge.terminal.takeover.invoke({ id: model.selectedId! }));
               }}
             >
               {label('takeover')}
-            </Button>
-            <Button
-              size='small'
-              onClick={() => {
-                void run(() => ipcBridge.terminal.cancel.invoke({ id: model.selectedId! }));
-              }}
-            >
-              {label('cancelWait')}
-            </Button>
-            <Button
-              size='small'
-              disabled={model.selected.owner !== 'manual' || model.selected.profile.kind !== 'shell'}
+            </button>
+          )}
+          {model.selected?.profile.kind === 'shell' && (
+            <button
+              type='button'
+              style={{ ...toolButton, opacity: model.selected.owner === 'manual' ? 1 : 0.4 }}
+              disabled={model.selected.owner !== 'manual'}
               onClick={() => {
                 void run(() => ipcBridge.terminal.interrupt.invoke({ id: model.selectedId! }));
               }}
             >
               {label('interrupt')}
-            </Button>
-            <Button
-              size='small'
+            </button>
+          )}
+          {model.selected && (
+            <button
+              type='button'
+              style={toolButton}
+              onClick={() => {
+                void run(() => ipcBridge.terminal.cancel.invoke({ id: model.selectedId! }));
+              }}
+            >
+              {label('cancelWait')}
+            </button>
+          )}
+          {model.selected && (
+            <button
+              type='button'
+              style={{ ...toolButton, opacity: manualOpen ? 1 : 0.4 }}
+              disabled={!manualOpen}
               onClick={() => {
                 void run(() => ipcBridge.terminal.close.invoke({ id: model.selectedId! }));
               }}
             >
               {label('disconnect')}
-            </Button>
-          </Space>
-        )}
-      </div>
-      <div className='flex-1 min-h-220px flex flex-col overflow-hidden border border-solid border-border-2 rd-8px'>
-        <div className='shrink-0 flex flex-wrap items-center justify-between gap-8px px-14px py-10px border-b border-solid border-border-2'>
-          <span className='text-13px font-[600]'>{label('output')}</span>
-          <Space wrap>
-            <Select
-              size='small'
-              value={hexView ? 'hex' : 'utf8'}
-              style={{ width: 100 }}
-              onChange={(value) => setHexView(value === 'hex')}
-              options={[
-                { value: 'hex', label: label('hex') },
-                { value: 'utf8', label: label('text') },
-              ]}
-            />
-            <Button type='text' size='small' icon={<Clear theme='outline' size='15' />} onClick={model.clear}>
-              {label('clear')}
-            </Button>
-            <Button
-              type='text'
-              size='small'
-              icon={<Download theme='outline' size='15' />}
-              disabled={!model.selectedId}
-              onClick={() => {
-                void run(exportLog);
-              }}
+            </button>
+          )}
+          {serialSession && (
+            <button
+              type='button'
+              style={{ ...toolButton, color: '#8fd4ff', opacity: model.selected?.owner === 'manual' && !working ? 1 : 0.4 }}
+              disabled={model.selected?.owner !== 'manual' || working}
+              onClick={reconnect}
             >
-              {label('export')}
-            </Button>
-          </Space>
+              {model.selected?.status === 'open' ? label('reconnect') : label('connect')}
+            </button>
+          )}
+          <button type='button' style={toolButton} onClick={model.clear}>
+            {label('clear')}
+          </button>
+          <button
+            type='button'
+            style={{ ...toolButton, opacity: model.selectedId ? 1 : 0.4 }}
+            disabled={!model.selectedId}
+            onClick={() => {
+              void run(exportLog);
+            }}
+          >
+            {label('export')}
+          </button>
         </div>
         <div
           ref={outputRef}
@@ -309,145 +442,213 @@ export default function TerminalPanel({ conversationId, cwd }: { conversationId?
             const target = event.currentTarget;
             followOutput.current = target.scrollHeight - target.scrollTop - target.clientHeight < 80;
           }}
-          className='flex-1 min-h-0 overflow-auto bg-fill-1 p-14px font-mono text-12px leading-20px'
+          className='flex-1 min-h-160px overflow-auto px-16px py-12px font-mono text-13px leading-22px'
         >
           {display.length === 0 ? (
-            <div className='h-full min-h-120px flex items-center justify-center'>
-              <Empty
-                icon={<Terminal theme='outline' size='32' />}
-                description={label(model.selected?.status === 'open' ? 'waitingOutput' : 'emptyOutput')}
-              />
+            <div className='h-full min-h-160px flex items-center justify-center text-13px' style={{ color: '#8b95a7' }}>
+              {label(model.selected?.status === 'open' ? 'waitingOutput' : 'emptyOutput')}
             </div>
           ) : (
-            display.map((event) => (
-              <div key={event.cursor} className='whitespace-pre-wrap break-all'>
-                <span className='text-t-tertiary'>
-                  {new Date(event.timestamp).toLocaleTimeString()} {label(event.direction)} {label(event.source)} (
-                  {event.byteLength}){' '}
+            display.map((event, index) => (
+              <div key={`${event.cursor}-${index}`} className='whitespace-pre-wrap break-all'>
+                <span
+                  style={{
+                    color:
+                      event.direction === 'outgoing' ? '#e5c07b' : event.direction === 'system' ? '#8b95a7' : '#d7dde7',
+                  }}
+                >
+                  {event.text || ' '}
                 </span>
-                <span>{event.text}</span>
-                {event.status === 'failed' && (
-                  <span className='text-danger'>
-                    {' '}
-                    {label('failed')}: {event.error}
-                  </span>
-                )}
+                {event.status === 'failed' && <span style={{ color: '#f07178' }}> {event.error}</span>}
               </div>
             ))
           )}
         </div>
-        <div className='shrink-0 flex flex-wrap items-center justify-between gap-8px px-14px py-8px border-t border-solid border-border-2'>
-          <span className='text-12px text-t-tertiary'>{label('viewLimit')}</span>
-        </div>
-      </div>
-      <div className='shrink-0 border border-solid border-border-2 rd-8px p-14px flex flex-col gap-12px'>
-        <div className='flex flex-wrap items-center justify-between gap-8px'>
-          <span className='text-13px font-[600]'>{label('input')}</span>
-          <Space wrap>
-            {conversationId ? (
+        <div className='shrink-0 flex flex-col gap-8px px-12px py-10px' style={{ background: 'rgba(0,0,0,0.22)' }}>
+          <div className='flex flex-wrap items-center gap-8px'>
+            {serialSession && (
               <>
-                <Button
-                  type='text'
-                  size='small'
-                  disabled={!model.selectedId || model.selected?.status !== 'open' || working}
-                  onClick={() => {
-                    void grant(false);
-                  }}
-                >
-                  {label('grantConnection')}
-                </Button>
-                <Button
-                  type='text'
-                  size='small'
-                  disabled={!profileId || working}
-                  onClick={() => {
-                    void grant(true);
-                  }}
-                >
-                  {label('grantProfile')}
-                </Button>
+                <Select
+                  size='mini'
+                  aria-label={label('inputMode')}
+                  style={{ width: 132 }}
+                  value={inputMode}
+                  onChange={(value) => setInputMode(value as TerminalInputMode)}
+                  options={TERMINAL_INPUT_MODES.map((value) => ({ value, label: label(`inputMode_${value}`) }))}
+                />
+                {inputMode !== 'readlineHex' && (
+                  <Select
+                    size='mini'
+                    aria-label={label('newlineIn')}
+                    style={{ width: 148 }}
+                    value={inputNewlines}
+                    onChange={(value) => setInputNewlines(value as TerminalNewlineMode)}
+                    options={TERMINAL_NEWLINE_MODES.map((value) => ({ value, label: label(`newline_${value}`) }))}
+                  />
+                )}
+                <Select
+                  size='mini'
+                  aria-label={label('newlineOut')}
+                  style={{ width: 148 }}
+                  value={outputNewlines}
+                  onChange={(value) => setOutputNewlines(value as TerminalNewlineMode)}
+                  options={TERMINAL_NEWLINE_MODES.map((value) => ({ value, label: label(`newline_${value}`) }))}
+                />
+                <span className='inline-flex items-center gap-6px text-12px' style={{ color: '#8b95a7' }}>
+                  <Switch size='small' checked={slowSend} onChange={setSlowSend} aria-label={label('slowSend')} />
+                  {label('slowSend')}
+                </span>
               </>
-            ) : (
-              <span className='text-12px text-t-tertiary'>{label('grantHint')}</span>
             )}
-          </Space>
-        </div>
-        <Space wrap>
-          <Select
-            value={encoding}
-            style={{ width: 110 }}
-            onChange={setEncoding}
-            options={[
-              { value: 'hex', label: label('hex') },
-              { value: 'utf8', label: label('text') },
-            ]}
-          />
-          <Select
-            value={ending}
-            style={{ width: 140 }}
-            onChange={setEnding}
-            options={(['none', 'cr', 'lf', 'crlf'] as const).map((value) => ({
-              value,
-              label: label(`ending_${value}`),
-            }))}
-          />
-          {model.selected?.profile.kind === 'serial' && (
-            <>
+            {(!serialSession || inputMode === 'readlineHex') && (
+              <>
+                <Select
+                  size='mini'
+                  value={encoding}
+                  style={{ width: 100 }}
+                  onChange={setEncoding}
+                  options={[
+                    { value: 'hex', label: label('hex') },
+                    { value: 'utf8', label: label('text') },
+                  ]}
+                />
+                <Select
+                  size='mini'
+                  value={ending}
+                  style={{ width: 120 }}
+                  onChange={setEnding}
+                  options={(['none', 'cr', 'lf', 'crlf'] as const).map((value) => ({
+                    value,
+                    label: label(`ending_${value}`),
+                  }))}
+                />
+              </>
+            )}
+            {serialSession && (
               <Select
+                size='mini'
                 value={waitMode}
-                style={{ width: 160 }}
+                style={{ width: 140 }}
                 onChange={setWaitMode}
                 options={(['none', 'count', 'pattern', 'idle'] as const).map((value) => ({
                   value,
                   label: label(`wait_${value}`),
                 }))}
               />
-              {waitMode !== 'none' && (
-                <>
-                  <Input
-                    style={{ width: 140 }}
-                    value={waitValue}
-                    onChange={setWaitValue}
-                    aria-label={label('waitValue')}
-                    placeholder={label('waitValue')}
-                  />
-                  <InputNumber
-                    style={{ width: 140 }}
-                    value={timeoutMs}
-                    min={1}
-                    max={120000}
-                    onChange={(value) => setTimeoutMs(value || 3000)}
-                    suffix='ms'
-                    aria-label={label('timeoutLabel')}
-                  />
-                </>
+            )}
+            {serialSession && waitMode !== 'none' && (
+              <>
+                <Input
+                  size='mini'
+                  style={{ width: 120 }}
+                  value={waitValue}
+                  onChange={setWaitValue}
+                  aria-label={label('waitValue')}
+                  placeholder={label('waitValue')}
+                />
+                <InputNumber
+                  size='mini'
+                  style={{ width: 120 }}
+                  value={timeoutMs}
+                  min={1}
+                  max={120000}
+                  onChange={(value) => setTimeoutMs(value || 3000)}
+                  suffix='ms'
+                  aria-label={label('timeoutLabel')}
+                />
+              </>
+            )}
+            <span className='flex-1' />
+            {conversationId ? (
+              <>
+                <button
+                  type='button'
+                  style={{ ...toolButton, opacity: !model.selectedId || model.selected?.status !== 'open' || working ? 0.4 : 1 }}
+                  disabled={!model.selectedId || model.selected?.status !== 'open' || working}
+                  onClick={() => {
+                    void grant(false);
+                  }}
+                >
+                  {label('grantConnection')}
+                </button>
+                <button
+                  type='button'
+                  style={{ ...toolButton, opacity: !profileId || working ? 0.4 : 1 }}
+                  disabled={!profileId || working}
+                  onClick={() => {
+                    void grant(true);
+                  }}
+                >
+                  {label('grantProfile')}
+                </button>
+              </>
+            ) : (
+              <span className='text-12px' style={{ color: '#8b95a7' }}>
+                {label('grantHint')}
+              </span>
+            )}
+          </div>
+          <div className='flex items-end gap-8px'>
+            <div className='flex-1 min-w-0'>
+              {typing ? (
+                <Input
+                  aria-label={label('input')}
+                  placeholder={label('inputHintNormal')}
+                  readOnly
+                  onKeyDown={(event) => {
+                    if (event.ctrlKey || event.metaKey || event.altKey) return;
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      sendKey('\n');
+                    } else if (event.key === 'Backspace') {
+                      event.preventDefault();
+                      sendKey('\u007f');
+                    } else if (event.key.length === 1) {
+                      event.preventDefault();
+                      sendKey(event.key);
+                    }
+                  }}
+                  onPaste={(event) => {
+                    const text = event.clipboardData.getData('text');
+                    if (!text) return;
+                    event.preventDefault();
+                    sendKey(text);
+                  }}
+                />
+              ) : (
+                <Input.TextArea
+                  value={input}
+                  onChange={setInput}
+                  aria-label={label('input')}
+                  placeholder={serialSession && inputMode === 'readline' ? label('inputHintReadline') : label('inputHint')}
+                  autoSize={{ minRows: 1, maxRows: 4 }}
+                  onKeyDown={(event) => {
+                    if (serialSession && inputMode === 'readline' && event.key === 'Enter' && !event.shiftKey) {
+                      event.preventDefault();
+                      void send();
+                    }
+                  }}
+                />
               )}
-            </>
+            </div>
+            {!typing && (
+              <Button
+                type='primary'
+                loading={sending}
+                disabled={!manualOpen || (!(serialSession && inputMode === 'readline') && !input)}
+                onClick={() => {
+                  void send();
+                }}
+              >
+                {label('send')}
+              </Button>
+            )}
+          </div>
+          {result && (
+            <span className='text-12px' role='status' style={{ color: '#8b95a7' }}>
+              {result}
+            </span>
           )}
-        </Space>
-        <Input.TextArea
-          value={input}
-          onChange={setInput}
-          aria-label={label('input')}
-          placeholder={label('inputHint')}
-          autoSize={{ minRows: 2, maxRows: 6 }}
-        />
-        <div className='flex items-center justify-between gap-12px'>
-          <span className='text-12px text-t-secondary' role='status'>
-            {result}
-          </span>
-          <Button
-            type='primary'
-            loading={sending}
-            disabled={
-              !model.selectedId || model.selected?.status !== 'open' || model.selected.owner !== 'manual' || !input
-            }
-            onClick={() => {
-              void send();
-            }}
-          >
-            {label('send')}
-          </Button>
         </div>
       </div>
       <Modal

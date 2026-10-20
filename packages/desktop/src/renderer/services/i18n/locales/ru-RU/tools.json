@@ -150,6 +150,26 @@
     "writePending": "Native write is still pending; the sent byte count is not confirmed. Check subsequent output before sending again.",
     "description": "Connect to a local Shell or serial port and work with AI to debug your device.",
     "emptyOutput": "Select a profile and connect to view output here.",
-    "waitingOutput": "Connected. Waiting for incoming data."
+    "waitingOutput": "Connected. Waiting for incoming data.",
+    "inputMode": "Режим ввода",
+    "inputMode_normal": "Сразу при наборе",
+    "inputMode_localEcho": "Локальное эхо",
+    "inputMode_readline": "Построчно",
+    "inputMode_readlineHex": "Шестнадцатеричная строка",
+    "inputHintNormal": "Клавиши уходят сразу. Enter отправляет выбранный перевод строки.",
+    "inputHintReadline": "Enter отправляет строку. Shift+Enter вставляет перевод в поле.",
+    "newlineIn": "Перевод при отправке",
+    "newlineOut": "Перевод при приёме",
+    "newline_keep": "Оставить",
+    "newline_strip": "Убрать",
+    "newline_cr": "Принудительно CR",
+    "newline_lf": "Принудительно LF",
+    "newline_crlf": "Принудительно CRLF",
+    "newline_implicitCr": "CR перед каждым LF",
+    "newline_implicitLf": "LF после каждого CR",
+    "hexdump": "Hexdump",
+    "slowSend": "По одному байту",
+    "reconnect": "Переподключить",
+    "baudLive": "Скорость"
   }
 }

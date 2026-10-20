@@ -48,6 +48,8 @@ export type TerminalSendOptions = {
   data: string;
   encoding: 'hex' | 'utf8';
   ending: 'none' | 'cr' | 'lf' | 'crlf';
+  /** Serial only. Write the payload one byte at a time. */
+  slow?: boolean;
   wait?: TerminalWait;
 };
 export type TerminalSendRequest = TerminalSendOptions;
@@ -55,6 +57,7 @@ export type TerminalTransport = {
   write(data: Buffer): Promise<number>;
   close(): Promise<void>;
   interrupt?(): Promise<void>;
+  setBaud?(baudRate: number): Promise<void>;
   onData(listener: (data: Buffer) => void): () => void;
   onClose(listener: (error?: string) => void): () => void;
 };

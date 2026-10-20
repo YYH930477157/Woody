@@ -195,6 +195,38 @@ describe('shared terminal connections', () => {
     expect(transport.writes[0]).toEqual(Buffer.from([255, 0]));
   });
 
+  it('writes serial bytes one at a time and can change baud without reopening', async () => {
+    const transport = new MemoryTransport();
+    const rates: number[] = [];
+    transport.setBaud = async (baudRate) => {
+      rates.push(baudRate);
+    };
+    const service = new TerminalConnectionService(async () => transport);
+    services.push(service);
+    const connection = await service.open({
+      id: 'serial',
+      name: 'Serial',
+      kind: 'serial',
+      path: 'COM1',
+      baudRate: 9600,
+      dataBits: 8,
+      parity: 'none',
+      stopBits: 1,
+      rtscts: false,
+      xon: false,
+      xoff: false,
+    });
+    await service.send(connection.id, { data: '010203', encoding: 'hex', ending: 'none', slow: true });
+    expect(transport.writes).toEqual([Buffer.from([1]), Buffer.from([2]), Buffer.from([3])]);
+    await expect(service.setBaud(connection.id, 115200)).resolves.toMatchObject({
+      profile: { baudRate: 115200 },
+    });
+    expect(rates).toEqual([115200]);
+    await expect(service.send(connection.id, { data: 'A', encoding: 'utf8', ending: 'none', slow: false })).resolves.toMatchObject({
+      writtenBytes: 1,
+    });
+  });
+
   it('detaches listeners if a transport fails during setup', async () => {
     const transport = new MemoryTransport();
     transport.onClose = () => {

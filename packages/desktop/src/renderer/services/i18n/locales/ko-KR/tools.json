@@ -150,6 +150,26 @@
     "writePending": "Native write is still pending; the sent byte count is not confirmed. Check subsequent output before sending again.",
     "description": "Connect to a local Shell or serial port and work with AI to debug your device.",
     "emptyOutput": "Select a profile and connect to view output here.",
-    "waitingOutput": "Connected. Waiting for incoming data."
+    "waitingOutput": "Connected. Waiting for incoming data.",
+    "inputMode": "입력 방식",
+    "inputMode_normal": "입력 즉시 전송",
+    "inputMode_localEcho": "로컬 에코",
+    "inputMode_readline": "한 줄씩 전송",
+    "inputMode_readlineHex": "16진수 한 줄",
+    "inputHintNormal": "키를 누르면 바로 보냅니다. Enter는 선택한 줄바꿈 규칙으로 보냅니다.",
+    "inputHintReadline": "Enter로 이 줄을 보냅니다. Shift+Enter는 입력칸 안에서 줄을 바꿉니다.",
+    "newlineIn": "보낼 때 줄바꿈",
+    "newlineOut": "받을 때 줄바꿈",
+    "newline_keep": "그대로",
+    "newline_strip": "줄바꿈 제거",
+    "newline_cr": "CR로 고정",
+    "newline_lf": "LF로 고정",
+    "newline_crlf": "CRLF로 고정",
+    "newline_implicitCr": "LF마다 앞에 CR",
+    "newline_implicitLf": "CR마다 뒤에 LF",
+    "hexdump": "Hexdump",
+    "slowSend": "한 바이트씩 전송",
+    "reconnect": "다시 연결",
+    "baudLive": "전송 속도"
   }
 }

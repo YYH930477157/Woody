@@ -150,6 +150,26 @@
     "writePending": "Native write is still pending; the sent byte count is not confirmed. Check subsequent output before sending again.",
     "description": "Connect to a local Shell or serial port and work with AI to debug your device.",
     "emptyOutput": "Select a profile and connect to view output here.",
-    "waitingOutput": "Connected. Waiting for incoming data."
+    "waitingOutput": "Connected. Waiting for incoming data.",
+    "inputMode": "Giriş kipi",
+    "inputMode_normal": "Yazarken gönder",
+    "inputMode_localEcho": "Yerel yankı",
+    "inputMode_readline": "Satır satır",
+    "inputMode_readlineHex": "Onaltılık satır",
+    "inputHintNormal": "Tuşlar hemen gider. Enter seçilen satır sonunu gönderir.",
+    "inputHintReadline": "Enter satırı gönderir. Shift+Enter alanda satır sonu ekler.",
+    "newlineIn": "Gönderirken satır sonu",
+    "newlineOut": "Alırken satır sonu",
+    "newline_keep": "Olduğu gibi",
+    "newline_strip": "Kaldır",
+    "newline_cr": "CR zorla",
+    "newline_lf": "LF zorla",
+    "newline_crlf": "CRLF zorla",
+    "newline_implicitCr": "Her LF öncesine CR",
+    "newline_implicitLf": "Her CR sonrasına LF",
+    "hexdump": "Hexdump",
+    "slowSend": "Bayt bayt gönder",
+    "reconnect": "Yeniden bağlan",
+    "baudLive": "Baud hızı"
   }
 }
