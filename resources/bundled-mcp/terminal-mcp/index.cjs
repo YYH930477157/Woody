@@ -8,6 +8,11 @@ if (!Number.isInteger(port) || port < 1 || port > 65535 || !token) {
   console.error('Woody terminal service is unavailable. Restart Woody.');
   process.exit(1);
 }
+// The global WebSocket client ships with Node.js 22; the bundled managed runtime is newer.
+if (typeof WebSocket !== 'function') {
+  console.error(`Woody terminal MCP requires Node.js 22 or newer (running ${process.version}).`);
+  process.exit(1);
+}
 const socket = new WebSocket(`ws://127.0.0.1:${port}/terminal?token=${encodeURIComponent(token)}`);
 let nextId = 0;
 const pending = new Map();

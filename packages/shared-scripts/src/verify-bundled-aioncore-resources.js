@@ -1,6 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 
+// Bundled MCPs (terminal-mcp) rely on the global WebSocket client added in Node.js 22.
+const MIN_MANAGED_NODE_MAJOR = 22;
+
 function backendBinaryName(platform) {
   return platform === 'win32' ? 'aioncore.exe' : 'aioncore';
 }
@@ -208,6 +211,16 @@ function verifyManagedNodeFromContract(baseDir, runtimeKey, contract, checked, m
     !validateContractPathField(node.executable, 'managed-node', 'node.executable', failures)
   ) {
     return;
+  }
+  const major = Number(/^v?(\d+)\./.exec(node.version)?.[1]);
+  if (!(major >= MIN_MANAGED_NODE_MAJOR)) {
+    addFailure(failures, missing, [], {
+      component: 'managed-node',
+      reason: 'unsupported_version',
+      version: node.version,
+      runtimeKey,
+      path: manifestPath,
+    });
   }
 
   const executablePath = joinContractPath(joinContractPath(baseDir, node.root), node.executable);

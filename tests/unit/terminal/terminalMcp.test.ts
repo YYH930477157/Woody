@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { EventEmitter } from 'node:events';
+import { EventEmitter, once } from 'node:events';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { TerminalConnectionService } from '../../../packages/desktop/src/process/services/terminal/connectionService';
@@ -97,6 +97,24 @@ describe('bundled terminal MCP with shared desktop connections', () => {
     children.push(mcp.process);
     return { service, rpc, mcp, sent };
   }
+  it('exits with a clear message on a runtime without the global WebSocket client', async () => {
+    const child = spawn(
+      globalThis.process.execPath,
+      ['--no-experimental-websocket', path.resolve('resources/bundled-mcp/terminal-mcp/index.cjs')],
+      {
+        env: { ...globalThis.process.env, AIONUI_TERMINAL_PORT: '1', AIONUI_TERMINAL_TOKEN: 'token' },
+        stdio: 'pipe',
+      }
+    );
+    let stderr = '';
+    child.stderr.on('data', (bytes: Buffer) => {
+      stderr += bytes.toString();
+    });
+    const [code] = await once(child, 'exit');
+
+    expect(code).toBe(1);
+    expect(stderr).toContain('requires Node.js 22 or newer');
+  });
   it('initializes offline and exposes the bundled tools', async () => {
     const { mcp } = await setup();
     const result = await mcp.call('tools/list', {});

@@ -1,6 +1,7 @@
 # Woody terminal MCP
 
 Runs with the bundled managed Node runtime, with no package installation or network request.
+It needs Node.js 22 or newer for the global `WebSocket` client; bundle verification rejects an older runtime.
 `AIONUI_TERMINAL_PORT` and `AIONUI_TERMINAL_TOKEN` are inherited from Woody at backend startup.
 The private bridge additionally requires a temporary user grant for every operation.
 Select `woody-terminal` when creating a conversation, then grant a connection/profile from

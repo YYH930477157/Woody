@@ -457,4 +457,22 @@ describe('verifyBundledAioncoreResources', () => {
 
     expect(result.failures).toContainEqual(expect.objectContaining({ reason: 'runtime_key_mismatch' }));
   });
+
+  it('rejects a managed Node runtime without the global WebSocket client', () => {
+    const manifestPath = join(managedResourcesDir, 'manifest.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    manifest.node.version = '20.18.0';
+    writeJson(manifestPath, manifest);
+
+    const result = verifyBundledAioncoreResources({
+      resourcesDir,
+      electronPlatformName: 'win32',
+      targetArch: 'x64',
+    });
+
+    expect(result.missing).toContain('bundled-aioncore/win32-x64/managed-resources/manifest.json<unsupported_version>');
+    expect(result.failures).toContainEqual(
+      expect.objectContaining({ component: 'managed-node', reason: 'unsupported_version', version: '20.18.0' })
+    );
+  });
 });
