@@ -655,10 +655,11 @@ name: todo-email-scan
 You are a scheduled job inside AionUi. Goal: turn actionable emails into todo items.
 
 Steps:
-1. Call the \`email_snapshot_read\` tool. It returns ONLY unprocessed emails (already-scanned ones are filtered out server-side, each call stays small).
+1. Call the \`email_snapshot_read\` tool. It refreshes the mailbox snapshot when it is stale and returns ONLY unprocessed emails, at most 15 per call (already-scanned ones are filtered out server-side).
 2. If it reports an error, or "No email snapshot available", reply with a one-line status and stop. Do not create anything.
 3. For each email decide: does it ask the user to DO something — a task, a review, an approval, a submission, a meeting with required prep, a delivery with a deadline? Pure notifications, newsletters, automated reports and spam are skipped.
-4. For each actionable email call \`todo_create\` with:
+4. Call \`email_mark_skipped\` once with the message_id of EVERY non-actionable email in the batch (VERBATIM), so later scans never re-read them. Every email returned must end up either in todo_create (with email_ref) or in email_mark_skipped.
+5. For each actionable email call \`todo_create\` with:
    - title: 具体动作+对象 ONLY, ≤ 45 字, e.g. "回复 Virgo 06 样机 6 项客户反馈". NEVER append requester names or dates — those go in the dedicated fields. Match the email's language.
    - requester: the person asking — prefer the Chinese display name when the email has one (e.g. 李国强), else the raw sender.
    - due_at: ONLY if the email states an explicit deadline (pass epoch ms or ISO string). Relative wording like "今天内/明天下班前" resolves against the email's received_at date. Never guess beyond that.
@@ -671,8 +672,9 @@ Steps:
      (2–6 points, most important first; preserve numbers/codes/model names exactly)
      原文关键句: "<one verbatim sentence from the email that best captures the ask>"
    - email_ref: pass the email's message_id / subject / received_at fields VERBATIM — this is the dedup key. For from, use the email's from_name field (fallback to from_address when from_name is empty); NEVER invent or leave it blank.
-5. If todo_create returns duplicate, that email is already tracked — skip it.
-6. Finish with a one-line summary: scanned N emails, created M todos, skipped K non-actionable.
+6. If todo_create returns duplicate, that email is already tracked — skip it.
+7. If email_snapshot_read said more unprocessed emails remain, call it again and repeat steps 3–6 for the next batch (at most 10 batches per run).
+8. Finish with a one-line summary: scanned N emails, created M todos, skipped K non-actionable.
 
 Rules:
 - At most one todo per email, unless it genuinely contains multiple distinct tasks with different deadlines.
@@ -793,17 +795,17 @@ async function ensureTodoScanCronJob(): Promise<void> {
   }
 
   if (jobExists) {
-    // 技能文件按版本自愈重发:SKILL 内容升级(如 v3 的 requester/status/
-    // subtasks 指引)后,已存在的 cron 任务也要拿到新指令。
+    // 技能文件按版本自愈重发:SKILL 内容升级(如 v5 的 email_mark_skipped
+    // 与分批读取指引)后,已存在的 cron 任务也要拿到新指令。
     // Skill re-post on version bump so existing jobs pick up new instructions.
     try {
       const prefs = (await httpRequest<Record<string, unknown>>('GET', '/api/settings/client')) || {};
-      if (!prefs['migration.todoScanSkillV4']) {
+      if (!prefs['migration.todoScanSkillV5']) {
         const existing = jobs.find((job) => job.name === TODO_SCAN_JOB_NAME);
         if (existing?.id) {
           await httpRequest('POST', `/api/cron/jobs/${existing.id}/skill`, { content: TODO_SCAN_SKILL });
-          await httpRequest('PUT', '/api/settings/client', { 'migration.todoScanSkillV4': true });
-          console.info('[Migration] todo scan skill refreshed to v4');
+          await httpRequest('PUT', '/api/settings/client', { 'migration.todoScanSkillV5': true });
+          console.info('[Migration] todo scan skill refreshed to v5');
         }
       }
     } catch (error) {

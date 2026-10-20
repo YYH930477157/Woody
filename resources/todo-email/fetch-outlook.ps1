@@ -24,7 +24,17 @@ function Write-Snapshot([string]$errorMessage, [array]$emails) {
     $json = ConvertTo-Json -InputObject $snapshot -Depth 5
     $dir = Split-Path -Parent $OutFile
     if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
-    [System.IO.File]::WriteAllText($OutFile, $json)
+    # The host and the todo MCP can both refresh the snapshot: replace it
+    # atomically so a reader never sees a half-written file.
+    $tmp = "$OutFile.$PID.tmp"
+    try {
+        [System.IO.File]::WriteAllText($tmp, $json)
+        # [NullString]: PowerShell would pass $null as "" (an invalid backup path).
+        if ([System.IO.File]::Exists($OutFile)) { [System.IO.File]::Replace($tmp, $OutFile, [NullString]::Value) }
+        else { [System.IO.File]::Move($tmp, $OutFile) }
+    } finally {
+        if ([System.IO.File]::Exists($tmp)) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
+    }
 }
 
 try {

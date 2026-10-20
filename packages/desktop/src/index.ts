@@ -843,11 +843,14 @@ const handleAppReady = async (): Promise<void> => {
    * write protocol); the dir is ensured before publishing. Same inheritance
    * chain as AIONUI_BUILTIN_MCP_DIR above — must be set before the backend
    * starts. Active in dev and packaged builds alike (the MCP runs in both).
+   * The email script path lets scheduled scans refresh a stale snapshot.
    */
   try {
     const todoDir = path.join(app.getPath('userData'), 'todo');
     fs.mkdirSync(todoDir, { recursive: true });
     process.env.AIONUI_TODO_DIR = todoDir;
+    const { resolveEmailScriptPath } = await import('./process/services/todo/emailSource');
+    process.env.AIONUI_TODO_EMAIL_SCRIPT = resolveEmailScriptPath();
     console.log(`[Todo] data dir published at ${todoDir}`);
   } catch (error) {
     console.error('[Todo] failed to publish data dir:', error);

@@ -13,12 +13,19 @@
  * forced break; acquire retries up to 3s in 50ms steps) plus tmp-file rename
  * for atomic replace. Keep the two implementations in sync when editing.
  *
+ * Email snapshot: emails.json is written by the host's fetch-outlook.ps1. A
+ * scheduled scan never passes through the host's scan button, so
+ * email_snapshot_read reruns that script (AIONUI_TODO_EMAIL_SCRIPT) when the
+ * snapshot is stale. Every returned email ends up in processed_message_ids,
+ * via todo_create or email_mark_skipped, so later scans only see new mail.
+ *
  * Protocol notes: stdio MCP uses newline-delimited JSON-RPC. stdout is the
  * protocol channel — all diagnostics go to stderr only.
  */
 
 'use strict';
 
+const { execFile } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const readline = require('node:readline');
@@ -28,6 +35,10 @@ const LOCK_STALE_MS = 10000;
 const LOCK_ACQUIRE_TIMEOUT_MS = 3000;
 const LOCK_RETRY_DELAY_MS = 50;
 const SNAPSHOT_MAX_EMAILS = 15;
+const SNAPSHOT_MAX_AGE_MS = 10 * 60 * 1000;
+const SNAPSHOT_REFRESH_TIMEOUT_MS = 120000;
+// Message-IDs only need to outlive the snapshot window (a few days, ≤100 emails per fetch).
+const PROCESSED_IDS_LIMIT = 2000;
 
 const log = (message) => {
   process.stderr.write(`[aionui-todo] ${message}\n`);
@@ -36,6 +47,7 @@ const log = (message) => {
 const todoDir = (process.env.AIONUI_TODO_DIR || '').trim();
 const dbPath = todoDir ? path.join(todoDir, 'todo.json') : null;
 const snapshotPath = todoDir ? path.join(todoDir, 'emails.json') : null;
+const emailScriptPath = (process.env.AIONUI_TODO_EMAIL_SCRIPT || '').trim();
 
 if (!dbPath) {
   log('AIONUI_TODO_DIR is not set — todo tools will return an error until the Electron host publishes it.');
@@ -121,6 +133,58 @@ async function withLock(mutate) {
 
 const readStore = () => readStoreUnlocked();
 
+function rememberProcessed(store, messageId) {
+  store.processed_message_ids.push(messageId);
+  const overflow = store.processed_message_ids.length - PROCESSED_IDS_LIMIT;
+  if (overflow > 0) store.processed_message_ids.splice(0, overflow);
+}
+
+function readSnapshot() {
+  if (!snapshotPath) return null;
+  try {
+    return JSON.parse(fs.readFileSync(snapshotPath, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+let refreshing = null;
+
+/** Rerun the host's Outlook export when the snapshot is stale; resolves to a failure reason or undefined. */
+function refreshSnapshotIfStale() {
+  if (process.platform !== 'win32' || !snapshotPath || !emailScriptPath || !fs.existsSync(emailScriptPath)) {
+    return Promise.resolve(undefined);
+  }
+  const current = readSnapshot();
+  if (current && Date.now() - (Number(current.fetched_at) || 0) < SNAPSHOT_MAX_AGE_MS) {
+    return Promise.resolve(undefined);
+  }
+  if (!refreshing) {
+    refreshing = new Promise((resolve) => {
+      execFile(
+        'powershell.exe',
+        ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', emailScriptPath, '-OutFile', snapshotPath, '-Days', '3'],
+        { timeout: SNAPSHOT_REFRESH_TIMEOUT_MS, windowsHide: true },
+        (error) => resolve(error ? `outlook fetch failed: ${error.message}` : undefined)
+      );
+    })
+      .then(async (failure) => {
+        // The script reports Outlook problems inside the snapshot; mirror the host's scan status.
+        const snapshot = readSnapshot();
+        const reason = failure || (snapshot ? snapshot.error : 'snapshot unreadable');
+        await withLock((store) => {
+          store.last_scan_at = Date.now();
+          store.last_scan_status = reason ? `snapshot-failed: ${reason}` : 'snapshot-ok';
+        }).catch((error) => log(`failed to record scan status: ${error && error.message ? error.message : error}`));
+        return failure;
+      })
+      .finally(() => {
+        refreshing = null;
+      });
+  }
+  return refreshing;
+}
+
 const newId = () => `todo_${Date.now().toString(36)}_${Math.random().toString(16).slice(2, 10)}`;
 
 const normalizeDueAt = (value) => {
@@ -199,8 +263,7 @@ async function toolTodoCreate(params) {
         (todo) => todo.email_ref && todo.email_ref.message_id === emailRef.message_id
       );
       if (alreadyReferenced) {
-        if (!store.processed_message_ids.includes(emailRef.message_id))
-          store.processed_message_ids.push(emailRef.message_id);
+        if (!store.processed_message_ids.includes(emailRef.message_id)) rememberProcessed(store, emailRef.message_id);
         return { created: false, reason: 'duplicate', message_id: emailRef.message_id };
       }
     }
@@ -223,7 +286,7 @@ async function toolTodoCreate(params) {
       updated_at: now,
     };
     store.todos.push(item);
-    if (emailRef && emailRef.message_id) store.processed_message_ids.push(emailRef.message_id);
+    if (emailRef && emailRef.message_id) rememberProcessed(store, emailRef.message_id);
     return { created: true, todo: item };
   });
 }
@@ -279,12 +342,12 @@ async function toolTodoDelete(params) {
   });
 }
 
-function toolEmailSnapshotRead() {
+async function toolEmailSnapshotRead() {
   if (!snapshotPath) throw new Error('email snapshot unavailable: AIONUI_TODO_DIR not set');
-  let snapshot;
-  try {
-    snapshot = JSON.parse(fs.readFileSync(snapshotPath, 'utf8'));
-  } catch {
+  const refreshFailure = await refreshSnapshotIfStale();
+  if (refreshFailure) return `Email source error: ${refreshFailure}`;
+  const snapshot = readSnapshot();
+  if (!snapshot) {
     return 'No email snapshot available yet. The host writes emails.json when a scan starts.';
   }
   if (snapshot.error) {
@@ -293,7 +356,35 @@ function toolEmailSnapshotRead() {
   const processed = new Set(readStore().processed_message_ids);
   const fresh = (snapshot.emails || []).filter((email) => email.message_id && !processed.has(email.message_id));
   const capped = fresh.slice(0, SNAPSHOT_MAX_EMAILS);
-  return `${capped.length} unprocessed email(s) of ${fresh.length} fresh / ${(snapshot.emails || []).length} total, fetched_at=${snapshot.fetched_at}\n${JSON.stringify(capped, null, 2)}`;
+  const remaining = fresh.length - capped.length;
+  const next = remaining
+    ? `${remaining} more unprocessed email(s) remain: handle every email in this batch with todo_create or email_mark_skipped, then call email_snapshot_read again.`
+    : 'No more unprocessed emails after this batch.';
+  return `${capped.length} unprocessed email(s) in this batch, ${(snapshot.emails || []).length} in snapshot, fetched_at=${snapshot.fetched_at}. ${next}\n${JSON.stringify(capped, null, 2)}`;
+}
+
+async function toolEmailMarkSkipped(params) {
+  const ids = Array.isArray(params && params.message_ids)
+    ? [...new Set(params.message_ids.map((id) => String(id ?? '').trim()).filter(Boolean))]
+    : [];
+  if (!ids.length) throw new Error('message_ids is required');
+  if (ids.length > 100) throw new Error('at most 100 message_ids per call');
+  // Only ids from the current snapshot are accepted, so a mistyped id stays visible to the next scan.
+  const known = new Set(((readSnapshot() || {}).emails || []).map((email) => email.message_id).filter(Boolean));
+  return withLock((store) => {
+    const processed = new Set(store.processed_message_ids);
+    const result = { marked: 0, already_processed: 0, unknown: [] };
+    for (const id of ids) {
+      if (processed.has(id)) result.already_processed += 1;
+      else if (!known.has(id)) result.unknown.push(id);
+      else {
+        rememberProcessed(store, id);
+        processed.add(id);
+        result.marked += 1;
+      }
+    }
+    return result;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -405,8 +496,24 @@ const TOOLS = [
   {
     name: 'email_snapshot_read',
     description:
-      'Read the pending email snapshot (emails not yet turned into todos). Call this first when scanning emails for tasks; each email carries message_id, subject, from, received_at and a body preview.',
+      'Read unprocessed emails from the mailbox snapshot (refreshed automatically when older than 10 minutes). Call this first when scanning emails for tasks; each email carries message_id, subject, from, received_at and a body preview. Returns at most 15 per call: handle each one with todo_create (email_ref) or email_mark_skipped before calling again.',
     inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'email_mark_skipped',
+    description:
+      'Mark emails returned by email_snapshot_read as reviewed without creating a todo (not actionable), so later scans do not return them again. Pass message_id values verbatim.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        message_ids: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'message_id values of the non-actionable emails (max 100 per call).',
+        },
+      },
+      required: ['message_ids'],
+    },
   },
 ];
 
@@ -417,6 +524,7 @@ const TOOL_HANDLERS = {
   todo_complete: toolTodoComplete,
   todo_delete: toolTodoDelete,
   email_snapshot_read: toolEmailSnapshotRead,
+  email_mark_skipped: toolEmailMarkSkipped,
 };
 
 const send = (payload) => {

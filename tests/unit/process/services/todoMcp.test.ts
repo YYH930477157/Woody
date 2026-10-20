@@ -19,20 +19,28 @@ let lines: Interface;
 let todoDir: string;
 let requestId = 0;
 
-beforeEach(() => {
-  todoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aionui-todo-mcp-test-'));
+function startServer(env: NodeJS.ProcessEnv = {}): void {
   child = spawn(process.execPath, [path.resolve('resources/bundled-mcp/todo-mcp/index.js')], {
-    env: { ...process.env, AIONUI_TODO_DIR: todoDir },
+    env: { ...process.env, AIONUI_TODO_DIR: todoDir, AIONUI_TODO_EMAIL_SCRIPT: '', ...env },
     windowsHide: true,
   });
   lines = createInterface({ input: child.stdout });
-});
+}
 
-afterEach(async () => {
+async function stopServer(): Promise<void> {
   const exited = once(child, 'exit');
   child.stdin.end();
   await exited;
   lines.close();
+}
+
+beforeEach(() => {
+  todoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aionui-todo-mcp-test-'));
+  startServer();
+});
+
+afterEach(async () => {
+  await stopServer();
   fs.rmSync(todoDir, { recursive: true, force: true });
 });
 
@@ -41,6 +49,37 @@ async function request(method: string, params?: unknown): Promise<McpReply> {
   child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: ++requestId, method, params })}\n`);
   const [line] = await response;
   return JSON.parse(line as string) as McpReply;
+}
+
+async function callTool(name: string, args: Record<string, unknown> = {}): Promise<string> {
+  const reply = await request('tools/call', { name, arguments: args });
+  return reply.result.content![0].text;
+}
+
+function writeSnapshot(emails: Array<{ message_id: string; subject: string }>, fetchedAt = Date.now()): void {
+  fs.writeFileSync(
+    path.join(todoDir, 'emails.json'),
+    JSON.stringify({ fetched_at: fetchedAt, source: 'test', emails })
+  );
+}
+
+/** Restart the server with a fake Outlook export that records its -Days argument. */
+async function restartWithEmailScript(): Promise<string> {
+  const marker = path.join(todoDir, 'fetched.marker');
+  const script = path.join(todoDir, 'fetch-outlook.ps1');
+  fs.writeFileSync(
+    script,
+    [
+      'param([string]$OutFile, [int]$Days)',
+      `Set-Content -LiteralPath '${marker}' -Value $Days`,
+      '$now = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()',
+      `$json = '{"fetched_at":' + $now + ',"source":"test","emails":[{"message_id":"new@test","subject":"New"}]}'`,
+      '[System.IO.File]::WriteAllText($OutFile, $json)',
+    ].join('\r\n')
+  );
+  await stopServer();
+  startServer({ AIONUI_TODO_EMAIL_SCRIPT: script });
+  return marker;
 }
 
 describe('bundled Todo MCP', () => {
@@ -79,4 +118,62 @@ describe('bundled Todo MCP', () => {
 
     expect(JSON.parse(reply.result.content![0].text)).toEqual({ updated: false, reason: 'not found' });
   });
+});
+
+describe('bundled Todo MCP email snapshot', () => {
+  it('stops returning emails once they are marked skipped', async () => {
+    writeSnapshot([
+      { message_id: 'm1', subject: 'Newsletter' },
+      { message_id: 'm2', subject: 'Report' },
+    ]);
+
+    const marked = JSON.parse(await callTool('email_mark_skipped', { message_ids: ['m1', 'm1', 'unknown'] }));
+    const text = await callTool('email_snapshot_read');
+
+    expect(marked).toEqual({ marked: 1, already_processed: 0, unknown: ['unknown'] });
+    expect(text).toContain('"m2"');
+    expect(text).not.toContain('"m1"');
+  });
+
+  it('reaches emails beyond the first batch after the batch is handled', async () => {
+    writeSnapshot(Array.from({ length: 16 }, (_, index) => ({ message_id: `m${index}`, subject: `S${index}` })));
+
+    const first = await callTool('email_snapshot_read');
+    await callTool('email_mark_skipped', { message_ids: Array.from({ length: 15 }, (_, index) => `m${index}`) });
+    const second = await callTool('email_snapshot_read');
+
+    expect(first).toContain('1 more unprocessed email(s) remain');
+    expect(first).not.toContain('"m15"');
+    expect(second).toContain('"m15"');
+    expect(second).toContain('No more unprocessed emails');
+  });
+
+  it('reads a fresh snapshot without rerunning the email export', async () => {
+    const marker = await restartWithEmailScript();
+    writeSnapshot([{ message_id: 'm1', subject: 'Fresh' }]);
+
+    const text = await callTool('email_snapshot_read');
+
+    expect(text).toContain('"m1"');
+    expect(fs.existsSync(marker)).toBe(false);
+  });
+
+  it.runIf(process.platform === 'win32')(
+    'refreshes a stale snapshot through the email export before reading',
+    async () => {
+      const marker = await restartWithEmailScript();
+      writeSnapshot([{ message_id: 'old', subject: 'Old' }], 0);
+
+      const text = await callTool('email_snapshot_read');
+
+      expect(text).toContain('"new@test"');
+      expect(text).not.toContain('"old"');
+      expect(fs.readFileSync(marker, 'utf8').trim()).toBe('3');
+      const store = JSON.parse(fs.readFileSync(path.join(todoDir, 'todo.json'), 'utf8')) as {
+        last_scan_status: string;
+      };
+      expect(store.last_scan_status).toBe('snapshot-ok');
+    },
+    60_000
+  );
 });

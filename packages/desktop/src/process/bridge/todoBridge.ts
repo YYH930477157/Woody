@@ -10,7 +10,8 @@
  * scanNow runs the two-phase pipeline: (1) refresh the email snapshot via the
  * source adapter (Outlook v1), (2) trigger the email-scan cron job so an
  * agent turn does the LLM extraction. The cron job itself is created in
- * runBackendMigrations (see TODO_SCAN_JOB_NAME there).
+ * runBackendMigrations (see TODO_SCAN_JOB_NAME there). Scheduled runs skip
+ * phase (1) here; the todo MCP refreshes a stale snapshot on first read.
  */
 
 import { ipcBridge } from '@/common';
