@@ -8,6 +8,9 @@ import {
   buildStaticScanCommand,
   createStaticScanConfigStore,
   createStaticScanService,
+  decodeCommandOutput,
+  readWindowsCodePage,
+  runStaticScanCommand,
   type StaticScanCommandRunner,
 } from '@/process/services/sourceControl/staticScanService';
 import type { StaticScanConfig } from '@/common/types/sourceControl/staticScanTypes';
@@ -66,6 +69,29 @@ describe('static scan service', () => {
     });
     expect(result.diagnostics[0]?.rule).toBe('10');
     expect(result.exitCode).toBe(1);
+  });
+
+  it('decodes non-UTF-8 tool output with the Windows code page', () => {
+    const gbk = Buffer.from([0xb4, 0xed, 0xce, 0xf3]); // "错误" in GBK
+    const utf8 = Buffer.from('src/显示.c(3): Error (10)', 'utf8');
+
+    expect(decodeCommandOutput(gbk, 936)).toBe('错误');
+    expect(decodeCommandOutput(utf8, 936)).toBe('src/显示.c(3): Error (10)');
+    expect(decodeCommandOutput(utf8)).toBe('src/显示.c(3): Error (10)');
+  });
+
+  it('keeps UTF-8 command output intact on both streams', async () => {
+    const result = await runStaticScanCommand(
+      process.execPath,
+      ['-e', "process.stdout.write('输出 ok'); process.stderr.write('错误 bad'); process.exit(2)"],
+      { cwd: process.cwd(), timeoutMs: 30_000 }
+    );
+
+    expect(result).toMatchObject({ stdout: '输出 ok', stderr: '错误 bad', exitCode: 2 });
+  });
+
+  it.runIf(process.platform === 'win32')('reads the Windows ANSI code page', async () => {
+    expect(await readWindowsCodePage()).toBeGreaterThan(0);
   });
 
   it('stores machine tool paths separately from project configuration', async () => {
