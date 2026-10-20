@@ -48,7 +48,8 @@ export default function TerminalPanel({ conversationId, cwd }: { conversationId?
   const baudRate = liveBaud ?? serialSession?.baudRate;
   const typing = Boolean(serialSession) && (inputMode === 'normal' || inputMode === 'localEcho');
   const display = useMemo(
-    () => renderTerminalEvents([...model.events, ...echoes], outputMode === 'text' ? false : outputMode, outputNewlines),
+    () =>
+      renderTerminalEvents([...model.events, ...echoes], outputMode === 'text' ? false : outputMode, outputNewlines),
     [echoes, model.events, outputMode, outputNewlines]
   );
   useEffect(() => {
@@ -209,16 +210,6 @@ export default function TerminalPanel({ conversationId, cwd }: { conversationId?
     });
     setWorking(false);
   };
-  const toolButton: React.CSSProperties = {
-    border: 0,
-    background: 'transparent',
-    color: '#c5cdd8',
-    height: 28,
-    padding: '0 8px',
-    borderRadius: 6,
-    cursor: 'pointer',
-    fontSize: 12,
-  };
   const baudOptions = (
     TERMINAL_BAUD_RATES.includes(baudRate || 0) || !baudRate ? TERMINAL_BAUD_RATES : [baudRate, ...TERMINAL_BAUD_RATES]
   ).map((value) => ({ value, label: String(value) }));
@@ -284,7 +275,12 @@ export default function TerminalPanel({ conversationId, cwd }: { conversationId?
         >
           {label('removeProfile')}
         </Button>
-        <Button size='small' type='text' icon={<Refresh theme='outline' size='15' />} onClick={() => void refreshPorts()}>
+        <Button
+          size='small'
+          type='text'
+          icon={<Refresh theme='outline' size='15' />}
+          onClick={() => void refreshPorts()}
+        >
           {label('refreshPorts')}
         </Button>
         <Button
@@ -315,18 +311,11 @@ export default function TerminalPanel({ conversationId, cwd }: { conversationId?
           {model.lost && <Alert type='warning' content={label('historyLost')} />}
         </div>
       )}
-      <div
-        className='flex-1 min-h-0 m-12px rd-12px overflow-hidden flex flex-col'
-        style={{ background: '#1c1e26', color: '#d7dde7', boxShadow: '0 16px 40px rgba(0,0,0,0.18)' }}
-      >
-        <div
-          className='shrink-0 flex flex-wrap items-center gap-8px px-12px'
-          style={{ minHeight: 40, background: 'rgba(255,255,255,0.04)' }}
-        >
+      <div className='flex-1 min-h-0 m-12px rd-12px overflow-hidden flex flex-col bg-base text-t-primary border border-solid border-b-base'>
+        <div className='shrink-0 flex flex-wrap items-center gap-8px px-12px min-h-40px bg-1'>
           <span
             aria-hidden
-            className='inline-block w-8px h-8px rd-full shrink-0'
-            style={{ background: model.selected?.status === 'open' ? '#3dd68c' : '#f07178' }}
+            className={`inline-block w-8px h-8px rd-full shrink-0 ${model.selected?.status === 'open' ? 'bg-success' : 'bg-danger'}`}
           />
           <span className='font-mono text-13px font-[600]'>
             {serialSession
@@ -336,7 +325,7 @@ export default function TerminalPanel({ conversationId, cwd }: { conversationId?
                 : label('title')}
           </span>
           {model.selected && (
-            <span className='text-12px' style={{ color: '#8b95a7' }}>
+            <span className='text-12px text-t-tertiary'>
               {label(model.selected.status)} · {label(model.selected.owner)}
             </span>
           )}
@@ -365,74 +354,74 @@ export default function TerminalPanel({ conversationId, cwd }: { conversationId?
             ]}
           />
           {model.selected && (
-            <button
-              type='button'
-              style={toolButton}
+            <Button
+              size='mini'
+              type='text'
               onClick={() => {
                 void run(() => ipcBridge.terminal.takeover.invoke({ id: model.selectedId! }));
               }}
             >
               {label('takeover')}
-            </button>
+            </Button>
           )}
           {model.selected?.profile.kind === 'shell' && (
-            <button
-              type='button'
-              style={{ ...toolButton, opacity: model.selected.owner === 'manual' ? 1 : 0.4 }}
+            <Button
+              size='mini'
+              type='text'
               disabled={model.selected.owner !== 'manual'}
               onClick={() => {
                 void run(() => ipcBridge.terminal.interrupt.invoke({ id: model.selectedId! }));
               }}
             >
               {label('interrupt')}
-            </button>
+            </Button>
           )}
           {model.selected && (
-            <button
-              type='button'
-              style={toolButton}
+            <Button
+              size='mini'
+              type='text'
               onClick={() => {
                 void run(() => ipcBridge.terminal.cancel.invoke({ id: model.selectedId! }));
               }}
             >
               {label('cancelWait')}
-            </button>
+            </Button>
           )}
           {model.selected && (
-            <button
-              type='button'
-              style={{ ...toolButton, opacity: manualOpen ? 1 : 0.4 }}
+            <Button
+              size='mini'
+              type='text'
               disabled={!manualOpen}
               onClick={() => {
                 void run(() => ipcBridge.terminal.close.invoke({ id: model.selectedId! }));
               }}
             >
               {label('disconnect')}
-            </button>
+            </Button>
           )}
           {serialSession && (
-            <button
-              type='button'
-              style={{ ...toolButton, color: '#8fd4ff', opacity: model.selected?.owner === 'manual' && !working ? 1 : 0.4 }}
+            <Button
+              size='mini'
+              type='text'
               disabled={model.selected?.owner !== 'manual' || working}
               onClick={reconnect}
             >
               {model.selected?.status === 'open' ? label('reconnect') : label('connect')}
-            </button>
+            </Button>
           )}
-          <button type='button' style={toolButton} onClick={model.clear}>
+          <Button size='mini' type='text' onClick={model.clear}>
             {label('clear')}
-          </button>
-          <button
-            type='button'
-            style={{ ...toolButton, opacity: model.selectedId ? 1 : 0.4 }}
+          </Button>
+          <Button
+            size='mini'
+            type='text'
             disabled={!model.selectedId}
             onClick={() => {
               void run(exportLog);
             }}
           >
             {label('export')}
-          </button>
+          </Button>
         </div>
         <div
           ref={outputRef}
@@ -445,26 +434,29 @@ export default function TerminalPanel({ conversationId, cwd }: { conversationId?
           className='flex-1 min-h-160px overflow-auto px-16px py-12px font-mono text-13px leading-22px'
         >
           {display.length === 0 ? (
-            <div className='h-full min-h-160px flex items-center justify-center text-13px' style={{ color: '#8b95a7' }}>
+            <div className='h-full min-h-160px flex items-center justify-center text-13px text-t-tertiary'>
               {label(model.selected?.status === 'open' ? 'waitingOutput' : 'emptyOutput')}
             </div>
           ) : (
             display.map((event, index) => (
               <div key={`${event.cursor}-${index}`} className='whitespace-pre-wrap break-all'>
                 <span
-                  style={{
-                    color:
-                      event.direction === 'outgoing' ? '#e5c07b' : event.direction === 'system' ? '#8b95a7' : '#d7dde7',
-                  }}
+                  className={
+                    event.direction === 'outgoing'
+                      ? 'text-warning'
+                      : event.direction === 'system'
+                        ? 'text-t-tertiary'
+                        : 'text-t-primary'
+                  }
                 >
                   {event.text || ' '}
                 </span>
-                {event.status === 'failed' && <span style={{ color: '#f07178' }}> {event.error}</span>}
+                {event.status === 'failed' && <span className='text-danger'> {event.error}</span>}
               </div>
             ))
           )}
         </div>
-        <div className='shrink-0 flex flex-col gap-8px px-12px py-10px' style={{ background: 'rgba(0,0,0,0.22)' }}>
+        <div className='shrink-0 flex flex-col gap-8px px-12px py-10px bg-1 border-t border-solid border-b-base border-s-0 border-e-0 border-b-0'>
           <div className='flex flex-wrap items-center gap-8px'>
             {serialSession && (
               <>
@@ -494,7 +486,7 @@ export default function TerminalPanel({ conversationId, cwd }: { conversationId?
                   onChange={(value) => setOutputNewlines(value as TerminalNewlineMode)}
                   options={TERMINAL_NEWLINE_MODES.map((value) => ({ value, label: label(`newline_${value}`) }))}
                 />
-                <span className='inline-flex items-center gap-6px text-12px' style={{ color: '#8b95a7' }}>
+                <span className='inline-flex items-center gap-6px text-12px text-t-tertiary'>
                   <Switch size='small' checked={slowSend} onChange={setSlowSend} aria-label={label('slowSend')} />
                   {label('slowSend')}
                 </span>
@@ -561,31 +553,29 @@ export default function TerminalPanel({ conversationId, cwd }: { conversationId?
             <span className='flex-1' />
             {conversationId ? (
               <>
-                <button
-                  type='button'
-                  style={{ ...toolButton, opacity: !model.selectedId || model.selected?.status !== 'open' || working ? 0.4 : 1 }}
+                <Button
+                  size='mini'
+                  type='text'
                   disabled={!model.selectedId || model.selected?.status !== 'open' || working}
                   onClick={() => {
                     void grant(false);
                   }}
                 >
                   {label('grantConnection')}
-                </button>
-                <button
-                  type='button'
-                  style={{ ...toolButton, opacity: !profileId || working ? 0.4 : 1 }}
+                </Button>
+                <Button
+                  size='mini'
+                  type='text'
                   disabled={!profileId || working}
                   onClick={() => {
                     void grant(true);
                   }}
                 >
                   {label('grantProfile')}
-                </button>
+                </Button>
               </>
             ) : (
-              <span className='text-12px' style={{ color: '#8b95a7' }}>
-                {label('grantHint')}
-              </span>
+              <span className='text-12px text-t-tertiary'>{label('grantHint')}</span>
             )}
           </div>
           <div className='flex items-end gap-8px'>
@@ -620,7 +610,9 @@ export default function TerminalPanel({ conversationId, cwd }: { conversationId?
                   value={input}
                   onChange={setInput}
                   aria-label={label('input')}
-                  placeholder={serialSession && inputMode === 'readline' ? label('inputHintReadline') : label('inputHint')}
+                  placeholder={
+                    serialSession && inputMode === 'readline' ? label('inputHintReadline') : label('inputHint')
+                  }
                   autoSize={{ minRows: 1, maxRows: 4 }}
                   onKeyDown={(event) => {
                     if (serialSession && inputMode === 'readline' && event.key === 'Enter' && !event.shiftKey) {
@@ -645,7 +637,7 @@ export default function TerminalPanel({ conversationId, cwd }: { conversationId?
             )}
           </div>
           {result && (
-            <span className='text-12px' role='status' style={{ color: '#8b95a7' }}>
+            <span className='text-12px text-t-tertiary' role='status'>
               {result}
             </span>
           )}
