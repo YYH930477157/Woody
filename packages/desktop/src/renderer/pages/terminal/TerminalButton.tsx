@@ -28,7 +28,7 @@ export default function TerminalButton({ conversationId, cwd }: { conversationId
         unmountOnExit
       >
         <Suspense fallback={<Spin />}>
-          <TerminalPanel conversationId={conversationId} cwd={cwd} />
+          <TerminalPanel conversationId={conversationId} cwd={cwd} embedded />
         </Suspense>
       </Drawer>
     </>

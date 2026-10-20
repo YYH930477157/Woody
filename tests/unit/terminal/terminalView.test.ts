@@ -1,9 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import { applyNewlineMode } from '../../../packages/desktop/src/common/terminal/stream';
+import type { TerminalEvent } from '../../../packages/desktop/src/common/types/terminal';
 import {
+  buildTextLines,
+  describeProfile,
   displayedTerminalEvents,
+  formatByteSize,
+  groupTerminalFrames,
+  parseHexInput,
   renderTerminalEvents,
+  toHex,
 } from '../../../packages/desktop/src/renderer/pages/terminal/terminalView';
+
+const timed = (
+  data: string | number[],
+  cursor: number,
+  timestamp: number,
+  direction: TerminalEvent['direction'] = 'incoming',
+  source: TerminalEvent['source'] = 'transport'
+): TerminalEvent => {
+  const bytes = typeof data === 'string' ? Buffer.from(data) : Buffer.from(data);
+  return { cursor, timestamp, direction, source, data: bytes.toString('base64'), byteLength: bytes.length };
+};
 
 const historyEvent = (
   data: string,
@@ -101,5 +119,124 @@ describe('terminal byte display', () => {
 
     expect(text(false)).toBe('AOKBAT');
     expect(text(true)).toBe('OKAT');
+  });
+});
+
+describe('terminal frames', () => {
+  it('joins received chunks that arrive within the frame gap and keeps each write separate', () => {
+    const frames = groupTerminalFrames(
+      [
+        timed([0x68, 0xaa], 2, 1000, 'outgoing', 'manual'),
+        timed([0x68, 0x12], 4, 1100),
+        timed([0x34, 0x16], 6, 1120),
+        timed([0x68], 7, 1200),
+        timed([0x68, 0xaa], 9, 1300, 'outgoing', 'manual'),
+        timed([0x01], 10, 1300, 'outgoing', 'ai'),
+      ],
+      30
+    );
+
+    expect(frames.map((frame) => [frame.direction, frame.source, toHex(frame.bytes)])).toEqual([
+      ['outgoing', 'manual', '68 AA'],
+      ['incoming', 'transport', '68 12 34 16'],
+      ['incoming', 'transport', '68'],
+      ['outgoing', 'manual', '68 AA'],
+      ['outgoing', 'ai', '01'],
+    ]);
+  });
+
+  it('shows every raw chunk with a zero gap but rejoins slices of one event', () => {
+    const frames = groupTerminalFrames([timed('AB', 2, 5), timed('CD', 4, 5), timed('EF', 6, 6)], 0);
+
+    expect(frames.map((frame) => Buffer.from(frame.bytes).toString())).toEqual(['ABCD', 'EF']);
+  });
+
+  it('keeps a disconnect as its own frame with the transport error', () => {
+    const frames = groupTerminalFrames(
+      [timed('A', 1, 1), { ...timed('', 2, 2, 'system'), error: 'unplugged' }, timed('B', 3, 3)],
+      1000
+    );
+
+    expect(frames.map((frame) => [frame.direction, frame.error])).toEqual([
+      ['incoming', undefined],
+      ['system', 'unplugged'],
+      ['incoming', undefined],
+    ]);
+  });
+});
+
+describe('terminal text lines', () => {
+  const lineText = (events: TerminalEvent[]) =>
+    buildTextLines(events).map((line) => line.segments.map((segment) => segment.text).join(''));
+
+  it('flows chunks inline so only real line breaks start a new line', () => {
+    expect(
+      lineText([timed('PS C:\\> ', 1, 1), timed('dir', 4, 2), timed('\r\nok\r', 9, 3), timed('\nnext', 14, 4)])
+    ).toEqual(['PS C:\\> dir', 'ok', 'next']);
+  });
+
+  it('treats a lone CR as a line break and keeps empty lines', () => {
+    expect(lineText([timed('a\rb\n\nc', 6, 1)])).toEqual(['a', 'b', '', 'c']);
+  });
+
+  it('marks echoed input and stamps each line with the time it started', () => {
+    const lines = buildTextLines([timed('AT', 2, 10, 'outgoing', 'manual'), timed('\r\nOK\r\n', 8, 20)]);
+
+    expect(lines.map((line) => [line.timestamp, line.segments.map((segment) => segment.direction)])).toEqual([
+      [10, ['outgoing']],
+      [20, ['incoming']],
+    ]);
+  });
+
+  it('renders a disconnect as a separate system line', () => {
+    const lines = buildTextLines([timed('x', 1, 1), { ...timed('', 2, 2, 'system'), error: 'gone' }, timed('y', 3, 3)]);
+
+    expect(lines.map((line) => (line.system ? `system:${line.error}` : line.segments[0].text))).toEqual([
+      'x',
+      'system:gone',
+      'y',
+    ]);
+  });
+});
+
+describe('terminal input and labels', () => {
+  it('accepts common HEX notations and reports what is wrong otherwise', () => {
+    expect(parseHexInput('0x68, 0xaa;7e-16')).toEqual({ ok: true, hex: '68 AA 7E 16', bytes: 4 });
+    expect(parseHexInput('68 A')).toEqual({ ok: false, reason: 'hexOdd' });
+    expect(parseHexInput('68 GG')).toEqual({ ok: false, reason: 'hexInvalid' });
+    expect(parseHexInput('  ')).toEqual({ ok: true, hex: '', bytes: 0 });
+  });
+
+  it('summarizes connection parameters compactly', () => {
+    expect(
+      describeProfile(
+        {
+          id: 'p',
+          name: 'Meter',
+          kind: 'serial',
+          path: 'COM3',
+          baudRate: 2400,
+          dataBits: 8,
+          parity: 'even',
+          stopBits: 1,
+          rtscts: true,
+          xon: false,
+          xoff: false,
+        },
+        'Shell'
+      )
+    ).toBe('COM3 · 2400 · 8E1 · RTS/CTS');
+    expect(describeProfile({ id: 's', name: 'pwsh', kind: 'shell', executable: 'C:\\pwsh\\pwsh.exe' }, 'Shell')).toBe(
+      'pwsh.exe'
+    );
+    expect(describeProfile({ id: 's', name: 'shell', kind: 'shell' }, 'Default shell')).toBe('Default shell');
+  });
+
+  it('formats byte counters', () => {
+    expect([formatByteSize(512), formatByteSize(2048), formatByteSize(3 * 1024 * 1024)]).toEqual([
+      '512 B',
+      '2.0 KB',
+      '3.0 MB',
+    ]);
   });
 });
