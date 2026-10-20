@@ -129,5 +129,28 @@
     "overdue": "逾期 {{count}} 天",
     "today": "今天",
     "tomorrow": "明天"
+  },
+  "skipped": {
+    "button": "已过滤 {{count}}",
+    "tooltip": "扫描判断为不需要你处理的邮件",
+    "title": "已过滤的邮件",
+    "hint": "这些邮件被判断为别人的事、仅供知悉或自动发送，没有建成待办。判断有误时可以转为待办，之后的扫描会参考你的修正。",
+    "all": "全部",
+    "reason": {
+      "not_mine": "别人的事",
+      "fyi": "仅供知悉",
+      "automated": "自动邮件",
+      "tracked": "已有待办",
+      "other": "其他"
+    },
+    "owner": "{{name}} 负责",
+    "byUser": "你标记的",
+    "noSubject": "（无主题）",
+    "empty": "没有已过滤的邮件",
+    "restore": "转为待办",
+    "restored": "已转为待办",
+    "notMine": "不是我的",
+    "notMineTip": "移出待办，之后的扫描会参考这次判断",
+    "dismissed": "已移到已过滤的邮件"
   }
 }

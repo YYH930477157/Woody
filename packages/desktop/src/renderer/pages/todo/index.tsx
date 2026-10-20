@@ -7,8 +7,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Empty } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
-import type { ITodoItem } from '@/common/types/todo/todoTypes';
+import type { ITodoItem, TodoSkippedEmail } from '@/common/types/todo/todoTypes';
 import { useLayoutContext } from '@renderer/hooks/context/LayoutContext';
+import SkippedEmails from './components/SkippedEmails';
 import TodoDetail, { TodoDetailPlaceholder } from './components/TodoDetail';
 import TodoEditor from './components/TodoEditor';
 import TodoList from './components/TodoList';
@@ -19,6 +20,7 @@ import {
   filterTodos,
   requesterCounts,
   startOfDay,
+  subjectAsTitle,
   viewCounts,
   type TodoGroup,
   type TodoView,
@@ -46,7 +48,12 @@ const TodoPage: React.FC = () => {
   const [requester, setRequester] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [editor, setEditor] = useState<{ open: boolean; item: ITodoItem | null }>({ open: false, item: null });
+  // `restore`: the editor turns a skipped email into a todo.
+  const [editor, setEditor] = useState<{ open: boolean; item: ITodoItem | null; restore?: TodoSkippedEmail }>({
+    open: false,
+    item: null,
+  });
+  const [skippedOpen, setSkippedOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(() => (typeof window === 'undefined' ? 0 : window.innerWidth));
 
@@ -90,6 +97,17 @@ const TodoPage: React.FC = () => {
     [day, view]
   );
 
+  const restoreDefaults = useMemo<Partial<TodoDraft> | undefined>(
+    () =>
+      editor.restore && {
+        title: subjectAsTitle(editor.restore.subject),
+        requester: editor.restore.from,
+        due_at: null,
+        status: 'pending',
+      },
+    [editor.restore]
+  );
+
   const saveDraft = useCallback(
     async (draft: TodoDraft, existing: ITodoItem | null) => {
       const result = await data.save(existing?.status === 'done' ? { ...draft, status: undefined } : draft, existing);
@@ -119,6 +137,7 @@ const TodoPage: React.FC = () => {
       onSubtasksChange={(subtasks) => void data.setSubtasks(selected, subtasks)}
       onEdit={() => setEditor({ open: true, item: selected })}
       onRemove={() => void data.remove(selected)}
+      onNotMine={() => void data.dismiss(selected)}
     />
   );
 
@@ -158,6 +177,8 @@ const TodoPage: React.FC = () => {
         scanInfo={data.scanInfo}
         scanning={data.scanning}
         onScan={() => void data.scan()}
+        skippedCount={data.skipped.length}
+        onOpenSkipped={() => setSkippedOpen(true)}
         onCreate={openCreate}
         onQuickAdd={
           view === 'done' && day === null
@@ -210,12 +231,34 @@ const TodoPage: React.FC = () => {
           </div>
         )
       )}
+      <SkippedEmails
+        open={skippedOpen}
+        emails={data.skipped}
+        onClose={() => setSkippedOpen(false)}
+        onRestore={(email) => {
+          setSkippedOpen(false);
+          setEditor({ open: true, item: null, restore: email });
+        }}
+      />
       <TodoEditor
         open={editor.open}
         item={editor.item}
-        defaults={createDefaults}
-        onCancel={() => setEditor({ open: false, item: null })}
+        defaults={restoreDefaults ?? createDefaults}
+        heading={editor.restore ? t('todo.skipped.restore') : undefined}
+        onCancel={() => {
+          // Back to the list the email came from.
+          if (editor.restore) setSkippedOpen(true);
+          setEditor({ open: false, item: null });
+        }}
         onSave={async (draft) => {
+          if (editor.restore) {
+            const result = await data.restore(editor.restore, draft);
+            if (result.ok) {
+              if (result.item) setSelectedId(result.item.id);
+              setEditor({ open: false, item: null });
+            }
+            return result.ok;
+          }
           const ok = await saveDraft(draft, editor.item);
           if (ok) setEditor({ open: false, item: null });
           return ok;

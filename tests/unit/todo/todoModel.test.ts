@@ -9,6 +9,7 @@ import {
   groupOf,
   parseNotes,
   requesterCounts,
+  subjectAsTitle,
   summaryOf,
   viewCounts,
 } from '@/renderer/pages/todo/todoModel';
@@ -128,5 +129,11 @@ describe('todo notes and deadlines', () => {
     expect(label(at(23, 9, 30))).toBe('Fri 09:30');
     expect(label(at(30))).toBe('Oct 30');
     expect(label(null)).toBe('todo.dueNone');
+  });
+
+  it('drops reply and forward prefixes when an email subject becomes a title', () => {
+    expect(subjectAsTitle('RE: FW: Virgo 06 sample feedback')).toBe('Virgo 06 sample feedback');
+    expect(subjectAsTitle('回复：转发: 样机整改计划')).toBe('样机整改计划');
+    expect(subjectAsTitle('Return policy update')).toBe('Return policy update');
   });
 });

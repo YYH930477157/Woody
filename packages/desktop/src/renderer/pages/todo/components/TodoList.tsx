@@ -6,7 +6,7 @@
 
 import React, { useState } from 'react';
 import { Button, Empty, Input, Radio, Spin, Tag, Tooltip } from '@arco-design/web-react';
-import { Calendar, Mail, Plus, Search, User } from '@icon-park/react';
+import { Calendar, Filter, Mail, Plus, Search, User } from '@icon-park/react';
 import classNames from 'classnames';
 import { useTranslation } from 'react-i18next';
 import type { ITodoItem, TodoStatusInfo } from '@/common/types/todo/todoTypes';
@@ -43,6 +43,8 @@ export default function TodoList({
   scanInfo,
   scanning,
   onScan,
+  skippedCount,
+  onOpenSkipped,
   onCreate,
   onQuickAdd,
   loading,
@@ -65,6 +67,9 @@ export default function TodoList({
   scanInfo: TodoStatusInfo | null;
   scanning: boolean;
   onScan: () => void;
+  /** Emails the scan kept off the list; reviewed in a drawer. */
+  skippedCount: number;
+  onOpenSkipped: () => void;
   onCreate: () => void;
   onQuickAdd: ((title: string) => Promise<boolean>) | null;
   loading: boolean;
@@ -119,6 +124,18 @@ export default function TodoList({
           placeholder={t('todo.searchPlaceholder')}
           prefix={<Search theme='outline' fill='currentColor' size='14' />}
         />
+        {skippedCount > 0 && (
+          <Tooltip content={t('todo.skipped.tooltip')} mini>
+            <Button size='small' type='text' aria-label={t('todo.skipped.title')} onClick={onOpenSkipped}>
+              <span className='inline-flex items-center gap-6px text-t-secondary'>
+                <Filter theme='outline' fill='currentColor' size='14' />
+                <span className='tabular-nums'>
+                  {compact ? skippedCount : t('todo.skipped.button', { count: skippedCount })}
+                </span>
+              </span>
+            </Button>
+          </Tooltip>
+        )}
         <Tooltip
           content={
             lastScan

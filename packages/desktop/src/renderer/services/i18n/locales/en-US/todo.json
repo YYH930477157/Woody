@@ -129,5 +129,28 @@
     "overdue": "{{count}}d overdue",
     "today": "Today",
     "tomorrow": "Tomorrow"
+  },
+  "skipped": {
+    "button": "Filtered {{count}}",
+    "tooltip": "Emails the scan judged not to be yours to do",
+    "title": "Filtered emails",
+    "hint": "The scan kept these emails off your list: someone else’s task, for your information, or sent automatically. If it got one wrong, turn it into a todo — later scans learn from your corrections.",
+    "all": "All",
+    "reason": {
+      "not_mine": "Someone else’s",
+      "fyi": "FYI",
+      "automated": "Automated",
+      "tracked": "Already tracked",
+      "other": "Other"
+    },
+    "owner": "For {{name}}",
+    "byUser": "Marked by you",
+    "noSubject": "(No subject)",
+    "empty": "No filtered emails",
+    "restore": "Make it a todo",
+    "restored": "Added to your todos",
+    "notMine": "Not mine",
+    "notMineTip": "Remove it from your todos; later scans learn from this",
+    "dismissed": "Moved to filtered emails"
   }
 }

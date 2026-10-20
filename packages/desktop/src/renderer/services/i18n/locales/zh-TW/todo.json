@@ -129,5 +129,28 @@
     "overdue": "逾期 {{count}} 天",
     "today": "今天",
     "tomorrow": "明天"
+  },
+  "skipped": {
+    "button": "已過濾 {{count}}",
+    "tooltip": "掃描判斷為不需要你處理的郵件",
+    "title": "已過濾的郵件",
+    "hint": "這些郵件被判斷為別人的事、僅供知悉或自動寄送，沒有建立為待辦。判斷有誤時可以轉為待辦，之後的掃描會參考你的修正。",
+    "all": "全部",
+    "reason": {
+      "not_mine": "別人的事",
+      "fyi": "僅供知悉",
+      "automated": "自動郵件",
+      "tracked": "已有待辦",
+      "other": "其他"
+    },
+    "owner": "{{name}} 負責",
+    "byUser": "你標記的",
+    "noSubject": "（無主旨）",
+    "empty": "沒有已過濾的郵件",
+    "restore": "轉為待辦",
+    "restored": "已轉為待辦",
+    "notMine": "不是我的",
+    "notMineTip": "移出待辦，之後的掃描會參考這次判斷",
+    "dismissed": "已移到已過濾的郵件"
   }
 }

@@ -644,7 +644,9 @@ async function ensureBootstrapMcpServersInDb(configFile: ConfigFile): Promise<vo
  * Skill content for the scheduled email scan. Each cron run injects it into
  * the scan conversation; the LLM follows it to extract tasks from the
  * snapshot. Message-ID dedup lives inside the todo MCP's todo_create, so the
- * skill only needs the agent to pass email_ref through verbatim.
+ * skill only needs the agent to pass email_ref through verbatim. Ownership
+ * signals (my_role, thread_todo, user corrections) come from
+ * email_snapshot_read; the skill turns them into the decision rules.
  */
 const TODO_SCAN_SKILL = `---
 name: todo-email-scan
@@ -652,17 +654,32 @@ name: todo-email-scan
 
 # Email → Todo scan
 
-You are a scheduled job inside AionUi. Goal: turn actionable emails into todo items.
+You are a scheduled job inside AionUi. Goal: put the mailbox owner's OWN tasks on their todo list — nothing else. Mail about other people's work, mail the user is only copied on, and machine-sent mail stay off the list; they are logged as skipped with a reason the user can review and restore.
 
 Steps:
-1. Call the \`email_snapshot_read\` tool. It refreshes the mailbox snapshot when it is stale and returns ONLY unprocessed emails, at most 15 per call (already-scanned ones are filtered out server-side).
+1. Call the \`email_snapshot_read\` tool. It refreshes the mailbox snapshot when it is stale and returns ONLY unprocessed emails, at most 15 per call. Its header names the mailbox owner — "me" below — and may list corrections the user made to earlier scans: decide similar emails the same way.
 2. If it reports an error, or "No email snapshot available", reply with a one-line status and stop. Do not create anything.
-3. For each email decide: does it ask the user to DO something — a task, a review, an approval, a submission, a meeting with required prep, a delivery with a deadline? Pure notifications, newsletters, automated reports and spam are skipped.
-4. Call \`email_mark_skipped\` once with the message_id of EVERY non-actionable email in the batch (VERBATIM), so later scans never re-read them. Every email returned must end up either in todo_create (with email_ref) or in email_mark_skipped.
-5. For each actionable email call \`todo_create\` with:
-   - title: 具体动作+对象 ONLY, ≤ 45 字, e.g. "回复 Virgo 06 样机 6 项客户反馈". NEVER append requester names or dates — those go in the dedicated fields. Match the email's language.
-   - requester: the person asking — prefer the Chinese display name when the email has one (e.g. 李国强), else the raw sender.
-   - due_at: ONLY if the email states an explicit deadline (pass epoch ms or ISO string). Relative wording like "今天内/明天下班前" resolves against the email's received_at date. Never guess beyond that.
+3. Decide each email with three checks, in order:
+   A. Is it MY task? Look for the ask in latest_message. quoted_history is context only: an old ask quoted there is not new unless latest_message repeats it to me.
+      MINE when any of:
+      - the ask names me — my name, given name, English name, @me — or says "你/you" in a mail where my_role is "to" and I am the only or main recipient;
+      - my_role is "to" and the ask goes to every recipient ("请各位/大家/all", a team-wide deadline);
+      - my_role is "self" (a note I sent myself), or flagged is true (I flagged it for follow-up);
+      - a system mail asks ME by name to approve, review or act (审批、评审指派、系统待办).
+      NOT MINE when any of:
+      - the ask names someone else ("张三请…", "@Tom please…", "Hi Lily,") — even when I am in To;
+      - my_role is "cc" and latest_message does not name me;
+      - my_role is "not_listed" (a distribution list or BCC) and the ask is not explicitly for me;
+      - my_role is "sender": I asked others; their reply or acknowledgement is not my task unless it asks me something new.
+      A mail that gives several people tasks: create todos ONLY for my part.
+      Unclear whose it is: create it when my_role is "to" or "self"; otherwise skip it as not_mine with a note.
+   B. Is there something for me to DO? Announcements, information, meeting minutes without my action items, receipts, newsletters, automated reports, alerts and spam are skipped (reason fyi or automated; automated=true marks bulk or machine-sent mail). A meeting invitation is a todo only when it needs preparation from me.
+   C. Is it already tracked? thread_todo is a todo made from the same mail thread. While it is not done, do not create a second todo for the same ask: if the new mail moves its deadline, call \`todo_update\` with its id and the new due_at; if it now has to wait on someone, set status "waiting" with blocked_reason. Then skip the mail with reason tracked. A NEW, different ask for me in the thread is a new todo. Mail of one thread is listed together: judge it together, the newest message decides.
+4. Call \`email_mark_skipped\` once per batch with every email that gets no new todo: {message_id (VERBATIM), reason, owner (for not_mine: whose task it is), note (one short line on why, in the email's language)}. Every email returned must end up either in todo_create (with email_ref) or in email_mark_skipped.
+5. For each of MY tasks call \`todo_create\` with:
+   - title: 具体动作+对象 ONLY, from my point of view, ≤ 45 字, e.g. "回复 Virgo 06 样机 6 项客户反馈". NEVER append requester names or dates — those go in the dedicated fields. Match the email's language.
+   - requester: the person asking me — prefer the Chinese display name when the email has one (e.g. 李国强), else the raw sender.
+   - due_at: ONLY if the email states an explicit deadline for my part (pass epoch ms or ISO string). Relative wording like "今天内/明天下班前/周五前" resolves against the email's received_local date. Never guess beyond that.
    - status: pass "waiting" instead of the default when execution is blocked on an external reply or input (待客户确认 / 等实验室数据 / 待上游答复...), and put the blocking condition into blocked_reason, e.g. "待客户确认固件方案后再执行".
    - subtasks: when the email lists concrete execution steps or acceptance items, pass them as 2–5 short imperative lines: [{text: "..."}, ...]. One entry per real step; skip when the ask is single-step.
    - notes: MUST follow this exact structure (keep each 标签, values in the email's language):
@@ -671,17 +688,21 @@ Steps:
      - <point extracted from the email: requirement, constraint, acceptance criteria, or decision to make>
      (2–6 points, most important first; preserve numbers/codes/model names exactly)
      原文关键句: "<one verbatim sentence from the email that best captures the ask>"
-   - email_ref: pass the email's message_id / subject / received_at fields VERBATIM — this is the dedup key. For from, use the email's from_name field (fallback to from_address when from_name is empty); NEVER invent or leave it blank.
+   - email_ref: pass the email's message_id / subject / received_at fields VERBATIM — this is the dedup key. For from, use the email's from_name field (fallback to from_address when from_name is empty); NEVER invent or leave it blank. The thread is filled in automatically.
 6. If todo_create returns duplicate, that email is already tracked — skip it.
 7. If email_snapshot_read said more unprocessed emails remain, call it again and repeat steps 3–6 for the next batch (at most 10 batches per run).
-8. Finish with a one-line summary: scanned N emails, created M todos, skipped K non-actionable.
+8. Finish with a one-line summary: scanned N emails, created M todos, skipped K (not mine / info or automated / already tracked).
 
 Rules:
-- At most one todo per email, unless it genuinely contains multiple distinct tasks with different deadlines.
+- Only the mailbox owner's own tasks become todos. A wrong todo costs the user attention; a skipped mail can be restored from the skipped list in one click.
+- At most one todo per email, unless it genuinely contains multiple distinct tasks for me with different deadlines.
 - Never delete todos or mark them done.
 - A missing due_at is always better than a wrong one.
 - The todo must be actionable from the notes alone: a reader who never saw the email should know exactly what to do, by when, for whom.
 `;
+
+/** Bump with every TODO_SCAN_SKILL change so existing scan jobs get the new text. */
+export const TODO_SCAN_SKILL_FLAG = 'migration.todoScanSkillV6';
 
 interface CronJobApiShape {
   id: string;
@@ -795,17 +816,17 @@ async function ensureTodoScanCronJob(): Promise<void> {
   }
 
   if (jobExists) {
-    // 技能文件按版本自愈重发:SKILL 内容升级(如 v5 的 email_mark_skipped
-    // 与分批读取指引)后,已存在的 cron 任务也要拿到新指令。
+    // 技能文件按版本自愈重发:SKILL 内容升级(如 v6 的归属判断与跳过原因)后,
+    // 已存在的 cron 任务也要拿到新指令。
     // Skill re-post on version bump so existing jobs pick up new instructions.
     try {
       const prefs = (await httpRequest<Record<string, unknown>>('GET', '/api/settings/client')) || {};
-      if (!prefs['migration.todoScanSkillV5']) {
+      if (!prefs[TODO_SCAN_SKILL_FLAG]) {
         const existing = jobs.find((job) => job.name === TODO_SCAN_JOB_NAME);
         if (existing?.id) {
           await httpRequest('POST', `/api/cron/jobs/${existing.id}/skill`, { content: TODO_SCAN_SKILL });
-          await httpRequest('PUT', '/api/settings/client', { 'migration.todoScanSkillV5': true });
-          console.info('[Migration] todo scan skill refreshed to v5');
+          await httpRequest('PUT', '/api/settings/client', { [TODO_SCAN_SKILL_FLAG]: true });
+          console.info('[Migration] todo scan skill refreshed (%s)', TODO_SCAN_SKILL_FLAG);
         }
       }
     } catch (error) {

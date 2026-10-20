@@ -4,6 +4,10 @@
 # error field carries any failure reason (Outlook missing, profile locked...),
 # so the host degrades gracefully instead of treating "no email" as a crash.
 #
+# Besides the mail itself the snapshot records who the mailbox owner is and
+# who each mail was addressed to, so the scan can tell the user's own asks
+# from mail about other people's work.
+#
 # Usage: powershell -NoProfile -ExecutionPolicy Bypass -File fetch-outlook.ps1 -OutFile <path> [-Days 3]
 
 param(
@@ -14,14 +18,20 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-function Write-Snapshot([string]$errorMessage, [array]$emails) {
+$PR_SMTP_ADDRESS = 'http://schemas.microsoft.com/mapi/proptag/0x39FE001F'
+$PR_TRANSPORT_MESSAGE_HEADERS = 'http://schemas.microsoft.com/mapi/proptag/0x007D001F'
+$MaxRecipients = 40
+$MaxBodyChars = 6000
+
+function Write-Snapshot([string]$errorMessage, [array]$emails, $mailbox) {
     $snapshot = @{
         fetched_at = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
         source     = 'outlook-com'
         emails     = @($emails)
     }
+    if ($mailbox) { $snapshot.mailbox = $mailbox }
     if ($errorMessage) { $snapshot.error = $errorMessage }
-    $json = ConvertTo-Json -InputObject $snapshot -Depth 5
+    $json = ConvertTo-Json -InputObject $snapshot -Depth 6
     $dir = Split-Path -Parent $OutFile
     if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
     # The host and the todo MCP can both refresh the snapshot: replace it
@@ -37,9 +47,80 @@ function Write-Snapshot([string]$errorMessage, [array]$emails) {
     }
 }
 
+# Exchange recipients carry an X500 address (/o=...); PR_SMTP_ADDRESS holds the SMTP form.
+function Get-SmtpAddress($recipient) {
+    $address = ''
+    try { $address = [string]$recipient.Address } catch {}
+    if ($address -match '@' -and $address -notmatch '^/o=') { return $address }
+    try {
+        $smtp = [string]$recipient.PropertyAccessor.GetProperty($PR_SMTP_ADDRESS)
+        if ($smtp) { return $smtp }
+    } catch {}
+    return $address
+}
+
+# $type: 1 = To, 2 = CC (OlMailRecipientType). Large distribution lists are capped.
+function Get-Recipients($item, [int]$type) {
+    $list = New-Object System.Collections.ArrayList
+    try {
+        foreach ($recipient in $item.Recipients) {
+            if ($list.Count -ge $MaxRecipients) { break }
+            try {
+                if ($recipient.Type -ne $type) { continue }
+                [void]$list.Add([ordered]@{ name = [string]$recipient.Name; address = (Get-SmtpAddress $recipient) })
+            } catch {}
+        }
+    } catch {}
+    return , $list.ToArray()
+}
+
+function Add-Unique($list, $value) {
+    $text = ([string]$value).Trim()
+    if ($text -and -not $list.Contains($text)) { [void]$list.Add($text) }
+}
+
+# The mailbox owner: every display name and address the user can be addressed by.
+function Get-Mailbox($session) {
+    $names = New-Object System.Collections.ArrayList
+    $addresses = New-Object System.Collections.ArrayList
+    try {
+        $me = $session.CurrentUser
+        Add-Unique $names $me.Name
+        Add-Unique $addresses $me.Address
+        Add-Unique $addresses (Get-SmtpAddress $me)
+        try {
+            $exchangeUser = $me.AddressEntry.GetExchangeUser()
+            if ($exchangeUser) {
+                Add-Unique $names $exchangeUser.Name
+                Add-Unique $addresses $exchangeUser.PrimarySmtpAddress
+            }
+        } catch {}
+    } catch {}
+    try {
+        foreach ($account in $session.Accounts) {
+            try { Add-Unique $addresses $account.SmtpAddress } catch {}
+        }
+    } catch {}
+    return [ordered]@{ names = $names.ToArray(); addresses = $addresses.ToArray() }
+}
+
+# Header lines that mark mailing-list or machine-sent mail.
+function Get-ListHeaders($item) {
+    try {
+        $headers = [string]$item.PropertyAccessor.GetProperty($PR_TRANSPORT_MESSAGE_HEADERS)
+        if (-not $headers) { return , @() }
+        $lines = [regex]::Matches($headers, '(?im)^(List-Id|List-Unsubscribe|Auto-Submitted|Precedence)[ \t]*:[^\r\n]*') |
+            Select-Object -First 6 |
+            ForEach-Object { if ($_.Value.Length -gt 120) { $_.Value.Substring(0, 120) } else { $_.Value } }
+        return , @($lines)
+    } catch { return , @() }
+}
+
 try {
     $outlook = New-Object -ComObject Outlook.Application
-    $inbox = $outlook.Session.GetDefaultFolder(6) # olFolderInbox
+    $session = $outlook.Session
+    $mailbox = Get-Mailbox $session
+    $inbox = $session.GetDefaultFolder(6) # olFolderInbox
     $items = $inbox.Items
     $items.Sort("[ReceivedTime]", $true) # newest first
 
@@ -71,7 +152,7 @@ try {
             try {
                 if ($item.Body) { $body = [string]$item.Body }
             } catch {}
-            if ($body.Length -gt 1500) { $body = $body.Substring(0, 1500) }
+            if ($body.Length -gt $MaxBodyChars) { $body = $body.Substring(0, $MaxBodyChars) }
             # Strip control chars that break JSON round-trips.
             $body = $body -replace "[\x00-\x08\x0B\x0C\x0E-\x1F]", " "
 
@@ -79,7 +160,18 @@ try {
             $unread = $false
             try { $unread = [bool]$item.UnRead } catch {}
             $senderAddress = ''
-            try { $senderAddress = [string]$item.SenderEmailAddress } catch {}
+            try {
+                $senderAddress = [string]$item.SenderEmailAddress
+                if ($senderAddress -match '^/o=') { $senderAddress = Get-SmtpAddress $item.Sender }
+            } catch {}
+            $threadId = ''
+            try { $threadId = [string]$item.ConversationID } catch {}
+            $importance = ''
+            try {
+                if ($item.Importance -eq 2) { $importance = 'high' } elseif ($item.Importance -eq 0) { $importance = 'low' }
+            } catch {}
+            $flagged = $false
+            try { $flagged = [bool]$item.IsMarkedAsTask -or ($item.FlagStatus -eq 2) } catch {}
 
             [void]$emails.Add([ordered]@{
                 message_id    = $messageId
@@ -88,6 +180,12 @@ try {
                 from_address  = $senderAddress
                 received_at   = $receivedMs
                 folder        = 'Inbox'
+                to            = (Get-Recipients $item 1)
+                cc            = (Get-Recipients $item 2)
+                thread_id     = $threadId
+                importance    = $importance
+                flagged       = $flagged
+                list_headers  = (Get-ListHeaders $item)
                 body_preview  = $body
                 unread        = $unread
             })
@@ -96,9 +194,9 @@ try {
         } catch { continue } # one poisoned item must not abort the export
     }
 
-    Write-Snapshot $null $emails
+    Write-Snapshot $null $emails $mailbox
     Write-Output ("OK " + $emails.Count)
 } catch {
-    Write-Snapshot ("outlook unavailable: " + $_.Exception.Message) @()
+    Write-Snapshot ("outlook unavailable: " + $_.Exception.Message) @() $null
     Write-Output ("ERR " + $_.Exception.Message)
 }

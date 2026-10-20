@@ -15,6 +15,7 @@ export default function TodoEditor({
   open,
   item,
   defaults,
+  heading,
   onCancel,
   onSave,
 }: {
@@ -22,6 +23,8 @@ export default function TodoEditor({
   item: ITodoItem | null;
   /** Prefill for new todos, e.g. the day picked on the calendar. */
   defaults?: Partial<TodoDraft>;
+  /** Overrides the "new todo" title, e.g. when turning an email into a todo. */
+  heading?: string;
   onCancel: () => void;
   onSave: (draft: TodoDraft) => Promise<boolean>;
 }) {
@@ -39,9 +42,9 @@ export default function TodoEditor({
     if (!open) return;
     const due = item ? item.due_at : defaults?.due_at;
     setTitle(item?.title || defaults?.title || '');
-    setNotes(item?.notes || '');
+    setNotes(item ? item.notes || '' : defaults?.notes || '');
     setDueDate(due ? dayjs(due).format('YYYY-MM-DD') : '');
-    setRequester(item?.requester || item?.email_ref?.from || '');
+    setRequester(item ? item.requester || item.email_ref?.from || '' : defaults?.requester || '');
     setStatus(item?.status === 'waiting' || (!item && defaults?.status === 'waiting') ? 'waiting' : 'pending');
   }, [open, item, defaults]);
 
@@ -70,7 +73,7 @@ export default function TodoEditor({
 
   return (
     <Modal
-      title={item ? t('todo.edit') : t('todo.new')}
+      title={item ? t('todo.edit') : heading || t('todo.new')}
       visible={open}
       onCancel={onCancel}
       onOk={() => void submit()}

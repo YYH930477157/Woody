@@ -129,5 +129,28 @@
     "overdue": "{{count}} j de retard",
     "today": "Aujourd’hui",
     "tomorrow": "Demain"
+  },
+  "skipped": {
+    "button": "Filtrés {{count}}",
+    "tooltip": "E-mails que l’analyse juge hors de vos tâches",
+    "title": "E-mails filtrés",
+    "hint": "L’analyse n’a pas créé de tâche pour ces e-mails : tâche d’une autre personne, simple information ou envoi automatique. En cas d’erreur, transformez-le en tâche ; les prochaines analyses tiennent compte de vos corrections.",
+    "all": "Tous",
+    "reason": {
+      "not_mine": "Pour quelqu’un d’autre",
+      "fyi": "Pour info",
+      "automated": "Automatique",
+      "tracked": "Déjà suivi",
+      "other": "Autre"
+    },
+    "owner": "Pour {{name}}",
+    "byUser": "Marqué par vous",
+    "noSubject": "(Sans objet)",
+    "empty": "Aucun e-mail filtré",
+    "restore": "En faire une tâche",
+    "restored": "Ajoutée à vos tâches",
+    "notMine": "Pas pour moi",
+    "notMineTip": "Retirer de vos tâches ; les prochaines analyses en tiennent compte",
+    "dismissed": "Déplacé vers les e-mails filtrés"
   }
 }

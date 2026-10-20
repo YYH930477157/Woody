@@ -129,5 +129,28 @@
     "overdue": "{{count}} T. überfällig",
     "today": "Heute",
     "tomorrow": "Morgen"
+  },
+  "skipped": {
+    "button": "Gefiltert {{count}}",
+    "tooltip": "E-Mails, die laut Scan nicht von dir zu erledigen sind",
+    "title": "Gefilterte E-Mails",
+    "hint": "Diese E-Mails wurden nicht als Aufgaben angelegt: Aufgabe einer anderen Person, nur zur Info oder automatisch versendet. Liegt der Scan falsch, mach eine Aufgabe daraus – spätere Scans lernen aus deinen Korrekturen.",
+    "all": "Alle",
+    "reason": {
+      "not_mine": "Aufgabe anderer",
+      "fyi": "Zur Info",
+      "automated": "Automatisch",
+      "tracked": "Bereits erfasst",
+      "other": "Sonstige"
+    },
+    "owner": "Für {{name}}",
+    "byUser": "Von dir markiert",
+    "noSubject": "(Kein Betreff)",
+    "empty": "Keine gefilterten E-Mails",
+    "restore": "Als Aufgabe anlegen",
+    "restored": "Zu deinen Aufgaben hinzugefügt",
+    "notMine": "Nicht meine",
+    "notMineTip": "Aus den Aufgaben entfernen; spätere Scans lernen daraus",
+    "dismissed": "Zu den gefilterten E-Mails verschoben"
   }
 }

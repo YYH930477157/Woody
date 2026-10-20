@@ -177,3 +177,181 @@ describe('bundled Todo MCP email snapshot', () => {
     60_000
   );
 });
+
+type PresentedEmail = {
+  message_id: string;
+  my_role: string;
+  to?: string;
+  automated?: boolean;
+  thread_todo?: { id: string; title: string };
+  latest_message: string;
+  quoted_history?: string;
+};
+
+const ME = { name: '李国强', address: 'lgq@corp.com' };
+const ZHANG = { name: '张三', address: 'zs@corp.com' };
+
+function writeMailbox(emails: Array<Record<string, unknown>>): void {
+  fs.writeFileSync(
+    path.join(todoDir, 'emails.json'),
+    JSON.stringify({
+      fetched_at: Date.now(),
+      source: 'test',
+      mailbox: { names: [ME.name], addresses: ['/o=Corp/cn=Recipients/cn=lgq', ME.address] },
+      emails: emails.map((email) => ({ subject: 'Subject', received_at: 1_700_000_000_000, ...email })),
+    })
+  );
+}
+
+function readStoreFile(): {
+  todos: Array<{ id: string; email_ref?: { thread_id?: string; subject?: string } }>;
+  skipped_emails?: Array<Record<string, unknown>>;
+} {
+  return JSON.parse(fs.readFileSync(path.join(todoDir, 'todo.json'), 'utf8'));
+}
+
+async function readBatch(): Promise<{ header: string; emails: Map<string, PresentedEmail> }> {
+  const text = await callTool('email_snapshot_read');
+  const start = text.indexOf('\n[');
+  const emails = JSON.parse(text.slice(start + 1)) as PresentedEmail[];
+  return { header: text.slice(0, start), emails: new Map(emails.map((email) => [email.message_id, email])) };
+}
+
+describe('bundled Todo MCP email ownership', () => {
+  it("states the user's role in each email", async () => {
+    writeMailbox([
+      { message_id: 'to-me', from_name: '王经理', to: [ME], cc: [] },
+      { message_id: 'cc-me', from_name: '王经理', to: [ZHANG], cc: [ME] },
+      { message_id: 'exchange', from_name: '王经理', to: [{ name: '', address: '/O=Corp/cn=Recipients/cn=lgq' }] },
+      { message_id: 'via-list', from_name: '王经理', to: [{ name: 'All Staff', address: 'all@corp.com' }], cc: [] },
+      { message_id: 'sent', from_name: ME.name, from_address: ME.address, to: [ZHANG], cc: [] },
+      { message_id: 'note-to-self', from_name: ME.name, from_address: ME.address, to: [ME], cc: [] },
+      { message_id: 'old-export', from_name: '王经理' },
+    ]);
+
+    const { header, emails } = await readBatch();
+
+    expect(header).toContain('Mailbox owner ("me"): 李国强, lgq@corp.com');
+    expect(Object.fromEntries([...emails].map(([id, email]) => [id, email.my_role]))).toEqual({
+      'to-me': 'to',
+      'cc-me': 'cc',
+      exchange: 'to',
+      'via-list': 'not_listed',
+      sent: 'sender',
+      'note-to-self': 'self',
+      'old-export': 'unknown',
+    });
+    expect(emails.get('cc-me')?.to).toBe('张三');
+    expect(emails.get('to-me')?.to).toBe('李国强 (me)');
+  });
+
+  it('separates the newest message from the quoted thread', async () => {
+    writeMailbox([
+      {
+        message_id: 'reply',
+        to: [ME],
+        body_preview:
+          '张三，请周五前提交测试报告。\r\n\r\n发件人: 李国强 <lgq@corp.com>\r\n发送时间: 2026年10月18日 10:00\r\n主题: 测试\r\n\r\n请大家确认排期。',
+      },
+      {
+        message_id: 'outlook-en',
+        to: [ME],
+        body_preview:
+          'Please review the draft.\n________________________________\nFrom: Tom\nSent: Monday\nFix the build.',
+      },
+      { message_id: 'plain', to: [ME], body_preview: 'No history here.' },
+    ]);
+
+    const { emails } = await readBatch();
+
+    expect(emails.get('reply')?.latest_message).toBe('张三，请周五前提交测试报告。');
+    expect(emails.get('reply')?.quoted_history).toContain('请大家确认排期');
+    expect(emails.get('outlook-en')?.latest_message).toBe('Please review the draft.');
+    expect(emails.get('outlook-en')?.quoted_history).toContain('Fix the build.');
+    expect(emails.get('plain')?.latest_message).toBe('No history here.');
+    expect(emails.get('plain')?.quoted_history).toBeUndefined();
+  });
+
+  it('flags mailing-list and no-reply mail as automated', async () => {
+    writeMailbox([
+      { message_id: 'list', to: [ME], list_headers: ['List-Unsubscribe: <mailto:u@news.com>'] },
+      { message_id: 'noreply', to: [ME], from_address: 'no-reply@system.com' },
+      { message_id: 'person', to: [ME], from_address: 'wang@corp.com', list_headers: ['Auto-Submitted: no'] },
+    ]);
+
+    const { emails } = await readBatch();
+
+    expect(emails.get('list')?.automated).toBe(true);
+    expect(emails.get('noreply')?.automated).toBe(true);
+    expect(emails.get('person')?.automated).toBeUndefined();
+  });
+
+  it('logs why emails were skipped and keeps the log through later writes', async () => {
+    writeMailbox([
+      { message_id: 'theirs', subject: 'RE: 样机反馈', from_name: '王经理', to: [ZHANG], cc: [ME], thread_id: 'T1' },
+      { message_id: 'legacy', subject: 'Digest', from_address: 'news@x.com', to: [ME] },
+    ]);
+
+    const marked = JSON.parse(
+      await callTool('email_mark_skipped', {
+        emails: [{ message_id: 'theirs', reason: 'not_mine', owner: '张三', note: '王经理让张三整理' }],
+        message_ids: ['legacy'],
+      })
+    );
+    await callTool('todo_create', { title: 'Unrelated' });
+
+    expect(marked).toEqual({ marked: 2, already_processed: 0, unknown: [] });
+    expect(readStoreFile().skipped_emails).toEqual([
+      expect.objectContaining({
+        message_id: 'theirs',
+        subject: 'RE: 样机反馈',
+        from: '王经理',
+        thread_id: 'T1',
+        reason: 'not_mine',
+        owner: '张三',
+        note: '王经理让张三整理',
+        by: 'scan',
+      }),
+      expect.objectContaining({ message_id: 'legacy', from: 'news@x.com', reason: 'other' }),
+    ]);
+  });
+
+  it('links later mail of a thread to the todo already made from it', async () => {
+    writeMailbox([{ message_id: 'first', subject: '评审方案', from_name: '王经理', to: [ME], thread_id: 'T9' }]);
+    const created = JSON.parse(
+      await callTool('todo_create', { title: '评审方案', email_ref: { message_id: 'first' } })
+    );
+    writeMailbox([
+      { message_id: 'reply', subject: 'RE: 评审方案', to: [ME], thread_id: 'T9' },
+      { message_id: 'other', subject: '别的事', to: [ME], thread_id: 'T2' },
+    ]);
+
+    const { emails } = await readBatch();
+
+    expect(readStoreFile().todos[0].email_ref).toMatchObject({ subject: '评审方案', thread_id: 'T9' });
+    expect(emails.get('reply')?.thread_todo).toMatchObject({ id: created.todo.id, title: '评审方案' });
+    expect(emails.get('other')?.thread_todo).toBeUndefined();
+  });
+
+  it("shows the user's corrections to later scans, newest first", async () => {
+    fs.writeFileSync(
+      path.join(todoDir, 'todo.json'),
+      JSON.stringify({
+        version: 1,
+        todos: [],
+        processed_message_ids: [],
+        scan_feedback: [
+          { verdict: 'not_mine', subject: '周报汇总', from: '王经理', owner: '张三', at: 1 },
+          { verdict: 'mine', subject: '审批单', from: 'OA', at: 2 },
+        ],
+      })
+    );
+    writeMailbox([{ message_id: 'm1', to: [ME] }]);
+
+    const { header } = await readBatch();
+
+    expect(header).toContain(`NOT the user's todo: "周报汇总" from 王经理 (it is 张三's)`);
+    expect(header).toContain(`IS the user's todo (an earlier scan skipped it): "审批单" from OA`);
+    expect(header.indexOf('审批单')).toBeLessThan(header.indexOf('周报汇总'));
+  });
+});

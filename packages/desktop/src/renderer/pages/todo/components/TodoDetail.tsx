@@ -6,7 +6,7 @@
 
 import React, { useState } from 'react';
 import { Button, Checkbox, Input, Popconfirm, Radio, Tag, Tooltip } from '@arco-design/web-react';
-import { Close, Delete, Edit, Hourglass, Mail, Notes, Plus, Quote } from '@icon-park/react';
+import { Close, Delete, Edit, Hourglass, Mail, Notes, PeopleMinus, Plus, Quote } from '@icon-park/react';
 import classNames from 'classnames';
 import { useTranslation } from 'react-i18next';
 import type { ITodoItem, ITodoSubtask } from '@/common/types/todo/todoTypes';
@@ -42,6 +42,7 @@ export default function TodoDetail({
   onSubtasksChange,
   onEdit,
   onRemove,
+  onNotMine,
 }: {
   item: ITodoItem;
   onClose?: () => void;
@@ -50,6 +51,8 @@ export default function TodoDetail({
   onSubtasksChange: (subtasks: ITodoSubtask[]) => void;
   onEdit: () => void;
   onRemove: () => void;
+  /** Email todos only: the ask belongs to someone else. */
+  onNotMine: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const locale = i18n?.language || 'en-US';
@@ -259,7 +262,19 @@ export default function TodoDetail({
         </Section>
 
         {item.email_ref && (
-          <Section title={t('todo.drawer.email')}>
+          <Section
+            title={t('todo.drawer.email')}
+            extra={
+              <Tooltip content={t('todo.skipped.notMineTip')} mini position='tr'>
+                <Button size='mini' type='text' onClick={onNotMine}>
+                  <span className='inline-flex items-center gap-4px'>
+                    <PeopleMinus theme='outline' fill='currentColor' size='13' />
+                    <span>{t('todo.skipped.notMine')}</span>
+                  </span>
+                </Button>
+              </Tooltip>
+            }
+          >
             <div className='flex gap-10px p-12px rd-10px border border-[var(--border-base)]'>
               <Mail theme='outline' fill='currentColor' size='16' className='shrink-0 mt-2px text-t-tertiary' />
               <div className='min-w-0 flex-1'>

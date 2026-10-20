@@ -129,5 +129,28 @@
     "overdue": "{{count}} 日超過",
     "today": "今日",
     "tomorrow": "明日"
+  },
+  "skipped": {
+    "button": "除外 {{count}}",
+    "tooltip": "あなたの対応は不要とスキャンが判断したメール",
+    "title": "除外したメール",
+    "hint": "これらのメールは、他の人の作業・共有のみ・自動送信と判断され、ToDo にしていません。判断が誤っていれば ToDo に変換できます。以降のスキャンはあなたの修正を参考にします。",
+    "all": "すべて",
+    "reason": {
+      "not_mine": "他の人の作業",
+      "fyi": "共有のみ",
+      "automated": "自動送信",
+      "tracked": "追跡中",
+      "other": "その他"
+    },
+    "owner": "担当: {{name}}",
+    "byUser": "あなたが指定",
+    "noSubject": "（件名なし）",
+    "empty": "除外したメールはありません",
+    "restore": "ToDo にする",
+    "restored": "ToDo に追加しました",
+    "notMine": "自分の作業ではない",
+    "notMineTip": "ToDo から外し、以降のスキャンの参考にします",
+    "dismissed": "除外したメールに移動しました"
   }
 }

@@ -129,5 +129,28 @@
     "overdue": "{{count}} d de atraso",
     "today": "Hoje",
     "tomorrow": "Amanhã"
+  },
+  "skipped": {
+    "button": "Filtrados {{count}}",
+    "tooltip": "E-mails que a varredura julgou não serem seus para fazer",
+    "title": "E-mails filtrados",
+    "hint": "A varredura não criou tarefas para estes e-mails: tarefa de outra pessoa, apenas informativo ou envio automático. Se errou, transforme em tarefa; as próximas varreduras aprendem com suas correções.",
+    "all": "Todos",
+    "reason": {
+      "not_mine": "De outra pessoa",
+      "fyi": "Informativo",
+      "automated": "Automático",
+      "tracked": "Já acompanhado",
+      "other": "Outros"
+    },
+    "owner": "Para {{name}}",
+    "byUser": "Marcado por você",
+    "noSubject": "(Sem assunto)",
+    "empty": "Nenhum e-mail filtrado",
+    "restore": "Transformar em tarefa",
+    "restored": "Adicionada às suas tarefas",
+    "notMine": "Não é minha",
+    "notMineTip": "Remover das tarefas; as próximas varreduras aprendem com isso",
+    "dismissed": "Movido para e-mails filtrados"
   }
 }

@@ -129,5 +129,28 @@
     "overdue": "{{count}} gün gecikti",
     "today": "Bugün",
     "tomorrow": "Yarın"
+  },
+  "skipped": {
+    "button": "Filtrelenen {{count}}",
+    "tooltip": "Taramanın sizin yapmanız gerekmediğine karar verdiği e-postalar",
+    "title": "Filtrelenen e-postalar",
+    "hint": "Tarama bu e-postalardan görev oluşturmadı: başkasının işi, yalnızca bilgi amaçlı ya da otomatik gönderim. Yanlış karar verdiyse göreve dönüştürün; sonraki taramalar düzeltmelerinizden öğrenir.",
+    "all": "Tümü",
+    "reason": {
+      "not_mine": "Başkasının işi",
+      "fyi": "Bilgi amaçlı",
+      "automated": "Otomatik",
+      "tracked": "Zaten takipte",
+      "other": "Diğer"
+    },
+    "owner": "{{name}} için",
+    "byUser": "Sizin işaretledikleriniz",
+    "noSubject": "(Konu yok)",
+    "empty": "Filtrelenen e-posta yok",
+    "restore": "Göreve dönüştür",
+    "restored": "Görevlerinize eklendi",
+    "notMine": "Benim değil",
+    "notMineTip": "Görevlerden çıkar; sonraki taramalar bunu dikkate alır",
+    "dismissed": "Filtrelenen e-postalara taşındı"
   }
 }

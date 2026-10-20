@@ -42,6 +42,15 @@ export function initTodoBridge(): void {
 
   ipcBridge.todo.setDone.provider(({ id, done }) => store.setDone({ id, done }));
 
+  ipcBridge.todo.skippedEmails.provider(async () => store.skippedEmails());
+
+  ipcBridge.todo.dismissEmail.provider(({ id }) => store.dismissEmailTodo({ id }));
+
+  ipcBridge.todo.restoreEmail.provider(
+    ({ message_id, title, notes, due_at, requester, status, blocked_reason, subtasks }) =>
+      store.restoreSkippedEmail({ message_id, title, notes, due_at, requester, status, blocked_reason, subtasks })
+  );
+
   ipcBridge.todo.remove.provider(({ id }) => store.remove({ id }));
 
   ipcBridge.todo.scanNow.provider(async () => {

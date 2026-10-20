@@ -19,6 +19,14 @@
  * snapshot is stale. Every returned email ends up in processed_message_ids,
  * via todo_create or email_mark_skipped, so later scans only see new mail.
  *
+ * Ownership: the scan must only create the user's own todos. The snapshot
+ * names the mailbox owner and each mail's To/CC, so email_snapshot_read
+ * states the user's role in every mail (to / cc / not_listed / sender / self),
+ * splits the newest message from the quoted history, flags machine-sent mail
+ * and points at an existing todo of the same thread. Skipped mail is logged
+ * with its reason (skipped_emails) so the user can review and restore it;
+ * the user's corrections (scan_feedback) are shown to later scans.
+ *
  * Protocol notes: stdio MCP uses newline-delimited JSON-RPC. stdout is the
  * protocol channel — all diagnostics go to stderr only.
  */
@@ -39,6 +47,14 @@ const SNAPSHOT_MAX_AGE_MS = 10 * 60 * 1000;
 const SNAPSHOT_REFRESH_TIMEOUT_MS = 120000;
 // Message-IDs only need to outlive the snapshot window (a few days, ≤100 emails per fetch).
 const PROCESSED_IDS_LIMIT = 2000;
+// Keep in sync with todoStore.ts.
+const SKIPPED_EMAILS_LIMIT = 300;
+const SCAN_FEEDBACK_LIMIT = 30;
+const SCAN_FEEDBACK_SHOWN = 10;
+const LATEST_MESSAGE_MAX_CHARS = 1800;
+const QUOTED_HISTORY_MAX_CHARS = 500;
+const RECIPIENTS_SHOWN = 6;
+const SKIP_REASONS = ['not_mine', 'fyi', 'automated', 'tracked', 'other'];
 
 const log = (message) => {
   process.stderr.write(`[aionui-todo] ${message}\n`);
@@ -63,6 +79,8 @@ const emptyStore = () => ({
   processed_message_ids: [],
   last_scan_at: null,
   last_scan_status: null,
+  skipped_emails: [],
+  scan_feedback: [],
 });
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -108,6 +126,8 @@ function readStoreUnlocked() {
       processed_message_ids: Array.isArray(parsed.processed_message_ids) ? parsed.processed_message_ids : [],
       last_scan_at: parsed.last_scan_at ?? null,
       last_scan_status: parsed.last_scan_status ?? null,
+      skipped_emails: Array.isArray(parsed.skipped_emails) ? parsed.skipped_emails : [],
+      scan_feedback: Array.isArray(parsed.scan_feedback) ? parsed.scan_feedback : [],
     };
   } catch {
     return emptyStore();
@@ -137,6 +157,13 @@ function rememberProcessed(store, messageId) {
   store.processed_message_ids.push(messageId);
   const overflow = store.processed_message_ids.length - PROCESSED_IDS_LIMIT;
   if (overflow > 0) store.processed_message_ids.splice(0, overflow);
+}
+
+function rememberSkipped(store, entry) {
+  store.skipped_emails = store.skipped_emails.filter((current) => current.message_id !== entry.message_id);
+  store.skipped_emails.push(entry);
+  const overflow = store.skipped_emails.length - SKIPPED_EMAILS_LIMIT;
+  if (overflow > 0) store.skipped_emails.splice(0, overflow);
 }
 
 function readSnapshot() {
@@ -213,6 +240,213 @@ const sanitizeSubtasks = (value) => {
     .slice(0, 30);
 };
 
+const clean = (value, max) =>
+  String(value ?? '')
+    .trim()
+    .slice(0, max);
+
+// ---------------------------------------------------------------------------
+// Email analysis — whom a mail is for and what is new in it
+// ---------------------------------------------------------------------------
+
+const normalizeKey = (value) =>
+  String(value ?? '')
+    .trim()
+    .toLowerCase();
+
+/** The mailbox owner's names and addresses; empty for exports that predate them. */
+function mailboxIdentity(snapshot) {
+  const mailbox = (snapshot && snapshot.mailbox) || {};
+  const collect = (values) => new Set((Array.isArray(values) ? values : []).map(normalizeKey).filter(Boolean));
+  return { names: collect(mailbox.names), addresses: collect(mailbox.addresses) };
+}
+
+const isMe = (me, person) =>
+  Boolean(person) &&
+  Boolean(
+    (person.address && me.addresses.has(normalizeKey(person.address))) ||
+    (person.name && me.names.has(normalizeKey(person.name)))
+  );
+
+const peopleOf = (value) =>
+  Array.isArray(value) ? value.filter((person) => person && (person.name || person.address)) : [];
+
+/**
+ * The user's place in a mail: self (a note to themselves), sender, to, cc,
+ * not_listed (reached through a distribution list or BCC), or unknown when
+ * the export has no mailbox or recipient data.
+ */
+function myRole(email, me) {
+  if (!me.names.size && !me.addresses.size) return 'unknown';
+  if (!Array.isArray(email.to) && !Array.isArray(email.cc)) return 'unknown';
+  const to = peopleOf(email.to);
+  const cc = peopleOf(email.cc);
+  if (isMe(me, { name: email.from_name, address: email.from_address })) {
+    const onlyMe = to.length > 0 && cc.length === 0 && to.every((person) => isMe(me, person));
+    return onlyMe ? 'self' : 'sender';
+  }
+  if (to.some((person) => isMe(me, person))) return 'to';
+  if (cc.some((person) => isMe(me, person))) return 'cc';
+  return 'not_listed';
+}
+
+/** "Me (me), Zhang San, +12 more", with the user listed first. */
+function describePeople(value, me) {
+  const people = peopleOf(value).sort((a, b) => Number(isMe(me, b)) - Number(isMe(me, a)));
+  if (!people.length) return undefined;
+  const shown = people
+    .slice(0, RECIPIENTS_SHOWN)
+    .map((person) => `${person.name || person.address}${isMe(me, person) ? ' (me)' : ''}`);
+  const hidden = people.length - shown.length;
+  return hidden > 0 ? `${shown.join(', ')}, +${hidden} more` : shown.join(', ');
+}
+
+// Where the quoted thread starts in a plain-text reply or forward (Outlook, Gmail, Foxmail; en/zh).
+const QUOTE_MARKERS = [
+  /^[ \t]*-{2,}[ \t]*(Original Message|Forwarded message|原始邮件|邮件原件|原始郵件|轉寄郵件|转发邮件)[ \t]*-{2,}/im,
+  /^[ \t]*_{10,}[ \t]*$/m,
+  /^[ \t]*(From|发件人|發件人|寄件者)[ \t]*[:：][^\n]*\n[ \t]*(Sent|Date|发送时间|發送時間|日期|时间|時間|寄件日期)[ \t]*[:：]/im,
+  /^[ \t]*On [^\n]{4,200}wrote:[ \t]*$/im,
+  /^[ \t]*在[^\n]{4,200}写道[:：][ \t]*$/m,
+  /^[ \t]*>[^\n]*\n[ \t]*>/m,
+];
+
+const clip = (text, max) => {
+  const tidy = text
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return tidy.length > max ? `${tidy.slice(0, max)}…` : tidy;
+};
+
+/** Split a mail body into the newest message and the quoted thread below it. */
+function splitQuoted(body) {
+  const text = String(body || '').replace(/\r\n?/g, '\n');
+  let cut = -1;
+  for (const marker of QUOTE_MARKERS) {
+    const match = marker.exec(text);
+    if (match && (cut === -1 || match.index < cut)) cut = match.index;
+  }
+  if (cut === -1) return { latest: clip(text, LATEST_MESSAGE_MAX_CHARS), quoted: '' };
+  return {
+    latest: clip(text.slice(0, cut), LATEST_MESSAGE_MAX_CHARS),
+    quoted: clip(text.slice(cut), QUOTED_HISTORY_MAX_CHARS),
+  };
+}
+
+const AUTOMATED_SENDER =
+  /(^|[._+-])(no-?reply|do-?not-?reply|notifications?|alerts?|mailer-daemon|postmaster|bounces?)([._+-]|@)/i;
+
+/** Mailing-list or machine-sent mail, judged by its headers or sender address. */
+function isAutomated(email) {
+  const headers = Array.isArray(email.list_headers) ? email.list_headers.map(String) : [];
+  const listed = headers.some(
+    (line) =>
+      /^list-(id|unsubscribe)\s*:/i.test(line) ||
+      /^precedence\s*:\s*(bulk|list|junk)/i.test(line) ||
+      (/^auto-submitted\s*:/i.test(line) && !/^auto-submitted\s*:\s*no\b/i.test(line))
+  );
+  return listed || AUTOMATED_SENDER.test(String(email.from_address || ''));
+}
+
+const SUBJECT_PREFIX = /^\s*(re|fw|fwd|aw|wg|tr|rv|sv|回复|回覆|答复|转发|轉寄|轉發)\s*[:：]\s*/i;
+
+/** Subject without reply / forward prefixes; matches a thread when one side has no thread id. */
+function threadSubject(subject) {
+  let text = String(subject || '').trim();
+  for (let previous = ''; previous !== text; ) {
+    previous = text;
+    text = text.replace(SUBJECT_PREFIX, '').trim();
+  }
+  return text.toLowerCase().replace(/\s+/g, ' ');
+}
+
+/** The todo already made from this mail's thread, open ones first. */
+function findThreadTodo(todos, email) {
+  const subject = threadSubject(email.subject);
+  const matches = todos.filter((todo) => {
+    const ref = todo.email_ref;
+    if (!ref) return false;
+    if (email.thread_id && ref.thread_id) return ref.thread_id === email.thread_id;
+    return subject.length >= 4 && threadSubject(ref.subject) === subject;
+  });
+  matches.sort(
+    (a, b) => Number(a.status === 'done') - Number(b.status === 'done') || (b.updated_at || 0) - (a.updated_at || 0)
+  );
+  const todo = matches[0];
+  return todo ? { id: todo.id, title: todo.title, status: todo.status, due_at: todo.due_at ?? null } : undefined;
+}
+
+/** Local wall-clock time, so relative deadlines ("明天下班前") resolve against the right day. */
+function formatLocal(ms) {
+  const date = new Date(Number(ms));
+  if (!Number.isFinite(date.getTime())) return undefined;
+  const pad = (value) => String(value).padStart(2, '0');
+  const weekday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][date.getDay()];
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())} ${weekday}`;
+}
+
+/** Mail of one thread stays together, in the order the thread first appears. */
+function groupByThread(emails) {
+  const rank = new Map();
+  const keyed = emails.map((email, index) => {
+    const key = email.thread_id ? `t:${email.thread_id}` : `i:${index}`;
+    if (!rank.has(key)) rank.set(key, rank.size);
+    return { email, index, rank: rank.get(key) };
+  });
+  keyed.sort((a, b) => a.rank - b.rank || a.index - b.index);
+  return keyed.map((entry) => entry.email);
+}
+
+function presentEmail(email, me, todos) {
+  const { latest, quoted } = splitQuoted(email.body_preview);
+  return {
+    message_id: email.message_id,
+    subject: email.subject,
+    from_name: email.from_name,
+    from_address: email.from_address,
+    received_at: email.received_at,
+    received_local: formatLocal(email.received_at),
+    my_role: myRole(email, me),
+    to: describePeople(email.to, me),
+    cc: describePeople(email.cc, me),
+    automated: isAutomated(email) || undefined,
+    importance: email.importance || undefined,
+    flagged: email.flagged || undefined,
+    thread_id: email.thread_id || undefined,
+    thread_todo: findThreadTodo(todos, email),
+    latest_message: latest,
+    quoted_history: quoted || undefined,
+  };
+}
+
+function describeMailbox(snapshot) {
+  const mailbox = (snapshot && snapshot.mailbox) || {};
+  const names = (Array.isArray(mailbox.names) ? mailbox.names : []).filter(Boolean);
+  const addresses = (Array.isArray(mailbox.addresses) ? mailbox.addresses : []).filter(
+    (address) => /@/.test(address) && !/^\/o=/i.test(address)
+  );
+  if (!names.length && !addresses.length) {
+    return 'Mailbox owner ("me"): unknown — this export has no recipient data (my_role=unknown); judge ownership from the mail text.';
+  }
+  return `Mailbox owner ("me"): ${[...names, ...addresses].join(', ')}`;
+}
+
+function describeFeedback(feedback) {
+  return feedback
+    .slice(-SCAN_FEEDBACK_SHOWN)
+    .reverse()
+    .map((entry) => {
+      const mail = `"${entry.subject}" from ${entry.from || 'unknown sender'}`;
+      return entry.verdict === 'not_mine'
+        ? `- NOT the user's todo: ${mail}${entry.owner ? ` (it is ${entry.owner}'s)` : ''}`
+        : `- IS the user's todo (an earlier scan skipped it): ${mail}`;
+    });
+}
+
+const findSnapshotEmail = (messageId) =>
+  ((readSnapshot() || {}).emails || []).find((email) => email && email.message_id === messageId);
+
 // ---------------------------------------------------------------------------
 // Tool implementations
 // ---------------------------------------------------------------------------
@@ -240,15 +474,19 @@ function toolTodoList(params) {
 async function toolTodoCreate(params) {
   const title = String((params && params.title) || '').trim();
   if (!title) throw new Error('title is required');
-  const emailRef =
-    params && params.email_ref
-      ? {
-          message_id: String(params.email_ref.message_id || ''),
-          subject: String(params.email_ref.subject || ''),
-          from: String(params.email_ref.from || ''),
-          received_at: Number(params.email_ref.received_at) || Date.now(),
-        }
-      : null;
+  const ref = params && params.email_ref;
+  // The snapshot fills what the agent left out, including the thread id it never sees as required.
+  const source = ref && ref.message_id ? findSnapshotEmail(String(ref.message_id)) : undefined;
+  const threadId = String((ref && ref.thread_id) || (source && source.thread_id) || '');
+  const emailRef = ref
+    ? {
+        message_id: String(ref.message_id || ''),
+        subject: String(ref.subject || (source && source.subject) || ''),
+        from: String(ref.from || (source && (source.from_name || source.from_address)) || ''),
+        received_at: Number(ref.received_at) || (source && Number(source.received_at)) || Date.now(),
+        ...(threadId ? { thread_id: threadId } : {}),
+      }
+    : null;
 
   return withLock((store) => {
     // 邮件来源去重:同一封邮件无论派生几个任务,只在首个到达时登记
@@ -353,33 +591,72 @@ async function toolEmailSnapshotRead() {
   if (snapshot.error) {
     return `Email source error: ${snapshot.error}`;
   }
-  const processed = new Set(readStore().processed_message_ids);
+  const store = readStore();
+  const processed = new Set(store.processed_message_ids);
   const fresh = (snapshot.emails || []).filter((email) => email.message_id && !processed.has(email.message_id));
   const capped = fresh.slice(0, SNAPSHOT_MAX_EMAILS);
   const remaining = fresh.length - capped.length;
   const next = remaining
     ? `${remaining} more unprocessed email(s) remain: handle every email in this batch with todo_create or email_mark_skipped, then call email_snapshot_read again.`
     : 'No more unprocessed emails after this batch.';
-  return `${capped.length} unprocessed email(s) in this batch, ${(snapshot.emails || []).length} in snapshot, fetched_at=${snapshot.fetched_at}. ${next}\n${JSON.stringify(capped, null, 2)}`;
+  const me = mailboxIdentity(snapshot);
+  const batch = groupByThread(capped).map((email) => presentEmail(email, me, store.todos));
+  const lines = [
+    describeMailbox(snapshot),
+    `${capped.length} unprocessed email(s) in this batch, ${(snapshot.emails || []).length} in snapshot, fetched_at=${snapshot.fetched_at}. ${next}`,
+  ];
+  const corrections = describeFeedback(store.scan_feedback);
+  if (corrections.length) {
+    lines.push('Corrections the user made to earlier scans — decide similar emails the same way:', ...corrections);
+  }
+  return `${lines.join('\n')}\n${JSON.stringify(batch, null, 2)}`;
 }
 
 async function toolEmailMarkSkipped(params) {
-  const ids = Array.isArray(params && params.message_ids)
-    ? [...new Set(params.message_ids.map((id) => String(id ?? '').trim()).filter(Boolean))]
-    : [];
-  if (!ids.length) throw new Error('message_ids is required');
-  if (ids.length > 100) throw new Error('at most 100 message_ids per call');
+  const decisions = new Map();
+  const add = (rawId, reason, owner, note) => {
+    const id = String(rawId ?? '').trim();
+    if (!id || decisions.has(id)) return;
+    decisions.set(id, {
+      reason: SKIP_REASONS.includes(reason) ? reason : 'other',
+      owner: clean(owner, 60),
+      note: clean(note, 200),
+    });
+  };
+  for (const entry of Array.isArray(params && params.emails) ? params.emails : []) {
+    if (entry && typeof entry === 'object') add(entry.message_id, entry.reason, entry.owner, entry.note);
+  }
+  // Older skill versions pass bare ids.
+  for (const id of Array.isArray(params && params.message_ids) ? params.message_ids : []) add(id, 'other');
+  if (!decisions.size) throw new Error('emails is required');
+  if (decisions.size > 100) throw new Error('at most 100 emails per call');
   // Only ids from the current snapshot are accepted, so a mistyped id stays visible to the next scan.
-  const known = new Set(((readSnapshot() || {}).emails || []).map((email) => email.message_id).filter(Boolean));
+  const known = new Map(
+    ((readSnapshot() || {}).emails || []).filter((email) => email && email.message_id).map((e) => [e.message_id, e])
+  );
   return withLock((store) => {
     const processed = new Set(store.processed_message_ids);
     const result = { marked: 0, already_processed: 0, unknown: [] };
-    for (const id of ids) {
+    const now = Date.now();
+    for (const [id, decision] of decisions) {
+      const email = known.get(id);
       if (processed.has(id)) result.already_processed += 1;
-      else if (!known.has(id)) result.unknown.push(id);
+      else if (!email) result.unknown.push(id);
       else {
         rememberProcessed(store, id);
         processed.add(id);
+        rememberSkipped(store, {
+          message_id: id,
+          subject: String(email.subject || ''),
+          from: String(email.from_name || email.from_address || ''),
+          received_at: Number(email.received_at) || now,
+          ...(email.thread_id ? { thread_id: String(email.thread_id) } : {}),
+          reason: decision.reason,
+          ...(decision.owner ? { owner: decision.owner } : {}),
+          ...(decision.note ? { note: decision.note } : {}),
+          by: 'scan',
+          at: now,
+        });
         result.marked += 1;
       }
     }
@@ -397,7 +674,7 @@ const TOOLS = [
   {
     name: 'todo_list',
     description:
-      "List the user's todos. Filter by status ('pending'|'done') and due-date range (epoch ms). Use this before creating tasks to avoid duplicates and to find task ids.",
+      "List the user's todos. Filter by status ('pending'|'waiting'|'done') and due-date range (epoch ms). Use this before creating tasks to avoid duplicates and to find task ids.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -440,12 +717,14 @@ const TOOLS = [
         },
         email_ref: {
           type: 'object',
-          description: 'Origin email for dedup/traceability.',
+          description:
+            'Origin email for dedup/traceability. Missing subject, sender, time and thread are filled from the snapshot.',
           properties: {
             message_id: { type: 'string' },
             subject: { type: 'string' },
             from: { type: 'string' },
             received_at: { type: 'number' },
+            thread_id: { type: 'string' },
           },
           required: ['message_id'],
         },
@@ -496,23 +775,36 @@ const TOOLS = [
   {
     name: 'email_snapshot_read',
     description:
-      'Read unprocessed emails from the mailbox snapshot (refreshed automatically when older than 10 minutes). Call this first when scanning emails for tasks; each email carries message_id, subject, from, received_at and a body preview. Returns at most 15 per call: handle each one with todo_create (email_ref) or email_mark_skipped before calling again.',
+      "Read unprocessed emails from the mailbox snapshot (refreshed automatically when older than 10 minutes). Call this first when scanning emails for tasks. The header names the mailbox owner (the user) and lists the user's corrections of earlier scans; each email carries message_id, subject, sender, received_local, my_role (the user's place in the mail: to / cc / not_listed / sender / self / unknown), to / cc, automated, flagged, thread_todo (an existing todo of the same thread), latest_message (the new text) and quoted_history (older mail in the thread). Returns at most 15 per call: handle each one with todo_create (email_ref) or email_mark_skipped before calling again.",
     inputSchema: { type: 'object', properties: {} },
   },
   {
     name: 'email_mark_skipped',
     description:
-      'Mark emails returned by email_snapshot_read as reviewed without creating a todo (not actionable), so later scans do not return them again. Pass message_id values verbatim.',
+      'Record emails returned by email_snapshot_read that need no new todo for the user, each with a reason, so later scans skip them and the user can review the decision. Pass message_id values verbatim.',
     inputSchema: {
       type: 'object',
       properties: {
-        message_ids: {
+        emails: {
           type: 'array',
-          items: { type: 'string' },
-          description: 'message_id values of the non-actionable emails (max 100 per call).',
+          description: 'One entry per email (max 100 per call).',
+          items: {
+            type: 'object',
+            properties: {
+              message_id: { type: 'string' },
+              reason: {
+                type: 'string',
+                enum: SKIP_REASONS,
+                description:
+                  "not_mine: the ask is someone else's; fyi: for information, nothing to do; automated: newsletter, notification or report; tracked: the thread already has a todo; other.",
+              },
+              owner: { type: 'string', description: 'For not_mine: whose task it is, e.g. "张三".' },
+              note: { type: 'string', description: 'One short line on why, in the email language.' },
+            },
+            required: ['message_id', 'reason'],
+          },
         },
       },
-      required: ['message_ids'],
     },
   },
 ];

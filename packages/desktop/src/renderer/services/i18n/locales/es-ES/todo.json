@@ -129,5 +129,28 @@
     "overdue": "{{count}} d de retraso",
     "today": "Hoy",
     "tomorrow": "Mañana"
+  },
+  "skipped": {
+    "button": "Filtrados {{count}}",
+    "tooltip": "Correos que el escaneo consideró que no te tocan",
+    "title": "Correos filtrados",
+    "hint": "El escaneo no convirtió estos correos en tareas: son tareas de otra persona, solo informativos o automáticos. Si se equivocó, conviértelo en tarea; los próximos escaneos aprenden de tus correcciones.",
+    "all": "Todos",
+    "reason": {
+      "not_mine": "De otra persona",
+      "fyi": "Informativo",
+      "automated": "Automático",
+      "tracked": "Ya en seguimiento",
+      "other": "Otros"
+    },
+    "owner": "Para {{name}}",
+    "byUser": "Marcado por ti",
+    "noSubject": "(Sin asunto)",
+    "empty": "No hay correos filtrados",
+    "restore": "Convertir en tarea",
+    "restored": "Añadida a tus tareas",
+    "notMine": "No es mía",
+    "notMineTip": "Quitarla de tus tareas; los próximos escaneos lo tendrán en cuenta",
+    "dismissed": "Movido a correos filtrados"
   }
 }

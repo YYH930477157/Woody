@@ -2,7 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { IMAGE_GEN_ENV_KEYS } from '@/common/config/imageGenerationMcpEnv';
 import { BUILTIN_IMAGE_GEN_NAME, type IMcpServer, type IProvider } from '@/common/config/storage';
-import { resolveImageGenerationMigrationConfig, runBackendMigrations } from '@/process/utils/runBackendMigrations';
+import {
+  resolveImageGenerationMigrationConfig,
+  runBackendMigrations,
+  TODO_SCAN_SKILL_FLAG,
+} from '@/process/utils/runBackendMigrations';
 
 const {
   batchImportServersMock,
@@ -245,7 +249,7 @@ describe('runBackendMigrations', () => {
       if (path === '/api/assistants/assistant') return detail;
       if (path === '/api/mcp/servers') return [{ id: 'todo', name: 'aionui-todo' }];
       if (path === '/api/cron/jobs') return [{ id: 'scan', name: 'Todo email scan' }];
-      if (path === '/api/settings/client') return { 'migration.todoScanSkillV5': true };
+      if (path === '/api/settings/client') return { [TODO_SCAN_SKILL_FLAG]: true };
       return [];
     });
 
@@ -264,7 +268,7 @@ describe('runBackendMigrations', () => {
       if (path === '/api/assistants/assistant') return { defaults: { mcps: { mode: 'fixed', value: ['mail'] } } };
       if (path === '/api/mcp/servers') return [{ id: 'todo', name: 'aionui-todo' }];
       if (path === '/api/cron/jobs') return [{ id: 'scan', name: 'Todo email scan' }];
-      if (path === '/api/settings/client') return { 'migration.todoScanSkillV5': true };
+      if (path === '/api/settings/client') return { [TODO_SCAN_SKILL_FLAG]: true };
       return [];
     });
 
@@ -281,7 +285,7 @@ describe('runBackendMigrations', () => {
       if (path === '/api/assistants/assistant') throw new Error('backend unavailable');
       if (path === '/api/mcp/servers') return [{ id: 'todo', name: 'aionui-todo' }];
       if (path === '/api/cron/jobs') return [{ id: 'scan', name: 'Todo email scan' }];
-      if (path === '/api/settings/client') return { 'migration.todoScanSkillV5': true };
+      if (path === '/api/settings/client') return { [TODO_SCAN_SKILL_FLAG]: true };
       return [];
     });
 
@@ -290,20 +294,20 @@ describe('runBackendMigrations', () => {
     expect(httpRequestMock).not.toHaveBeenCalledWith('PUT', '/api/assistants/assistant', expect.anything());
   });
 
-  it('re-posts the Todo scan skill with skip marking to an existing job once', async () => {
+  it('re-posts the Todo scan skill with ownership rules to an existing job once', async () => {
     listServersMock.mockResolvedValue([imageServer()]);
     httpRequestMock.mockImplementation(async (method: string, path: string) => {
       if (method !== 'GET') return undefined;
       if (path === '/api/cron/jobs') return [{ id: 'scan', name: 'Todo email scan' }];
-      if (path === '/api/settings/client') return { 'migration.todoScanSkillV4': true };
+      if (path === '/api/settings/client') return { 'migration.todoScanSkillV5': true };
       return [];
     });
 
     await runBackendMigrations(configFile as never);
 
     expect(httpRequestMock).toHaveBeenCalledWith('POST', '/api/cron/jobs/scan/skill', {
-      content: expect.stringContaining('email_mark_skipped'),
+      content: expect.stringContaining('my_role'),
     });
-    expect(httpRequestMock).toHaveBeenCalledWith('PUT', '/api/settings/client', { 'migration.todoScanSkillV5': true });
+    expect(httpRequestMock).toHaveBeenCalledWith('PUT', '/api/settings/client', { [TODO_SCAN_SKILL_FLAG]: true });
   });
 });

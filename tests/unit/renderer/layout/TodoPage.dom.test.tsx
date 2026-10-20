@@ -2,17 +2,22 @@ import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import TodoPage from '@/renderer/pages/todo';
+import type { ITodoItem, TodoSkippedEmail } from '@/common/types/todo/todoTypes';
 
 const mocks = vi.hoisted(() => ({
   list: vi.fn(),
   status: vi.fn(),
   create: vi.fn(),
+  skippedEmails: vi.fn(),
+  restoreEmail: vi.fn(),
+  dismissEmail: vi.fn(),
   error: vi.fn(),
+  success: vi.fn(),
 }));
 
 vi.mock('@arco-design/web-react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@arco-design/web-react')>();
-  return { ...actual, Message: { ...actual.Message, error: mocks.error } };
+  return { ...actual, Message: { ...actual.Message, error: mocks.error, success: mocks.success } };
 });
 
 vi.mock('@/common', () => ({
@@ -21,6 +26,9 @@ vi.mock('@/common', () => ({
       list: { invoke: mocks.list },
       status: { invoke: mocks.status },
       create: { invoke: mocks.create },
+      skippedEmails: { invoke: mocks.skippedEmails },
+      restoreEmail: { invoke: mocks.restoreEmail },
+      dismissEmail: { invoke: mocks.dismissEmail },
     },
   },
 }));
@@ -52,6 +60,9 @@ beforeEach(() => {
   mocks.list.mockResolvedValue([]);
   mocks.status.mockResolvedValue(null);
   mocks.create.mockResolvedValue(undefined);
+  mocks.skippedEmails.mockResolvedValue([]);
+  mocks.restoreEmail.mockResolvedValue(null);
+  mocks.dismissEmail.mockResolvedValue(true);
 });
 
 async function openEditor() {
@@ -92,5 +103,61 @@ describe('Todo editor saving', () => {
 
     await waitFor(() => expect(mocks.create).toHaveBeenCalledTimes(2));
     expect(mocks.error).toHaveBeenCalledWith('todo.opFailed');
+  });
+});
+
+describe('Email scan corrections', () => {
+  const skipped: TodoSkippedEmail = {
+    message_id: 'm1',
+    subject: 'Weekly report summary',
+    from: 'Wang',
+    received_at: 1_700_000_000_000,
+    reason: 'not_mine',
+    owner: 'Zhang',
+    note: 'Wang asked Zhang',
+    by: 'scan',
+    at: 1,
+  };
+
+  it('turns a filtered email into a todo', async () => {
+    mocks.skippedEmails.mockResolvedValue([skipped]);
+    mocks.restoreEmail.mockResolvedValue({ id: 'todo-1', title: 'Weekly report summary' });
+    render(<TodoPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'todo.skipped.title' }));
+    expect(await screen.findByText('Weekly report summary')).toBeInTheDocument();
+    expect(screen.getByText('todo.skipped.reason.not_mine')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'todo.skipped.restore' }));
+
+    expect(await screen.findByDisplayValue('Weekly report summary')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Wang')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'todo.save' }));
+
+    await waitFor(() =>
+      expect(mocks.restoreEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ message_id: 'm1', title: 'Weekly report summary', requester: 'Wang' })
+      )
+    );
+    expect(mocks.success).toHaveBeenCalledWith('todo.skipped.restored');
+  });
+
+  it('removes an email todo the user marks as not theirs', async () => {
+    const item: ITodoItem = {
+      id: 'todo-7',
+      title: 'Summarize the weekly report',
+      status: 'pending',
+      source: 'email',
+      email_ref: { message_id: 'm7', subject: 'Weekly report', from: 'Wang', received_at: 1_700_000_000_000 },
+      created_at: 1,
+      updated_at: 1,
+    };
+    mocks.list.mockResolvedValue([item]);
+    render(<TodoPage />);
+
+    fireEvent.click(await screen.findByText('Summarize the weekly report'));
+    fireEvent.click(await screen.findByRole('button', { name: 'todo.skipped.notMine' }));
+
+    await waitFor(() => expect(mocks.dismissEmail).toHaveBeenCalledWith({ id: 'todo-7' }));
+    expect(mocks.success).toHaveBeenCalledWith('todo.skipped.dismissed');
   });
 });

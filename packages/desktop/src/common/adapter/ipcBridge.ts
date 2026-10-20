@@ -18,7 +18,13 @@ import { bridge } from '@/common/platform/bridge';
 export { terminal } from './terminal';
 import { buildListTasksPath } from './teamTaskPath';
 import type { OpenDialogOptions } from 'electron';
-import type { ITodoItem, TodoScanResult, TodoScanSession, TodoStatusInfo } from '../types/todo/todoTypes';
+import type {
+  ITodoItem,
+  TodoScanResult,
+  TodoScanSession,
+  TodoSkippedEmail,
+  TodoStatusInfo,
+} from '../types/todo/todoTypes';
 import type {
   ICssTheme,
   IMcpServer,
@@ -1722,6 +1728,14 @@ export const todo = {
   scanNow: bridge.buildProvider<TodoScanResult, void>('todo.scan-now'),
   scanSessions: bridge.buildProvider<TodoScanSession[], void>('todo.scan-sessions'),
   status: bridge.buildProvider<TodoStatusInfo, void>('todo.status'),
+  /** Emails the scan judged not to be the user's todos, newest first. */
+  skippedEmails: bridge.buildProvider<TodoSkippedEmail[], void>('todo.skipped-emails'),
+  /** Remove an email todo that belongs to someone else; later scans learn from it. */
+  dismissEmail: bridge.buildProvider<boolean, { id: string }>('todo.dismiss-email'),
+  /** Turn a skipped email into a todo; later scans learn from it. */
+  restoreEmail: bridge.buildProvider<ITodoItem | null, ITodoCreateParams & { message_id: string }>(
+    'todo.restore-email'
+  ),
 };
 
 export const sourceControl = {

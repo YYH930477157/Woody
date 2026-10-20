@@ -9,7 +9,7 @@ import { Message } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import { ipcBridge } from '@/common';
-import type { ITodoItem, ITodoSubtask, TodoStatusInfo } from '@/common/types/todo/todoTypes';
+import type { ITodoItem, ITodoSubtask, TodoSkippedEmail, TodoStatusInfo } from '@/common/types/todo/todoTypes';
 
 const BACKGROUND_REFRESH_MS = 15_000;
 
@@ -28,16 +28,19 @@ export function useTodos(enabled: boolean) {
   const [todos, setTodos] = useState<ITodoItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [scanInfo, setScanInfo] = useState<TodoStatusInfo | null>(null);
+  const [skipped, setSkipped] = useState<TodoSkippedEmail[]>([]);
   const [scanning, setScanning] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
-      const [list, info] = await Promise.all([
+      const [list, info, skippedEmails] = await Promise.all([
         ipcBridge.todo.list.invoke(),
         ipcBridge.todo.status.invoke().catch((): TodoStatusInfo | null => null),
+        ipcBridge.todo.skippedEmails.invoke().catch((): TodoSkippedEmail[] => []),
       ]);
       setTodos(list || []);
       setScanInfo(info);
+      setSkipped(skippedEmails || []);
     } catch (error) {
       console.error('[TodoPage] failed to load todos:', error);
     } finally {
@@ -156,6 +159,42 @@ export function useTodos(enabled: boolean) {
     [refresh, t]
   );
 
+  /** An email todo that is someone else's: it moves to the skipped list and later scans learn from it. */
+  const dismiss = useCallback(
+    async (item: ITodoItem) => {
+      try {
+        const done = await ipcBridge.todo.dismissEmail.invoke({ id: item.id });
+        await refresh();
+        if (done) Message.success(t('todo.skipped.dismissed'));
+        return done;
+      } catch {
+        Message.error(t('todo.opFailed'));
+        return false;
+      }
+    },
+    [refresh, t]
+  );
+
+  /** Make a todo from a skipped email. */
+  const restore = useCallback(
+    async (email: TodoSkippedEmail, draft: TodoDraft): Promise<{ ok: boolean; item?: ITodoItem }> => {
+      try {
+        const item = await ipcBridge.todo.restoreEmail.invoke({ ...draft, message_id: email.message_id });
+        await refresh();
+        if (!item) {
+          Message.error(t('todo.opFailed'));
+          return { ok: false };
+        }
+        Message.success(t('todo.skipped.restored'));
+        return { ok: true, item };
+      } catch {
+        Message.error(t('todo.opFailed'));
+        return { ok: false };
+      }
+    },
+    [refresh, t]
+  );
+
   const scan = useCallback(async () => {
     setScanning(true);
     try {
@@ -173,5 +212,21 @@ export function useTodos(enabled: boolean) {
     }
   }, [refresh, t]);
 
-  return { todos, loading, scanInfo, scanning, refresh, setDone, setStatus, unblock, setSubtasks, remove, save, scan };
+  return {
+    todos,
+    skipped,
+    loading,
+    scanInfo,
+    scanning,
+    refresh,
+    setDone,
+    setStatus,
+    unblock,
+    setSubtasks,
+    remove,
+    save,
+    dismiss,
+    restore,
+    scan,
+  };
 }

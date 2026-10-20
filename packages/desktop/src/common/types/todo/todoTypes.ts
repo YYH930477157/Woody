@@ -34,6 +34,37 @@ export interface TodoEmailRef {
   subject: string;
   from: string;
   received_at: number;
+  /** Mail thread (Outlook ConversationID): later mail in the thread is checked against this todo. */
+  thread_id?: string;
+}
+
+/** Why the email scan left an email out of the todo list. */
+export type EmailSkipReason = 'not_mine' | 'fyi' | 'automated' | 'tracked' | 'other';
+
+/** An email the scan, or the user, decided is not one of the user's todos; kept so it can be reviewed and restored. */
+export interface TodoSkippedEmail {
+  message_id: string;
+  subject: string;
+  from: string;
+  received_at: number;
+  thread_id?: string;
+  reason: EmailSkipReason;
+  /** Who the ask is actually for, when reason is not_mine. */
+  owner?: string;
+  /** One-line explanation from the scan. */
+  note?: string;
+  /** 'user' when the user removed an email todo as not theirs. */
+  by: 'scan' | 'user';
+  at: number;
+}
+
+/** A user correction of a scan decision; the most recent ones are shown to later scans. */
+export interface TodoScanFeedback {
+  verdict: 'mine' | 'not_mine';
+  subject: string;
+  from: string;
+  owner?: string;
+  at: number;
 }
 
 export interface ITodoItem {
@@ -63,6 +94,15 @@ export interface TodoStoreData {
   processed_message_ids: string[];
   last_scan_at?: number | null;
   last_scan_status?: string | null;
+  /** Emails reviewed without creating a todo, oldest first (capped). */
+  skipped_emails?: TodoSkippedEmail[];
+  /** User corrections of scan decisions, oldest first (capped). */
+  scan_feedback?: TodoScanFeedback[];
+}
+
+export interface EmailAddress {
+  name: string;
+  address: string;
 }
 
 /** 邮件快照单条(由邮件源适配器产出,MCP 的 email_snapshot_read 读取)。 */
@@ -75,12 +115,27 @@ export interface EmailSnapshotItem {
   folder?: string;
   body_preview: string;
   unread?: boolean;
+  to?: EmailAddress[];
+  cc?: EmailAddress[];
+  thread_id?: string;
+  importance?: 'high' | 'low';
+  /** Flagged for follow-up by the user in the mail client. */
+  flagged?: boolean;
+  /** List-*, Auto-Submitted and Precedence header lines, which mark bulk or machine-sent mail. */
+  list_headers?: string[];
+}
+
+/** The mailbox owner: the user the scan creates todos for. */
+export interface EmailMailbox {
+  names: string[];
+  addresses: string[];
 }
 
 export interface EmailSnapshot {
   fetched_at: number;
   source: string;
   error?: string;
+  mailbox?: EmailMailbox;
   emails: EmailSnapshotItem[];
 }
 

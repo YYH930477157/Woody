@@ -42,6 +42,18 @@ export function requesterOf(item: ITodoItem): string | null {
   return name.trim() || null;
 }
 
+const SUBJECT_PREFIX = /^\s*(re|fw|fwd|回复|回覆|答复|转发|轉寄|轉發)\s*[:：]\s*/i;
+
+/** An email subject without its reply / forward prefixes, as a starting title for a todo. */
+export function subjectAsTitle(subject: string): string {
+  let text = subject.trim();
+  for (let previous = ''; previous !== text; ) {
+    previous = text;
+    text = text.replace(SUBJECT_PREFIX, '');
+  }
+  return text;
+}
+
 const NOTE_LABEL = /^(要做什么|关键点|原文关键句|要求人|截止)[:：]/;
 
 /** One-line summary: the "要做什么" line written by the email scan, else the first plain line or the subject. */

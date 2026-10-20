@@ -8,7 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'node:crypto';
 import { app } from 'electron';
-import type { ITodoItem, TodoStoreData } from '@/common/types/todo/todoTypes';
+import type { ITodoItem, TodoSkippedEmail, TodoStoreData } from '@/common/types/todo/todoTypes';
 
 /**
  * todo.json 存储:Electron 主进程侧的读写实现。
@@ -28,6 +28,9 @@ import type { ITodoItem, TodoStoreData } from '@/common/types/todo/todoTypes';
 const LOCK_STALE_MS = 10_000;
 const LOCK_ACQUIRE_TIMEOUT_MS = 3_000;
 const LOCK_RETRY_DELAY_MS = 50;
+// Keep in sync with the todo MCP (resources/bundled-mcp/todo-mcp/index.js).
+const SKIPPED_EMAILS_LIMIT = 300;
+const SCAN_FEEDBACK_LIMIT = 30;
 
 export const getTodoDir = (): string => path.join(app.getPath('userData'), 'todo');
 export const getTodoDbPath = (): string => path.join(getTodoDir(), 'todo.json');
@@ -39,6 +42,8 @@ const emptyStore = (): TodoStoreData => ({
   processed_message_ids: [],
   last_scan_at: null,
   last_scan_status: null,
+  skipped_emails: [],
+  scan_feedback: [],
 });
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -97,6 +102,9 @@ const readStoreUnlocked = (): TodoStoreData => {
       processed_message_ids: Array.isArray(parsed.processed_message_ids) ? parsed.processed_message_ids : [],
       last_scan_at: parsed.last_scan_at ?? null,
       last_scan_status: parsed.last_scan_status ?? null,
+      // Also written by the todo MCP: every rewrite here must carry them over.
+      skipped_emails: Array.isArray(parsed.skipped_emails) ? parsed.skipped_emails : [],
+      scan_feedback: Array.isArray(parsed.scan_feedback) ? parsed.scan_feedback : [],
     };
   } catch {
     return emptyStore();
@@ -150,45 +158,143 @@ export const sanitizeSubtasks = (input: unknown): { id: string; text: string; do
   return cleaned;
 };
 
+type TodoDraftInput = {
+  title: string;
+  notes?: string;
+  due_at?: number | null;
+  requester?: string;
+  status?: 'pending' | 'waiting';
+  blocked_reason?: string;
+  subtasks?: { id: string; text: string; done: boolean }[];
+};
+
+const buildItem = (
+  input: TodoDraftInput & { source?: ITodoItem['source']; email_ref?: ITodoItem['email_ref'] }
+): ITodoItem => {
+  const title = input.title.trim();
+  if (!title) throw new Error('title is required');
+  const now = Date.now();
+  const status = input.status === 'waiting' ? 'waiting' : 'pending';
+  return {
+    id: newId(),
+    title,
+    notes: input.notes?.trim() || undefined,
+    due_at: input.due_at ?? null,
+    status,
+    blocked_reason: status === 'waiting' ? input.blocked_reason?.trim() || undefined : undefined,
+    requester: input.requester?.trim() || undefined,
+    subtasks: sanitizeSubtasks(input.subtasks) ?? undefined,
+    completed_at: null,
+    source: input.source ?? 'manual',
+    email_ref: input.email_ref ?? null,
+    created_at: now,
+    updated_at: now,
+  };
+};
+
+const pushCapped = <T>(list: T[], entry: T, limit: number): void => {
+  list.push(entry);
+  if (list.length > limit) list.splice(0, list.length - limit);
+};
+
+type FeedbackMail = { subject: string; from: string };
+
+/** Drop earlier corrections of the same email; the user's latest word on it is the only one kept. */
+const withdrawFeedback = (store: TodoStoreData, mail: FeedbackMail): void => {
+  store.scan_feedback = (store.scan_feedback ?? []).filter(
+    (entry) => !(entry.subject === mail.subject && entry.from === mail.from)
+  );
+};
+
+const recordFeedback = (store: TodoStoreData, verdict: 'mine' | 'not_mine', mail: FeedbackMail): void => {
+  withdrawFeedback(store, mail);
+  pushCapped(
+    store.scan_feedback!,
+    { verdict, subject: mail.subject, from: mail.from, at: Date.now() },
+    SCAN_FEEDBACK_LIMIT
+  );
+};
+
 export const createTodoStoreService = () => ({
   list(): ITodoItem[] {
     return readStore().todos;
   },
 
-  async create(input: {
-    title: string;
-    notes?: string;
-    due_at?: number | null;
-    requester?: string;
-    status?: 'pending' | 'waiting';
-    blocked_reason?: string;
-    subtasks?: { id: string; text: string; done: boolean }[];
-    source?: ITodoItem['source'];
-    email_ref?: ITodoItem['email_ref'];
-  }): Promise<ITodoItem> {
-    const title = input.title.trim();
-    if (!title) throw new Error('title is required');
-    const now = Date.now();
-    const status = input.status === 'waiting' ? 'waiting' : 'pending';
-    const item: ITodoItem = {
-      id: newId(),
-      title,
-      notes: input.notes?.trim() || undefined,
-      due_at: input.due_at ?? null,
-      status,
-      blocked_reason: status === 'waiting' ? input.blocked_reason?.trim() || undefined : undefined,
-      requester: input.requester?.trim() || undefined,
-      subtasks: sanitizeSubtasks(input.subtasks) ?? undefined,
-      completed_at: null,
-      source: input.source ?? 'manual',
-      email_ref: input.email_ref ?? null,
-      created_at: now,
-      updated_at: now,
-    };
+  async create(
+    input: TodoDraftInput & { source?: ITodoItem['source']; email_ref?: ITodoItem['email_ref'] }
+  ): Promise<ITodoItem> {
+    const item = buildItem(input);
     await withLock((store) => {
       store.todos.push(item);
     });
     return item;
+  },
+
+  /** Emails the scan left out of the todo list, newest first. */
+  skippedEmails(): TodoSkippedEmail[] {
+    return (readStore().skipped_emails ?? []).toSorted((a, b) => b.received_at - a.received_at);
+  },
+
+  /**
+   * The user says an email todo is someone else's: the todo goes, its email
+   * joins the skipped list, and later scans see the correction.
+   */
+  async dismissEmailTodo(input: { id: string }): Promise<boolean> {
+    return withLock((store) => {
+      const item = store.todos.find((todo) => todo.id === input.id);
+      const ref = item?.email_ref;
+      if (!item || !ref) return false;
+      const now = Date.now();
+      store.todos = store.todos.filter((todo) => todo.id !== item.id);
+      const skipped = (store.skipped_emails ?? []).filter((entry) => entry.message_id !== ref.message_id);
+      pushCapped(
+        skipped,
+        {
+          message_id: ref.message_id,
+          subject: ref.subject,
+          from: ref.from,
+          received_at: ref.received_at,
+          ...(ref.thread_id ? { thread_id: ref.thread_id } : {}),
+          reason: 'not_mine',
+          by: 'user',
+          at: now,
+        },
+        SKIPPED_EMAILS_LIMIT
+      );
+      store.skipped_emails = skipped;
+      recordFeedback(store, 'not_mine', ref);
+      return true;
+    });
+  },
+
+  /**
+   * Make a todo from a skipped email. Restoring what the scan skipped teaches
+   * later scans; restoring what the user dismissed withdraws that correction.
+   */
+  async restoreSkippedEmail(input: TodoDraftInput & { message_id: string }): Promise<ITodoItem | null> {
+    return withLock((store) => {
+      const skipped = store.skipped_emails ?? [];
+      const entry = skipped.find((current) => current.message_id === input.message_id);
+      if (!entry) return null;
+      const { message_id: _messageId, ...draft } = input;
+      const item = buildItem({
+        ...draft,
+        source: 'email',
+        email_ref: {
+          message_id: entry.message_id,
+          subject: entry.subject,
+          from: entry.from,
+          received_at: entry.received_at,
+          ...(entry.thread_id ? { thread_id: entry.thread_id } : {}),
+        },
+      });
+      store.todos.push(item);
+      store.skipped_emails = skipped.filter((current) => current !== entry);
+      // The scan had made it a todo when the user is the one who removed it, so there is nothing to teach.
+      if (entry.by === 'user') withdrawFeedback(store, entry);
+      else recordFeedback(store, 'mine', entry);
+      return item;
+    });
   },
 
   async update(input: {
