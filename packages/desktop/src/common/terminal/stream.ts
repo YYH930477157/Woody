@@ -4,7 +4,9 @@ export const TERMINAL_INPUT_MODES = ['normal', 'localEcho', 'readline', 'readlin
 export type TerminalInputMode = (typeof TERMINAL_INPUT_MODES)[number];
 export const TERMINAL_OUTPUT_MODES = ['text', 'hex', 'hexdump'] as const;
 export type TerminalOutputMode = (typeof TERMINAL_OUTPUT_MODES)[number];
-export const TERMINAL_BAUD_RATES = [110, 300, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600];
+export const TERMINAL_BAUD_RATES = [
+  110, 300, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600,
+];
 
 /** Rewrite newline sequences. A trailing CR can stay buffered until the next chunk. */
 export function applyNewlineMode(text: string, mode: TerminalNewlineMode): string {
@@ -37,8 +39,13 @@ export function formatHexdump(bytes: Uint8Array, startOffset = 0): string {
   for (let offset = 0; offset < bytes.length; offset += 16) {
     const slice = bytes.subarray(offset, Math.min(offset + 16, bytes.length));
     const hex = Array.from(slice, (byte) => byte.toString(16).padStart(2, '0').toUpperCase());
-    const grouped = `${hex.slice(0, 8).join(' ')}${hex.length > 8 ? `  ${hex.slice(8).join(' ')}` : ''}`.padEnd(48, ' ');
-    const ascii = Array.from(slice, (byte) => (byte >= 0x20 && byte <= 0x7e ? String.fromCharCode(byte) : '.')).join('');
+    const grouped = `${hex.slice(0, 8).join(' ')}${hex.length > 8 ? `  ${hex.slice(8).join(' ')}` : ''}`.padEnd(
+      48,
+      ' '
+    );
+    const ascii = Array.from(slice, (byte) => (byte >= 0x20 && byte <= 0x7e ? String.fromCharCode(byte) : '.')).join(
+      ''
+    );
     lines.push(`${(startOffset + offset).toString(16).padStart(8, '0').toUpperCase()}  ${grouped}  |${ascii}|`);
   }
   return lines.join('\n');

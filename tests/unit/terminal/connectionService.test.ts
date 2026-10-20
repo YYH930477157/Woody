@@ -222,7 +222,9 @@ describe('shared terminal connections', () => {
       profile: { baudRate: 115200 },
     });
     expect(rates).toEqual([115200]);
-    await expect(service.send(connection.id, { data: 'A', encoding: 'utf8', ending: 'none', slow: false })).resolves.toMatchObject({
+    await expect(
+      service.send(connection.id, { data: 'A', encoding: 'utf8', ending: 'none', slow: false })
+    ).resolves.toMatchObject({
       writtenBytes: 1,
     });
   });

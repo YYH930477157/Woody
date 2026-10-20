@@ -339,7 +339,8 @@ export class TerminalConnectionService {
     const state = this.authorizeControl(id, actor);
     if (state.info.status !== 'open') throw new Error('Terminal connection is closed');
     if (state.info.profile.kind !== 'serial') throw new Error('Baud rate applies to serial connections only');
-    if (!Number.isInteger(baudRate) || baudRate < 1 || baudRate > 12_000_000) throw new Error('Invalid serial baud rate');
+    if (!Number.isInteger(baudRate) || baudRate < 1 || baudRate > 12_000_000)
+      throw new Error('Invalid serial baud rate');
     if (!state.transport.setBaud) throw new Error('Terminal transport does not support baud changes');
     await state.transport.setBaud(baudRate);
     state.info.profile = { ...state.info.profile, baudRate };
