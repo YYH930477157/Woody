@@ -1,13 +1,10 @@
 {
   "title": "待办事项",
-  "description": "带日历和截止节点的待办列表;邮件中的可执行任务会被自动识别为待办。",
   "new": "新建待办",
   "edit": "编辑",
   "save": "保存",
   "cancel": "取消",
   "due": "截止日期",
-  "clearDue": "清除",
-  "clearDayFilter": "显示全部",
   "titlePlaceholder": "要做什么?",
   "notesPlaceholder": "备注(可选)",
   "titleRequired": "标题不能为空",
@@ -22,9 +19,7 @@
   },
   "group": {
     "overdue": "已逾期 · 需立即处理",
-    "today": "今天",
     "upcoming": "近期计划与待排期",
-    "later": "更晚 / 无截止",
     "done": "已完成归档",
     "waiting": "等待前置确认",
     "todayFull": "今日待办 · {{date}}"
@@ -34,7 +29,9 @@
     "started": "扫描已启动(共 {{count}} 封邮件),新待办稍后出现",
     "noJob": "已抓到 {{count}} 封邮件,但邮件分析任务尚未创建:请先在 设置→模型 配置端点并重启应用",
     "inProgress": "邮件扫描正在进行中",
-    "failed": "邮件扫描失败"
+    "failed": "邮件扫描失败",
+    "lastAt": "上次扫描 {{time}}",
+    "lastFailed": "上次扫描失败 · {{time}}"
   },
   "emailScan": {
     "title": "邮件扫描",
@@ -53,31 +50,24 @@
     "empty": "还没有扫描会话",
     "openSession": "打开扫描会话"
   },
-  "lastScan": "上次邮件扫描:{{time}}({{status}})",
   "detail": {
-    "title": "查看待办",
-    "pending": "进行中",
     "due": "截止",
     "created": "创建于",
-    "emailSource": "来源邮件",
-    "close": "关闭"
+    "close": "关闭",
+    "source": "来源",
+    "completed": "完成于",
+    "addStep": "添加步骤，按 Enter 保存",
+    "removeStep": "删除步骤"
   },
   "searchPlaceholder": "搜索标题、要求人、邮件…",
-  "lastScanShort": "上次扫描 {{time}}({{status}})",
   "dueNone": "待排期",
   "delete": "删除",
-  "unblock": "标记已确认并激活",
   "unblockConfirm": "已确认,开始执行",
-  "unblockTip": "前置条件已满足?点击转为进行中",
   "markDone": "完成该待办",
   "markUndone": "恢复为未完成",
   "senderFilter": "按要求人筛选",
   "senderClear": "清除",
   "senderEmpty": "暂无邮件来源待办",
-  "stat": {
-    "focus": "今日与逾期",
-    "waiting": "等待前置确认"
-  },
   "tab": {
     "all": "全部待办",
     "focus": "今日与逾期",
@@ -86,15 +76,15 @@
     "done": "已完成"
   },
   "cal": {
-    "today": "回到今天",
+    "today": "今天",
     "focus": "逾期/今日",
     "waiting": "等待中",
-    "planned": "计划"
+    "planned": "计划",
+    "prev": "上个月",
+    "next": "下个月"
   },
   "filter": {
-    "date": "日历筛选",
     "sender": "要求人",
-    "search": "关键词",
     "clearAll": "清除全部筛选"
   },
   "emptyFiltered": {
@@ -106,15 +96,14 @@
     "requesterPlaceholder": "如:李国强(可选)",
     "statusGroup": "状态",
     "statusActive": "进行中",
-    "statusWaiting": "等待前置确认"
+    "statusWaiting": "等待前置确认",
+    "title": "标题",
+    "notes": "备注"
   },
   "drawer": {
-    "title": "任务详情与上下文",
     "placeholder": "点击左侧待办查看详情、执行步骤与来源邮件",
     "summary": "执行目标与说明",
     "subtasks": "执行步骤",
-    "subtasksHint": "点击勾选进度",
-    "subtaskProgress": "步骤进度",
     "requester": "要求人",
     "email": "来源邮件",
     "waiting": {
@@ -126,5 +115,19 @@
       "waiting": "等待前置确认",
       "done": "已完成"
     }
+  },
+  "nav": {
+    "calendar": "日历"
+  },
+  "row": {
+    "completedAt": "{{date}} 完成"
+  },
+  "quickAddPlaceholder": "添加待办，按 Enter 保存",
+  "emptyView": "这里没有待办",
+  "emptyCreate": "新建第一条待办",
+  "dueLabel": {
+    "overdue": "逾期 {{count}} 天",
+    "today": "今天",
+    "tomorrow": "明天"
   }
 }

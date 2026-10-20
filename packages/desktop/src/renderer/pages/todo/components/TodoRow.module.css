@@ -1,0 +1,4 @@
+/* Todo items use round check marks, unlike form checkboxes. */
+.check :global(.arco-checkbox-mask) {
+  border-radius: 50%;
+}

@@ -1,13 +1,10 @@
 {
   "title": "Todos",
-  "description": "Your todo list with deadlines on a calendar. Actionable emails are turned into todos automatically.",
   "new": "New Todo",
   "edit": "Edit",
   "save": "Save",
   "cancel": "Cancel",
   "due": "Deadline",
-  "clearDue": "Clear",
-  "clearDayFilter": "Show all days",
   "titlePlaceholder": "What needs to be done?",
   "notesPlaceholder": "Notes (optional)",
   "titleRequired": "Title is required",
@@ -22,9 +19,7 @@
   },
   "group": {
     "overdue": "Overdue · needs action now",
-    "today": "Today",
     "upcoming": "Upcoming & unscheduled",
-    "later": "Later / no deadline",
     "done": "Done archive",
     "waiting": "Waiting for confirmation",
     "todayFull": "Today · {{date}}"
@@ -34,7 +29,9 @@
     "started": "Scan started ({{count}} emails) — new todos appear in a moment",
     "noJob": "Fetched {{count}} emails, but the scan job is not created yet: configure a model in Settings first, then restart the app",
     "inProgress": "An email scan is already running",
-    "failed": "Email scan failed"
+    "failed": "Email scan failed",
+    "lastAt": "Último escaneo {{time}}",
+    "lastFailed": "Falló el último escaneo · {{time}}"
   },
   "emailScan": {
     "title": "Email Scan",
@@ -53,31 +50,24 @@
     "empty": "No scan conversations yet",
     "openSession": "Open scan conversation"
   },
-  "lastScan": "Last email scan: {{time}} ({{status}})",
   "detail": {
-    "title": "View Todo",
-    "pending": "Pending",
     "due": "Due",
     "created": "Created",
-    "emailSource": "Source email",
-    "close": "Close"
+    "close": "Close",
+    "source": "Origen",
+    "completed": "Completada",
+    "addStep": "Añade un paso y pulsa Intro",
+    "removeStep": "Quitar paso"
   },
   "searchPlaceholder": "Search title, requester, email…",
-  "lastScanShort": "Last scan {{time}} ({{status}})",
   "dueNone": "Unscheduled",
   "delete": "Delete",
-  "unblock": "Confirmed — activate",
   "unblockConfirm": "Confirmed, start now",
-  "unblockTip": "Prerequisite met? Click to activate",
   "markDone": "Mark done",
   "markUndone": "Mark as not done",
   "senderFilter": "Filter by requester",
   "senderClear": "Clear",
   "senderEmpty": "No email-sourced todos yet",
-  "stat": {
-    "focus": "Today & overdue",
-    "waiting": "Waiting"
-  },
   "tab": {
     "all": "All",
     "focus": "Today & overdue",
@@ -89,12 +79,12 @@
     "today": "Today",
     "focus": "Overdue/today",
     "waiting": "Waiting",
-    "planned": "Planned"
+    "planned": "Planned",
+    "prev": "Mes anterior",
+    "next": "Mes siguiente"
   },
   "filter": {
-    "date": "Date",
     "sender": "Requester",
-    "search": "Keyword",
     "clearAll": "Clear all filters"
   },
   "emptyFiltered": {
@@ -106,15 +96,14 @@
     "requesterPlaceholder": "e.g. a colleague (optional)",
     "statusGroup": "Status",
     "statusActive": "Active",
-    "statusWaiting": "Waiting"
+    "statusWaiting": "Waiting",
+    "title": "Título",
+    "notes": "Notas"
   },
   "drawer": {
-    "title": "Details & context",
     "placeholder": "Click a todo to see details, steps and the source email",
     "summary": "Goal & notes",
     "subtasks": "Steps",
-    "subtasksHint": "Click to tick progress",
-    "subtaskProgress": "Step progress",
     "requester": "Requester",
     "email": "Source email",
     "waiting": {
@@ -126,5 +115,19 @@
       "waiting": "Waiting",
       "done": "Done"
     }
+  },
+  "nav": {
+    "calendar": "Calendario"
+  },
+  "row": {
+    "completedAt": "Hecha el {{date}}"
+  },
+  "quickAddPlaceholder": "Añade una tarea y pulsa Intro",
+  "emptyView": "No hay nada aquí",
+  "emptyCreate": "Crea tu primera tarea",
+  "dueLabel": {
+    "overdue": "{{count}} d de retraso",
+    "today": "Hoy",
+    "tomorrow": "Mañana"
   }
 }

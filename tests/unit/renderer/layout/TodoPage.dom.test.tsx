@@ -34,6 +34,20 @@ vi.mock('@/renderer/hooks/context/LayoutContext', () => ({
 }));
 
 beforeEach(() => {
+  // jsdom has no matchMedia; Arco's Form grid subscribes to it.
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation(() => ({
+      matches: false,
+      media: '',
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
   vi.clearAllMocks();
   mocks.list.mockResolvedValue([]);
   mocks.status.mockResolvedValue(null);
