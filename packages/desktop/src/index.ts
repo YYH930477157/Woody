@@ -218,7 +218,7 @@ const backendManager = new BackendLifecycleManager(
     resourcesPath: process.resourcesPath,
     userDataPath: app.getPath('userData'),
   },
-  resolveBinaryPath
+  () => resolveBinaryPath({ includeDevelopmentResources: !app.isPackaged })
 );
 let disposeCronResumeListener: (() => void) | null = null;
 

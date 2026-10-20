@@ -3,7 +3,7 @@
  *
  * Search order:
  *  1. AIONUI_BACKEND_BIN env override (path, resolved to absolute)
- *  2. Bundled with app (production)
+ *  2. Bundled with app (production), then ./resources when development resources are allowed
  *  3. System PATH
  */
 
@@ -65,11 +65,19 @@ function trimLookupText(text: string): string {
   return text.trim().slice(0, MAX_LOOKUP_TEXT_LENGTH);
 }
 
+type ResolveBinaryOptions = {
+  /**
+   * Also check the repository's ./resources under process.cwd(). Development only:
+   * a packaged app's working directory is wherever it was launched from.
+   */
+  includeDevelopmentResources?: boolean;
+};
+
 /**
  * Resolve the aioncore binary path.
  * Returns the absolute path to the binary, or throws if not found.
  */
-export function resolveBinaryPath(): string {
+export function resolveBinaryPath({ includeDevelopmentResources = false }: ResolveBinaryOptions = {}): string {
   const runtimeKey = getRuntimeKey();
   const binaryName = getBinaryName();
   const diagnostics: BackendBinaryResolveDiagnostics = {
@@ -81,7 +89,7 @@ export function resolveBinaryPath(): string {
   const override = envOverridePath(diagnostics);
   if (override) return override;
 
-  const bundled = bundledPath(runtimeKey, binaryName, diagnostics);
+  const bundled = bundledPath(runtimeKey, binaryName, diagnostics, includeDevelopmentResources);
   if (bundled) return bundled;
 
   const fromPath = resolveFromSystemPATH(diagnostics);
@@ -124,7 +132,8 @@ function envOverridePath(diagnostics: BackendBinaryResolveDiagnostics): string |
 function bundledPath(
   runtimeKey: string,
   binaryName: string,
-  diagnostics: BackendBinaryResolveDiagnostics
+  diagnostics: BackendBinaryResolveDiagnostics,
+  includeDevelopmentResources: boolean
 ): string | null {
   const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
   if (resourcesPath) {
@@ -144,6 +153,7 @@ function bundledPath(
   // electron-vite development runs with Electron's own resourcesPath. The
   // repository keeps the bundled backend under ./resources, so include that
   // path before falling back to PATH.
+  if (!includeDevelopmentResources) return null;
   const developmentResourcesPath = resolve(process.cwd(), 'resources');
   if (developmentResourcesPath !== resourcesPath) {
     diagnostics.fallbackResourcesPath = developmentResourcesPath;

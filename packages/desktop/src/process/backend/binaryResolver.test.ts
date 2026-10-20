@@ -91,6 +91,6 @@ describe('resolveBinaryPath', () => {
     vi.mocked(existsSync).mockImplementation((path) => path === developmentBinaryPath);
     vi.mocked(readdirSync).mockReturnValue([]);
 
-    expect(resolveBinaryPath()).toBe(developmentBinaryPath);
+    expect(resolveBinaryPath({ includeDevelopmentResources: true })).toBe(developmentBinaryPath);
   });
 });

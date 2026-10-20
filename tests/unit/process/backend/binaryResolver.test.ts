@@ -119,6 +119,36 @@ describe('resolveBinaryPath', () => {
     expect(resolveBinaryPath()).toBe(resolved);
   });
 
+  it('resolves the repository resources directory when development resources are allowed', () => {
+    const developmentBinaryPath = join(
+      process.cwd(),
+      'resources',
+      'bundled-aioncore',
+      `${process.platform}-${process.arch}`,
+      process.platform === 'win32' ? 'aioncore.exe' : 'aioncore'
+    );
+    setResourcesPath('/electron/resources');
+    vi.mocked(existsSync).mockImplementation((path) => path === developmentBinaryPath);
+    vi.mocked(readdirSync).mockReturnValue([]);
+
+    expect(resolveBinaryPath({ includeDevelopmentResources: true })).toBe(developmentBinaryPath);
+  });
+
+  it('never runs a backend from the working directory of a packaged app', () => {
+    const workingDirectoryResources = join(process.cwd(), 'resources');
+    setResourcesPath('/app/resources');
+    vi.mocked(existsSync).mockImplementation((path) => String(path).startsWith(workingDirectoryResources));
+    vi.mocked(readdirSync).mockReturnValue([]);
+    vi.mocked(execSync).mockImplementation(() => {
+      throw new Error('not found on PATH');
+    });
+
+    expect(() => resolveBinaryPath()).toThrow('Cannot find "aioncore" binary');
+    expect(vi.mocked(existsSync).mock.calls.some(([path]) => String(path).startsWith(workingDirectoryResources))).toBe(
+      false
+    );
+  });
+
   it('attaches bundled path diagnostics when aioncore cannot be resolved', () => {
     const resourcesPath = '/app/resources';
     const runtimeKey = `${process.platform}-${process.arch}`;
