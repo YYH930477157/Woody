@@ -61,6 +61,9 @@ const parseBranches = (output: string): GitBranch[] =>
       return Object.assign({ name }, upstream ? { upstream } : {}, { current: head === `*` });
     });
 
+/** Push failures stay retryable: the user can fix the branch or remote setup, then retry the same commit. */
+const pushFailed = (stderr: string, stdout = ''): GitPushResult => ({ ok: false, retryable: true, stdout, stderr });
+
 export type GitCommandService = {
   getStatus: (repoPath: string) => Promise<GitStatusSnapshot>;
   getBranches: (repoPath: string) => Promise<GitBranchSnapshot>;
@@ -102,6 +105,33 @@ export const createGitCommandService = (runner: GitCommandRunner = defaultRunner
     await requireSuccess(['add', '--', ...paths], { cwd: repoPath, env });
     const tree = await requireSuccess(['write-tree'], { cwd: repoPath, env });
     return { ...head, tree };
+  };
+
+  /** Prefer remote.pushDefault, then origin, then the only configured remote. */
+  const resolvePushRemote = async (
+    repoPath: string
+  ): Promise<{ ok: true; name: string } | { ok: false; error: string }> => {
+    const listed = await runner(['remote'], { cwd: repoPath });
+    if (listed.exitCode !== 0) return { ok: false, error: listed.stderr || 'Unable to read Git remotes' };
+    const remotes = listed.stdout
+      .split(/\r?\n/)
+      .map((name) => name.trim())
+      .filter(Boolean);
+    const pushDefault = (await runner(['config', '--get', 'remote.pushDefault'], { cwd: repoPath })).stdout.trim();
+    const name = remotes.includes(pushDefault)
+      ? pushDefault
+      : remotes.includes('origin')
+        ? 'origin'
+        : remotes.length === 1
+          ? remotes[0]
+          : undefined;
+    if (name) return { ok: true, name };
+    return {
+      ok: false,
+      error: remotes.length
+        ? 'Multiple Git remotes are configured; set an upstream for this branch before pushing'
+        : 'No Git remote is configured for this repository',
+    };
   };
 
   return {
@@ -201,11 +231,29 @@ export const createGitCommandService = (runner: GitCommandRunner = defaultRunner
       }
     },
 
-    async push(repoPath, _branch) {
-      const result = await runner(['push'], { cwd: repoPath });
+    async push(repoPath, branch) {
+      if (!branch) return pushFailed('Cannot push from a detached HEAD');
+      const current = await runner(['branch', '--show-current'], { cwd: repoPath });
+      if (current.exitCode !== 0) return pushFailed(current.stderr || 'Unable to read Git branch', current.stdout);
+      if (current.stdout.trim() !== branch) {
+        return pushFailed(
+          `Current branch is "${current.stdout.trim()}"; switch back to "${branch}" to push this commit`
+        );
+      }
+      const upstream = await runner(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'], {
+        cwd: repoPath,
+      });
+      let args = ['push'];
+      if (upstream.exitCode !== 0) {
+        // A new local branch has no upstream yet: publish it to the default remote and track it.
+        const remote = await resolvePushRemote(repoPath);
+        if (remote.ok === false) return pushFailed(remote.error);
+        args = ['push', '--set-upstream', remote.name, `refs/heads/${branch}:refs/heads/${branch}`];
+      }
+      const result = await runner(args, { cwd: repoPath });
       return result.exitCode === 0
         ? { ok: true, stdout: result.stdout, stderr: result.stderr }
-        : { ok: false, retryable: true, stdout: result.stdout, stderr: result.stderr };
+        : pushFailed(result.stderr || 'Git push failed', result.stdout);
     },
   };
 };

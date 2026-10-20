@@ -82,6 +82,41 @@ describe('git command service', () => {
     }
   });
 
+  it('publishes a branch without upstream to origin and tracks it for later pushes', async () => {
+    const repoPath = await makeRepo();
+    const remotePath = await mkdtemp(join(tmpdir(), 'woody-git-remote-'));
+    tempDirs.push(remotePath);
+    await runGit(remotePath, ['init', '--bare']);
+    await runGit(repoPath, ['remote', 'add', 'origin', remotePath]);
+    const service = createGitCommandService();
+
+    const first = await service.push(repoPath, 'main');
+    await runGit(repoPath, ['commit', '--allow-empty', '-m', 'second']);
+    const second = await service.push(repoPath, 'main');
+
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    expect(await runGit(repoPath, ['rev-parse', '--abbrev-ref', 'main@{upstream}'])).toBe('origin/main');
+    expect(await runGit(remotePath, ['rev-parse', 'refs/heads/main'])).toBe(
+      await runGit(repoPath, ['rev-parse', 'HEAD'])
+    );
+  });
+
+  it('does not push another branch when the worktree switched away from the workflow branch', async () => {
+    const repoPath = await makeRepo();
+    const remotePath = await mkdtemp(join(tmpdir(), 'woody-git-remote-'));
+    tempDirs.push(remotePath);
+    await runGit(remotePath, ['init', '--bare']);
+    await runGit(repoPath, ['remote', 'add', 'origin', remotePath]);
+    await runGit(repoPath, ['checkout', '-b', 'other']);
+
+    const result = await createGitCommandService().push(repoPath, 'main');
+
+    expect(result).toMatchObject({ ok: false, retryable: true });
+    if (!result.ok) expect(result.stderr).toContain('"main"');
+    await expect(runGit(remotePath, ['rev-parse', '--verify', '--quiet', 'refs/heads/other'])).rejects.toThrow();
+  });
+
   it('treats a selected filename literally and preserves a similarly named staged file', async () => {
     const repoPath = await makeRepo();
     await writeFile(join(repoPath, 'a[1].c'), 'initial selected\n');
