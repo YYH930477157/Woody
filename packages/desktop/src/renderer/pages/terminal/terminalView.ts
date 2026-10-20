@@ -8,6 +8,13 @@ export function rawBytes(data: string): Uint8Array {
   return Uint8Array.from(atob(data), (char) => char.charCodeAt(0));
 }
 
+/** Normal serial typing leaves echo to the device; otherwise manual TX is drawn from the ordered history. */
+export function displayedTerminalEvents(events: TerminalEvent[], hideManualOutgoing: boolean): TerminalEvent[] {
+  return hideManualOutgoing
+    ? events.filter((event) => event.direction !== 'outgoing' || event.source !== 'manual')
+    : events;
+}
+
 /** Keep separate streaming decoders so TX bytes cannot corrupt a split RX character. */
 export function renderTerminalEvents(
   events: TerminalEvent[],

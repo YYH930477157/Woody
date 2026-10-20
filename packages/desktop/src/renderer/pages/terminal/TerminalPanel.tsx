@@ -12,10 +12,10 @@ import {
   type TerminalNewlineMode,
   type TerminalOutputMode,
 } from '@/common/terminal/stream';
-import type { TerminalEvent, TerminalProfile, TerminalSendRequest, TerminalWait } from '@/common/types/terminal';
+import type { TerminalProfile, TerminalSendRequest, TerminalWait } from '@/common/types/terminal';
 import TerminalConfig, { newTerminalProfile } from './TerminalConfig';
 import { useTerminal } from './useTerminal';
-import { renderTerminalEvents } from './terminalView';
+import { displayedTerminalEvents, renderTerminalEvents } from './terminalView';
 
 export default function TerminalPanel({ conversationId, cwd }: { conversationId?: string; cwd?: string }) {
   const { t, i18n } = useTranslation();
@@ -31,7 +31,6 @@ export default function TerminalPanel({ conversationId, cwd }: { conversationId?
   const [inputNewlines, setInputNewlines] = useState<TerminalNewlineMode>('crlf');
   const [outputNewlines, setOutputNewlines] = useState<TerminalNewlineMode>('keep');
   const [slowSend, setSlowSend] = useState(false);
-  const [echoes, setEchoes] = useState<TerminalEvent[]>([]);
   const [liveBaud, setLiveBaud] = useState<number>();
   const [ending, setEnding] = useState<TerminalSendRequest['ending']>('none');
   const [waitMode, setWaitMode] = useState<'none' | TerminalWait['mode']>('none');
@@ -47,10 +46,15 @@ export default function TerminalPanel({ conversationId, cwd }: { conversationId?
   const serialSession = model.selected?.profile.kind === 'serial' ? model.selected.profile : undefined;
   const baudRate = liveBaud ?? serialSession?.baudRate;
   const typing = Boolean(serialSession) && (inputMode === 'normal' || inputMode === 'localEcho');
+  const hideManualOutgoing = Boolean(serialSession) && inputMode === 'normal';
   const display = useMemo(
     () =>
-      renderTerminalEvents([...model.events, ...echoes], outputMode === 'text' ? false : outputMode, outputNewlines),
-    [echoes, model.events, outputMode, outputNewlines]
+      renderTerminalEvents(
+        displayedTerminalEvents(model.events, hideManualOutgoing),
+        outputMode === 'text' ? false : outputMode,
+        outputNewlines
+      ),
+    [hideManualOutgoing, model.events, outputMode, outputNewlines]
   );
   useEffect(() => {
     if (outputRef.current && followOutput.current) outputRef.current.scrollTop = outputRef.current.scrollHeight;
@@ -65,7 +69,6 @@ export default function TerminalPanel({ conversationId, cwd }: { conversationId?
   };
   const refreshPorts = () => run(async () => setPorts(await ipcBridge.terminal.ports.invoke()));
   useEffect(() => {
-    setEchoes([]);
     setLiveBaud(undefined);
     if (model.selected?.profile.kind === 'shell') {
       setEncoding('utf8');
@@ -79,28 +82,12 @@ export default function TerminalPanel({ conversationId, cwd }: { conversationId?
     }
   }, [model.selectedId, model.selected?.profile.kind]);
   const manualOpen = model.selected?.status === 'open' && model.selected.owner === 'manual';
-  const transmit = async (request: TerminalSendRequest, echoText?: string) => {
+  const transmit = async (request: TerminalSendRequest) => {
     if (!model.selectedId) return;
     const response = await ipcBridge.terminal.send.invoke({
       id: model.selectedId,
       request: slowSend && serialSession ? { ...request, slow: true } : request,
     });
-    if (echoText !== undefined && inputMode === 'localEcho') {
-      const bytes = new TextEncoder().encode(echoText);
-      let binary = '';
-      for (const byte of bytes) binary += String.fromCharCode(byte);
-      setEchoes((previous) => [
-        ...previous,
-        {
-          cursor: -Date.now(),
-          timestamp: Date.now(),
-          direction: 'outgoing',
-          source: 'manual',
-          data: btoa(binary),
-          byteLength: bytes.length,
-        },
-      ]);
-    }
     setResult(
       `${label(response.status)} · ${response.writePending ? label('writePending') : t('tools.terminal.sentBytes', { count: response.writtenBytes })}${response.wait ? ` · ${label(response.wait.status)} · ${t('tools.terminal.receivedBytes', { count: response.wait.byteLength })}` : ''}${response.error ? ` · ${response.error}` : ''}`
     );
@@ -125,7 +112,7 @@ export default function TerminalPanel({ conversationId, cwd }: { conversationId?
         : { data: input, encoding, ending, wait: serialWait() };
     setSending(true);
     await run(async () => {
-      await transmit(request, serialSession && inputMode === 'readline' ? request.data : undefined);
+      await transmit(request);
       if (serialSession && inputMode === 'readline') setInput('');
     });
     setSending(false);
@@ -133,7 +120,7 @@ export default function TerminalPanel({ conversationId, cwd }: { conversationId?
   const sendKey = (text: string) => {
     if (!manualOpen) return;
     const data = applyNewlineMode(text, inputNewlines);
-    void run(() => transmit({ data, encoding: 'utf8', ending: 'none' }, data));
+    void run(() => transmit({ data, encoding: 'utf8', ending: 'none' }));
   };
   const changeBaud = (next: number) => {
     if (!model.selectedId || !Number.isInteger(next) || next < 1) return;

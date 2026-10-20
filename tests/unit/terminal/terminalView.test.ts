@@ -1,6 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import { applyNewlineMode } from '../../../packages/desktop/src/common/terminal/stream';
-import { renderTerminalEvents } from '../../../packages/desktop/src/renderer/pages/terminal/terminalView';
+import {
+  displayedTerminalEvents,
+  renderTerminalEvents,
+} from '../../../packages/desktop/src/renderer/pages/terminal/terminalView';
+
+const historyEvent = (
+  data: string,
+  cursor: number,
+  direction: 'incoming' | 'outgoing',
+  source: 'manual' | 'ai' | 'transport'
+) => ({
+  cursor,
+  timestamp: 1,
+  direction,
+  source,
+  data: Buffer.from(data).toString('base64'),
+  byteLength: data.length,
+});
 
 describe('terminal byte display', () => {
   it('decodes UTF-8 split across serial receive chunks', () => {
@@ -69,5 +86,20 @@ describe('terminal byte display', () => {
     expect(applyNewlineMode('line\n', 'cr')).toBe('line\r');
     expect(applyNewlineMode('keep\r\n', 'strip')).toBe('keep');
     expect(applyNewlineMode('a\n', 'implicitCr')).toBe('a\r\n');
+  });
+  it('draws typed bytes once, in history order, and leaves normal-mode echo to the device', () => {
+    const history = [
+      historyEvent('A', 1, 'outgoing', 'manual'),
+      historyEvent('OK', 3, 'incoming', 'transport'),
+      historyEvent('B', 4, 'outgoing', 'manual'),
+      historyEvent('AT', 6, 'outgoing', 'ai'),
+    ];
+    const text = (hideManualOutgoing: boolean) =>
+      renderTerminalEvents(displayedTerminalEvents(history, hideManualOutgoing), false)
+        .map((item) => item.text)
+        .join('');
+
+    expect(text(false)).toBe('AOKBAT');
+    expect(text(true)).toBe('OKAT');
   });
 });
