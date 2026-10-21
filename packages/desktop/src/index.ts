@@ -864,6 +864,14 @@ const handleAppReady = async (): Promise<void> => {
     console.error('[Terminal] Failed to start Shell/Serial service', error);
   }
 
+  try {
+    const { getCmakeRuntime } = await import('./process/services/cmake/runtime');
+    await getCmakeRuntime();
+    console.log('[CMake] Shared build service ready');
+  } catch (error) {
+    console.error('[CMake] Failed to start build service', error);
+  }
+
   const debugBackendStartupFailure = resolveDebugBackendStartupFailure();
   if (debugBackendStartupFailure) {
     applyDebugBackendStartupFailure(debugBackendStartupFailure);
@@ -1211,7 +1219,8 @@ installQuitCleanup({
   // transitively (no separate frontend workerTaskManager remains).
   stopBackend: async () => {
     const { closeTerminalRuntime } = await import('./process/services/terminal/runtime');
-    await Promise.allSettled([closeTerminalRuntime(), backendManager.stop()]);
+    const { closeCmakeRuntime } = await import('./process/services/cmake/runtime');
+    await Promise.allSettled([closeTerminalRuntime(), closeCmakeRuntime(), backendManager.stop()]);
   },
   destroyPetWindow: async () => {
     const { destroyPetWindow } = await import('./process/pet/petManager');

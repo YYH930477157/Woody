@@ -8,6 +8,7 @@ import { initApplicationBridge } from './applicationBridge';
 import { initDialogBridge } from './dialogBridge';
 import { initTodoBridge } from './todoBridge';
 import { initTerminalBridge } from './terminal/terminalBridge';
+import { initCmakeBridge } from './cmake/cmakeBridge';
 import { initUpdateBridge } from './updateBridge';
 import { initSystemSettingsBridge } from './systemSettingsBridge';
 import { initWindowControlsBridge } from './windowControlsBridge';
@@ -24,6 +25,7 @@ export function initAllBridges(_deps: BridgeDependencies = {}): void {
   initApplicationBridge();
   initTodoBridge();
   initTerminalBridge();
+  initCmakeBridge();
   initWindowControlsBridge();
   initUpdateBridge();
   initSystemSettingsBridge();

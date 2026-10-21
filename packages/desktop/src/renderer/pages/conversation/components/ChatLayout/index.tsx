@@ -5,6 +5,7 @@ import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { useResizableSplit } from '@/renderer/hooks/ui/useResizableSplit';
 import ChatTitleEditor from '@/renderer/pages/conversation/components/ChatTitleEditor';
 import TerminalButton from '@/renderer/pages/terminal/TerminalButton';
+import CmakeButton from '@/renderer/pages/cmake/CmakeButton';
 import MobileWorkspaceOverlay from './MobileWorkspaceOverlay';
 import WorkspacePanelHeader from './WorkspacePanelHeader';
 import { useContainerWidth } from '@/renderer/pages/conversation/hooks/useContainerWidth';
@@ -231,6 +232,7 @@ const ChatLayout: React.FC<{
       </FlexFullContainer>
       <div className='flex items-center gap-12px shrink-0'>
         <TerminalButton conversationId={conversation_id} cwd={workspacePath} />
+        <CmakeButton cwd={workspacePath} />
         {props.headerExtra}
       </div>
     </ArcoLayout.Header>
