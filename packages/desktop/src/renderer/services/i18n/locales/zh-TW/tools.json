@@ -60,6 +60,13 @@
     "noOutput": "尚無偵錯輸出。"
   },
   "cmake": {
+    "project": "CMake 專案",
+    "selectProject": "請選擇 CMake 專案",
+    "rescan": "重新偵測專案",
+    "unsavedChanges": "尚有未儲存的變更",
+    "discardChanges": "放棄未儲存的建置設定並重新載入專案？",
+    "ambiguousProject": "找到多個 CMake 專案，請將目標專案目錄設為對話工作目錄。",
+    "projectSearchLimit": "專案搜尋範圍過大，請選擇更明確的專案目錄。",
     "selectionChanged": "已儲存的變體失效，請檢查目前選項並儲存後再讓 AI 建置。",
     "title": "CMake 建置",
     "aiAccess": "允許 AI 操作此專案",

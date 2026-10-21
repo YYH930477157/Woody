@@ -75,6 +75,18 @@ afterEach(async () => {
 });
 
 describe('CMake workbench service', () => {
+  it('configures and builds the source root discovered inside a workspace', async () => {
+    const calls: ProcessRequest[] = [];
+    const instance = await service(async (request) => {
+      calls.push(request);
+      return normalRunner(request);
+    });
+    const found = await instance.inspect(root, true);
+    const job = await instance.start(found.projectPath, 'build');
+    expect((await finish(instance, job.id)).job.status).toBe('succeeded');
+    expect(calls.find((call) => call.args.includes('-G'))?.args.at(-1)).toBe(await fs.realpath(project));
+    expect(job.buildDirectory.startsWith(path.join(found.projectPath, 'build'))).toBe(true);
+  });
   it('leases the configured executable for debugging and excludes GDB settings from build identity', async () => {
     const instance = await service();
     const initial = await instance.inspect(project);

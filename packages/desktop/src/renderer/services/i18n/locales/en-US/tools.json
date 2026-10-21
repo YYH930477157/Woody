@@ -60,6 +60,13 @@
     "noOutput": "No debug output yet."
   },
   "cmake": {
+    "project": "CMake project",
+    "selectProject": "Select a CMake project",
+    "rescan": "Rescan projects",
+    "unsavedChanges": "Unsaved changes",
+    "discardChanges": "Discard unsaved build settings and reload the project?",
+    "ambiguousProject": "Multiple CMake projects found. Open the intended directory as the conversation workspace.",
+    "projectSearchLimit": "Project search limit reached. Open a more specific project directory.",
     "selectionChanged": "Saved variants changed. Review the current choices and save before AI builds.",
     "title": "CMake Build",
     "aiAccess": "AI access to this project",

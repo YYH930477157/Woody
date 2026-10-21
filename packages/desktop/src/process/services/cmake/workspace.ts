@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import type { CmakeConfiguration } from '@/common/types/cmake';
+import type { CmakeConfiguration, CmakeWorkspace } from '@/common/types/cmake';
 import { defaultConfiguration, normalizeConfiguration } from './configuration';
 import { parseVariants } from './variants';
 
@@ -15,6 +15,57 @@ export async function canonicalProject(input: string): Promise<string> {
   const stat = await fs.stat(path.join(root, 'CMakeLists.txt'));
   if (!stat.isFile()) throw new Error('cmake.invalidProject: CMakeLists.txt missing');
   return root;
+}
+
+/** Discover source roots only when opening a workspace, never when running a saved target. */
+export async function discoverProject(input: string): Promise<string> {
+  const found = await discoverProjects(input);
+  if (!found.projects.length) throw new Error(`cmake.projectMissing: ${found.workspacePath}`);
+  if (found.projects.length > 1)
+    throw new Error(`cmake.ambiguousProject: ${found.projects.map((candidate) => candidate.relativePath).join(', ')}`);
+  return canonicalProject(found.projects[0].projectPath);
+}
+
+export async function discoverProjects(input: string): Promise<CmakeWorkspace> {
+  if (typeof input !== 'string' || !input.trim() || input.includes('\0') || !path.isAbsolute(input))
+    throw new Error('cmake.invalidProject');
+  const root = await fs.realpath(input).catch((error: unknown) => {
+    if (missing(error)) throw new Error(`cmake.projectMissing: ${input}`);
+    throw error;
+  });
+  const ignored = new Set(['.git', '.svn', '.hg', 'node_modules', 'build', 'out', 'dist', 'cmakefiles']);
+  const candidates: string[] = [];
+  let entries = 0;
+  let directories = 0;
+  async function visit(directory: string, depth: number): Promise<void> {
+    if (++directories > 2000 || depth > 16) throw new Error(`cmake.projectSearchLimit: ${root}`);
+    try {
+      if ((await fs.stat(path.join(directory, 'CMakeLists.txt'))).isFile()) {
+        candidates.push(directory);
+        return;
+      }
+    } catch (error) {
+      if (!missing(error)) throw error;
+    }
+    const handle = await fs.opendir(directory);
+    for await (const entry of handle) {
+      if (++entries > 50000) throw new Error(`cmake.projectSearchLimit: ${root}`);
+      const name = entry.name.toLowerCase();
+      if (!entry.isDirectory() || entry.isSymbolicLink() || ignored.has(name) || name.startsWith('cmake-build-'))
+        continue;
+      const child = path.join(directory, entry.name);
+      // Recheck junctions before descending; Windows projects often contain linked SDKs.
+      if ((await fs.lstat(child)).isSymbolicLink() || !isInside(root, await fs.realpath(child))) continue;
+      await visit(child, depth + 1);
+    }
+  }
+  await visit(root, 0);
+  return {
+    workspacePath: root,
+    projects: candidates
+      .toSorted()
+      .map((candidate) => ({ projectPath: candidate, relativePath: path.relative(root, candidate) || '.' })),
+  };
 }
 
 export async function readBounded(file: string, limit = 262144): Promise<string> {
@@ -64,11 +115,28 @@ export async function loadConfiguration(storage: string, root: string): Promise<
 }
 
 export async function storeConfiguration(storage: string, root: string, config: CmakeConfiguration): Promise<void> {
-  await fs.mkdir(storage, { recursive: true });
-  const file = configurationFile(storage, root);
+  await writeJson(configurationFile(storage, root), config);
+}
+
+export async function loadWorkspaceSelection(storage: string, root: string): Promise<string | undefined> {
+  try {
+    const value: unknown = JSON.parse(await readBounded(`${configurationFile(storage, root)}.workspace`));
+    return typeof value === 'string' ? value : undefined;
+  } catch (error) {
+    if (missing(error)) return undefined;
+    throw error;
+  }
+}
+
+export async function storeWorkspaceSelection(storage: string, root: string, relativePath: string): Promise<void> {
+  await writeJson(`${configurationFile(storage, root)}.workspace`, relativePath);
+}
+
+async function writeJson(file: string, value: unknown): Promise<void> {
+  await fs.mkdir(path.dirname(file), { recursive: true });
   const temporary = `${file}.${randomUUID()}.tmp`;
   try {
-    await fs.writeFile(temporary, JSON.stringify(config, null, 2), { flag: 'wx' });
+    await fs.writeFile(temporary, JSON.stringify(value, null, 2), { flag: 'wx' });
     await fs.rename(temporary, file);
   } finally {
     await fs.rm(temporary, { force: true });

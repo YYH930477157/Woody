@@ -40,4 +40,9 @@ export type CmakeProject = {
   latestJob?: CmakeJob;
   invalidSelections?: string[];
 };
+export type CmakeWorkspace = {
+  workspacePath: string;
+  projects: Array<{ projectPath: string; relativePath: string }>;
+  selectedProjectPath?: string;
+};
 export type CmakeJobRead = { job: CmakeJob; output: string; cursor: number; truncated: boolean };

@@ -60,6 +60,13 @@
     "noOutput": "Aucune sortie de débogage."
   },
   "cmake": {
+    "project": "Projet CMake",
+    "selectProject": "Sélectionner un projet CMake",
+    "rescan": "Rechercher les projets",
+    "unsavedChanges": "Modifications non enregistrées",
+    "discardChanges": "Abandonner les paramètres de compilation non enregistrés et recharger le projet ?",
+    "ambiguousProject": "Plusieurs projets CMake trouvés. Ouvrez le répertoire souhaité comme espace de travail de la conversation.",
+    "projectSearchLimit": "Limite de recherche atteinte. Ouvrez un répertoire de projet plus précis.",
     "selectionChanged": "Les variantes enregistrées ont changé. Vérifiez et enregistrez les choix avant une compilation IA.",
     "title": "Compilation CMake",
     "aiAccess": "Accès IA au projet",

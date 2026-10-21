@@ -60,6 +60,13 @@
     "noOutput": "デバッグ出力はありません。"
   },
   "cmake": {
+    "project": "CMake プロジェクト",
+    "selectProject": "CMake プロジェクトを選択",
+    "rescan": "プロジェクトを再検出",
+    "unsavedChanges": "未保存の変更",
+    "discardChanges": "未保存のビルド設定を破棄してプロジェクトを再読み込みしますか？",
+    "ambiguousProject": "複数の CMake プロジェクトが見つかりました。対象のディレクトリを会話のワークスペースとして開いてください。",
+    "projectSearchLimit": "検索上限に達しました。より具体的なプロジェクトディレクトリを開いてください。",
     "selectionChanged": "保存済みのバリアントが変更されました。選択を確認し、AI ビルドの前に保存してください。",
     "title": "CMake ビルド",
     "aiAccess": "このプロジェクトへの AI アクセス",

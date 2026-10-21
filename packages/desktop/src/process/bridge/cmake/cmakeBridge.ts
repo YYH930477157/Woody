@@ -6,6 +6,13 @@ import { gdbRequestSchema } from '@process/services/cmake/gdb/validation';
 
 /** Main-process validation and error transport are shared by every panel instance. */
 export function initCmakeBridge(): void {
+  cmake.discover.provider(async (input) => {
+    const { projectPath, selection } = projectSchema
+      .extend({ selection: z.string().min(1).max(32768).optional() })
+      .strict()
+      .parse(input);
+    return (await getCmakeRuntime()).service.discover(projectPath, selection);
+  });
   cmake.debug.provider(async (input) => (await getCmakeRuntime()).debug.request(gdbRequestSchema.parse(input)));
   cmake.debugAiEnabled.provider(async (input) =>
     (await getCmakeRuntime()).rpc.isDebugEnabled(projectSchema.parse(input).projectPath)
@@ -14,9 +21,10 @@ export function initCmakeBridge(): void {
     const { projectPath, enabled } = projectSchema.extend({ enabled: z.boolean() }).parse(input);
     await (await getCmakeRuntime()).rpc.setDebugEnabled(projectPath, enabled);
   });
-  cmake.inspect.provider(async (input) =>
-    (await getCmakeRuntime()).service.inspect(projectSchema.parse(input).projectPath)
-  );
+  cmake.inspect.provider(async (input) => {
+    const { projectPath, discover } = projectSchema.extend({ discover: z.boolean().optional() }).parse(input);
+    return (await getCmakeRuntime()).service.inspect(projectPath, discover === true);
+  });
   cmake.save.provider(async (input) => {
     const { projectPath } = projectSchema.parse(input);
     return (await getCmakeRuntime()).service.save(projectPath, input.config);

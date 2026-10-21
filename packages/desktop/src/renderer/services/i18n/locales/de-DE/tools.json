@@ -60,6 +60,13 @@
     "noOutput": "Noch keine Debugausgabe."
   },
   "cmake": {
+    "project": "CMake-Projekt",
+    "selectProject": "CMake-Projekt auswählen",
+    "rescan": "Projekte erneut suchen",
+    "unsavedChanges": "Ungespeicherte Änderungen",
+    "discardChanges": "Ungespeicherte Build-Einstellungen verwerfen und das Projekt neu laden?",
+    "ambiguousProject": "Mehrere CMake-Projekte gefunden. Öffnen Sie das gewünschte Verzeichnis als Arbeitsverzeichnis der Unterhaltung.",
+    "projectSearchLimit": "Suchlimit erreicht. Öffnen Sie ein genaueres Projektverzeichnis.",
     "selectionChanged": "Gespeicherte Varianten wurden geändert. Auswahl vor dem KI-Build prüfen und speichern.",
     "title": "CMake-Build",
     "aiAccess": "KI-Zugriff auf dieses Projekt",
