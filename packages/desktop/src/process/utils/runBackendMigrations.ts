@@ -333,6 +333,19 @@ function buildDefaultMcpServers(): McpImportServer[] {
       original_json: JSON.stringify({ mcpServers: { 'woody-terminal': config } }, null, 2),
     });
   }
+  const cmakeEntry = path.join(path.dirname(path.dirname(terminalEntry)), 'cmake-mcp', 'index.cjs');
+  if (fs.existsSync(cmakeEntry)) {
+    const config = { command: 'node', args: [cmakeEntry] };
+    servers.push({
+      name: 'woody-cmake',
+      description:
+        'Shared offline CMake builds and GDB debugging. Enable build and debug project access separately in the workbench.',
+      enabled: true,
+      builtin: true,
+      transport: { type: 'stdio', ...config },
+      original_json: JSON.stringify({ mcpServers: { 'woody-cmake': config } }, null, 2),
+    });
+  }
   return servers;
 }
 
@@ -422,19 +435,21 @@ async function ensureBootstrapMcpServersInDb(configFile: ConfigFile): Promise<vo
   logImageGenerationEnvResolution(imageEnvResolution, 'bootstrap');
   const imageServer = buildBuiltinImageGenerationServer(imageEnvResolution, imageConfig);
   const defaultServers = buildDefaultMcpServers();
-  const desiredTerminal = defaultServers.find((server) => server.name === 'woody-terminal');
-  const existingTerminal = existingByName.get('woody-terminal');
-  if (
-    desiredTerminal &&
-    existingTerminal &&
-    (!isSameStdioTransport(existingTerminal.transport, desiredTerminal.transport) ||
-      existingTerminal.builtin !== true ||
-      existingTerminal.original_json !== desiredTerminal.original_json)
-  ) {
-    await mcpService.updateServer.invoke({
-      id: existingTerminal.id,
-      data: { transport: desiredTerminal.transport, builtin: true, original_json: desiredTerminal.original_json },
-    });
+  for (const name of ['woody-terminal', 'woody-cmake']) {
+    const desired = defaultServers.find((server) => server.name === name);
+    const current = existingByName.get(name);
+    if (
+      desired &&
+      current &&
+      (!isSameStdioTransport(current.transport, desired.transport) ||
+        current.builtin !== true ||
+        current.original_json !== desired.original_json)
+    ) {
+      await mcpService.updateServer.invoke({
+        id: current.id,
+        data: { transport: desired.transport, builtin: true, original_json: desired.original_json },
+      });
+    }
   }
   const missing = [...defaultServers, imageServer].filter((server) => !existingByName.has(server.name));
   let imageServerUpdated = false;

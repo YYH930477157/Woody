@@ -93,6 +93,8 @@ export async function createNativeTransport(profile: TerminalProfile): Promise<T
     // Runtime bridge credentials must never appear in a user's interactive environment.
     delete env.AIONUI_TERMINAL_TOKEN;
     delete env.AIONUI_TERMINAL_PORT;
+    delete env.AIONUI_CMAKE_TOKEN;
+    delete env.AIONUI_CMAKE_PORT;
     const terminal = spawn(
       executable,
       profile.args ??
