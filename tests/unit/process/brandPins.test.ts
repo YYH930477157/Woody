@@ -85,6 +85,22 @@ describe('brand storage paths', () => {
     expect(app.setPath).not.toHaveBeenCalledWith('userData', path.join('C:/test', 'WoodyUi'));
   });
 
+  it('withholds the instance lock after a failed migration so startup does not continue', async () => {
+    migration.migrateUserData.mockImplementationOnce(() => {
+      throw new Error('verification failed');
+    });
+    const { packagedInstanceLock } = await import('@/brandPins');
+    expect(packagedInstanceLock).toBe(false);
+  });
+
+  it('withholds the instance lock when the data path cannot be prepared', async () => {
+    migration.prepareLegacyUserDataPath.mockImplementationOnce(() => {
+      throw new Error('unexpected legacy link');
+    });
+    const { packagedInstanceLock } = await import('@/brandPins');
+    expect(packagedInstanceLock).toBe(false);
+  });
+
   it('shows migration progress in the system language', async () => {
     app.getPreferredSystemLanguages.mockReturnValueOnce(['zh-Hans-CN']);
     migration.migrateUserData.mockImplementationOnce(

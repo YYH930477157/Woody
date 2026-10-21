@@ -26,6 +26,21 @@ function seed() {
   fs.writeFileSync(path.join(legacy, 'config.json'), JSON.stringify({ workspace: path.join(legacy, 'aionui') }));
 }
 
+/** Fail the compatibility link for one migrated entry once, after the link probe has passed. */
+function failEntryLinkOnce(name: string) {
+  const link = fs.symlinkSync;
+  let failed = false;
+  vi.spyOn(fs, 'symlinkSync').mockImplementation((from, to, type) => {
+    if (!failed && path.basename(String(to)) === name) {
+      failed = true;
+      throw new Error('link denied');
+    }
+    link(from, to, type);
+  });
+}
+
+const linkType = process.platform === 'win32' ? 'junction' : 'dir';
+
 describe('WoodyUi profile migration', () => {
   it('preserves bytes, creates a verified backup, and keeps old absolute paths working', () => {
     seed();
@@ -94,9 +109,7 @@ describe('WoodyUi profile migration', () => {
 
   it('retains data and resumes if interrupted between moving a directory and linking it', () => {
     seed();
-    vi.spyOn(fs, 'symlinkSync').mockImplementationOnce(() => {
-      throw new Error('link denied');
-    });
+    failEntryLinkOnce('aionui');
     expect(() => migrateUserData(root, { assertIdle: idle })).toThrow('link denied');
     expect(fs.existsSync(path.join(target, 'aionui', 'chats.db'))).toBe(true);
     migrateUserData(root, { assertIdle: idle });
@@ -159,12 +172,59 @@ describe('WoodyUi profile migration', () => {
     expect(fs.readdirSync(root).toSorted()).toEqual(['AionUi', 'WoodyUi']);
   });
 
-  it('still starts a fresh installation on a volume that cannot hold links', () => {
+  it('starts a fresh installation in the historical root on a volume that cannot hold links', () => {
     vi.spyOn(fs, 'symlinkSync').mockImplementation(() => {
       throw new Error('junctions need a local volume');
     });
     prepareLegacyUserDataPath(root);
-    expect(migrateUserData(root, { assertIdle: idle }).userDataPath).toBe(target);
+    expect(migrateUserData(root, { assertIdle: idle }).userDataPath).toBe(legacy);
+  });
+
+  it('keeps existing data in place when the volume cannot hold links', () => {
+    seed();
+    vi.spyOn(fs, 'symlinkSync').mockImplementation(() => {
+      throw new Error('junctions need a local volume');
+    });
+    expect(migrateUserData(root, { assertIdle: idle })).toEqual({ userDataPath: legacy });
+    expect(fs.readdirSync(root)).toEqual(['AionUi']);
+  });
+
+  it('removes the copy of a backup that failed', () => {
+    seed();
+    vi.spyOn(fs, 'copyFileSync').mockImplementationOnce(() => {
+      throw new Error('disk full');
+    });
+    expect(() => migrateUserData(root, { assertIdle: idle })).toThrow('disk full');
+    expect(fs.readdirSync(root)).toEqual(['AionUi']);
+  });
+
+  it('removes copies left by an interrupted backup before starting another', () => {
+    seed();
+    fs.mkdirSync(path.join(root, 'AionUi-backup-abc123', 'incomplete'), { recursive: true });
+    migrateUserData(root, { assertIdle: idle });
+    expect(fs.existsSync(path.join(root, 'AionUi-backup-abc123'))).toBe(false);
+  });
+
+  it('keeps verified backups even when no journal names them', () => {
+    seed();
+    fs.mkdirSync(path.join(root, 'AionUi-backup-kept', 'AionUi'), { recursive: true });
+    migrateUserData(root, { assertIdle: idle });
+    expect(fs.existsSync(path.join(root, 'AionUi-backup-kept', 'AionUi'))).toBe(true);
+  });
+
+  it('does not follow links while removing a failed backup', () => {
+    seed();
+    const outside = path.join(root, 'workspace');
+    fs.mkdirSync(outside);
+    fs.writeFileSync(path.join(outside, 'notes.txt'), 'keep');
+    fs.symlinkSync(outside, path.join(legacy, 'workspace-link'), linkType);
+    const copy = fs.copyFileSync;
+    vi.spyOn(fs, 'copyFileSync').mockImplementation((from, to, mode) => {
+      copy(from, to, mode);
+      fs.appendFileSync(to, 'corrupt');
+    });
+    expect(() => migrateUserData(root, { assertIdle: idle })).toThrow(/verif/i);
+    expect(fs.readFileSync(path.join(outside, 'notes.txt'), 'utf8')).toBe('keep');
   });
 
   it('reports progress from zero to the hashed and copied byte total', () => {
@@ -197,9 +257,7 @@ describe('WoodyUi profile migration', () => {
 
   it('compares contents with the backup when finishing an interrupted migration', () => {
     seed();
-    vi.spyOn(fs, 'symlinkSync').mockImplementationOnce(() => {
-      throw new Error('link denied');
-    });
+    failEntryLinkOnce('aionui');
     expect(() => migrateUserData(root, { assertIdle: idle })).toThrow('link denied');
     fs.writeFileSync(path.join(target, 'aionui', 'chats.db'), Buffer.from([1, 2, 3, 4]));
     expect(() => migrateUserData(root, { assertIdle: idle })).toThrow(/verif/i);
