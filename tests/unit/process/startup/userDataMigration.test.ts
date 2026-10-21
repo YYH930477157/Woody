@@ -147,8 +147,62 @@ describe('WoodyUi profile migration', () => {
 
   it('creates the new root and compatibility link on a fresh installation', () => {
     prepareLegacyUserDataPath(root);
+    expect(migrateUserData(root, { assertIdle: idle })).toEqual({ userDataPath: target });
+    expect(fs.realpathSync(legacy)).toBe(fs.realpathSync(target));
+  });
+
+  it('does not back up or check for a backend on a fresh installation', () => {
+    const guard = vi.fn();
+    prepareLegacyUserDataPath(root);
+    migrateUserData(root, { assertIdle: guard });
+    expect(guard).not.toHaveBeenCalled();
+    expect(fs.readdirSync(root).toSorted()).toEqual(['AionUi', 'WoodyUi']);
+  });
+
+  it('still starts a fresh installation on a volume that cannot hold links', () => {
+    vi.spyOn(fs, 'symlinkSync').mockImplementation(() => {
+      throw new Error('junctions need a local volume');
+    });
+    prepareLegacyUserDataPath(root);
     expect(migrateUserData(root, { assertIdle: idle }).userDataPath).toBe(target);
-    expect(fs.lstatSync(legacy).isDirectory()).toBe(true);
+  });
+
+  it('reports progress from zero to the hashed and copied byte total', () => {
+    seed();
+    const bytes = 4 + fs.statSync(path.join(legacy, 'config.json')).size;
+    const progress: [number, number][] = [];
+    migrateUserData(root, { assertIdle: idle, onProgress: (done, total) => progress.push([done, total]) });
+    expect(progress[0]).toEqual([0, bytes * 3]);
+    expect(progress.at(-1)).toEqual([bytes * 3, bytes * 3]);
+  });
+
+  it('hashes file contents only for the source and its backup', () => {
+    seed();
+    const bytes = 4 + fs.statSync(path.join(legacy, 'config.json')).size;
+    const read = vi.spyOn(fs, 'readSync');
+    migrateUserData(root, { assertIdle: idle });
+    const hashed = read.mock.results.reduce((sum, result) => sum + (result.value as number), 0);
+    expect(hashed).toBe(bytes * 2);
+  });
+
+  it('refuses to finish when an entry changes while it is moved', () => {
+    seed();
+    const rename = fs.renameSync;
+    vi.spyOn(fs, 'renameSync').mockImplementation((from, to) => {
+      rename(from, to);
+      if (path.basename(String(to)) === 'aionui') fs.appendFileSync(path.join(String(to), 'chats.db'), 'late');
+    });
+    expect(() => migrateUserData(root, { assertIdle: idle })).toThrow(/verif/i);
+  });
+
+  it('compares contents with the backup when finishing an interrupted migration', () => {
+    seed();
+    vi.spyOn(fs, 'symlinkSync').mockImplementationOnce(() => {
+      throw new Error('link denied');
+    });
+    expect(() => migrateUserData(root, { assertIdle: idle })).toThrow('link denied');
+    fs.writeFileSync(path.join(target, 'aionui', 'chats.db'), Buffer.from([1, 2, 3, 4]));
+    expect(() => migrateUserData(root, { assertIdle: idle })).toThrow(/verif/i);
   });
 
   it('leaves Electron lock files in the historical root and excludes them from backup', () => {

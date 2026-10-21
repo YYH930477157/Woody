@@ -277,6 +277,8 @@ export type I18nKey =
   | 'common.createSuccess'
   | 'common.dataMigrationFailedBody'
   | 'common.dataMigrationFailedTitle'
+  | 'common.dataMigrationProgressBody'
+  | 'common.dataMigrationProgressTitle'
   | 'common.default'
   | 'common.defaultModel'
   | 'common.delete'
