@@ -13,15 +13,26 @@
 import { app, dialog } from 'electron';
 import fs from 'node:fs';
 import { migrateUserData, prepareLegacyUserDataPath } from './process/startup/userDataMigration';
+import { createMigrationProgressWindow } from './process/startup/userDataMigration/progressWindow';
 import enUS from './renderer/services/i18n/locales/en-US/common.json';
 import zhCN from './renderer/services/i18n/locales/zh-CN/common.json';
 import zhTW from './renderer/services/i18n/locales/zh-TW/common.json';
 
-const locales: Record<string, { dataMigrationFailedTitle: string; dataMigrationFailedBody: string }> = {
+type MigrationMessages = Pick<
+  typeof enUS,
+  'dataMigrationFailedTitle' | 'dataMigrationFailedBody' | 'dataMigrationProgressTitle' | 'dataMigrationProgressBody'
+>;
+const locales: Record<string, MigrationMessages> = {
   'en-US': enUS,
   'zh-CN': zhCN,
   'zh-TW': zhTW,
 };
+
+function systemMessages(): MigrationMessages {
+  const language = app.getPreferredSystemLanguages()[0] || 'en-US';
+  const locale = language.startsWith('zh') ? (/(TW|HK|Hant)/i.test(language) ? 'zh-TW' : 'zh-CN') : language;
+  return locales[locale] || enUS;
+}
 
 // Reuse this result in index.ts; taking another lock after changing userData
 // would change the identity used by older releases.
@@ -44,15 +55,23 @@ if (app.isPackaged) {
       if (!packagedInstanceLock) {
         app.exit(0);
       } else {
-        const result = migrateUserData(appDataDir);
-        app.setPath('userData', result.userDataPath);
-        app.setPath('sessionData', result.userDataPath);
+        const messages = systemMessages();
+        // The window appears only if the migration reports copy or hash work.
+        const progress = createMigrationProgressWindow({
+          title: messages.dataMigrationProgressTitle,
+          body: messages.dataMigrationProgressBody,
+        });
+        try {
+          const result = migrateUserData(appDataDir, { onProgress: progress.update });
+          app.setPath('userData', result.userDataPath);
+          app.setPath('sessionData', result.userDataPath);
+        } finally {
+          progress.close();
+        }
       }
     }
   } catch (error) {
-    const language = app.getPreferredSystemLanguages()[0] || 'en-US';
-    const locale = language.startsWith('zh') ? (/(TW|HK|Hant)/i.test(language) ? 'zh-TW' : 'zh-CN') : language;
-    const messages = locales[locale] || enUS;
+    const messages = systemMessages();
     console.error('[Woody] Data directory migration failed:', error);
     dialog.showErrorBox(messages.dataMigrationFailedTitle, `${messages.dataMigrationFailedBody}\n\n${String(error)}`);
     app.exit(1);

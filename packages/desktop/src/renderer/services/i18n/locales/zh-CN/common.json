@@ -1,6 +1,8 @@
 {
   "dataMigrationFailedTitle": "WoodyUi 数据迁移已停止",
   "dataMigrationFailedBody": "请关闭所有 Woody/AionUi 窗口和后台进程后重试。已有数据和备份均已保留。如果 AionUi 和 WoodyUi 是两个独立目录，请先处理目录冲突再启动。",
+  "dataMigrationProgressTitle": "正在升级 Woody 数据",
+  "dataMigrationProgressBody": "Woody 正在备份您的数据并迁移到新的数据目录。此过程只进行一次，可能需要几分钟。请耐心等待，不要关闭电脑。",
   "send": "发送",
   "cancel": "取消",
   "save": "保存",

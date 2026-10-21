@@ -14,8 +14,11 @@ const app = vi.hoisted(() => ({
 
 const migration = vi.hoisted(() => ({ prepareLegacyUserDataPath: vi.fn(), migrateUserData: vi.fn() }));
 const showErrorBox = vi.hoisted(() => vi.fn());
+const progress = vi.hoisted(() => ({ update: vi.fn(), close: vi.fn() }));
+const createMigrationProgressWindow = vi.hoisted(() => vi.fn(() => progress));
 vi.mock('electron', () => ({ app, dialog: { showErrorBox } }));
 vi.mock('@/process/startup/userDataMigration', () => migration);
+vi.mock('@/process/startup/userDataMigration/progressWindow', () => ({ createMigrationProgressWindow }));
 
 beforeEach(() => {
   vi.resetModules();
@@ -80,6 +83,35 @@ describe('brand storage paths', () => {
     expect(app.exit).toHaveBeenCalledWith(1);
     expect(showErrorBox).toHaveBeenCalledWith(expect.any(String), expect.stringContaining('conflict'));
     expect(app.setPath).not.toHaveBeenCalledWith('userData', path.join('C:/test', 'WoodyUi'));
+  });
+
+  it('shows migration progress in the system language', async () => {
+    app.getPreferredSystemLanguages.mockReturnValueOnce(['zh-Hans-CN']);
+    migration.migrateUserData.mockImplementationOnce(
+      (root: string, options: { onProgress: (done: number, total: number) => void }) => {
+        options.onProgress(1, 3);
+        return { userDataPath: path.join(root, 'WoodyUi') };
+      }
+    );
+    await import('@/brandPins');
+    expect(createMigrationProgressWindow).toHaveBeenCalledWith(
+      expect.objectContaining({ title: '正在升级 Woody 数据' })
+    );
+    expect(progress.update).toHaveBeenCalledWith(1, 3);
+  });
+
+  it('closes the progress window before reporting a migration failure', async () => {
+    migration.migrateUserData.mockImplementationOnce(() => {
+      throw new Error('conflict');
+    });
+    await import('@/brandPins');
+    expect(progress.close.mock.invocationCallOrder[0]).toBeLessThan(showErrorBox.mock.invocationCallOrder[0]);
+  });
+
+  it('does not open a progress window when another instance owns the lock', async () => {
+    app.requestSingleInstanceLock.mockReturnValue(false);
+    await import('@/brandPins');
+    expect(createMigrationProgressWindow).not.toHaveBeenCalled();
   });
 
   it('bypasses all production path access for an isolated E2E profile', async () => {

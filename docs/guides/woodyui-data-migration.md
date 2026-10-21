@@ -5,9 +5,11 @@ Windows 安装版首次启动时，将 `%APPDATA%\AionUi` 中的配置、对话�
 ## 首次启动
 
 1. 退出 Woody/AionUi，包括托盘和后台 AionCore。迁移不会强制结束这些进程。
-2. 启动新版。程序先取得历史目录的单实例锁，随后备份并逐文件校验 SHA256。备份位于 `%APPDATA%\AionUi-backup-随机后缀\AionUi`。`incomplete` 子目录表示备份未完成，不能作为已验证备份使用。
-3. 校验成功后，逐项迁移数据至 `WoodyUi`。迁移记录保存在 `%APPDATA%\.woodyui-data-migration.json`，用于恢复中断的迁移。
+2. 启动新版。程序先取得历史目录的单实例锁，随后备份并逐文件校验 SHA256。备份位于 `%APPDATA%\AionUi-backup-随机后缀\AionUi`。`incomplete` 子目录表示备份未完成，不能作为已验证备份使用。备份和校验期间，Windows 会显示迁移进度窗口，主界面在迁移完成后出现。
+3. 校验成功后，逐项迁移数据至 `WoodyUi`。迁移记录保存在 `%APPDATA%\.woodyui-data-migration.json`，用于恢复中断的迁移。同一次启动内，移动完成后按文件大小和修改时间核对，不再重复读取内容；继续中断的迁移时，仍逐文件将内容与备份比对。
 4. 旧目录保留 Electron 的锁文件，以及指向新目录的兼容引用。目录使用 junction，根目录文件使用硬链接。旧会话内的绝对路径仍可访问原文件。实际配置及对话数据位于 `WoodyUi\config`、`WoodyUi\aionui` 和 `WoodyUi\todo`。
+
+全新安装没有 `AionUi` 数据，程序直接创建 `WoodyUi`，并将 `AionUi` 创建为指向它的目录链接，不做备份、不检查后台进程，也不显示进度窗口。
 
 不要手工删除旧 `AionUi` 兼容目录、其中的链接或迁移记录，也不要将它误认为另一份独立备份。根目录硬链接只兼容现有文件引用；某些 Chromium 根目录元数据在原子替换后可能独立更新，因此后续备份及使用都以 `WoodyUi` 为准。
 
