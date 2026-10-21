@@ -110,7 +110,7 @@ const TodoPage: React.FC = () => {
 
   const saveDraft = useCallback(
     async (draft: TodoDraft, existing: ITodoItem | null) => {
-      const result = await data.save(existing?.status === 'done' ? { ...draft, status: undefined } : draft, existing);
+      const result = await data.save(draft, existing);
       if (result.ok && result.item) setSelectedId(result.item.id);
       return result.ok;
     },

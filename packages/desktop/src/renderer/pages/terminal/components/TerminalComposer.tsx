@@ -96,7 +96,8 @@ export default function TerminalComposer({
   const [quickOpen, setQuickOpen] = useState(false);
   const draftBeforeHistory = useRef('');
   const inspection = inspectPayload(value, encoding);
-  const sendable = enabled && inspection.ok && (inspection.bytes > 0 || ending !== 'none' || kind === 'shell');
+  const sendable =
+    enabled && !sending && inspection.ok && (inspection.bytes > 0 || ending !== 'none' || kind === 'shell');
 
   const recall = (direction: 1 | -1) => {
     if (history.length === 0) return false;

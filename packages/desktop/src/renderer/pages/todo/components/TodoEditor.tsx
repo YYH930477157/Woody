@@ -33,7 +33,7 @@ export default function TodoEditor({
   const [notes, setNotes] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [requester, setRequester] = useState('');
-  const [status, setStatus] = useState<'pending' | 'waiting'>('pending');
+  const [status, setStatus] = useState<TodoDraft['status']>('pending');
   const [saving, setSaving] = useState(false);
   // A ref, not state: two Enter presses in one tick must not both start a save.
   const savingRef = useRef(false);
@@ -45,7 +45,8 @@ export default function TodoEditor({
     setNotes(item ? item.notes || '' : defaults?.notes || '');
     setDueDate(due ? dayjs(due).format('YYYY-MM-DD') : '');
     setRequester(item ? item.requester || item.email_ref?.from || '' : defaults?.requester || '');
-    setStatus(item?.status === 'waiting' || (!item && defaults?.status === 'waiting') ? 'waiting' : 'pending');
+    // Omit status for completed items until the user explicitly chooses to reopen them.
+    setStatus(item ? (item.status === 'done' ? undefined : item.status) : (defaults?.status ?? 'pending'));
   }, [open, item, defaults]);
 
   const submit = async () => {
@@ -109,7 +110,7 @@ export default function TodoEditor({
         <Form.Item className='col-span-6' label={t('todo.editor.statusGroup')}>
           <Radio.Group
             type='button'
-            value={status}
+            value={status ?? ''}
             onChange={setStatus}
             options={[
               { value: 'pending', label: t('todo.editor.statusActive') },

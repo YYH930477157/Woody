@@ -156,7 +156,8 @@ export function filterTodos(todos: ITodoItem[], filters: TodoFilters, now = Date
     // A picked day shows that day's items from every open view; "done" keeps its own scope.
     if (filters.day === null || filters.view === 'done') {
       if (!matchesView(item, filters.view, now)) return false;
-    } else if (!hasDue(item) || startOfDay(item.due_at) !== filters.day) return false;
+    }
+    if (filters.day !== null && (!hasDue(item) || startOfDay(item.due_at) !== filters.day)) return false;
     if (filters.requester && requesterOf(item) !== filters.requester) return false;
     if (query) {
       const haystack = [item.title, item.notes, requesterOf(item), item.email_ref?.subject, item.email_ref?.from]

@@ -1,12 +1,21 @@
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { TerminalConnection, TerminalProfile, TerminalSendResult } from '@/common/types/terminal';
 import TerminalPanel from '../../../packages/desktop/src/renderer/pages/terminal/TerminalPanel';
 
 const mocks = vi.hoisted(() => ({
   owner: 'ai' as 'ai' | 'manual',
   send: vi.fn().mockResolvedValue({ status: 'completed', writtenBytes: 3 }),
   takeover: vi.fn().mockResolvedValue(undefined),
+  profiles: [] as TerminalProfile[],
+  connections: [] as TerminalConnection[],
+  saveProfile: vi.fn(),
+  open: vi.fn(),
+  close: vi.fn(),
+  report: vi.fn(),
+  setSelectedId: vi.fn(),
+  refreshConnections: vi.fn(),
 }));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'zh-CN' } }),
@@ -16,23 +25,26 @@ vi.mock('../../../packages/desktop/src/common', () => ({
     terminal: {
       send: { invoke: mocks.send },
       takeover: { invoke: mocks.takeover },
+      saveProfile: { invoke: mocks.saveProfile },
+      open: { invoke: mocks.open },
+      close: { invoke: mocks.close },
     },
   },
 }));
 vi.mock('../../../packages/desktop/src/renderer/pages/terminal/useTerminal', () => ({
   useTerminal: () => ({
-    profiles: [],
-    connections: [],
+    profiles: mocks.profiles,
+    connections: mocks.connections,
     selectedId: 'shared-device',
-    setSelectedId: vi.fn(),
+    setSelectedId: mocks.setSelectedId,
     events: [],
     counters: { rx: 0, tx: 0 },
     lost: false,
     error: '',
     setError: vi.fn(),
-    report: vi.fn(),
+    report: mocks.report,
     refreshProfiles: vi.fn().mockResolvedValue(undefined),
-    refreshConnections: vi.fn().mockResolvedValue(undefined),
+    refreshConnections: mocks.refreshConnections,
     refresh: vi.fn(),
     clear: vi.fn(),
     selected: {
@@ -65,6 +77,17 @@ describe('manual terminal controls', () => {
     vi.clearAllMocks();
     localStorage.clear();
     mocks.owner = 'ai';
+    mocks.profiles = [];
+    mocks.connections = [];
+    mocks.send.mockReset().mockResolvedValue({ status: 'completed', writtenBytes: 3 });
+    mocks.saveProfile.mockReset().mockImplementation(async (profile: TerminalProfile) => profile);
+    mocks.open.mockReset().mockResolvedValue({ id: 'new-session' });
+    mocks.close.mockReset().mockResolvedValue(undefined);
+    mocks.refreshConnections.mockResolvedValue(undefined);
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: () => ({ matches: false, addListener() {}, removeListener() {} }),
+    });
   });
   afterEach(cleanup);
   it('keeps manual send disabled while AI controls the connection', () => {
@@ -118,5 +141,127 @@ describe('manual terminal controls', () => {
     await waitFor(() => expect(input()).toHaveValue(''));
     fireEvent.keyDown(input(), { key: 'ArrowUp' });
     expect(input()).toHaveValue('0x68,0x16');
+  });
+
+  it('ignores repeated Enter in the same tick and while a send is pending', async () => {
+    mocks.owner = 'manual';
+    let finish!: (result: TerminalSendResult) => void;
+    mocks.send.mockReturnValue(
+      new Promise<TerminalSendResult>((resolve) => {
+        finish = resolve;
+      })
+    );
+    render(<TerminalPanel />);
+    fireEvent.change(input(), { target: { value: '68 16' } });
+    act(() => {
+      fireEvent.keyDown(input(), { key: 'Enter' });
+      fireEvent.keyDown(input(), { key: 'Enter' });
+    });
+    fireEvent.keyDown(input(), { key: 'Enter' });
+    const requests = mocks.send.mock.calls.length;
+    await act(async () => finish({ status: 'completed', writtenBytes: 2 }));
+    expect(requests).toBe(1);
+  });
+
+  it.each(['7E A0', '68 16'])('keeps a draft edited during send, even when retyped as %s', async (next) => {
+    mocks.owner = 'manual';
+    let finish!: (result: TerminalSendResult) => void;
+    mocks.send.mockReturnValueOnce(
+      new Promise<TerminalSendResult>((resolve) => {
+        finish = resolve;
+      })
+    );
+    render(<TerminalPanel />);
+    fireEvent.change(input(), { target: { value: '68 16' } });
+    fireEvent.keyDown(input(), { key: 'Enter' });
+    fireEvent.change(input(), { target: { value: '' } });
+    fireEvent.change(input(), { target: { value: next } });
+    await act(async () => finish({ status: 'completed', writtenBytes: 2 }));
+    expect(input()).toHaveValue(next);
+    fireEvent.keyDown(input(), { key: 'ArrowUp' });
+    expect(input()).toHaveValue('68 16');
+  });
+
+  it('keeps the draft and permits retry after a rejected send', async () => {
+    mocks.owner = 'manual';
+    mocks.send.mockRejectedValueOnce(new Error('write failed'));
+    render(<TerminalPanel />);
+    fireEvent.change(input(), { target: { value: '68 16' } });
+    fireEvent.keyDown(input(), { key: 'Enter' });
+    await waitFor(() => expect(sendButton()).not.toHaveClass('arco-btn-loading'));
+    expect(input()).toHaveValue('68 16');
+    fireEvent.keyDown(input(), { key: 'Enter' });
+    await waitFor(() => expect(input()).toHaveValue(''));
+    expect(mocks.send).toHaveBeenCalledTimes(2);
+  });
+
+  const setupOpenProfile = () => {
+    const profile: TerminalProfile = {
+      id: 'shell-profile',
+      name: 'Shell profile',
+      kind: 'shell',
+      executable: 'old-shell.exe',
+    };
+    mocks.profiles = [profile];
+    const id = crypto.randomUUID();
+    mocks.connections = [{ id, profile, status: 'open', owner: 'manual', createdAt: 1 }];
+    return id;
+  };
+
+  const saveAndConnect = async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'common.edit' }));
+    fireEvent.change(await screen.findByDisplayValue('old-shell.exe'), { target: { value: 'new-shell.exe' } });
+    fireEvent.click(screen.getByRole('button', { name: 'tools.terminal.saveAndConnect' }));
+  };
+
+  it('closes the old connection before opening the saved profile', async () => {
+    const id = setupOpenProfile();
+    let finishClose!: () => void;
+    mocks.close.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finishClose = resolve;
+      })
+    );
+    render(<TerminalPanel />);
+    await saveAndConnect();
+    await waitFor(() => expect(mocks.close).toHaveBeenCalledWith({ id }));
+    expect(mocks.open).not.toHaveBeenCalled();
+    await act(async () => finishClose());
+    await waitFor(() =>
+      expect(mocks.open).toHaveBeenCalledWith(expect.objectContaining({ executable: 'new-shell.exe' }))
+    );
+    expect(mocks.setSelectedId).toHaveBeenCalledWith('new-session');
+  });
+
+  it('refreshes connection state and reports a failure when reopening the saved profile fails', async () => {
+    const id = setupOpenProfile();
+    mocks.open.mockRejectedValueOnce(new Error('launch failed'));
+    render(<TerminalPanel />);
+    await saveAndConnect();
+    await waitFor(() => expect(mocks.report).toHaveBeenCalledWith(new Error('launch failed')));
+    expect(mocks.close).toHaveBeenCalledWith({ id });
+    expect(mocks.refreshConnections).toHaveBeenCalled();
+    expect(mocks.setSelectedId).not.toHaveBeenCalledWith('new-session');
+    expect(screen.getAllByRole('button', { name: 'Shell profile' })).toHaveLength(2);
+  });
+
+  it('selects an existing session when its saved profile is clicked', () => {
+    const id = setupOpenProfile();
+    render(<TerminalPanel />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Shell profile' }).at(-1)!);
+    expect(mocks.setSelectedId).toHaveBeenCalledWith(id);
+    expect(mocks.open).not.toHaveBeenCalled();
+    expect(mocks.close).not.toHaveBeenCalled();
+  });
+
+  it('does not open a replacement if releasing the old connection fails', async () => {
+    setupOpenProfile();
+    mocks.close.mockRejectedValueOnce(new Error('close failed'));
+    render(<TerminalPanel />);
+    await saveAndConnect();
+    await waitFor(() => expect(mocks.report).toHaveBeenCalledWith(new Error('close failed')));
+    expect(mocks.open).not.toHaveBeenCalled();
+    expect(mocks.refreshConnections).toHaveBeenCalled();
+    expect(screen.getAllByRole('button', { name: 'Shell profile' })).toHaveLength(2);
   });
 });

@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   list: vi.fn(),
   status: vi.fn(),
   create: vi.fn(),
+  update: vi.fn(),
   skippedEmails: vi.fn(),
   restoreEmail: vi.fn(),
   dismissEmail: vi.fn(),
@@ -26,6 +27,7 @@ vi.mock('@/common', () => ({
       list: { invoke: mocks.list },
       status: { invoke: mocks.status },
       create: { invoke: mocks.create },
+      update: { invoke: mocks.update },
       skippedEmails: { invoke: mocks.skippedEmails },
       restoreEmail: { invoke: mocks.restoreEmail },
       dismissEmail: { invoke: mocks.dismissEmail },
@@ -60,6 +62,7 @@ beforeEach(() => {
   mocks.list.mockResolvedValue([]);
   mocks.status.mockResolvedValue(null);
   mocks.create.mockResolvedValue(undefined);
+  mocks.update.mockResolvedValue(undefined);
   mocks.skippedEmails.mockResolvedValue([]);
   mocks.restoreEmail.mockResolvedValue(null);
   mocks.dismissEmail.mockResolvedValue(true);
@@ -75,6 +78,36 @@ async function openEditor() {
 }
 
 describe('Todo editor saving', () => {
+  it.each([
+    [undefined, undefined],
+    ['todo.editor.statusActive', 'pending'],
+    ['todo.editor.statusWaiting', 'waiting'],
+  ])('only reopens a finished todo when status is explicitly selected: %s', async (label, status) => {
+    mocks.list.mockResolvedValue([
+      {
+        id: 'finished',
+        title: 'Finished item',
+        status: 'done',
+        source: 'manual',
+        created_at: 1,
+        updated_at: 1,
+        completed_at: 2,
+      },
+    ]);
+    render(<TodoPage />);
+    fireEvent.click(await screen.findByText('todo.tab.done'));
+    await screen.findByText('Finished item');
+    fireEvent.click(screen.getByRole('button', { name: 'todo.edit' }));
+    fireEvent.change(await screen.findByDisplayValue('Finished item'), { target: { value: 'Edited item' } });
+    if (label) fireEvent.click(screen.getByText(label));
+    fireEvent.click(screen.getByRole('button', { name: 'todo.save' }));
+    await waitFor(() => expect(mocks.update).toHaveBeenCalled());
+    expect(mocks.update).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'finished', title: 'Edited item', status })
+    );
+    expect(mocks.update.mock.calls[0][0]).not.toHaveProperty('completed_at');
+  });
+
   it('ignores repeated Enter presses while a create request is pending', async () => {
     let finishSave!: () => void;
     mocks.create.mockReturnValue(

@@ -84,6 +84,17 @@ describe('todo grouping and views', () => {
     ).toEqual(['Review PR']);
   });
 
+  it('intersects the done view with the selected day', () => {
+    const items = [
+      done,
+      todo({ status: 'done', due_at: at(20) }),
+      todo({ status: 'done', due_at: null }),
+      todo({ status: 'pending', due_at: at(19) }),
+    ];
+    expect(filterTodos(items, { view: 'done', day: at(19), requester: null, query: '' }, NOW)).toEqual([done]);
+    expect(filterTodos(items, { view: 'done', day: null, requester: null, query: '' }, NOW)).toEqual(items.slice(0, 3));
+  });
+
   it('counts open items per requester and marks calendar days', () => {
     expect(requesterCounts(all)).toEqual([{ name: 'Li', count: 1 }]);
     const marks = dayMarks(all, NOW);

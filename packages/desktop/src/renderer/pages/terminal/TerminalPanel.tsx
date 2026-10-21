@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button } from '@arco-design/web-react';
 import { Robot, Terminal, Usb } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
@@ -51,6 +51,7 @@ export default function TerminalPanel({
   const prefs = useTerminalPreferences();
   const [editing, setEditing] = useState<{ profile: TerminalProfile; isNew: boolean }>();
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const draftRevisions = useRef<Record<string, number>>({});
   const [results, setResults] = useState<Record<string, Result>>({});
   const [liveBaud, setLiveBaud] = useState<Record<string, number>>({});
   const [hidden, setHidden] = useState<Set<string>>(() => new Set(dismissedSessions));
@@ -63,6 +64,7 @@ export default function TerminalPanel({
   const [wait, setWait] = useState<ComposerWait>({ mode: 'none', value: '', timeoutMs: 3000 });
   const [slowSend, setSlowSend] = useState(false);
   const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
   const [working, setWorking] = useState(false);
 
   const connections = useMemo(
@@ -120,20 +122,26 @@ export default function TerminalPanel({
     ].join(' · '),
   });
 
-  const openProfile = (profile: TerminalProfile) => {
+  const openProfile = (profile: TerminalProfile, replaceExisting = false) => {
     const existing = model.connections.find(
       (connection) => connection.profile.id === profile.id && connection.status === 'open'
     );
-    if (existing) {
+    if (existing && !replaceExisting) {
       setSessionHidden(existing.id, false);
       model.setSelectedId(existing.id);
       return;
     }
     setWorking(true);
     void run(async () => {
-      const connection = await ipcBridge.terminal.open.invoke(profile);
-      await model.refreshConnections();
-      model.setSelectedId(connection.id);
+      try {
+        // Release serial ports before applying the saved connection settings.
+        if (existing) await ipcBridge.terminal.close.invoke({ id: existing.id });
+        const connection = await ipcBridge.terminal.open.invoke(profile);
+        if (existing) setSessionHidden(existing.id, true);
+        model.setSelectedId(connection.id);
+      } finally {
+        await model.refreshConnections();
+      }
     }).finally(() => setWorking(false));
   };
 
@@ -142,7 +150,7 @@ export default function TerminalPanel({
       const saved = await ipcBridge.terminal.saveProfile.invoke(profile);
       await model.refreshProfiles();
       setEditing(undefined);
-      if (connect) openProfile(saved);
+      if (connect) openProfile(saved, true);
     } catch (error) {
       model.report(new Error(localizeError(error instanceof Error ? error.message : String(error))));
     }
@@ -217,16 +225,23 @@ export default function TerminalPanel({
   };
 
   const send = () => {
-    if (!selected || !enabled) return;
+    if (!selected || !enabled || sendingRef.current) return;
     const connection = selected;
     const data = drafts[connection.id] ?? '';
+    const revision = draftRevisions.current[connection.id] ?? 0;
+    sendingRef.current = true;
     setSending(true);
     void run(async () => {
       const request = { ...payload(data, encoding, view.ending), wait: waitCondition() };
       await transmit(connection, request);
       prefs.remember(connection.profile.kind, { data, encoding });
-      setDrafts((previous) => ({ ...previous, [connection.id]: '' }));
-    }).finally(() => setSending(false));
+      setDrafts((previous) =>
+        (draftRevisions.current[connection.id] ?? 0) === revision ? { ...previous, [connection.id]: '' } : previous
+      );
+    }).finally(() => {
+      sendingRef.current = false;
+      setSending(false);
+    });
   };
 
   const sendKeys = (text: string) => {
@@ -457,7 +472,10 @@ export default function TerminalPanel({
               enabled={Boolean(enabled)}
               disabledReason={label(selected.status !== 'open' ? 'notConnected' : 'aiControlling')}
               value={drafts[selected.id] ?? ''}
-              onValueChange={(value) => setDrafts((previous) => ({ ...previous, [selected.id]: value }))}
+              onValueChange={(value) => {
+                draftRevisions.current[selected.id] = (draftRevisions.current[selected.id] ?? 0) + 1;
+                setDrafts((previous) => ({ ...previous, [selected.id]: value }));
+              }}
               encoding={encoding}
               onEncodingChange={(next) => prefs.updateView(kind, { encoding: next })}
               ending={view.ending}
