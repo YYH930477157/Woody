@@ -4,7 +4,7 @@ import { Close, Keyboard, Lightning, SendOne, SettingTwo } from '@icon-park/reac
 import classNames from 'classnames';
 import { useTranslation } from 'react-i18next';
 import type { TerminalWait } from '@/common/types/terminal';
-import { formatByteSize, parseHexInput } from '../terminalView';
+import { formatByteSize, parseHexInput, terminalKeyInput, type TerminalBackspace } from '../terminalView';
 import type {
   HistoryEntry,
   QuickCommand,
@@ -43,6 +43,8 @@ export default function TerminalComposer({
   onEndingChange,
   inputMode,
   onInputModeChange,
+  backspace,
+  onBackspaceChange,
   wait,
   onWaitChange,
   slowSend,
@@ -71,6 +73,8 @@ export default function TerminalComposer({
   onEndingChange: (ending: TerminalEnding) => void;
   inputMode: ComposerInputMode;
   onInputModeChange: (mode: ComposerInputMode) => void;
+  backspace: TerminalBackspace;
+  onBackspaceChange: (backspace: TerminalBackspace) => void;
   wait: ComposerWait;
   onWaitChange: (wait: ComposerWait) => void;
   slowSend: boolean;
@@ -135,6 +139,21 @@ export default function TerminalComposer({
           ]}
         />
       </div>
+      {inputMode !== 'line' && (
+        <div className='flex flex-col gap-6px'>
+          <span className='text-12px text-t-tertiary'>{label('backspaceKey')}</span>
+          <Radio.Group
+            type='button'
+            size='small'
+            value={backspace}
+            onChange={onBackspaceChange}
+            options={[
+              { value: 'ctrlH', label: label('backspace_ctrlH') },
+              { value: 'del', label: label('backspace_del') },
+            ]}
+          />
+        </div>
+      )}
       <div className='flex flex-col gap-6px'>
         <span className='text-12px text-t-tertiary'>{label('waitReply')}</span>
         <Select
@@ -315,19 +334,10 @@ export default function TerminalComposer({
               placeholder={enabled ? label('placeholderKeys') : disabledReason}
               onKeyDown={(event) => {
                 if (event.ctrlKey || event.metaKey || event.altKey) return;
-                if (event.key === 'Enter') {
-                  event.preventDefault();
-                  onSendKeys('\n');
-                } else if (event.key === 'Backspace') {
-                  event.preventDefault();
-                  onSendKeys('\u007f');
-                } else if (event.key === 'Tab') {
-                  event.preventDefault();
-                  onSendKeys('\t');
-                } else if (event.key.length === 1) {
-                  event.preventDefault();
-                  onSendKeys(event.key);
-                }
+                const input = terminalKeyInput(event.key, backspace);
+                if (input === undefined) return;
+                event.preventDefault();
+                onSendKeys(input);
               }}
               onPaste={(event) => {
                 const text = event.clipboardData.getData('text');

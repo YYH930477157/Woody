@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import type { TerminalNewlineMode, TerminalOutputMode } from '@/common/terminal/stream';
 import type { TerminalSendRequest } from '@/common/types/terminal';
+import type { TerminalBackspace } from './terminalView';
 
 export type TerminalKind = 'serial' | 'shell';
 export type TerminalEncoding = TerminalSendRequest['encoding'];
@@ -14,6 +15,8 @@ export type TerminalViewPreferences = {
   receiveNewlines: TerminalNewlineMode;
   encoding: TerminalEncoding;
   ending: TerminalEnding;
+  /** Byte Backspace sends when typing straight to the device. */
+  backspace: TerminalBackspace;
 };
 
 export type QuickCommand = {
@@ -35,6 +38,7 @@ const DEFAULTS: Record<TerminalKind, TerminalViewPreferences> = {
     receiveNewlines: 'keep',
     encoding: 'hex',
     ending: 'none',
+    backspace: 'ctrlH',
   },
   shell: {
     display: 'text',
@@ -43,6 +47,7 @@ const DEFAULTS: Record<TerminalKind, TerminalViewPreferences> = {
     receiveNewlines: 'keep',
     encoding: 'utf8',
     ending: 'cr',
+    backspace: 'del',
   },
 };
 const HISTORY_LIMIT = 50;

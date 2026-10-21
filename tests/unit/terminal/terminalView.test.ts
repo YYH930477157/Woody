@@ -9,6 +9,7 @@ import {
   groupTerminalFrames,
   parseHexInput,
   renderTerminalEvents,
+  terminalKeyInput,
   toHex,
 } from '../../../packages/desktop/src/renderer/pages/terminal/terminalView';
 
@@ -179,6 +180,22 @@ describe('terminal text lines', () => {
     expect(lineText([timed('a\rb\n\nc', 6, 1)])).toEqual(['a', 'b', '', 'c']);
   });
 
+  it('applies a shell backspace echo instead of keeping the deleted character', () => {
+    expect(lineText([timed('admin:/$ helpx', 14, 1), timed('\b \b', 17, 2)])).toEqual(['admin:/$ help ']);
+  });
+
+  it('shows a tab completion redraw as the completed command', () => {
+    expect(lineText([timed('admin:/$ he', 11, 1), timed('\b \b\b \bhelp', 23, 2)])).toEqual(['admin:/$ help']);
+  });
+
+  it('does not let backspace reach into the previous line', () => {
+    expect(lineText([timed('ok\r\n\b\bx', 7, 1)])).toEqual(['ok', 'x']);
+  });
+
+  it('backspaces over a whole character outside the basic plane', () => {
+    expect(lineText([timed('a😀', 5, 1), timed('\bb', 7, 2)])).toEqual(['ab']);
+  });
+
   it('marks echoed input and stamps each line with the time it started', () => {
     const lines = buildTextLines([timed('AT', 2, 10, 'outgoing', 'manual'), timed('\r\nOK\r\n', 8, 20)]);
 
@@ -196,6 +213,24 @@ describe('terminal text lines', () => {
       'system:gone',
       'y',
     ]);
+  });
+});
+
+describe('terminal keystroke input', () => {
+  it('sends the configured Backspace byte', () => {
+    expect([terminalKeyInput('Backspace', 'ctrlH'), terminalKeyInput('Backspace', 'del')]).toEqual(['\b', '\x7f']);
+  });
+
+  it('sends editing keys as VT sequences', () => {
+    expect(['ArrowUp', 'ArrowLeft', 'Delete'].map((key) => terminalKeyInput(key, 'ctrlH'))).toEqual([
+      '\x1b[A',
+      '\x1b[D',
+      '\x1b[3~',
+    ]);
+  });
+
+  it('leaves modifier and function keys to the browser', () => {
+    expect(['Shift', 'F5'].map((key) => terminalKeyInput(key, 'ctrlH'))).toEqual([undefined, undefined]);
   });
 });
 

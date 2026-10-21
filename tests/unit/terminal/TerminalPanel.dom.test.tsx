@@ -127,6 +127,37 @@ describe('manual terminal controls', () => {
     fireEvent.keyDown(input(), { key: 'Enter' });
     expect(mocks.send).not.toHaveBeenCalled();
   });
+  const typeStraightToDevice = () => {
+    fireEvent.click(screen.getByRole('button', { name: /tools\.terminal\.sendOptions/ }));
+    fireEvent.click(screen.getByText('tools.terminal.inputMode_normal'));
+    return screen.getByRole('textbox', { name: 'tools.terminal.input' });
+  };
+  const sentKeys = (data: string) =>
+    expect(mocks.send).toHaveBeenCalledWith({ id: 'shared-device', request: expect.objectContaining({ data }) });
+
+  it('sends Ctrl+H for Backspace while typing straight to a serial shell', async () => {
+    mocks.owner = 'manual';
+    render(<TerminalPanel />);
+    fireEvent.keyDown(typeStraightToDevice(), { key: 'Backspace' });
+    await waitFor(() => sentKeys('\b'));
+  });
+
+  it('sends DEL for Backspace when the device expects it', async () => {
+    mocks.owner = 'manual';
+    render(<TerminalPanel />);
+    const keys = typeStraightToDevice();
+    fireEvent.click(screen.getByText('tools.terminal.backspace_del'));
+    fireEvent.keyDown(keys, { key: 'Backspace' });
+    await waitFor(() => sentKeys('\x7f'));
+  });
+
+  it('sends arrow keys as VT sequences so shell history works', async () => {
+    mocks.owner = 'manual';
+    render(<TerminalPanel />);
+    fireEvent.keyDown(typeStraightToDevice(), { key: 'ArrowUp' });
+    await waitFor(() => sentKeys('\x1b[A'));
+  });
+
   it('sends on Enter, clears the draft, and recalls it from history', async () => {
     mocks.owner = 'manual';
     render(<TerminalPanel />);

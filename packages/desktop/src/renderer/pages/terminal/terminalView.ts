@@ -119,10 +119,32 @@ export type TerminalTextLine = {
   error?: string;
   system?: boolean;
 };
+type TextCell = { direction: TerminalEvent['direction']; char: string };
+
+/** Count code points; a low surrogate continues the previous character. */
+function codePoints(text: string): number {
+  let count = 0;
+  for (let index = 0; index < text.length; index++) {
+    const unit = text.charCodeAt(index);
+    if (unit < 0xdc00 || unit > 0xdfff) count++;
+  }
+  return count;
+}
+
+function segmentsOf(cells: TextCell[]): TerminalTextLine['segments'] {
+  const segments: TerminalTextLine['segments'] = [];
+  for (const { direction, char } of cells) {
+    const last = segments.at(-1);
+    if (last?.direction === direction) last.text += char;
+    else segments.push({ direction, text: char });
+  }
+  return segments;
+}
 
 /**
  * Lay a byte stream out as terminal lines: chunks flow inline and only CR, LF or CRLF break a line,
- * so a reply split across serial reads still reads as one line.
+ * so a reply split across serial reads still reads as one line. BS moves the cursor back without
+ * erasing, so a shell's "\b \b" deletion and completion redraws read as they would on a terminal.
  */
 export function buildTextLines(
   events: TerminalEvent[],
@@ -137,6 +159,9 @@ export function buildTextLines(
   };
   const lines: TerminalTextLine[] = [];
   let current: TerminalTextLine | undefined;
+  // Cursor and length of the open line, in code points.
+  let column = 0;
+  let width = 0;
   let pendingCr = false;
   for (const event of events) {
     if (event.direction === 'system') {
@@ -155,6 +180,8 @@ export function buildTextLines(
     const start = (): TerminalTextLine => {
       const line: TerminalTextLine = { key: `${event.cursor}:${piece++}`, timestamp: event.timestamp, segments: [] };
       lines.push(line);
+      column = 0;
+      width = 0;
       return line;
     };
     for (const token of transforms[event.direction](decode(event)).split(/(\r\n|\r|\n)/)) {
@@ -171,9 +198,23 @@ export function buildTextLines(
         continue;
       }
       current ??= start();
-      const last = current.segments.at(-1);
-      if (last?.direction === event.direction) last.text += token;
-      else current.segments.push({ direction: event.direction, text: token });
+      if (column === width && !token.includes('\b')) {
+        const last = current.segments.at(-1);
+        if (last?.direction === event.direction) last.text += token;
+        else current.segments.push({ direction: event.direction, text: token });
+        width += codePoints(token);
+        column = width;
+        continue;
+      }
+      const cells = current.segments.flatMap((segment) =>
+        Array.from(segment.text, (char): TextCell => ({ direction: segment.direction, char }))
+      );
+      for (const char of token) {
+        if (char === '\b') column = Math.max(0, column - 1);
+        else cells[column++] = { direction: event.direction, char };
+      }
+      current.segments = segmentsOf(cells);
+      width = cells.length;
     }
     if (event.status === 'failed' && event.error) {
       current ??= start();
@@ -181,6 +222,29 @@ export function buildTextLines(
     }
   }
   return lines.length > maxLines ? lines.slice(-maxLines) : lines;
+}
+
+/** Byte sent by Backspace: ^H for most embedded shells (letter-shell treats DEL as forward delete). */
+export type TerminalBackspace = 'ctrlH' | 'del';
+
+const KEY_SEQUENCES: Record<string, string> = {
+  // The panel replaces Enter with the selected line ending.
+  Enter: '\n',
+  Tab: '\t',
+  ArrowUp: '\x1b[A',
+  ArrowDown: '\x1b[B',
+  ArrowRight: '\x1b[C',
+  ArrowLeft: '\x1b[D',
+  Home: '\x1b[H',
+  End: '\x1b[F',
+  Delete: '\x1b[3~',
+};
+
+/** Bytes a key sends in keystroke mode; undefined leaves the key to the browser. */
+export function terminalKeyInput(key: string, backspace: TerminalBackspace): string | undefined {
+  if (key === 'Backspace') return backspace === 'ctrlH' ? '\b' : '\x7f';
+  if (key.length === 1) return key;
+  return KEY_SEQUENCES[key];
 }
 
 export type HexInput = { ok: true; hex: string; bytes: number } | { ok: false; reason: 'hexInvalid' | 'hexOdd' };
