@@ -27,6 +27,10 @@ type State = {
 };
 type Factory = (launch: GdbLaunch, events: GdbEvents) => MiConnection;
 const key = (root: string) => (process.platform === 'win32' ? root.toLowerCase() : root);
+// Offline MinGW-w64 8.1 toolchains ship GDB 8.1, which predates may-call-functions
+// (8.3) and print max-depth (9). readPath already rejects calls, so a GDB without
+// these settings still debugs within the same limits.
+const OPTIONAL_SETTINGS = new Set(['-gdb-set may-call-functions off', '-gdb-set print max-depth 5']);
 const terminal = (state: GdbSession['state']) => state === 'exited' || state === 'failed';
 const frame = (value: MiFields): GdbFrame => ({
   level: textField(value.level) ?? '0',
@@ -154,7 +158,11 @@ export class GdbService {
       ];
       for (const command of commands) {
         if (state.stopping) return;
-        await state.connection.command(command);
+        try {
+          await state.connection.command(command);
+        } catch (error) {
+          if (!OPTIONAL_SETTINGS.has(command)) throw error;
+        }
       }
       if (state.stopping) return;
       state.snapshot.state = 'running';

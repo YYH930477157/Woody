@@ -109,6 +109,29 @@ describe('shared GDB session', () => {
     expect(result.session?.state).toBe('exited');
     expect(release).toHaveBeenCalledTimes(1);
   });
+  it('debugs with an older GDB that lacks newer print and call settings', async () => {
+    const { connection } = setup();
+    const respond = vi.mocked(connection.command).getMockImplementation()!;
+    vi.mocked(connection.command).mockImplementation(async (command) => {
+      if (/may-call-functions|max-depth/.test(command)) throw new Error('Undefined set command');
+      return respond(command);
+    });
+    await ready();
+  });
+  it('fails the launch when GDB rejects a required setup command', async () => {
+    const { connection } = setup();
+    const respond = vi.mocked(connection.command).getMockImplementation()!;
+    vi.mocked(connection.command).mockImplementation(async (command) => {
+      if (command.startsWith('-file-exec-and-symbols')) throw new Error('No symbol table is loaded');
+      return respond(command);
+    });
+    await service.request({ projectPath: '/meter', operation: 'start' });
+    await vi.waitFor(async () =>
+      expect((await service.request({ projectPath: '/meter', operation: 'status' })).session?.error).toBe(
+        'No symbol table is loaded'
+      )
+    );
+  });
   it('cleans up a launch that fails during GDB setup', async () => {
     const { connection, release } = setup();
     vi.mocked(connection.command).mockRejectedValue(new Error('setup failure'));

@@ -14,6 +14,9 @@ export type ProcessRequest = {
 export type ProcessResult = { code: number; output: string };
 export type ProcessRunner = (request: ProcessRequest) => Promise<ProcessResult>;
 
+/** Characters of combined output kept for version parsing and error messages. */
+const OUTPUT_TAIL = 262144;
+
 /** Spawn a shell-free process and hold ownership until its entire pipe lifetime ends. */
 export function createOutputDecoder(
   codePage: number | undefined,
@@ -58,7 +61,9 @@ export const runProcess: ProcessRunner = async (request) => {
     let stopping = false;
     let termination = Promise.resolve();
     const emit = (text: string): void => {
-      output = (output + text).slice(-262144);
+      output += text;
+      // Trim in batches; slicing the tail for every line would copy it once per line.
+      if (output.length > OUTPUT_TAIL * 2) output = output.slice(-OUTPUT_TAIL);
       request.onOutput(text);
     };
     const stdout = createOutputDecoder(codePage, emit);
@@ -107,7 +112,7 @@ export const runProcess: ProcessRunner = async (request) => {
       stderr.end();
       void termination.then(() => {
         if (failure) reject(failure);
-        else resolve({ code: code ?? -1, output });
+        else resolve({ code: code ?? -1, output: output.slice(-OUTPUT_TAIL) });
       });
     });
   });
