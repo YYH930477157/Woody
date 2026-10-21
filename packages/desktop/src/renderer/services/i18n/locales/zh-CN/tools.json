@@ -60,6 +60,13 @@
     "noOutput": "暂无调试输出。"
   },
   "cmake": {
+    "project": "CMake 工程",
+    "selectProject": "请选择 CMake 工程",
+    "rescan": "重新检测工程",
+    "unsavedChanges": "尚有未保存的修改",
+    "discardChanges": "放弃未保存的构建设置并重新加载工程？",
+    "ambiguousProject": "发现多个 CMake 工程，请将目标工程目录设为会话工作目录。",
+    "projectSearchLimit": "项目搜索范围过大，请选择更具体的工程目录。",
     "selectionChanged": "已保存的变体失效，请检查当前选项并保存后再让 AI 构建。",
     "title": "CMake 构建",
     "aiAccess": "允许 AI 操作此工程",

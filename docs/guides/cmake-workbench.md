@@ -6,7 +6,28 @@ to the terminal icon in the conversation header.
 
 ## Project setup
 
-The conversation workspace must contain `CMakeLists.txt`. Woody reads
+Woody first checks `CMakeLists.txt` in the current conversation's project directory.
+If it is absent, Woody searches subdirectories and automatically opens the only
+CMake source root found. It stops descending at each source root, so component
+`CMakeLists.txt` files do not become separate candidates. Multiple independent
+projects appear in the project selector. Choose one to load its variants and
+saved build settings. Woody remembers that explicit choice for this workspace in
+its user data, using a relative source path. No developer-machine or installation
+path is used. A moved workspace is detected afresh; multiple projects may require
+selection again at the new location.
+Generated directories (`build`, `out`, `dist`, `CMakeFiles`, `cmake-build-*`),
+dependency directories (`node_modules`), version-control directories and directory
+links are skipped. Searches stop with an explicit error after 2,000 directories,
+50,000 entries or 16 levels; use a narrower project directory in that case.
+
+Once found, the source directory is used for settings, builds, AI access and GDB.
+Subsequent operations stay bound to it, even if its CMake file is later removed.
+Reopening the panel or selecting Rescan projects discovers the workspace again.
+An empty workspace shows an empty state with rescan available. If a saved source
+directory disappears, Woody selects the only remaining candidate or waits for a
+new choice. Switching or rescanning with unsaved settings requires confirmation;
+both controls are disabled during a build or debug operation. Detection never
+launches CMake or GDB and does not grant AI access automatically. Woody reads
 `cmake-variants.yaml` or `.yml` at the project root or in `.vscode` (one file only).
 Supported choice fields are `short`, `long`, `buildType`, scalar `settings`, and
 string `env`; dimensions have `default`, `choices`, and optional labels. Unknown
@@ -48,7 +69,7 @@ AI calls. Cancel terminates the process tree; already generated files remain.
 Logs are bounded and older output may be discarded.
 
 Settings are saved per canonical project under the Woody user data directory
-(`%APPDATA%/AionUi/cmake/projects`), outside the source tree. The panel saves
+(`%APPDATA%/WoodyUi/cmake/projects`), outside the source tree. The panel saves
 current edits before starting an action. Settings cannot be changed through MCP.
 
 ## AI access

@@ -1,9 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { cmake } from '@/common/adapter/cmake';
-import type { CmakeAction, CmakeConfiguration, CmakeJob, CmakeProject } from '@/common/types/cmake';
+import type { CmakeAction, CmakeConfiguration, CmakeJob, CmakeProject, CmakeWorkspace } from '@/common/types/cmake';
 
 /** Poll the desktop-owned job without overwriting unsaved form edits. */
 export function useCmake(projectPath: string) {
+  const [workspace, setWorkspace] = useState<CmakeWorkspace>();
+  const [discovering, setDiscovering] = useState(false);
+  const [scan, setScan] = useState<{ id: number; workspacePath: string; selection?: string }>({
+    id: 0,
+    workspacePath: '',
+  });
   const [project, setProject] = useState<CmakeProject>();
   const [draft, setDraft] = useState<CmakeConfiguration>();
   const [job, setJob] = useState<CmakeJob>();
@@ -23,6 +29,9 @@ export function useCmake(projectPath: string) {
     const current = ++generation.current;
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
+    let sourcePath: string | undefined;
+    setWorkspace(undefined);
+    setDiscovering(!!projectPath);
     setProject(undefined);
     setDraft(undefined);
     setJob(undefined);
@@ -36,8 +45,9 @@ export function useCmake(projectPath: string) {
     async function poll() {
       const observed = revision.current;
       try {
-        const result = await cmake.inspect.invoke({ projectPath });
-        const enabled = await cmake.aiEnabled.invoke({ projectPath });
+        const result = await cmake.inspect.invoke({ projectPath: sourcePath!, discover: false });
+        sourcePath = result.projectPath;
+        const enabled = await cmake.aiEnabled.invoke({ projectPath: result.projectPath });
         if (stopped || current !== generation.current || observed !== revision.current) return;
         setProject(result);
         setLoadError('');
@@ -56,19 +66,35 @@ export function useCmake(projectPath: string) {
       } catch (reason) {
         if (!stopped) setLoadError(reason instanceof Error ? reason.message : String(reason));
       } finally {
-        if (!stopped)
+        if (!stopped && sourcePath)
           timer = setTimeout(() => {
             void poll();
           }, 800);
       }
     }
-    if (projectPath) void poll();
+    async function discover() {
+      try {
+        const found = await cmake.discover.invoke({
+          projectPath,
+          ...(scan.workspacePath === projectPath && scan.selection !== undefined ? { selection: scan.selection } : {}),
+        });
+        if (stopped || current !== generation.current) return;
+        setWorkspace(found);
+        sourcePath = found.selectedProjectPath;
+        if (sourcePath) await poll();
+      } catch (reason) {
+        if (!stopped) setLoadError(reason instanceof Error ? reason.message : String(reason));
+      } finally {
+        if (!stopped) setDiscovering(false);
+      }
+    }
+    if (projectPath) void discover();
     return () => {
       stopped = true;
       clearTimeout(timer);
       generation.current++;
     };
-  }, [projectPath]);
+  }, [projectPath, scan]);
 
   async function perform(operation: () => Promise<void>) {
     if (busy.current) return;
@@ -91,15 +117,20 @@ export function useCmake(projectPath: string) {
   }
 
   async function saveAndStart(action?: CmakeAction) {
-    if (!draft) return;
+    if (!draft || !project) return;
+    const sourcePath = project.projectPath;
     const current = generation.current;
     await perform(async () => {
-      const saved = await cmake.save.invoke({ projectPath, config: draft });
+      const saved = await cmake.save.invoke({ projectPath: sourcePath, config: draft });
       if (current !== generation.current) return;
       setProject(saved);
       setDraft(saved.config);
       if (action) {
-        const started = await cmake.start.invoke({ projectPath, action, selection: saved.config.selections });
+        const started = await cmake.start.invoke({
+          projectPath: saved.projectPath,
+          action,
+          selection: saved.config.selections,
+        });
         if (current !== generation.current) return;
         setJob(started);
         cursor.current = { id: '', value: 0 };
@@ -109,6 +140,11 @@ export function useCmake(projectPath: string) {
     });
   }
   return {
+    workspace,
+    discovering,
+    refresh: () => setScan((previous) => ({ id: previous.id + 1, workspacePath: projectPath })),
+    selectProject: (selection: string) =>
+      setScan((previous) => ({ id: previous.id + 1, workspacePath: projectPath, selection })),
     project,
     draft,
     setDraft,
@@ -126,7 +162,8 @@ export function useCmake(projectPath: string) {
     setAiEnabled: (enabled: boolean) =>
       perform(async () => {
         const current = generation.current;
-        await cmake.setAiEnabled.invoke({ projectPath, enabled });
+        if (!project) return;
+        await cmake.setAiEnabled.invoke({ projectPath: project.projectPath, enabled });
         if (current === generation.current) setAiEnabled(enabled);
       }),
   };

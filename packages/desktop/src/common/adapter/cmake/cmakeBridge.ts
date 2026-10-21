@@ -1,5 +1,12 @@
 import { bridge } from '@/common/platform/bridge';
-import type { CmakeAction, CmakeConfiguration, CmakeJob, CmakeJobRead, CmakeProject } from '@/common/types/cmake';
+import type {
+  CmakeAction,
+  CmakeConfiguration,
+  CmakeJob,
+  CmakeJobRead,
+  CmakeProject,
+  CmakeWorkspace,
+} from '@/common/types/cmake';
 import type { GdbReply, GdbRequest } from '@/common/types/cmake/gdb';
 
 type Reply<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -25,10 +32,11 @@ function provider<T, P>(name: string) {
 }
 type ProjectInput = { projectPath: string };
 export const cmake = {
+  discover: provider<CmakeWorkspace, ProjectInput & { selection?: string }>('cmake.discover'),
   debug: provider<GdbReply, GdbRequest>('cmake.debug'),
   debugAiEnabled: provider<boolean, ProjectInput>('cmake.debug-ai-enabled'),
   setDebugAiEnabled: provider<void, ProjectInput & { enabled: boolean }>('cmake.set-debug-ai-enabled'),
-  inspect: provider<CmakeProject, ProjectInput>('cmake.inspect'),
+  inspect: provider<CmakeProject, ProjectInput & { discover?: boolean }>('cmake.inspect'),
   save: provider<CmakeProject, ProjectInput & { config: CmakeConfiguration }>('cmake.save'),
   start: provider<CmakeJob, ProjectInput & { action: CmakeAction; selection?: Record<string, string> }>('cmake.start'),
   read: provider<CmakeJobRead, { jobId: string; cursor?: number }>('cmake.read'),

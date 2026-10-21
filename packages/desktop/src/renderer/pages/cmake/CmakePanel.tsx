@@ -1,6 +1,19 @@
-import React from 'react';
-import { Alert, Button, Collapse, Empty, Form, Select, Spin, Switch, Tag, Tabs } from '@arco-design/web-react';
-import { Check, Config, Tool, Pause, Play, Save, TestTube } from '@icon-park/react';
+import React, { useState } from 'react';
+import {
+  Alert,
+  Button,
+  Collapse,
+  Empty,
+  Form,
+  Modal,
+  Select,
+  Spin,
+  Switch,
+  Tag,
+  Tabs,
+  Tooltip,
+} from '@arco-design/web-react';
+import { Check, Config, Tool, Pause, Play, Refresh, Save, TestTube } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import type { CmakeAction } from '@/common/types/cmake';
 import CmakeSettings from './CmakeSettings';
@@ -12,10 +25,17 @@ import styles from './CmakePanel.module.css';
 export default function CmakePanel({ projectPath }: { projectPath: string }) {
   const { t } = useTranslation();
   const state = useCmake(projectPath);
-  const debug = useGdb(projectPath);
+  const debug = useGdb(state.project?.projectPath || '');
   const { project, draft, job, pending } = state;
   const running = job?.status === 'running' || project?.latestJob?.status === 'running';
-  const locked = running || pending || debug.active || debug.pending;
+  const locked = running || pending || debug.active || debug.pending || state.discovering;
+  const [projectChange, setProjectChange] = useState<() => void>();
+  const changeProject = (action: () => void) => {
+    if (locked) return;
+    if (draft && project && JSON.stringify(draft) !== JSON.stringify(project.config)) {
+      setProjectChange(() => action);
+    } else action();
+  };
   const errorText = (text: string) => {
     const match = /^(cmake\.[A-Za-z]+)(:[\s\S]*)?$/.exec(text);
     return match ? t(`tools.${match[1]}` as 'tools.cmake.failed', { defaultValue: match[1] }) + (match[2] || '') : text;
@@ -30,9 +50,61 @@ export default function CmakePanel({ projectPath }: { projectPath: string }) {
   if (!projectPath) return <Empty description={t('tools.cmake.noProject')} />;
   return (
     <div className={styles.panel}>
+      <Modal
+        title={t('tools.cmake.unsavedChanges')}
+        visible={!!projectChange}
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
+        okButtonProps={{ disabled: locked }}
+        onCancel={() => setProjectChange(undefined)}
+        onOk={() => {
+          if (locked) return;
+          projectChange?.();
+          setProjectChange(undefined);
+        }}
+      >
+        {t('tools.cmake.discardChanges')}
+      </Modal>
+      <div className={styles.projectSelector}>
+        <Select
+          aria-label={t('tools.cmake.project')}
+          placeholder={t('tools.cmake.selectProject')}
+          value={state.workspace?.selectedProjectPath}
+          loading={state.discovering}
+          disabled={locked || !state.workspace?.projects.length}
+          onChange={(value: string) => {
+            const selected = state.workspace?.projects.find((candidate) => candidate.projectPath === value);
+            if (selected && value !== state.workspace?.selectedProjectPath)
+              changeProject(() => state.selectProject(selected.relativePath));
+          }}
+          options={
+            state.workspace?.projects.map((candidate) => ({
+              label: candidate.relativePath,
+              value: candidate.projectPath,
+            })) || []
+          }
+        />
+        <Tooltip content={t('tools.cmake.rescan')}>
+          <Button
+            icon={<Refresh />}
+            aria-label={t('tools.cmake.rescan')}
+            disabled={locked}
+            onClick={() => changeProject(state.refresh)}
+          />
+        </Tooltip>
+      </div>
       {state.error && <Alert type='error' content={errorText(state.error)} />}
       {!draft || !project ? (
-        !state.error && <Spin />
+        !state.error &&
+        (state.discovering ? (
+          <Spin />
+        ) : (
+          <Empty
+            description={t(
+              state.workspace?.projects.length ? 'tools.cmake.selectProject' : 'tools.cmake.projectMissing'
+            )}
+          />
+        ))
       ) : (
         <>
           {project.invalidSelections?.length ? (
@@ -144,7 +216,7 @@ export default function CmakePanel({ projectPath }: { projectPath: string }) {
             </Tabs.TabPane>
             <Tabs.TabPane key='debug' title={t('tools.gdb.debugTab')}>
               <GdbPanel
-                key={projectPath}
+                key={project.projectPath}
                 debug={debug}
                 draft={draft}
                 onChange={state.setDraft}

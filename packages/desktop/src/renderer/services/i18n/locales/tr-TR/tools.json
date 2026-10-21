@@ -60,6 +60,13 @@
     "noOutput": "Henüz hata ayıklama çıktısı yok."
   },
   "cmake": {
+    "project": "CMake projesi",
+    "selectProject": "CMake projesi seçin",
+    "rescan": "Projeleri yeniden tara",
+    "unsavedChanges": "Kaydedilmemiş değişiklikler",
+    "discardChanges": "Kaydedilmemiş derleme ayarları atılıp proje yeniden yüklensin mi?",
+    "ambiguousProject": "Birden fazla CMake projesi bulundu. İstenen dizini konuşmanın çalışma alanı olarak açın.",
+    "projectSearchLimit": "Arama sınırına ulaşıldı. Daha belirli bir proje dizini açın.",
     "selectionChanged": "Kayıtlı varyantlar değişti. Seçimleri gözden geçirip AI derlemesinden önce kaydedin.",
     "title": "CMake Derleme",
     "aiAccess": "Projeye AI erişimi",

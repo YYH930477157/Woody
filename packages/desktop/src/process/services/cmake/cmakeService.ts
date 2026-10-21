@@ -8,6 +8,7 @@ import type {
   CmakeJobRead,
   CmakeProject,
   CmakeTools,
+  CmakeWorkspace,
 } from '@/common/types/cmake';
 import { childEnvironment, configurationHash, normalizeConfiguration } from './configuration';
 import { buildCommand, configureCommand, type CmakeCommand } from './commands';
@@ -19,6 +20,10 @@ import type { DebugTarget } from './gdb';
 import {
   buildDirectory,
   canonicalProject,
+  discoverProject,
+  discoverProjects,
+  loadWorkspaceSelection,
+  storeWorkspaceSelection,
   loadConfiguration,
   loadDimensions,
   projectKey,
@@ -104,9 +109,24 @@ export class CmakeService {
     };
   }
 
+  /** Discover a workspace and remember only a validated, explicitly selected source root. */
+  async discover(workspacePath: string, selection?: string): Promise<CmakeWorkspace> {
+    const found = await discoverProjects(workspacePath);
+    const selected = selection ?? (await loadWorkspaceSelection(this.storagePath, found.workspacePath));
+    const candidate = found.projects.find((entry) => entry.relativePath === selected);
+    if (selection !== undefined) {
+      if (!candidate) throw new Error('cmake.invalidProject');
+      await storeWorkspaceSelection(this.storagePath, found.workspacePath, candidate.relativePath);
+    }
+    found.selectedProjectPath =
+      candidate?.projectPath ?? (found.projects.length === 1 ? found.projects[0].projectPath : undefined);
+    return found;
+  }
+
   /** Inspect settings, variants and the latest operation without launching tools. */
-  async inspect(projectPath: string): Promise<CmakeProject> {
-    return (await this.project(await canonicalProject(projectPath), undefined, undefined, true)).project;
+  async inspect(projectPath: string, discover = false): Promise<CmakeProject> {
+    const root = await (discover ? discoverProject(projectPath) : canonicalProject(projectPath));
+    return (await this.project(root, undefined, undefined, true)).project;
   }
 
   /** Save validated settings outside the source tree. */

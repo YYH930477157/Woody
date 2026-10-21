@@ -60,6 +60,13 @@
     "noOutput": "Sem saída de depuração."
   },
   "cmake": {
+    "project": "Projeto CMake",
+    "selectProject": "Selecionar projeto CMake",
+    "rescan": "Buscar projetos novamente",
+    "unsavedChanges": "Alterações não salvas",
+    "discardChanges": "Descartar as configurações de compilação não salvas e recarregar o projeto?",
+    "ambiguousProject": "Vários projetos CMake encontrados. Abra o diretório desejado como espaço de trabalho da conversa.",
+    "projectSearchLimit": "Limite de busca atingido. Abra um diretório de projeto mais específico.",
     "selectionChanged": "As variantes salvas mudaram. Revise e salve as opções antes da compilação por IA.",
     "title": "Compilação CMake",
     "aiAccess": "Acesso da IA ao projeto",

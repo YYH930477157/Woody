@@ -60,6 +60,13 @@
     "noOutput": "디버그 출력이 없습니다."
   },
   "cmake": {
+    "project": "CMake 프로젝트",
+    "selectProject": "CMake 프로젝트 선택",
+    "rescan": "프로젝트 다시 검색",
+    "unsavedChanges": "저장하지 않은 변경 사항",
+    "discardChanges": "저장하지 않은 빌드 설정을 버리고 프로젝트를 다시 불러올까요?",
+    "ambiguousProject": "여러 CMake 프로젝트를 찾았습니다. 원하는 디렉터리를 대화 작업 공간으로 여세요.",
+    "projectSearchLimit": "검색 한도에 도달했습니다. 더 구체적인 프로젝트 디렉터리를 여세요.",
     "selectionChanged": "저장된 변형이 변경되었습니다. 선택을 확인하고 AI 빌드 전에 저장하세요.",
     "title": "CMake 빌드",
     "aiAccess": "이 프로젝트 AI 접근",
