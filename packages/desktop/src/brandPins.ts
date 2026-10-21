@@ -71,6 +71,9 @@ if (app.isPackaged) {
       }
     }
   } catch (error) {
+    // app.exit before ready does not stop the remaining module evaluation. A
+    // missing lock makes index.ts quit without registering any startup work.
+    packagedInstanceLock = false;
     const messages = systemMessages();
     console.error('[Woody] Data directory migration failed:', error);
     dialog.showErrorBox(messages.dataMigrationFailedTitle, `${messages.dataMigrationFailedBody}\n\n${String(error)}`);

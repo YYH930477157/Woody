@@ -78,6 +78,51 @@ function linkLegacyPath(legacy: string, target: string): void {
   fs.symlinkSync(target, legacy, process.platform === 'win32' ? 'junction' : 'dir');
 }
 
+/** Remove a tree without following links: a copied link still points at real data. */
+function removeTree(file: string): void {
+  if (fs.lstatSync(file).isDirectory()) {
+    for (const name of fs.readdirSync(file)) removeTree(path.join(file, name));
+    fs.rmdirSync(file);
+  } else fs.unlinkSync(file);
+}
+
+function discardBackup(container: string): void {
+  try {
+    removeTree(container);
+  } catch (error) {
+    console.warn('[Woody] Could not remove an unverified data backup:', container, error);
+  }
+}
+
+/** Remove copies that never verified; their original data was never moved. */
+function removeAbandonedBackups(appDataDir: string): void {
+  for (const name of fs.readdirSync(appDataDir)) {
+    const container = path.join(appDataDir, name);
+    if (!/^AionUi-backup-[\w-]+$/.test(name) || !entry(container)?.isDirectory()) continue;
+    if (fs.readdirSync(container).every((child) => child === 'incomplete')) discardBackup(container);
+  }
+}
+
+/** Moved entries leave junctions and hard links behind; network shares and FAT volumes hold neither. */
+function supportsCompatibilityLinks(appDataDir: string): boolean {
+  const probe = fs.mkdtempSync(path.join(appDataDir, '.woodyui-link-probe-'));
+  try {
+    fs.mkdirSync(path.join(probe, 'directory'));
+    fs.writeFileSync(path.join(probe, 'file'), '');
+    linkLegacyPath(path.join(probe, 'directory-link'), path.join(probe, 'directory'));
+    fs.linkSync(path.join(probe, 'file'), path.join(probe, 'file-link'));
+    return true;
+  } catch {
+    return false;
+  } finally {
+    try {
+      removeTree(probe);
+    } catch {
+      // A leftover empty probe folder is harmless.
+    }
+  }
+}
+
 function inspectRoots(appDataDir: string) {
   const legacy = path.join(appDataDir, 'AionUi');
   const target = path.join(appDataDir, 'WoodyUi');
@@ -113,7 +158,7 @@ export function prepareLegacyUserDataPath(appDataDir: string): string {
       linkLegacyPath(legacy, target);
     } catch {
       // Junctions need a local volume, so a redirected AppData share cannot link.
-      // Fall back to an empty historical root, which migrates with no links to create.
+      // Such volumes keep using the historical root; see migrateUserData.
       fs.rmdirSync(target);
       fs.mkdirSync(legacy, { recursive: true });
     }
@@ -282,39 +327,49 @@ export function migrateUserData(appDataDir: string, options: MigrationOptions = 
     if (!targetEntry) throw new Error('WoodyUi profile is missing after a completed migration. Restore the backup.');
     return { userDataPath: target };
   }
+  // Without links, old paths and older releases would lose every moved entry, and
+  // the resumed journal would retry the same failing link on every launch.
+  if (!journal && !supportsCompatibilityLinks(appDataDir)) return { userDataPath: legacy };
   const assertIdle = options.assertIdle ?? assertMigrationBackendIdle;
   assertIdle();
   // Set only when this run inventoried the source before moving it.
   let movedInventory: string | undefined;
   if (!journal) {
+    removeAbandonedBackups(appDataDir);
     const source = inventory(legacy);
     const advance = meter(source.bytes * 3, options.onProgress);
     const before = snapshot(legacy, advance);
     const backupContainer = fs.mkdtempSync(path.join(appDataDir, 'AionUi-backup-'));
-    const partial = path.join(backupContainer, 'incomplete');
-    const backupPath = path.join(backupContainer, 'AionUi');
-    copyTree(legacy, partial, true, advance);
-    if (snapshot(partial, advance) !== before || inventory(legacy).fingerprint !== source.fingerprint) {
-      throw new Error(`Data backup verification failed. Original data retained: ${legacy}`);
+    try {
+      const partial = path.join(backupContainer, 'incomplete');
+      copyTree(legacy, partial, true, advance);
+      if (snapshot(partial, advance) !== before || inventory(legacy).fingerprint !== source.fingerprint) {
+        throw new Error(`Data backup verification failed. Original data retained: ${legacy}`);
+      }
+      movedInventory = source.fingerprint;
+      fs.renameSync(partial, path.join(backupContainer, 'AionUi'));
+      assertIdle();
+      inspectRoots(appDataDir);
+      journal = {
+        version: 1,
+        backup: path.basename(backupContainer),
+        complete: false,
+        entries: fs
+          .readdirSync(legacy)
+          .filter((name) => !LOCK_FILES.has(name))
+          .map((name) => {
+            const file = path.join(legacy, name);
+            const stat = fs.lstatSync(file);
+            return { name, directory: stat.isDirectory() || (stat.isSymbolicLink() && isDirectoryLink(file)) };
+          }),
+      };
+      writeJournal(appDataDir, journal);
+    } catch (error) {
+      // Nothing has moved yet and no journal names this copy, so a retry would
+      // otherwise leave another full copy of the profile behind.
+      discardBackup(backupContainer);
+      throw error;
     }
-    movedInventory = source.fingerprint;
-    fs.renameSync(partial, backupPath);
-    assertIdle();
-    inspectRoots(appDataDir);
-    journal = {
-      version: 1,
-      backup: path.basename(backupContainer),
-      complete: false,
-      entries: fs
-        .readdirSync(legacy)
-        .filter((name) => !LOCK_FILES.has(name))
-        .map((name) => {
-          const file = path.join(legacy, name);
-          const stat = fs.lstatSync(file);
-          return { name, directory: stat.isDirectory() || (stat.isSymbolicLink() && isDirectoryLink(file)) };
-        }),
-    };
-    writeJournal(appDataDir, journal);
   }
   const backupPath = path.join(appDataDir, journal.backup, 'AionUi');
   if (!fs.statSync(backupPath).isDirectory()) throw new Error('Migration backup is missing.');
