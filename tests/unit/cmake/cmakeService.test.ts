@@ -267,6 +267,42 @@ describe('CMake workbench service', () => {
     expect((await instance.inspect(project)).latestJob?.id).toBe(job.id);
     expect(instance.read(job.id, read.cursor).output).toBe('');
   });
+  it('exposes at most the log limit while the job is still writing', async () => {
+    let release!: () => void;
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let writing = true;
+    const instance = await service(
+      async (request) => {
+        if (writing) {
+          for (let index = 0; index < 150; index++) request.onOutput(`line ${index}\n`);
+          writing = false;
+          await blocked;
+        }
+        return normalRunner(request);
+      },
+      { maxLogChars: 1024 }
+    );
+    const job = await instance.start(project, 'check');
+    await expect.poll(() => writing).toBe(false);
+    const read = instance.read(job.id, 0);
+    release();
+    expect([read.output.length, read.output.endsWith('line 149\n'), read.truncated]).toEqual([1024, true, true]);
+  });
+  it('keeps cursors exact after the log is trimmed in batches', async () => {
+    const instance = await service(
+      async (request) => {
+        for (let index = 0; index < 400; index++) request.onOutput(`line ${index}\n`);
+        return normalRunner(request);
+      },
+      { maxLogChars: 1024 }
+    );
+    const job = await instance.start(project, 'check');
+    const all = await finish(instance, job.id);
+    const tail = instance.read(job.id, all.cursor - 10);
+    expect([tail.output, tail.truncated]).toEqual([all.output.slice(-10), false]);
+  });
   it('limits completed job retention without evicting running operations', async () => {
     const instance = await service(normalRunner, { maxCompletedJobs: 2 });
     const ids: string[] = [];

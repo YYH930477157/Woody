@@ -82,6 +82,21 @@ describe('CMake process runner', () => {
     expect(childPid).toBeGreaterThan(0);
     expect(() => process.kill(childPid, 0)).toThrow();
   });
+  it('returns only the newest output tail from a chatty process', async () => {
+    const result = await runProcess({
+      executable: process.execPath,
+      args: [
+        '-e',
+        "for (let i = 0; i < 6000; i++) process.stdout.write('x'.repeat(99) + '\\n'); process.stdout.write('END')",
+      ],
+      cwd: process.cwd(),
+      env: process.env,
+      timeoutMs: 10000,
+      signal: new AbortController().signal,
+      onOutput: () => {},
+    });
+    expect([result.output.length, result.output.endsWith('END')]).toEqual([262144, true]);
+  });
   it('decodes split UTF-8 and Windows ANSI lines without corrupting characters', () => {
     let utf8 = '';
     const first = createOutputDecoder(936, (text) => {

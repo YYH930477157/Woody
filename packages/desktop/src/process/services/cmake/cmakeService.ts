@@ -236,6 +236,8 @@ export class CmakeService {
         })
         .finally(() => {
           job.finishedAt = new Date().toISOString();
+          // Retained jobs keep only the readable part of their log.
+          this.compact(state);
           this.locks.delete(key);
           this.trimJobs();
         });
@@ -252,11 +254,13 @@ export class CmakeService {
     if (!state) throw new Error('cmake.jobNotFound');
     const end = state.offset + state.output.length;
     if (!Number.isSafeInteger(cursor) || cursor < 0 || cursor > end) throw new Error('cmake.invalidCursor');
+    // Expose only the newest logLimit characters while a batched trim is pending.
+    const start = Math.max(state.offset, end - this.logLimit);
     return {
       job: structuredClone(state.job),
-      output: state.output.slice(Math.max(0, cursor - state.offset)),
+      output: state.output.slice(Math.max(cursor, start) - state.offset),
       cursor: end,
-      truncated: cursor < state.offset,
+      truncated: cursor < start,
     };
   }
 
@@ -277,10 +281,16 @@ export class CmakeService {
     await Promise.all(active.map((state) => state.completion));
   }
 
+  /** Trim in batches: slicing the capped log for every line would copy all of it once per line. */
   private append(state: JobState, output: string): void {
-    const combined = state.output + output;
-    const removed = Math.max(0, combined.length - this.logLimit);
-    state.output = combined.slice(removed);
+    state.output += output;
+    if (state.output.length > this.logLimit * 2) this.compact(state);
+  }
+
+  private compact(state: JobState): void {
+    const removed = Math.max(0, state.output.length - this.logLimit);
+    if (!removed) return;
+    state.output = state.output.slice(removed);
     state.offset += removed;
   }
 
