@@ -6,20 +6,32 @@
 
 import { spawnSync } from 'node:child_process';
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
-  renameSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const repoRoot = resolve(__dirname, '../../..');
+
+function prepareBuildFixture(root: string): void {
+  for (const relativePath of [
+    'package.json',
+    'scripts/build-with-builder.js',
+    'packages/desktop/electron-builder.yml',
+  ]) {
+    const target = resolve(root, relativePath);
+    mkdirSync(dirname(target), { recursive: true });
+    copyFileSync(resolve(repoRoot, relativePath), target);
+  }
+}
 
 function readInstallerErrorDefinitions(): Array<{ defineName: string; code: string }> {
   const source = readFileSync(resolve(repoRoot, 'resources/windows/installer-errors-sentry.nsh'), 'utf8');
@@ -50,9 +62,8 @@ function resolveAppBuilderInstallUtil(): string {
 
 describe('build-with-builder', () => {
   it('rejects skip-vite when renderer output is only a source html shell', () => {
-    const outDir = resolve(repoRoot, 'out');
-    const backupOutDir = resolve(repoRoot, `.tmp-out-backup-${process.pid}-${Date.now()}`);
     const tempDir = mkdtempSync(join(tmpdir(), 'aionui-build-skip-vite-test-'));
+    const outDir = resolve(tempDir, 'out');
     const hookPath = join(tempDir, 'hook.cjs');
 
     writeFileSync(
@@ -66,12 +77,8 @@ childProcess.execSync = function mockedExecSync(command) {
       'utf8'
     );
 
-    let movedExistingOut = false;
     try {
-      if (existsSync(outDir)) {
-        renameSync(outDir, backupOutDir);
-        movedExistingOut = true;
-      }
+      prepareBuildFixture(tempDir);
       mkdirSync(resolve(outDir, 'main'), { recursive: true });
       mkdirSync(resolve(outDir, 'renderer'), { recursive: true });
       writeFileSync(resolve(outDir, 'main/index.js'), 'console.log("main placeholder");\n', 'utf8');
@@ -85,7 +92,7 @@ childProcess.execSync = function mockedExecSync(command) {
         process.execPath,
         ['scripts/build-with-builder.js', 'x64', '--skip-vite', '--pack-only'],
         {
-          cwd: repoRoot,
+          cwd: tempDir,
           encoding: 'utf8',
           env: {
             ...process.env,
@@ -97,10 +104,6 @@ childProcess.execSync = function mockedExecSync(command) {
       expect(result.status).not.toBe(0);
       expect(result.stderr + result.stdout).toContain('Renderer build output is incomplete');
     } finally {
-      rmSync(outDir, { recursive: true, force: true });
-      if (movedExistingOut) {
-        renameSync(backupOutDir, outDir);
-      }
       rmSync(tempDir, { recursive: true, force: true });
     }
   });
@@ -272,8 +275,8 @@ childProcess.execSync = function mockedExecSync(command) {
     const tempDir = mkdtempSync(join(tmpdir(), 'aionui-build-test-'));
     const hookPath = join(tempDir, 'hook.cjs');
     const callsPath = join(tempDir, 'prepare-calls.json');
-    const outDir = resolve(repoRoot, 'out');
-    const backupOutDir = resolve(repoRoot, `.tmp-out-backup-${process.pid}-${Date.now()}-${expectedArch}`);
+    const appBuilderDir = resolve(tempDir, 'node_modules/app-builder-lib');
+    const installUtilPath = resolve(appBuilderDir, 'templates/nsis/include/installUtil.nsh');
 
     writeFileSync(
       hookPath,
@@ -309,9 +312,7 @@ Module._load = function patchedLoad(request, parent, isMain) {
   return originalLoad.call(this, request, parent, isMain);
 };
 
-// Satisfy build-with-builder's output checks without clobbering real build
-// artifacts: out/ lives in the actual repo (the script resolves it from its
-// own __dirname), so only create empty placeholders when nothing is there.
+// The copied build script resolves all artifacts inside the temporary fixture.
 function ensurePlaceholder(relativePath) {
   const target = path.join(process.cwd(), relativePath);
   fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -338,15 +339,14 @@ childProcess.execSync = function mockedExecSync(command) {
       'utf8'
     );
 
-    let movedExistingOut = false;
     try {
-      if (existsSync(outDir)) {
-        renameSync(outDir, backupOutDir);
-        movedExistingOut = true;
-      }
+      prepareBuildFixture(tempDir);
+      mkdirSync(dirname(installUtilPath), { recursive: true });
+      writeFileSync(resolve(appBuilderDir, 'package.json'), '{}\n');
+      copyFileSync(resolveAppBuilderInstallUtil(), installUtilPath);
 
       const result = spawnSync(process.execPath, ['scripts/build-with-builder.js', ...args], {
-        cwd: repoRoot,
+        cwd: tempDir,
         encoding: 'utf8',
         env: {
           ...process.env,
@@ -356,12 +356,12 @@ childProcess.execSync = function mockedExecSync(command) {
       });
 
       expect(result.status, result.stderr || result.stdout).toBe(0);
-      expect(readFileSync(resolve(repoRoot, 'resources/windows/support/_sentry-dsn.generated.nsh'), 'utf8')).toBe(
+      expect(readFileSync(resolve(tempDir, 'resources/windows/support/_sentry-dsn.generated.nsh'), 'utf8')).toBe(
         '!define AIONUI_SENTRY_DSN ""\n'
       );
 
       if (args.includes('--win')) {
-        const installUtil = readFileSync(resolveAppBuilderInstallUtil(), 'utf8');
+        const installUtil = readFileSync(installUtilPath, 'utf8');
         expect(installUtil).toContain('AionUi-bundled-uninstaller override source');
         expect(installUtil).toContain('$PLUGINSDIR\\AionUi-fixed-uninstaller.exe');
         expect(installUtil.match(/AionUi-bundled-uninstaller override source/g)).toHaveLength(1);
@@ -370,10 +370,6 @@ childProcess.execSync = function mockedExecSync(command) {
       const calls = JSON.parse(readFileSync(callsPath, 'utf8')) as Array<{ arch?: string } | null>;
       expect(calls).toContainEqual(expect.objectContaining({ arch: expectedArch }));
     } finally {
-      rmSync(outDir, { recursive: true, force: true });
-      if (movedExistingOut) {
-        renameSync(backupOutDir, outDir);
-      }
       rmSync(tempDir, { recursive: true, force: true });
     }
   });
