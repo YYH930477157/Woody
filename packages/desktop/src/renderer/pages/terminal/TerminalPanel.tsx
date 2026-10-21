@@ -482,6 +482,8 @@ export default function TerminalPanel({
               onEndingChange={(ending) => prefs.updateView(kind, { ending })}
               inputMode={effectiveInputMode}
               onInputModeChange={setInputMode}
+              backspace={view.backspace}
+              onBackspaceChange={(backspace) => prefs.updateView(kind, { backspace })}
               wait={wait}
               onWaitChange={setWait}
               slowSend={slowSend}
