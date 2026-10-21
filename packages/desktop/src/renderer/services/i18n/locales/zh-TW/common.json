@@ -1,4 +1,6 @@
 {
+  "dataMigrationFailedTitle": "WoodyUi 資料遷移已停止",
+  "dataMigrationFailedBody": "請關閉所有 Woody/AionUi 視窗和背景程序後重試。既有資料與備份均已保留。如果 AionUi 與 WoodyUi 是兩個獨立目錄，請先處理目錄衝突再啟動。",
   "send": "發送",
   "cancel": "取消",
   "save": "儲存",

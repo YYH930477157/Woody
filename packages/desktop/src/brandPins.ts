@@ -7,16 +7,54 @@
 /**
  * MUST remain the FIRST import of the main entry (src/index.ts).
  *
- * The product is branded "Woody", but every stored byte (Chromium profile,
- * config, logs, backend DBs) stays under the historical AionUi app-data
- * directory on every packaged platform. Module-scope code in modules imported
- * after this one (config load, electron-log setup) resolves paths exactly once,
- * so the pin has to run before any of them — import order within the bundled
- * chunk guarantees that when this file is imported first.
+ * Migrate before any module can cache paths or open a database. Do not import
+ * storage, logging, or the main-process i18n service here.
  */
-import { app } from 'electron';
-import path from 'node:path';
+import { app, dialog } from 'electron';
+import fs from 'node:fs';
+import { migrateUserData, prepareLegacyUserDataPath } from './process/startup/userDataMigration';
+import enUS from './renderer/services/i18n/locales/en-US/common.json';
+import zhCN from './renderer/services/i18n/locales/zh-CN/common.json';
+import zhTW from './renderer/services/i18n/locales/zh-TW/common.json';
+
+const locales: Record<string, { dataMigrationFailedTitle: string; dataMigrationFailedBody: string }> = {
+  'en-US': enUS,
+  'zh-CN': zhCN,
+  'zh-TW': zhTW,
+};
+
+// Reuse this result in index.ts; taking another lock after changing userData
+// would change the identity used by older releases.
+export let packagedInstanceLock: boolean | undefined;
 
 if (app.isPackaged) {
-  app.setPath('userData', path.join(app.getPath('appData'), 'AionUi'));
+  try {
+    if (process.env.AIONUI_E2E_TEST === '1') {
+      const testProfile = process.env.AIONUI_E2E_USER_DATA_DIR?.trim();
+      if (!testProfile) throw new Error('E2E mode requires an explicit user data path.');
+      fs.mkdirSync(testProfile, { recursive: true });
+      app.setPath('userData', testProfile);
+      app.setPath('sessionData', testProfile);
+    } else {
+      const appDataDir = app.getPath('appData');
+      app.setPath('userData', prepareLegacyUserDataPath(appDataDir));
+      packagedInstanceLock = app.requestSingleInstanceLock({
+        deepLinkUrl: process.argv.find((arg) => arg.startsWith('aionui://')),
+      });
+      if (!packagedInstanceLock) {
+        app.exit(0);
+      } else {
+        const result = migrateUserData(appDataDir);
+        app.setPath('userData', result.userDataPath);
+        app.setPath('sessionData', result.userDataPath);
+      }
+    }
+  } catch (error) {
+    const language = app.getPreferredSystemLanguages()[0] || 'en-US';
+    const locale = language.startsWith('zh') ? (/(TW|HK|Hant)/i.test(language) ? 'zh-TW' : 'zh-CN') : language;
+    const messages = locales[locale] || enUS;
+    console.error('[Woody] Data directory migration failed:', error);
+    dialog.showErrorBox(messages.dataMigrationFailedTitle, `${messages.dataMigrationFailedBody}\n\n${String(error)}`);
+    app.exit(1);
+  }
 }

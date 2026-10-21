@@ -18,7 +18,7 @@ type ConsumeOptions = {
 const isString = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0;
 
 export function getInstallerLastFailureMarkerPath(appDataDir: string): string {
-  return path.join(appDataDir, 'AionUi', INSTALLER_LAST_FAILURE_FILE_NAME);
+  return path.join(appDataDir, 'WoodyUi', INSTALLER_LAST_FAILURE_FILE_NAME);
 }
 
 export function parseInstallerLastFailureMarker(raw: unknown): InstallerLastFailureMarker | null {
@@ -61,7 +61,14 @@ export async function consumeInstallerLastFailure(options: ConsumeOptions): Prom
   try {
     text = await fs.readFile(markerPath, 'utf8');
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      if (!options.markerPath && options.appDataDir) {
+        return consumeInstallerLastFailure({
+          markerPath: path.join(options.appDataDir, 'AionUi', INSTALLER_LAST_FAILURE_FILE_NAME),
+        });
+      }
+      return null;
+    }
     throw error;
   }
 
@@ -75,6 +82,18 @@ export async function consumeInstallerLastFailure(options: ConsumeOptions): Prom
   const marker = parseInstallerLastFailureMarker(parsed);
   if (!marker) return null;
 
+  if (!options.markerPath && options.appDataDir) {
+    const legacyPath = path.join(options.appDataDir, 'AionUi', INSTALLER_LAST_FAILURE_FILE_NAME);
+    try {
+      const current = await fs.stat(markerPath);
+      const legacy = await fs.stat(legacyPath);
+      // Migration keeps root files as hard links. Consume both names so the
+      // fallback cannot report the same failure again on the next launch.
+      if (current.dev === legacy.dev && current.ino === legacy.ino) await fs.rm(legacyPath, { force: true });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+  }
   await fs.rm(markerPath, { force: true });
   return marker;
 }

@@ -224,6 +224,8 @@ Var /GLOBAL AionUiCurrentOutDir
       nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -Command "& { \
         $$ErrorActionPreference = 'Stop'; \
         $$appDir = Join-Path $$env:APPDATA 'AionUi'; \
+        $$woodyDir = Join-Path $$env:APPDATA 'WoodyUi'; \
+        if (Test-Path -LiteralPath $$woodyDir -PathType Container) { $$appDir = $$woodyDir }; \
         $$marker = Join-Path $$appDir 'installer-last-failure.json'; \
         $$log = '$AionUiSessionLogPath'; \
         if (-not $$log) { $$log = Join-Path $$env:TEMP '${AIONUI_FALLBACK_LOG}' }; \

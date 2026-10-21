@@ -68,9 +68,11 @@ function Write-InstallerLog([string]$event, [hashtable]$properties = @{}) {
 function Read-AionUiAnalyticsId {
   $candidates = @()
   if ($env:APPDATA) {
+    $candidates += (Join-Path $env:APPDATA 'WoodyUi\analytics.json')
     $candidates += (Join-Path $env:APPDATA 'AionUi\analytics.json')
   }
   if ($env:LOCALAPPDATA) {
+    $candidates += (Join-Path $env:LOCALAPPDATA 'WoodyUi\analytics.json')
     $candidates += (Join-Path $env:LOCALAPPDATA 'AionUi\analytics.json')
   }
 
