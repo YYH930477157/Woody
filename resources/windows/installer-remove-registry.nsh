@@ -1,6 +1,49 @@
 !ifndef AIONUI_INSTALLER_REMOVE_REGISTRY_NSH
 !define AIONUI_INSTALLER_REMOVE_REGISTRY_NSH
 
+; Reserve a unique sibling name on the same volume. Old backups may still be
+; held by antivirus or another process and must not block the next upgrade.
+!macro AIONUI_STAGE_INSTALL_DIR
+  Var /GLOBAL AionUiAtomicMoveError
+  Var /GLOBAL AionUiAtomicMoveAttempts
+  Push $9
+  StrCpy $AionUiAtomicMoveError "0"
+  StrCpy $AionUiAtomicMoveAttempts "0"
+  ClearErrors
+  GetTempFileName $AionUiAtomicStagingDir "$INSTDIR\.."
+  ${If} ${Errors}
+    System::Call 'kernel32::GetLastError() i .r9'
+    StrCpy $AionUiAtomicMoveError $9
+    ${If} $AionUiAtomicMoveError == 0
+      StrCpy $AionUiAtomicMoveError "5"
+    ${EndIf}
+  ${Else}
+    System::Call 'kernel32::DeleteFileW(w "$AionUiAtomicStagingDir") i .r9 ?e'
+    Pop $AionUiAtomicMoveError
+    ${If} $9 != 0
+      ${Do}
+        IntOp $AionUiAtomicMoveAttempts $AionUiAtomicMoveAttempts + 1
+        System::Call 'kernel32::MoveFileW(w "$INSTDIR", w "$AionUiAtomicStagingDir") i .r9 ?e'
+        Pop $AionUiAtomicMoveError
+        ${If} $9 != 0
+          StrCpy $AionUiAtomicMoveError "0"
+          ${ExitDo}
+        ${EndIf}
+        ${If} $AionUiAtomicMoveAttempts >= 4
+          ${ExitDo}
+        ${EndIf}
+        ${If} $AionUiAtomicMoveError != 5
+        ${AndIf} $AionUiAtomicMoveError != 32
+        ${AndIf} $AionUiAtomicMoveError != 33
+          ${ExitDo}
+        ${EndIf}
+        Sleep 300
+      ${Loop}
+    ${EndIf}
+  ${EndIf}
+  Pop $9
+!macroend
+
 !macro AIONUI_CLEAR_INSTALL_REGISTRY _REASON
   DeleteRegKey SHCTX "${UNINSTALL_REGISTRY_KEY}"
   DeleteRegKey SHCTX "${INSTALL_REGISTRY_KEY}"
@@ -20,7 +63,7 @@
     if ($$failed.StartsWith($$instDir, [System.StringComparison]::CurrentCultureIgnoreCase)) { $$relative = $$failed.Substring($$instDir.Length).TrimStart('\') }; \
     $$tempCandidate = if ($$relative -and $$relative -ne $$failed) { Join-Path $$oldInstallDir $$relative } else { '' }; \
     $$kind = if ($$tempCandidate.Length -ge 260) { 'likely-long-path' } else { 'unknown' }; \
-    $$payload = [ordered]@{ schemaVersion = 1; ts = (Get-Date -Format o); session = '$AionUiSessionId'; version = '${VERSION}'; arch = '${AIONUI_TARGET_ARCH}'; updated = ('$AionUiIsUpdated' -eq '1'); instDir = '$INSTDIR'; event = 'remove-atomic-failed'; kind = $$kind; pathLength = $$failed.Length; tempCandidateLength = $$tempCandidate.Length; atomicFailedPath = $$failed; tempCandidate = $$tempCandidate }; \
+    $$payload = [ordered]@{ schemaVersion = 1; ts = (Get-Date -Format o); session = '$AionUiSessionId'; version = '${VERSION}'; arch = '${AIONUI_TARGET_ARCH}'; updated = ('$AionUiIsUpdated' -eq '1'); instDir = '$INSTDIR'; event = 'remove-atomic-failed'; kind = $$kind; win32Error = '$AionUiAtomicMoveError'; attempts = '$AionUiAtomicMoveAttempts'; stagingDir = $$oldInstallDir; pathLength = $$failed.Length; tempCandidateLength = $$tempCandidate.Length; atomicFailedPath = $$failed; tempCandidate = $$tempCandidate }; \
     Add-Content -LiteralPath $$log -Encoding UTF8 -Value ($$payload | ConvertTo-Json -Compress -Depth 8) \
   }"`
   Pop $9
@@ -120,18 +163,9 @@
   StrCpy $AionUiCurrentOutDir "$TEMP"
 
   ${if} ${isUpdated}
-    StrCpy $AionUiAtomicStagingDir "$INSTDIR.__old"
-    ${If} ${FileExists} "$AionUiAtomicStagingDir\*.*"
-      StrCpy $AionUiRemoveResidueRoot "$AionUiAtomicStagingDir"
-      !insertmacro AIONUI_LOG_EVENT "remove-stale-staging start root=$AionUiRemoveResidueRoot"
-      !insertmacro AIONUI_REMOVE_INSTALL_DIR
-      StrCpy $AionUiRemoveResidueRoot "$INSTDIR"
-    ${EndIf}
-
     aionui_retry_atomic_rename:
-      ClearErrors
-      Rename "$INSTDIR" "$AionUiAtomicStagingDir"
-    ${if} ${Errors}
+      !insertmacro AIONUI_STAGE_INSTALL_DIR
+    ${if} $AionUiAtomicMoveError != 0
       DetailPrint "Atomic update cleanup failed before replacing previous installation: $INSTDIR"
       StrCpy $AionUiAtomicFailedPath "$INSTDIR"
       !insertmacro AIONUI_LOG_ATOMIC_REMOVE_FAILURE
@@ -141,9 +175,8 @@
         aionui_cancel_atomic_rename:
       ${EndIf}
       aionui_continue_atomic_failed:
-      !insertmacro AIONUI_LOG_REMOVE_FAILURE_JSON "atomic-failed" "1" "$AionUiAtomicFailedPath" "$$payload.atomicFailedPath = '$AionUiAtomicFailedPath'"
+      !insertmacro AIONUI_LOG_REMOVE_FAILURE_JSON "atomic-failed" "1" "$AionUiAtomicFailedPath" "$$payload.atomicFailedPath = '$AionUiAtomicFailedPath'; $$payload.win32Error = '$AionUiAtomicMoveError'; $$payload.stagingDir = '$AionUiAtomicStagingDir'"
       !insertmacro AIONUI_LOG_EVENT "code=${AIONUI_E_INSTALL_DIR_REMOVE_OR_LOCKED} phase=atomic-failed fatal=1 degraded=none firstFailed=$AionUiAtomicFailedPath atomicFailedPath=$AionUiAtomicFailedPath"
-      !insertmacro AIONUI_CLEAR_INSTALL_REGISTRY "remove-failed-before-quit"
       !insertmacro AIONUI_FAIL_REPORTABLE_BILINGUAL ${AIONUI_E_INSTALL_DIR_REMOVE_OR_LOCKED} "event=session-end result=fail code=${AIONUI_E_INSTALL_DIR_REMOVE_OR_LOCKED} phase=atomic-failed fatal=1 firstFailed=$AionUiAtomicFailedPath lockers=$AionUiLockerList" "${AIONUI_MSG_REPLACE_LOCKED_EN}" "${AIONUI_MSG_REPLACE_LOCKED_ZH}" "${AIONUI_MSG_CLOSE_SHOWN_FILE_ACTION_EN}" "${AIONUI_MSG_CLOSE_SHOWN_FILE_ACTION_ZH}"
     ${else}
       !insertmacro AIONUI_LOG_EVENT "remove-atomic result=0 staging=$AionUiAtomicStagingDir"

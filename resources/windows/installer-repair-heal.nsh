@@ -30,6 +30,8 @@ Var /GLOBAL AionUiInnerFailureReadResult
         if (-not $$blocking) { $$blocking = 'Windows did not identify a specific locking process. Close terminals, editors, and file managers opened in the install folder.' }; \
         $$parts = @('- Outer installer: previous uninstaller exited with code $R0', ('- Inner failure: ' + $$code + ' phase ' + $$phase)); \
         if ($$path) { $$parts += ('- File or folder: ' + $$path) }; \
+        if ($$failure.win32Error) { $$parts += ('- Win32: ' + [string]$$failure.win32Error) }; \
+        if ($$failure.stagingDir) { $$parts += ('- Staging: ' + [string]$$failure.stagingDir) }; \
         $$parts += ('- Blocking process: ' + $$blocking); \
         $$summary = $$parts -join [Environment]::NewLine; \
       } \
@@ -168,7 +170,7 @@ Var /GLOBAL AionUiInnerFailureReadResult
       DetailPrint `Uninstall was not successful. Uninstaller error code: $R0.`
       !insertmacro AIONUI_READ_LAST_INNER_FAILURE
       ${If} $AionUiLockerList != ""
-        StrCpy $AionUiInnerFailureSummary "- Failure: previous uninstaller failed with exit code $R0$\r$\n- File or folder: $INSTDIR$\r$\n- Blocking process: $AionUiLockerList"
+        StrCpy $AionUiInnerFailureSummary "$AionUiInnerFailureSummary$\r$\n- Outer installer blocking process: $AionUiLockerList"
       ${EndIf}
       !insertmacro AIONUI_LOG_EVENT "event=old-uninstaller-failed action=report exitCode=$R0 lockers=$AionUiLockerList uninstallerDetail=$AionUiInnerFailureSummary"
       ${If} $AionUiInnerRootCode != ""

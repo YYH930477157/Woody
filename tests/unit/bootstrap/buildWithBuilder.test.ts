@@ -61,6 +61,31 @@ function resolveAppBuilderInstallUtil(): string {
 }
 
 describe('build-with-builder', () => {
+  it('keeps extraction and installation on an indeterminate progress bar until the finish page', () => {
+    const script = readFileSync(resolve(repoRoot, 'resources/windows/installer-update-verify.nsh'), 'utf8');
+    const hook = script.match(/!macro customPageAfterChangeDir([\s\S]*?)!macroend/)?.[1];
+    expect(hook).toContain('MUI_PAGE_CUSTOMFUNCTION_SHOW AionUiShowInstallProgress');
+    const callback = script.match(/Function AionUiShowInstallProgress([\s\S]*?)FunctionEnd/)?.[1];
+    expect(callback).toContain('0x08'); // PBS_MARQUEE
+    expect(callback).toContain('0x040A 1'); // PBM_SETMARQUEE
+  });
+
+  it('stages updates without reusing or deleting an earlier backup directory', () => {
+    const script = readFileSync(resolve(repoRoot, 'resources/windows/installer-remove-registry.nsh'), 'utf8');
+    expect(script).toContain('!macro AIONUI_STAGE_INSTALL_DIR');
+    expect(script).toContain('GetTempFileName $AionUiAtomicStagingDir');
+    expect(script).not.toContain('StrCpy $AionUiAtomicStagingDir "$INSTDIR.__old"');
+    const failure = script.match(/aionui_continue_atomic_failed:([\s\S]*?)\$\{else\}/)?.[1];
+    expect(failure).toBeTruthy();
+    expect(failure).not.toContain('AIONUI_CLEAR_INSTALL_REGISTRY');
+    expect(failure).toContain('win32Error');
+  });
+
+  it('retains the inner Windows error when the outer installer also reports a locking process', () => {
+    const script = readFileSync(resolve(repoRoot, 'resources/windows/installer-repair-heal.nsh'), 'utf8');
+    const branch = script.match(/\$\{If\} \$AionUiLockerList != ""([\s\S]*?)\$\{EndIf\}/)?.[1];
+    expect(branch).toContain('StrCpy $AionUiInnerFailureSummary "$AionUiInnerFailureSummary');
+  });
   it('rejects skip-vite when renderer output is only a source html shell', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'aionui-build-skip-vite-test-'));
     const outDir = resolve(tempDir, 'out');
