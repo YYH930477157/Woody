@@ -4,6 +4,7 @@ import type {
   TerminalProfile,
   TerminalSerialAccessMode,
 } from '@/common/types/terminal';
+import { deepEqual } from '@/common/utils/deepEqual';
 import type { TerminalConnectionService } from './connectionService';
 
 type SerialProfile = Extract<TerminalProfile, { kind: 'serial' }>;
@@ -39,13 +40,13 @@ export class TerminalSerialAccess {
     if (!connection || connection.status !== 'open') throw new Error('terminal.invalidConnection');
     if (connection.aiAccessBlocked)
       throw new Error(
-        'Serial connection was manually taken over. Click Allow AI access in the terminal panel to restore access.'
+        'terminal.aiAccessBlocked: the serial connection was manually taken over. Click Allow AI access in the terminal panel to restore access.'
       );
     return connection;
   }
 
   private check(signal: AbortSignal): void {
-    if (signal.aborted) throw new Error('Serial access request cancelled. No authorization was granted.');
+    if (signal.aborted) throw new Error('terminal.accessCancelled: no authorization was granted.');
   }
 
   /** Serialize acquisitions so two agents cannot open or take ownership of the same port. */
@@ -58,7 +59,7 @@ export class TerminalSerialAccess {
     const timer = setTimeout(cancel, 60000);
     let stop!: () => void;
     const cancelled = new Promise<never>((_resolve, reject) => {
-      stop = () => reject(new Error('Serial access request cancelled. No authorization was granted.'));
+      stop = () => reject(new Error('terminal.accessCancelled: no authorization was granted.'));
       controller.signal.addEventListener('abort', stop, { once: true });
       if (controller.signal.aborted) stop();
     });
@@ -90,7 +91,7 @@ export class TerminalSerialAccess {
       });
       if (!approved)
         throw new Error(
-          'Serial access was declined or expired. Ask the user to allow the request in Woody; do not ask for a ticket.'
+          'terminal.accessDeclined: the request was declined or expired. Ask the user to allow it in Woody; do not ask for a ticket.'
         );
     }
     this.check(signal);
@@ -111,7 +112,7 @@ export class TerminalSerialAccess {
     if (actor) {
       if (!this.service.claim(actor.ticket, leaseId).canWrite && write)
         throw new Error(
-          'Serial write permission was revoked. Click Allow AI access in the terminal panel to restore access.'
+          'terminal.accessRevoked: serial write permission was revoked. Click Allow AI access in the terminal panel to restore access.'
         );
     }
     return actor;
@@ -123,13 +124,15 @@ export class TerminalSerialAccess {
     const connection = this.current(id);
     if (connection.owner === 'ai')
       throw new Error(
-        'Serial connection is controlled by another AI. Wait for it to release the connection or take over manually.'
+        'terminal.accessBusy: the serial connection is controlled by another AI. Wait for it to release the connection or take over manually.'
       );
     await this.approve(connection.profile as SerialProfile, signal);
     // A human may take over or change baud while the approval dialog is open.
     const latest = this.current(id);
-    if (latest.owner === 'ai' || JSON.stringify(latest.profile) !== JSON.stringify(connection.profile)) {
-      throw new Error('Serial connection changed during authorization. Request access again.');
+    if (latest.owner === 'ai' || !deepEqual(latest.profile, connection.profile)) {
+      throw new Error(
+        'terminal.accessChanged: the serial connection changed during authorization. Request access again.'
+      );
     }
     return this.grant(leaseId, { connectionId: id });
   }
@@ -156,10 +159,11 @@ export class TerminalSerialAccess {
       this.check(active);
       if (!profile)
         throw new Error(
-          'Saved serial profile not found. Use terminal_profiles; shell profiles require an explicit Hand to AI grant.'
+          'terminal.profileMissing: saved serial profile not found. Use terminal_profiles; shell profiles require an explicit Hand to AI grant.'
         );
       const portKey = profile.path.toLowerCase();
-      if (this.openingPorts.has(portKey)) throw new Error('Serial port is still opening. Wait before retrying.');
+      if (this.openingPorts.has(portKey))
+        throw new Error('terminal.portOpening: the serial port is still opening. Wait before retrying.');
       const existing = this.list().find(
         (entry) =>
           entry.status === 'open' &&
@@ -168,9 +172,9 @@ export class TerminalSerialAccess {
       );
       if (existing) {
         this.current(existing.id);
-        if (JSON.stringify(existing.profile) !== JSON.stringify(profile))
+        if (!deepEqual(existing.profile, profile))
           throw new Error(
-            'Serial port is already open with different settings. Close it manually before opening this profile.'
+            'terminal.profileConflict: the serial port is already open with different settings. Close it manually before opening this profile.'
           );
         await this.authorize(leaseId, existing.id, active);
         return this.current(existing.id);
@@ -179,7 +183,7 @@ export class TerminalSerialAccess {
       const latest = (await this.profiles()).find((entry) => entry.id === profileId);
       this.check(active);
       if (
-        JSON.stringify(latest) !== JSON.stringify(profile) ||
+        !deepEqual(latest, profile) ||
         this.openingPorts.has(portKey) ||
         this.list().some(
           (entry) =>
@@ -188,7 +192,9 @@ export class TerminalSerialAccess {
             entry.profile.path.toLowerCase() === profile.path.toLowerCase()
         )
       ) {
-        throw new Error('Serial profile or connection changed during authorization. Request access again.');
+        throw new Error(
+          'terminal.accessChanged: the serial profile or connection changed during authorization. Request access again.'
+        );
       }
       const actor = this.grant(leaseId, { profile });
       this.openingPorts.add(portKey);
