@@ -184,7 +184,8 @@
     "readPowerShellMissing": "PowerShell 7 yürütülebilir dosyası bulunamadı",
     "readPowerShellVersion": "Yapılandırmayı okumak için PowerShell 7 veya üzeri gerekir",
     "readPath": "Yapılandırma dosyasının yolu geçersiz veya çalışma alanının dışında",
-    "readBusy": "Çok fazla yapılandırma okuma isteği bekliyor"
+    "readBusy": "Çok fazla yapılandırma okuma isteği bekliyor",
+    "sourceSettingsUnreadable": ".vscode/settings.json okunamadı; cmake.sourceDirectory yok sayıldı ve projeler klasörler taranarak bulundu. Bir proje seçtikten sonra yapılandırma okuma ayarını yapıp yeniden tarayın."
   },
   "unknownFile": "Bilinmeyen dosya",
   "newFile": "Yeni Dosya",

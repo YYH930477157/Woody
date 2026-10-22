@@ -184,7 +184,8 @@
     "readPowerShellMissing": "PowerShell 7 executable was not found",
     "readPowerShellVersion": "Configuration reading requires PowerShell 7 or later",
     "readPath": "Configuration file path is invalid or outside the workspace",
-    "readBusy": "Too many configuration reads are pending"
+    "readBusy": "Too many configuration reads are pending",
+    "sourceSettingsUnreadable": "Could not read .vscode/settings.json, so cmake.sourceDirectory was ignored and projects were found by scanning folders. After choosing a project, set its configuration reader and rescan."
   },
   "unknownFile": "Unknown file",
   "newFile": "New File",

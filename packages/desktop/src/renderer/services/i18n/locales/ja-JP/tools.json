@@ -184,7 +184,8 @@
     "readPowerShellMissing": "PowerShell 7 実行ファイルが見つかりません",
     "readPowerShellVersion": "設定の読み取りには PowerShell 7 以降が必要です",
     "readPath": "設定ファイルのパスが無効か、ワークスペース外にあります",
-    "readBusy": "読み取り待ちの設定ファイルが多すぎます"
+    "readBusy": "読み取り待ちの設定ファイルが多すぎます",
+    "sourceSettingsUnreadable": ".vscode/settings.json を読み取れないため、cmake.sourceDirectory を無視してフォルダーをスキャンしプロジェクトを検出しました。プロジェクトを選択して設定の読み取り方法を設定し、再検出してください。"
   },
   "unknownFile": "不明なファイル",
   "newFile": "新規ファイル",

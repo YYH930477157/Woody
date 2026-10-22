@@ -184,7 +184,8 @@
     "readPowerShellMissing": "找不到 PowerShell 7 執行檔",
     "readPowerShellVersion": "讀取組態需要 PowerShell 7 或更新版本",
     "readPath": "組態檔案路徑無效或位於工作區外",
-    "readBusy": "等待讀取的組態檔案過多"
+    "readBusy": "等待讀取的組態檔案過多",
+    "sourceSettingsUnreadable": "無法讀取 .vscode/settings.json，已忽略 cmake.sourceDirectory，改為掃描資料夾尋找專案。選擇專案後設定組態讀取方式，再重新偵測專案。"
   },
   "unknownFile": "未知檔案",
   "newFile": "新檔案",

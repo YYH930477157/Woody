@@ -92,6 +92,18 @@ describe('CMake build panel', () => {
     expect(screen.queryByText('tools.cmake.noOutput')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'tools.cmake.cancel' })).not.toBeInTheDocument();
   });
+  it('explains a folder scan caused by unreadable VS Code settings and keeps reader settings reachable', async () => {
+    mocks.discover.mockResolvedValue({
+      workspacePath: 'D:/workspace',
+      projects: [{ projectPath: project.projectPath, relativePath: 'meter' }],
+      selectedProjectPath: project.projectPath,
+      settingsDiagnostic: { kind: 'read', message: 'cmake.readPowerShellMissing' },
+    });
+    render(<CmakePanel projectPath='D:/workspace' />);
+    expect(await screen.findByText('tools.cmake.sourceSettingsUnreadable')).toBeInTheDocument();
+    expect(screen.getByText('tools.cmake.readPowerShellMissing')).toBeInTheDocument();
+    expect(await screen.findByText('tools.cmake.readSettings')).toBeInTheDocument();
+  });
   it('keeps unverified tool paths collapsed while tool inspection stays available', async () => {
     render(<CmakePanel projectPath={project.projectPath} />);
     await screen.findByRole('button', { name: 'tools.cmake.check' });

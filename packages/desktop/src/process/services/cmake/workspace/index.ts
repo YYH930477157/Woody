@@ -11,7 +11,7 @@ import type {
 } from '@/common/types/cmake';
 import { defaultConfiguration, normalizeConfiguration } from '../configuration';
 import { parseVariants } from '../variants';
-import { ConfigurationReader, readBoundedBytes } from './reader';
+import { ConfigurationReader, readBoundedBytes, readErrorCode } from './reader';
 export { ConfigurationReader } from './reader';
 
 export const projectKey = (root: string): string => (process.platform === 'win32' ? root.toLowerCase() : root);
@@ -73,13 +73,14 @@ export async function discoverProjects(
     }
   }
   const configured = await configuredSources(root, reader, options);
-  if (configured) candidates.push(...configured);
+  if (configured.sources) candidates.push(...configured.sources);
   else await visit(root, 0);
   return {
     workspacePath: root,
     projects: candidates
       .toSorted()
       .map((candidate) => ({ projectPath: candidate, relativePath: path.relative(root, candidate) || '.' })),
+    ...(configured.diagnostic ? { settingsDiagnostic: configured.diagnostic } : {}),
   };
 }
 
@@ -87,21 +88,23 @@ async function configuredSources(
   root: string,
   reader: ConfigurationReader,
   options?: CmakeReadOptions
-): Promise<string[] | undefined> {
+): Promise<{ sources?: string[]; diagnostic?: CmakeDiagnostic }> {
   const file = path.join(root, '.vscode', 'settings.json');
   let text: string;
   try {
     const canonical = await containedConfiguration(root, file);
     text = (await reader.read(canonical, options)).text;
   } catch (error) {
-    if (missing(error)) return undefined;
-    throw new Error(`cmake.invalidProject: ${file}`, { cause: error });
+    if (missing(error)) return {};
+    // Reader settings belong to a project, so an unreadable settings file must not hide every project.
+    const diagnostic = (error as { diagnostic?: CmakeDiagnostic })?.diagnostic;
+    return { diagnostic: diagnostic ? { ...diagnostic, file } : { kind: 'read', message: readErrorCode(error), file } };
   }
   try {
     const settings: unknown = JSON5.parse(text);
     if (!settings || typeof settings !== 'object' || Array.isArray(settings)) throw new Error('expected settings');
     const value = (settings as Record<string, unknown>)['cmake.sourceDirectory'];
-    if (value === undefined) return undefined;
+    if (value === undefined) return {};
     const sources: unknown[] = Array.isArray(value) ? value : [value];
     if (!sources.length || sources.length > 100) throw new Error('source directory count');
     const directories = new Map<string, string>();
@@ -118,7 +121,7 @@ async function configuredSources(
         throw new Error('source directory outside workspace');
       directories.set(projectKey(directory), directory);
     }
-    return [...directories.values()];
+    return { sources: [...directories.values()] };
   } catch (cause) {
     throw new Error(`cmake.invalidProject: ${file} [cmake.sourceDirectory]`, { cause });
   }

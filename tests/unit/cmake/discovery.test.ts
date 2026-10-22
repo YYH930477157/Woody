@@ -56,6 +56,23 @@ describe('workspace CMake discovery', () => {
     }
   );
 
+  it('scans folders when VS Code settings cannot be read and reports why', async () => {
+    const firmware = await project('firmware');
+    await fs.mkdir(path.join(workspace, '.vscode'), { recursive: true });
+    // Transparently encrypted bytes are not valid text; without PowerShell 7 the reader cannot recover them.
+    await fs.writeFile(path.join(workspace, '.vscode/settings.json'), Buffer.from([0xc3, 0x28, 0xff, 0x81]));
+    const scanning = new CmakeService(path.join(root, 'settings'), {
+      env: { PATH: '', ProgramFiles: path.join(root, 'no-powershell') },
+    });
+    try {
+      const found = await scanning.discover(workspace);
+      expect(found.selectedProjectPath).toBe(firmware);
+      expect(found.settingsDiagnostic).toMatchObject({ kind: 'read', message: 'cmake.readPowerShellMissing' });
+    } finally {
+      await scanning.dispose();
+    }
+  });
+
   it('loads workspace variants for a configured nested source and remembers the context after restart', async () => {
     const nested = await project('firmware');
     await settings('{"cmake.sourceDirectory": "firmware"}');

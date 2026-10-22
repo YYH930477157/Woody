@@ -184,7 +184,8 @@
     "readPowerShellMissing": "O executável do PowerShell 7 não foi encontrado",
     "readPowerShellVersion": "A leitura da configuração requer PowerShell 7 ou posterior",
     "readPath": "O caminho da configuração é inválido ou está fora do espaço de trabalho",
-    "readBusy": "Há muitas leituras de configuração pendentes"
+    "readBusy": "Há muitas leituras de configuração pendentes",
+    "sourceSettingsUnreadable": "Não foi possível ler .vscode/settings.json; cmake.sourceDirectory foi ignorado e os projetos foram encontrados varrendo as pastas. Escolha um projeto, ajuste a leitura da configuração e busque novamente."
   },
   "unknownFile": "Arquivo desconhecido",
   "newFile": "Novo Arquivo",

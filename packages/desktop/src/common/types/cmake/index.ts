@@ -73,5 +73,7 @@ export type CmakeWorkspace = {
   workspacePath: string;
   projects: Array<{ projectPath: string; relativePath: string }>;
   selectedProjectPath?: string;
+  /** `.vscode/settings.json` could not be read, so projects came from a folder scan instead. */
+  settingsDiagnostic?: CmakeDiagnostic;
 };
 export type CmakeJobRead = { job: CmakeJob; output: string; cursor: number; truncated: boolean };
