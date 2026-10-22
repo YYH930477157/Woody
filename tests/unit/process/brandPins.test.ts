@@ -8,51 +8,41 @@ const app = vi.hoisted(() => ({
   getPath: vi.fn(),
   setPath: vi.fn(),
   requestSingleInstanceLock: vi.fn(),
-  getPreferredSystemLanguages: vi.fn(() => ['en-US']),
   exit: vi.fn(),
 }));
-
-const migration = vi.hoisted(() => ({ prepareLegacyUserDataPath: vi.fn(), migrateUserData: vi.fn() }));
-const showErrorBox = vi.hoisted(() => vi.fn());
-const progress = vi.hoisted(() => ({ update: vi.fn(), close: vi.fn() }));
-const createMigrationProgressWindow = vi.hoisted(() => vi.fn(() => progress));
-vi.mock('electron', () => ({ app, dialog: { showErrorBox } }));
-vi.mock('@/process/startup/userDataMigration', () => migration);
-vi.mock('@/process/startup/userDataMigration/progressWindow', () => ({ createMigrationProgressWindow }));
+vi.mock('electron', () => ({ app }));
 
 beforeEach(() => {
   vi.resetModules();
   vi.clearAllMocks();
   vi.stubEnv('AIONUI_E2E_TEST', '');
-  vi.stubEnv('AIONUI_MULTI_INSTANCE', '');
   app.isPackaged = true;
   app.getPath.mockReturnValue('C:/test');
-  app.requestSingleInstanceLock.mockReturnValue(true);
-  migration.prepareLegacyUserDataPath.mockImplementation((root: string) => path.join(root, 'AionUi'));
-  migration.migrateUserData.mockImplementation((root: string) => ({ userDataPath: path.join(root, 'WoodyUi') }));
 });
 
 afterEach(() => vi.unstubAllEnvs());
 
 describe('brand storage paths', () => {
   it.each(['C:/Users/test/AppData/Roaming', '/Users/test/Library/Application Support', '/home/test/.config'])(
-    'migrates packaged user data to WoodyUi under %s',
+    'stores packaged data directly under WoodyUi in %s',
     async (appData) => {
-      app.isPackaged = true;
       app.getPath.mockReturnValue(appData);
 
       await import('@/brandPins');
 
-      expect(app.setPath).toHaveBeenLastCalledWith('sessionData', path.join(appData, 'WoodyUi'));
-      expect(app.requestSingleInstanceLock.mock.invocationCallOrder[0]).toBeLessThan(
-        migration.migrateUserData.mock.invocationCallOrder[0]
-      );
-      expect(app.setPath.mock.calls.filter(([key]) => key === 'userData')).toEqual([
-        ['userData', path.join(appData, 'AionUi')],
+      expect(app.setPath.mock.calls).toEqual([
         ['userData', path.join(appData, 'WoodyUi')],
+        ['sessionData', path.join(appData, 'WoodyUi')],
       ]);
     }
   );
+
+  it('leaves the historical AionUi directory and the instance lock alone', async () => {
+    const { packagedInstanceLock } = await import('@/brandPins');
+
+    expect(app.setPath).not.toHaveBeenCalledWith('userData', path.join('C:/test', 'AionUi'));
+    expect([packagedInstanceLock, app.requestSingleInstanceLock.mock.calls.length]).toEqual([undefined, 0]);
+  });
 
   it('leaves the development user data path unchanged', async () => {
     app.isPackaged = false;
@@ -62,75 +52,7 @@ describe('brand storage paths', () => {
     expect(app.setPath).not.toHaveBeenCalled();
   });
 
-  it('exits before migrating when an old or new instance already owns the lock', async () => {
-    app.requestSingleInstanceLock.mockReturnValue(false);
-    await import('@/brandPins');
-    expect(app.exit).toHaveBeenCalledWith(0);
-    expect(migration.migrateUserData).not.toHaveBeenCalled();
-  });
-
-  it('never allows multi-instance mode to bypass the production migration lock', async () => {
-    vi.stubEnv('AIONUI_MULTI_INSTANCE', '1');
-    await import('@/brandPins');
-    expect(app.requestSingleInstanceLock).toHaveBeenCalled();
-  });
-
-  it('stops startup and reports migration failure before opening a new profile', async () => {
-    migration.migrateUserData.mockImplementationOnce(() => {
-      throw new Error('conflict');
-    });
-    await import('@/brandPins');
-    expect(app.exit).toHaveBeenCalledWith(1);
-    expect(showErrorBox).toHaveBeenCalledWith(expect.any(String), expect.stringContaining('conflict'));
-    expect(app.setPath).not.toHaveBeenCalledWith('userData', path.join('C:/test', 'WoodyUi'));
-  });
-
-  it('withholds the instance lock after a failed migration so startup does not continue', async () => {
-    migration.migrateUserData.mockImplementationOnce(() => {
-      throw new Error('verification failed');
-    });
-    const { packagedInstanceLock } = await import('@/brandPins');
-    expect(packagedInstanceLock).toBe(false);
-  });
-
-  it('withholds the instance lock when the data path cannot be prepared', async () => {
-    migration.prepareLegacyUserDataPath.mockImplementationOnce(() => {
-      throw new Error('unexpected legacy link');
-    });
-    const { packagedInstanceLock } = await import('@/brandPins');
-    expect(packagedInstanceLock).toBe(false);
-  });
-
-  it('shows migration progress in the system language', async () => {
-    app.getPreferredSystemLanguages.mockReturnValueOnce(['zh-Hans-CN']);
-    migration.migrateUserData.mockImplementationOnce(
-      (root: string, options: { onProgress: (done: number, total: number) => void }) => {
-        options.onProgress(1, 3);
-        return { userDataPath: path.join(root, 'WoodyUi') };
-      }
-    );
-    await import('@/brandPins');
-    expect(createMigrationProgressWindow).toHaveBeenCalledWith(
-      expect.objectContaining({ title: '正在升级 Woody 数据' })
-    );
-    expect(progress.update).toHaveBeenCalledWith(1, 3);
-  });
-
-  it('closes the progress window before reporting a migration failure', async () => {
-    migration.migrateUserData.mockImplementationOnce(() => {
-      throw new Error('conflict');
-    });
-    await import('@/brandPins');
-    expect(progress.close.mock.invocationCallOrder[0]).toBeLessThan(showErrorBox.mock.invocationCallOrder[0]);
-  });
-
-  it('does not open a progress window when another instance owns the lock', async () => {
-    app.requestSingleInstanceLock.mockReturnValue(false);
-    await import('@/brandPins');
-    expect(createMigrationProgressWindow).not.toHaveBeenCalled();
-  });
-
-  it('bypasses all production path access for an isolated E2E profile', async () => {
+  it('uses an isolated E2E profile without resolving the real app-data directory', async () => {
     vi.stubEnv('AIONUI_E2E_TEST', '1');
     const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'woody-brand-test-'));
     vi.stubEnv('AIONUI_E2E_USER_DATA_DIR', profile);
@@ -141,15 +63,16 @@ describe('brand storage paths', () => {
       fs.rmSync(profile, { recursive: true, force: true });
     }
     expect(app.getPath).not.toHaveBeenCalled();
-    expect(migration.prepareLegacyUserDataPath).not.toHaveBeenCalled();
-    expect(app.requestSingleInstanceLock).not.toHaveBeenCalled();
   });
 
-  it('rejects E2E mode without an explicit profile instead of touching real data', async () => {
+  it('stops startup in E2E mode without an explicit profile instead of touching real data', async () => {
     vi.stubEnv('AIONUI_E2E_TEST', '1');
     vi.stubEnv('AIONUI_E2E_USER_DATA_DIR', '');
-    await import('@/brandPins');
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const { packagedInstanceLock } = await import('@/brandPins');
+
+    expect([packagedInstanceLock, app.setPath.mock.calls.length]).toEqual([false, 0]);
     expect(app.exit).toHaveBeenCalledWith(1);
-    expect(migration.prepareLegacyUserDataPath).not.toHaveBeenCalled();
   });
 });

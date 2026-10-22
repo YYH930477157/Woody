@@ -1,8 +1,4 @@
 {
-  "dataMigrationFailedTitle": "WoodyUi data migration stopped",
-  "dataMigrationFailedBody": "Close all Woody/AionUi windows and background processes, then retry. Existing data and backups have been retained. If both AionUi and WoodyUi directories exist independently, resolve the conflict before restarting.",
-  "dataMigrationProgressTitle": "Обновление данных Woody",
-  "dataMigrationProgressBody": "Woody создаёт резервную копию ваших данных и переносит их в новую папку. Это происходит только один раз и может занять несколько минут. Пожалуйста, подождите и не выключайте компьютер.",
   "send": "Отправить",
   "cancel": "Отмена",
   "save": "Сохранить",
