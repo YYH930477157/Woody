@@ -36,7 +36,12 @@ export function readErrorCode(error: unknown): string {
 }
 
 /** Strict decoder shared by the direct and PowerShell byte transports. */
-function decode(bytes: Buffer, options: CmakeReadOptions, limit: number): { text: string; encoding: string } {
+function decode(
+  bytes: Buffer,
+  options: CmakeReadOptions,
+  limit: number,
+  asciiTokens: boolean
+): { text: string; encoding: string } {
   if (bytes.length > limit) throw new Error('cmake.fileTooLarge');
   let encoding: string = options.encoding;
   if (encoding === 'auto') {
@@ -46,6 +51,15 @@ function decode(bytes: Buffer, options: CmakeReadOptions, limit: number): { text
         : bytes[0] === 0xfe && bytes[1] === 0xff
           ? 'utf-16be'
           : 'utf-8';
+  }
+  if (asciiTokens && !encoding.startsWith('utf-16')) {
+    // A caller that only reads ASCII tokens accepts any ASCII-compatible encoding (UTF-8, GBK, ...), so
+    // non-ASCII bytes stay undecoded. Control bytes still mark binary content such as ciphertext, which
+    // must fail here so the PowerShell reader is tried next.
+    // Tab, line breaks, form feed and ESC occur in text; any other C0 byte does not.
+    if (bytes.some((byte) => byte < 0x09 || (byte > 0x0d && byte < 0x20 && byte !== 0x1b)))
+      throw new Error('cmake.readDecode');
+    return { text: bytes.toString('latin1'), encoding: 'ascii-compatible' };
   }
   let text: string;
   try {
@@ -66,7 +80,8 @@ export class ConfigurationReader {
   private generation = 0;
   constructor(private readonly dependencies: ReaderDependencies = {}) {}
 
-  async read(file: string, options = defaults, limit = 262144): Promise<ReadResult> {
+  /** `asciiTokens` is for callers that only scan ASCII syntax, such as project() in CMakeLists.txt. */
+  async read(file: string, options = defaults, limit = 262144, asciiTokens = false): Promise<ReadResult> {
     if (this.disposed) throw new Error('cmake.readCancelled');
     if (!path.isAbsolute(file) || file.includes('\0') || !Number.isSafeInteger(limit) || limit < 1 || limit > 1048576)
       throw new Error('cmake.readPath');
@@ -81,7 +96,15 @@ export class ConfigurationReader {
       }
     );
     if (this.disposed) throw new Error('cmake.readCancelled');
-    const key = JSON.stringify([canonical, identity, settings.mode, settings.encoding, settings.powershellPath, limit]);
+    const key = JSON.stringify([
+      canonical,
+      identity,
+      settings.mode,
+      settings.encoding,
+      settings.powershellPath,
+      limit,
+      asciiTokens,
+    ]);
     const cached = generation === this.generation ? this.cache.get(key) : undefined;
     if (cached) return cached.promise;
     if (this.inFlight.size >= 8) throw new Error('cmake.readBusy');
@@ -91,7 +114,7 @@ export class ConfigurationReader {
     }
     const controller = new AbortController();
     const entry: CacheEntry = { controller, pending: true, promise: Promise.resolve(undefined as never) };
-    entry.promise = this.perform(canonical, settings, limit, controller.signal).finally(() => {
+    entry.promise = this.perform(canonical, settings, limit, asciiTokens, controller.signal).finally(() => {
       entry.pending = false;
       this.inFlight.delete(entry);
     });
@@ -117,6 +140,7 @@ export class ConfigurationReader {
     file: string,
     options: CmakeReadOptions,
     limit: number,
+    asciiTokens: boolean,
     signal: AbortSignal
   ): Promise<ReadResult> {
     const attempts: NonNullable<CmakeDiagnostic['attempts']> = [];
@@ -136,7 +160,7 @@ export class ConfigurationReader {
           executable = result.executable;
         }
         if (signal.aborted) throw new Error('cmake.readCancelled');
-        const decoded = decode(bytes, options, limit);
+        const decoded = decode(bytes, options, limit, asciiTokens);
         return {
           text: decoded.text,
           info: { reader, encoding: decoded.encoding, ...(executable ? { executable } : {}) },

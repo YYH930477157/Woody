@@ -559,8 +559,9 @@ export class CmakeService {
       }
     } else {
       await buildDirectory(project.projectPath, hash, true);
+      // Only the ASCII project() declaration matters, so comments in GBK or other encodings must not fail the job.
       const lists = (
-        await this.reader.read(path.join(project.projectPath, 'CMakeLists.txt'), config.read, 1048576)
+        await this.reader.read(path.join(project.projectPath, 'CMakeLists.txt'), config.read, 1048576, true)
       ).text.replace(/#[^\n]*/g, '');
       const declaration = /\bproject\s*\(([^)]*)\)/i.exec(lists)?.[1]?.split(/\s+/).filter(Boolean).slice(1) ?? [];
       const explicitLanguage = declaration.some((token) => ['C', 'CXX', 'NONE'].includes(token));
