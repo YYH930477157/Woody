@@ -676,6 +676,11 @@
       "noChanges": "Değişiklik yok",
       "loading": "Değişiklikler yükleniyor…",
       "loadFailed": "Değişiklikler yüklenemedi",
+      "diagnostics": {
+        "checkedFolders": "Denetlenen proje klasörleri",
+        "backendReason": "Arka uç gerekçesi",
+        "notARepositoryHint": "«Değişiklikler» yalnızca Git depolarını listeler ve yalnızca projeye eklenen klasörleri denetler. Liste boşsa: önce proje klasörünü ekleyin; içinde .git yoksa o klasörde git init çalıştırın; depo bir üst dizindeyse o üst klasörü ekleyin."
+      },
       "monitorScope": {
         "label": "Görüntüleme kapsamı",
         "tooltip": "Yalnızca gösterilen değişiklikleri filtreler; projenin tamamı arka planda izlenmeye devam eder. software klasörü yoksa projenin tamamı gösterilir.",

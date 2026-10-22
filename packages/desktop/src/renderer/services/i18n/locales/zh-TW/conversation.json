@@ -674,6 +674,11 @@
       "noChanges": "沒有變更",
       "loading": "正在載入變更…",
       "loadFailed": "無法載入變更",
+      "diagnostics": {
+        "checkedFolders": "已檢查的專案資料夾",
+        "backendReason": "後端回傳的原因",
+        "notARepositoryHint": "「變更」只顯示 Git 儲存庫，且只檢查已加入專案的資料夾。清單為空時：先把專案資料夾加入專案；該資料夾沒有 .git 就在其中執行 git init；儲存庫在上一層目錄就把上一層目錄加入專案。"
+      },
       "monitorScope": {
         "label": "顯示範圍",
         "tooltip": "僅篩選顯示的變更，背景仍監控整個專案。沒有 software 資料夾時，顯示整個專案。",

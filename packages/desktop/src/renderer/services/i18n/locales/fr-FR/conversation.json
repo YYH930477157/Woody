@@ -674,6 +674,11 @@
       "noChanges": "Aucune modification",
       "loading": "Chargement des modifications…",
       "loadFailed": "Impossible de charger les modifications",
+      "diagnostics": {
+        "checkedFolders": "Dossiers de projet vérifiés",
+        "backendReason": "Motif renvoyé par le backend",
+        "notARepositoryHint": "« Modifications » n'affiche que les dépôts Git et ne vérifie que les dossiers ajoutés au projet. Si la liste est vide : ajoutez d'abord le dossier du projet ; s'il n'a pas de .git, lancez git init dedans ; si le dépôt se trouve un niveau au-dessus, ajoutez plutôt ce dossier parent."
+      },
       "monitorScope": {
         "label": "Périmètre d’affichage",
         "tooltip": "Filtre uniquement les modifications affichées ; le projet entier reste surveillé en arrière-plan. Si le dossier software est absent, le projet entier est affiché.",

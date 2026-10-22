@@ -363,11 +363,32 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
     return <PanelNotice text={t('conversation.explorer.scm.loading')} />;
   }
   if (view.loadState === 'error') {
-    return <PanelNotice text={t('conversation.explorer.scm.loadFailed')} />;
+    return (
+      <PanelNotice
+        text={t('conversation.explorer.scm.loadFailed')}
+        details={
+          view.error
+            ? { label: t('conversation.explorer.scm.diagnostics.backendReason'), values: [view.error] }
+            : undefined
+        }
+      />
+    );
   }
   // No pe root of this project is a repository → say so, do not fabricate a repo.
+  // The checked folders and the next step turn that dead end into a reportable state.
   if (view.repositories.length === 0 || !selectedRepo) {
-    return <PanelNotice text={t('conversation.explorer.scm.notARepository')} />;
+    const checked = [...new Set(Object.values(repoPaths).filter(Boolean))];
+    return (
+      <PanelNotice
+        text={t('conversation.explorer.scm.notARepository')}
+        details={
+          checked.length
+            ? { label: t('conversation.explorer.scm.diagnostics.checkedFolders'), values: checked }
+            : undefined
+        }
+        hint={t('conversation.explorer.scm.diagnostics.notARepositoryHint')}
+      />
+    );
   }
 
   const multiRepo = view.repositories.length > 1;
@@ -1306,6 +1327,37 @@ const ActionReportExtras: React.FC<{
   );
 };
 
-const PanelNotice: React.FC<{ text: string }> = ({ text }) => (
-  <div className='h-full flex items-center justify-center px-16px text-center text-t-secondary text-13px'>{text}</div>
+/**
+ * Full-panel state message. `details` and `hint` are the diagnostic tail — the folders the backend was asked about
+ * and the raw reason it returned — so a "no repository here" report can be acted on without reading logs.
+ */
+const PanelNotice: React.FC<{
+  text: string;
+  hint?: string;
+  details?: { label: string; values: string[] };
+}> = ({ text, hint, details }) => (
+  // The scroll container and the `min-h-full` inner box keep a tall notice (folders + hint) scrollable instead of
+  // clipped at the top, which is what a plain `justify-center` + `overflow-auto` would do in a short sidebar.
+  <div className='h-full overflow-auto px-16px py-16px text-center text-t-secondary text-13px'>
+    <div className='min-h-full flex flex-col items-center justify-center gap-8px'>
+      <div>{text}</div>
+      {details && details.values.length > 0 && (
+        <div className='text-12px' data-scm-diagnostic='details'>
+          <div className='text-t-tertiary'>{details.label}</div>
+          <ul className='m-0 p-0 list-none'>
+            {details.values.map((value) => (
+              <li key={value} className='break-all font-mono'>
+                {value}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {hint && (
+        <div className='max-w-420px text-12px text-t-tertiary' data-scm-diagnostic='hint'>
+          {hint}
+        </div>
+      )}
+    </div>
+  </div>
 );

@@ -199,12 +199,26 @@ describe('ScmPanel empty / failure states', () => {
     render(<ScmPanel projectId='p1' />);
 
     expect(await screen.findByText('conversation.explorer.scm.notARepository')).toBeInTheDocument();
+    // No attached folder means there is nothing to list, but the next step is still explained.
+    expect(screen.queryByText('conversation.explorer.scm.diagnostics.checkedFolders')).not.toBeInTheDocument();
+    expect(screen.getByText('conversation.explorer.scm.diagnostics.notARepositoryHint')).toBeInTheDocument();
+  });
+
+  it('names the folders that were checked so an empty repository list is reportable', async () => {
+    installPort({ repositories: [] });
+    render(<ScmPanel projectId='p1' repoPaths={{ pe1: 'D:/work/proj', pe2: 'D:/work/lib' }} />);
+
+    expect(await screen.findByText('conversation.explorer.scm.notARepository')).toBeInTheDocument();
+    expect(screen.getByText('conversation.explorer.scm.diagnostics.checkedFolders')).toBeInTheDocument();
+    expect(screen.getByText('D:/work/proj')).toBeInTheDocument();
+    expect(screen.getByText('D:/work/lib')).toBeInTheDocument();
+    expect(screen.getByText('conversation.explorer.scm.diagnostics.notARepositoryHint')).toBeInTheDocument();
   });
 
   it('shows a load failure instead of an empty list when listRepositories rejects', async () => {
     configureScmStore({
       listRepositories: async () => {
-        throw new Error('backend down');
+        throw new Error('not a repository: D:/work/proj');
       },
       subscribe: async () => ({ statuses: [] }),
       unsubscribe: () => {},
@@ -214,6 +228,9 @@ describe('ScmPanel empty / failure states', () => {
     render(<ScmPanel projectId='p1' />);
 
     expect(await screen.findByText('conversation.explorer.scm.loadFailed')).toBeInTheDocument();
+    // The raw backend reason is shown so the failure can be reported verbatim.
+    expect(screen.getByText('conversation.explorer.scm.diagnostics.backendReason')).toBeInTheDocument();
+    expect(screen.getByText('not a repository: D:/work/proj')).toBeInTheDocument();
   });
 
   it('shows `no changes` for a clean repo', async () => {
