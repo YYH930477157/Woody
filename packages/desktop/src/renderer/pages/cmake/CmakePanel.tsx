@@ -32,6 +32,9 @@ export default function CmakePanel({ projectPath }: { projectPath: string }) {
   const { project, draft, job, pending } = state;
   const running = job?.status === 'running' || project?.latestJob?.status === 'running';
   const locked = running || pending || debug.active || debug.pending || state.discovering;
+  // A conflict comes from the chosen combination, so the selectors and the save-then-run actions stay usable to
+  // repair it; unreadable or invalid variants files still block them.
+  const variantsBlocked = !!project?.configurationError && project.diagnostic?.kind !== 'conflict';
   const [projectChange, setProjectChange] = useState<() => void>();
   const [logOpen, setLogOpen] = useState(false);
   useEffect(() => {
@@ -227,7 +230,7 @@ export default function CmakePanel({ projectPath }: { projectPath: string }) {
                     >
                       <Select
                         aria-label={dimension.label}
-                        disabled={locked || !!project.configurationError}
+                        disabled={locked || variantsBlocked}
                         value={
                           (running ? (job || project.latestJob)?.selection?.[dimension.name] : undefined) ??
                           draft.selections[dimension.name] ??
@@ -253,7 +256,7 @@ export default function CmakePanel({ projectPath }: { projectPath: string }) {
                       key={action}
                       icon={icon}
                       type={action === 'build' ? 'primary' : 'secondary'}
-                      disabled={locked || !!project.configurationError || (action === 'run' && !draft.runExecutable)}
+                      disabled={locked || variantsBlocked || (action === 'run' && !draft.runExecutable)}
                       onClick={() => {
                         void state.saveAndStart(action);
                       }}
