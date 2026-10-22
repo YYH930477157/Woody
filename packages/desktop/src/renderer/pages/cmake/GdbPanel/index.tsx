@@ -18,11 +18,13 @@ export default function GdbPanel({
   draft,
   onChange,
   buildBusy,
+  configurationInvalid = false,
 }: {
   debug: DebugState;
   draft: CmakeConfiguration;
   onChange: (value: CmakeConfiguration) => void;
   buildBusy: boolean;
+  configurationInvalid?: boolean;
 }) {
   const { t } = useTranslation();
   const [location, setLocation] = useState('');
@@ -72,9 +74,14 @@ export default function GdbPanel({
             }}
           />
         </Tooltip>
-        {control('start', <Play />, buildBusy || active || pending || !draft.runExecutable, () => {
-          void debug.start(draft);
-        })}
+        {control(
+          'start',
+          <Play />,
+          configurationInvalid || buildBusy || active || pending || !draft.runExecutable,
+          () => {
+            void debug.start(draft);
+          }
+        )}
         {control('stop', <Square />, !active || pending || session?.state === 'stopping', () => {
           void debug.execute({ operation: 'stop' });
         })}

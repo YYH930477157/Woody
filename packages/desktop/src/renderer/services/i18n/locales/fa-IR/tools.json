@@ -60,6 +60,10 @@
     "noOutput": "هنوز خروجی اشکال‌زدایی وجود ندارد."
   },
   "cmake": {
+    "workspaceDirectory": "پوشه فضای کاری",
+    "sourceDirectory": "پوشه کد منبع CMake",
+    "variantsFile": "فایل گونه‌ها",
+    "defaultVariants": "پیش‌فرض Debug / Release",
     "project": "پروژه CMake",
     "selectProject": "انتخاب پروژه CMake",
     "rescan": "جستجوی دوباره پروژه‌ها",
@@ -195,6 +199,16 @@
     "delete": "حذف"
   },
   "terminal": {
+    "resumeAi": "اجازه دسترسی هوش مصنوعی",
+    "accessTitle": "دسترسی سریال هوش مصنوعی",
+    "accessAsk": "پرسیدن",
+    "accessAuto": "خودکار",
+    "accessScope": "برای همه گفتگوهای دارای woody-terminal اعمال می‌شود. پیش از کنترل اتصال بپرسد یا پروفایل‌های سریال ذخیره‌شده را خودکار مجاز کند. Shell به مجوز جداگانه نیاز دارد.",
+    "accessSettingsError": "بارگیری یا ذخیره تنظیمات دسترسی سریال ممکن نشد.",
+    "accessPrompt": "به هوش مصنوعی اجازه کنترل این اتصال سریال داده شود؟",
+    "accessDetails": "{{name}}\nدرگاه: {{port}} | نرخ: {{baud}} | {{dataBits}} / {{parity}} / {{stopBits}}\nاتصال، خواندن، ارسال و بستن مجاز می‌شود. کنترل دستی نوشتن هوش مصنوعی را متوقف می‌کند.",
+    "accessDeny": "رد کردن",
+    "accessAllow": "اجازه دادن",
     "title": "Terminal & Serial",
     "name": "Profile name",
     "kind": "Connection type",

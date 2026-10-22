@@ -33,6 +33,9 @@ export type CmakeJob = {
 };
 export type CmakeProject = {
   projectPath: string;
+  workspacePath?: string;
+  variantsFile?: string;
+  configurationError?: string;
   config: CmakeConfiguration;
   dimensions: CmakeDimension[];
   selection: Record<string, string>;

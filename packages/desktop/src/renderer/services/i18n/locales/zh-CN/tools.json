@@ -60,6 +60,10 @@
     "noOutput": "暂无调试输出。"
   },
   "cmake": {
+    "workspaceDirectory": "工作区目录",
+    "sourceDirectory": "CMake 源码目录",
+    "variantsFile": "变体配置文件",
+    "defaultVariants": "默认 Debug / Release",
     "project": "CMake 工程",
     "selectProject": "请选择 CMake 工程",
     "rescan": "重新检测工程",
@@ -195,6 +199,16 @@
     "delete": "删除"
   },
   "terminal": {
+    "resumeAi": "允许 AI 访问",
+    "accessTitle": "AI 串口授权",
+    "accessAsk": "询问",
+    "accessAuto": "自动授权",
+    "accessScope": "适用于所有使用 woody-terminal 的对话。询问模式在接管串口前确认；自动模式允许使用已保存的串口配置。Shell 终端仍需单独授权。",
+    "accessSettingsError": "无法读取或保存串口授权设置。",
+    "accessPrompt": "允许 AI 控制此串口连接吗？",
+    "accessDetails": "{{name}}\n串口：{{port}} | 波特率：{{baud}} | {{dataBits}} / {{parity}} / {{stopBits}}\n允许连接、读取、发送数据和关闭此连接。手工接管后停止 AI 写入。",
+    "accessDeny": "拒绝",
+    "accessAllow": "允许",
     "title": "终端与串口",
     "name": "配置名称",
     "kind": "连接类型",

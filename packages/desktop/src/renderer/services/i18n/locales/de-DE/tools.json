@@ -60,6 +60,10 @@
     "noOutput": "Noch keine Debugausgabe."
   },
   "cmake": {
+    "workspaceDirectory": "Arbeitsbereichsverzeichnis",
+    "sourceDirectory": "CMake-Quellverzeichnis",
+    "variantsFile": "Variantendatei",
+    "defaultVariants": "Standard Debug / Release",
     "project": "CMake-Projekt",
     "selectProject": "CMake-Projekt auswählen",
     "rescan": "Projekte erneut suchen",
@@ -195,6 +199,16 @@
     "delete": "löschen"
   },
   "terminal": {
+    "resumeAi": "KI-Zugriff erlauben",
+    "accessTitle": "KI-Zugriff auf serielle Ports",
+    "accessAsk": "Nachfragen",
+    "accessAuto": "Automatisch",
+    "accessScope": "Gilt für alle Chats mit woody-terminal. Vor der Übernahme fragen oder gespeicherte serielle Profile automatisch erlauben. Shell-Zugriff benötigt weiterhin eine separate Freigabe.",
+    "accessSettingsError": "Einstellungen für den seriellen Zugriff konnten nicht geladen oder gespeichert werden.",
+    "accessPrompt": "Darf die KI diese serielle Verbindung steuern?",
+    "accessDetails": "{{name}}\nPort: {{port}} | Baudrate: {{baud}} | {{dataBits}} / {{parity}} / {{stopBits}}\nErlaubt Verbinden, Lesen, Senden und Schließen. Manuelle Übernahme stoppt KI-Schreibzugriffe.",
+    "accessDeny": "Ablehnen",
+    "accessAllow": "Erlauben",
     "title": "Terminal & Serial",
     "name": "Profile name",
     "kind": "Connection type",

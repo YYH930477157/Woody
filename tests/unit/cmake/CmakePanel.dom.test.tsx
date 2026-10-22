@@ -77,6 +77,51 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 describe('CMake build panel', () => {
+  it('recovers removed selections after repairing variants while preserving unsaved tool edits', async () => {
+    mocks.inspect.mockResolvedValue({
+      ...project,
+      config: { ...project.config, selections: { oldMode: 'removed' } },
+      configurationError: 'cmake.invalidVariants: broken',
+    });
+    render(<CmakePanel projectPath='D:/workspace' />);
+    await screen.findByRole('button', { name: 'tools.cmake.build' });
+    fireEvent.click(screen.getByText('tools.cmake.settings'));
+    fireEvent.change(screen.getByRole('textbox', { name: 'tools.cmake.cmakePath' }), {
+      target: { value: 'D:/custom/cmake.exe' },
+    });
+    mocks.inspect.mockResolvedValue(project);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'tools.cmake.build' })).toBeEnabled(), {
+      timeout: 3000,
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'tools.cmake.save' }));
+    await waitFor(() =>
+      expect(mocks.save).toHaveBeenCalledWith({
+        projectPath: project.projectPath,
+        config: { ...project.config, tools: { ...project.config.tools, cmake: 'D:/custom/cmake.exe' } },
+      })
+    );
+  });
+
+  it('keeps project paths and settings visible when variants fail, but blocks build and debug launch', async () => {
+    mocks.inspect.mockResolvedValue({
+      ...project,
+      workspacePath: 'D:/workspace',
+      variantsFile: 'D:/workspace/cmake-variants.yaml',
+      configurationError: 'cmake.invalidVariants: broken yaml',
+      buildDirectory: '',
+    });
+    render(<CmakePanel projectPath='D:/workspace' />);
+    await screen.findByText(/tools.cmake.invalidVariants: broken yaml/);
+    expect(screen.getByText(/D:\/workspace\/cmake-variants.yaml/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'tools.cmake.build' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'tools.cmake.rescan' })).toBeEnabled();
+    fireEvent.click(screen.getByText('tools.cmake.settings'));
+    expect(screen.getByRole('textbox', { name: 'tools.cmake.cmakePath' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'tools.cmake.save' })).toBeEnabled();
+    fireEvent.click(screen.getByText('tools.gdb.debugTab'));
+    expect(screen.getByRole('button', { name: 'tools.gdb.start' })).toBeDisabled();
+  });
+
   it('uses the discovered source directory for build, AI access and GDB', async () => {
     render(<CmakePanel projectPath='D:/workspace' />);
     await screen.findByRole('button', { name: 'tools.cmake.build' });

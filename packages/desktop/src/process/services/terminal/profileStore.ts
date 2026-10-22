@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import type { TerminalProfile } from '@/common/types/terminal';
+import type { TerminalProfile, TerminalSerialAccessMode } from '@/common/types/terminal';
 import { validateTerminalProfile } from './serialData';
 
 type ProfileDocument = { version: 1; profiles: TerminalProfile[]; [key: string]: unknown };
@@ -36,6 +36,18 @@ export class TerminalProfileStore {
   async list(): Promise<TerminalProfile[]> {
     await this.tail;
     return (await this.load()).profiles;
+  }
+
+  async getSerialAccessMode(): Promise<TerminalSerialAccessMode> {
+    await this.tail;
+    return (await this.load()).serialAccessMode === 'auto' ? 'auto' : 'ask';
+  }
+
+  async setSerialAccessMode(mode: TerminalSerialAccessMode): Promise<void> {
+    if (mode !== 'ask' && mode !== 'auto') throw new Error('Invalid serial access mode');
+    await this.mutate((document) => {
+      document.serialAccessMode = mode;
+    });
   }
 
   private mutate(change: (document: ProfileDocument) => void): Promise<void> {

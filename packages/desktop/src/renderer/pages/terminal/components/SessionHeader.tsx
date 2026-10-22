@@ -32,6 +32,7 @@ export default function SessionHeader({
   onDisconnect,
   onReconnect,
   onGrant,
+  onResumeAi,
 }: {
   connection: TerminalConnection;
   baudRate?: number;
@@ -45,6 +46,7 @@ export default function SessionHeader({
   onDisconnect: () => void;
   onReconnect: () => void;
   onGrant: (scope: 'connection' | 'profile') => void;
+  onResumeAi: () => void;
 }) {
   const { t } = useTranslation();
   const label = (key: string) => t(`tools.terminal.${key}`);
@@ -170,6 +172,11 @@ export default function SessionHeader({
             onClick={onExport}
           />
         </Tooltip>
+        {serial && open && connection.aiAccessBlocked && (
+          <Button size='small' disabled={working} onClick={onResumeAi}>
+            <IconText icon={<Robot theme='outline' fill='currentColor' size='14' />}>{label('resumeAi')}</IconText>
+          </Button>
+        )}
         {canGrant && (
           <Dropdown
             trigger='click'

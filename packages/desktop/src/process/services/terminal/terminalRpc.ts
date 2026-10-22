@@ -4,6 +4,7 @@ import { WebSocketServer } from 'ws';
 import { z } from 'zod';
 import type { TerminalConnectionService } from './connectionService';
 import type { TerminalSendRequest } from '@/common/types/terminal';
+import type { TerminalSerialAccess } from './serialAccess';
 
 export const terminalSendSchema = z
   .object({
@@ -33,8 +34,9 @@ export const terminalSendSchema = z
 const requestSchema = z
   .object({
     id: z.number().int().nonnegative(),
-    action: z.enum(['claim', 'ports', 'list', 'open', 'read', 'send', 'cancel', 'interrupt', 'close']),
+    action: z.enum(['claim', 'profiles', 'ports', 'list', 'open', 'read', 'send', 'cancel', 'interrupt', 'close']),
     ticket: z.string().min(20).max(256).optional(),
+    profileId: z.string().min(1).max(128).optional(),
     connectionId: z.string().max(128).optional(),
     cursor: z.number().int().nonnegative().optional(),
     maxBytes: z.number().int().positive().max(65536).optional(),
@@ -42,10 +44,11 @@ const requestSchema = z
   })
   .strict();
 
-/** Private socket credentials authorize transport only; each operation still needs a user grant. */
+/** Private socket credentials authorize transport; serial policy or explicit grants scope device access. */
 export async function startTerminalRpc(
   service: TerminalConnectionService,
-  ports: () => Promise<Array<{ path: string; manufacturer?: string }>>
+  ports: () => Promise<Array<{ path: string; manufacturer?: string }>>,
+  access?: TerminalSerialAccess
 ): Promise<{ port: number; token: string; close: () => Promise<void> }> {
   const token = randomBytes(32).toString('hex');
   const server = createServer((_request, response) => response.writeHead(404).end());
@@ -62,6 +65,7 @@ export async function startTerminalRpc(
     }
     sockets.handleUpgrade(request, socket, head, (client) => {
       const leaseId = randomUUID();
+      const lease = new AbortController();
       let active = 0;
       let alive = true;
       const heartbeat = setInterval(() => {
@@ -76,6 +80,8 @@ export async function startTerminalRpc(
       client.on('error', () => client.terminate());
       client.once('close', () => {
         clearInterval(heartbeat);
+        lease.abort();
+        access?.release(leaseId);
         service.revokeLease(leaseId);
       });
       client.on('message', (raw) => {
@@ -90,17 +96,32 @@ export async function startTerminalRpc(
             try {
               const { action, ticket, connectionId } = request;
               let result: unknown;
+              if (request.profileId && (action !== 'open' || ticket || connectionId))
+                throw new Error('terminal.invalidData');
               if (action === 'claim') {
                 if (!ticket) throw new Error('terminal.unauthorized');
                 result = service.claim(ticket, leaseId);
+              } else if (!ticket && access && ['profiles', 'ports', 'list', 'open'].includes(action)) {
+                if (action === 'profiles') result = await access.profiles();
+                else if (action === 'ports') result = await ports();
+                else if (action === 'list') result = access.list();
+                else {
+                  if (!request.profileId)
+                    throw new Error('Specify a saved serial profileId from terminal_profiles. No ticket is needed.');
+                  result = await access.open(leaseId, request.profileId, lease.signal);
+                }
               } else {
-                if (!ticket) throw new Error('terminal.unauthorized');
-                const capability = service.claim(ticket, leaseId);
-                const actor = { ticket, leaseId };
+                const capability = ticket ? service.claim(ticket, leaseId) : undefined;
+                const actor = ticket
+                  ? { ticket, leaseId }
+                  : access && connectionId
+                    ? await access.actor(leaseId, connectionId, lease.signal, action !== 'read')
+                    : undefined;
+                if (!actor) throw new Error('terminal.unauthorized');
                 if (action === 'ports') result = await ports();
                 else if (action === 'list') result = service.list(actor);
                 else if (action === 'open') {
-                  if (!capability.profile) throw new Error('terminal.unauthorized');
+                  if (!capability?.profile) throw new Error('terminal.unauthorized');
                   result = await service.open(capability.profile, actor);
                 } else {
                   if (!connectionId) throw new Error('terminal.invalidConnection');
@@ -121,6 +142,8 @@ export async function startTerminalRpc(
                     case 'close':
                       result = await service.close(connectionId, actor);
                       break;
+                    default:
+                      throw new Error('terminal.invalidData');
                   }
                 }
               }

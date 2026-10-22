@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
+import JSON5 from 'json5';
 import type { CmakeConfiguration, CmakeWorkspace } from '@/common/types/cmake';
 import { defaultConfiguration, normalizeConfiguration } from './configuration';
 import { parseVariants } from './variants';
@@ -59,7 +60,9 @@ export async function discoverProjects(input: string): Promise<CmakeWorkspace> {
       await visit(child, depth + 1);
     }
   }
-  await visit(root, 0);
+  const configured = await configuredSources(root);
+  if (configured) candidates.push(...configured);
+  else await visit(root, 0);
   return {
     workspacePath: root,
     projects: candidates
@@ -68,39 +71,139 @@ export async function discoverProjects(input: string): Promise<CmakeWorkspace> {
   };
 }
 
+async function configuredSources(root: string): Promise<string[] | undefined> {
+  const file = path.join(root, '.vscode', 'settings.json');
+  let bytes: Buffer;
+  try {
+    bytes = await readBoundedBytes(file);
+  } catch (error) {
+    if (missing(error)) return undefined;
+    throw new Error(`cmake.invalidProject: ${file}`, { cause: error });
+  }
+  try {
+    const settings: unknown = JSON5.parse(decodeVariants(bytes, file));
+    if (!settings || typeof settings !== 'object' || Array.isArray(settings)) throw new Error('expected settings');
+    const value = (settings as Record<string, unknown>)['cmake.sourceDirectory'];
+    if (value === undefined) return undefined;
+    const sources: unknown[] = Array.isArray(value) ? value : [value];
+    if (!sources.length || sources.length > 100) throw new Error('source directory count');
+    const directories = new Map<string, string>();
+    for (const source of sources) {
+      if (typeof source !== 'string' || !source.trim() || source.includes('\0')) throw new Error('source directory');
+      const expanded = source.replace(/\$\{([^}]+)\}/g, (_match, name: string) => {
+        if (name === 'workspaceFolder' || name === 'workspaceRoot') return root;
+        if (name === 'workspaceFolderBasename') return path.basename(root);
+        throw new Error(`unsupported variable: ${name}`);
+      });
+      if (/[*?]/.test(expanded)) throw new Error('source directory glob');
+      const directory = await canonicalProject(path.resolve(root, expanded));
+      if (projectKey(root) !== projectKey(directory) && !isInside(root, directory))
+        throw new Error('source directory outside workspace');
+      directories.set(projectKey(directory), directory);
+    }
+    return [...directories.values()];
+  } catch (cause) {
+    const detail = cause instanceof Error ? cause.message : String(cause);
+    throw new Error(`cmake.invalidProject: ${file} [cmake.sourceDirectory]\n${detail}`, { cause });
+  }
+}
+
 export async function readBounded(file: string, limit = 262144): Promise<string> {
+  return (await readBoundedBytes(file, limit)).toString('utf8');
+}
+
+async function readBoundedBytes(file: string, limit = 262144): Promise<Buffer> {
   const handle = await fs.open(file, 'r');
   try {
     if ((await handle.stat()).size > limit) throw new Error('cmake.fileTooLarge');
     const buffer = Buffer.alloc(limit + 1);
     const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
     if (bytesRead > limit) throw new Error('cmake.fileTooLarge');
-    return buffer.subarray(0, bytesRead).toString('utf8');
+    return buffer.subarray(0, bytesRead);
   } finally {
     await handle.close();
   }
 }
 
-export async function loadDimensions(root: string): Promise<ReturnType<typeof parseVariants>> {
-  const found: string[] = [];
-  for (const file of [
-    'cmake-variants.yaml',
-    'cmake-variants.yml',
-    '.vscode/cmake-variants.yaml',
-    '.vscode/cmake-variants.yml',
-  ]) {
-    try {
-      found.push(await readBounded(path.join(root, file)));
-    } catch (error) {
-      if (!missing(error)) throw error;
+function decodeVariants(bytes: Buffer, file: string): string {
+  // Windows editors can save YAML as UTF-16; honor its BOM before parsing.
+  let encoding = 'utf-8';
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) encoding = 'utf-16le';
+  else if (bytes[0] === 0xfe && bytes[1] === 0xff) encoding = 'utf-16be';
+  try {
+    return new TextDecoder(encoding, { fatal: true }).decode(bytes);
+  } catch (cause) {
+    throw new Error(`cmake.invalidVariants: ${file} (${encoding})`, { cause });
+  }
+}
+
+export async function loadVariantConfiguration(
+  root: string,
+  workspace = root
+): Promise<{ dimensions: ReturnType<typeof parseVariants>; file?: string; error?: string }> {
+  for (const directory of new Set([workspace, root])) {
+    for (const file of [
+      'cmake-variants.yaml',
+      'cmake-variants.yml',
+      'cmake-variants.json',
+      '.vscode/cmake-variants.yaml',
+      '.vscode/cmake-variants.yml',
+      '.vscode/cmake-variants.json',
+    ]) {
+      const absolute = path.join(directory, file);
+      let bytes: Buffer;
+      try {
+        bytes = await readBoundedBytes(absolute);
+      } catch (cause) {
+        if (missing(cause)) continue;
+        return { dimensions: [], file: absolute, error: variantError(cause, absolute) };
+      }
+      try {
+        const text = decodeVariants(bytes, absolute);
+        const source = file.endsWith('.json') ? JSON.stringify(JSON5.parse(text)) : text;
+        return { dimensions: parseVariants(source), file: absolute };
+      } catch (cause) {
+        return { dimensions: [], file: absolute, error: variantError(cause, absolute) };
+      }
     }
   }
-  if (found.length > 1) throw new Error('cmake.ambiguousVariants: multiple variants files');
-  return parseVariants(found[0]);
+  return { dimensions: parseVariants(undefined) };
+}
+
+function variantError(cause: unknown, file: string): string {
+  const message = cause instanceof Error ? cause.message : String(cause);
+  const detail = message.startsWith('cmake.') ? message : `cmake.invalidVariants: ${message}`;
+  return `${detail.includes(':') ? detail : `${detail}:`}\n${file}`;
+}
+
+export async function loadDimensions(root: string): Promise<ReturnType<typeof parseVariants>> {
+  const result = await loadVariantConfiguration(root);
+  if (result.error) throw new Error(result.error);
+  return result.dimensions;
 }
 
 function configurationFile(storage: string, root: string): string {
   return path.join(storage, `${createHash('sha256').update(projectKey(root)).digest('hex')}.json`);
+}
+
+/** A canonical source root retains its selected workspace for desktop and MCP calls. */
+export async function loadProjectWorkspace(storage: string, root: string): Promise<string> {
+  let value: unknown;
+  try {
+    value = JSON.parse(await readBounded(`${configurationFile(storage, root)}.context`));
+  } catch (error) {
+    if (missing(error)) return root;
+    throw error;
+  }
+  if (typeof value !== 'string' || !path.isAbsolute(value) || value.includes('\0'))
+    throw new Error('cmake.invalidProject');
+  const workspace = await fs.realpath(value);
+  if (projectKey(workspace) !== projectKey(root) && !isInside(workspace, root)) throw new Error('cmake.invalidProject');
+  return workspace;
+}
+
+export async function storeProjectWorkspace(storage: string, root: string, workspace: string): Promise<void> {
+  await writeJson(`${configurationFile(storage, root)}.context`, workspace);
 }
 
 export async function loadConfiguration(storage: string, root: string): Promise<CmakeConfiguration> {

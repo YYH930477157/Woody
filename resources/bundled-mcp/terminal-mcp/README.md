@@ -3,11 +3,27 @@
 Runs with the bundled managed Node runtime, with no package installation or network request.
 It needs Node.js 22 or newer for the global `WebSocket` client; bundle verification rejects an older runtime.
 `AIONUI_TERMINAL_PORT` and `AIONUI_TERMINAL_TOKEN` are inherited from Woody at backend startup.
-The private bridge additionally requires a temporary user grant for every operation.
-Select `woody-terminal` when creating a conversation, then grant a connection/profile from
-the terminal panel. Claim a new ticket within five minutes; it then binds to its first
-MCP process and expires on disconnect. Restarting Woody invalidates all tickets.
-Manual takeover cancels AI writes/waits and retains read access for that lease.
+Settings > Tools > AI serial access controls authorization across all chats using
+`woody-terminal`: **Ask** (default) confirms control of a serial connection once per MCP
+connection; **Automatic** allows saved serial profiles without a prompt. The preference
+persists in the terminal profile document. It does not change which tools a chat has loaded.
+
+For serial work, call `terminal_profiles`, then `terminal_open` with a `profileId`, then
+`terminal_read` / `terminal_send` with the returned connection `id`. No ticket is required.
+An existing open serial connection can also be accessed by `connectionId` from `terminal_list`.
+Metadata discovery never opens or probes a device. Requests to control a port already owned
+by another AI are rejected. Prompts expire after one minute and are cancelled on disconnect.
+Switching modes revokes existing policy grants and cancels pending approval requests.
+
+Manual takeover cancels AI writes/waits and blocks automatic reacquisition, including from
+other MCP processes. Click **Allow AI access** in either terminal panel to allow a new
+policy request without a chat ticket or reconnect. Already-issued native writes may still
+complete. Authorized readers can inspect retained history after takeover or disconnect.
+
+Shell access keeps the explicit **Hand to AI** workflow in the conversation terminal panel.
+Legacy tickets remain compatible for both shell and serial: claim within five minutes;
+the ticket binds to its first MCP process and expires on disconnect or Woody restart.
+These explicit grants retain read access after manual takeover.
 
 Native SerialPort and node-pty modules run only in Electron and are packaged separately.
 

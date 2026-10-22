@@ -25,6 +25,140 @@ afterEach(async () => {
 });
 
 describe('workspace CMake discovery', () => {
+  async function settings(source: string) {
+    await fs.mkdir(path.join(workspace, '.vscode'), { recursive: true });
+    await fs.writeFile(path.join(workspace, '.vscode/settings.json'), source);
+  }
+
+  it('honors JSONC sourceDirectory instead of selecting the first root CMakeLists', async () => {
+    await project('.');
+    const nested = await project('firmware/virtual meter');
+    await settings(
+      '{ // existing VS Code configuration\n "cmake.sourceDirectory": "${workspaceFolder}/firmware/virtual meter", }'
+    );
+    expect((await service.discover(workspace)).selectedProjectPath).toBe(nested);
+  });
+
+  it('offers each configured source directory as a separate candidate', async () => {
+    const a = await project('one');
+    const b = await project('two');
+    await project('unrelated');
+    await settings('{"cmake.sourceDirectory": ["one", "${workspaceRoot}/two", "one"]}');
+    expect((await service.discover(workspace)).projects.map((entry) => entry.projectPath)).toEqual([a, b]);
+  });
+
+  it.each(['"${command:chooseSource}"', '"../outside"', '42', '[]', '"missing"'])(
+    'reports an invalid configured source without silently choosing another project: %s',
+    async (value) => {
+      await project('firmware');
+      await settings(`{"cmake.sourceDirectory": ${value}}`);
+      await expect(service.discover(workspace)).rejects.toThrow('cmake.invalidProject');
+    }
+  );
+
+  it('loads workspace variants for a configured nested source and remembers the context after restart', async () => {
+    const nested = await project('firmware');
+    await settings('{"cmake.sourceDirectory": "firmware"}');
+    const variantsFile = path.join(workspace, '.vscode/cmake-variants.yaml');
+    await fs.writeFile(variantsFile, Buffer.from('\ufeffmode: {choices: {sim: {short: Simulator}}}', 'utf16le'));
+    await fs.writeFile(path.join(nested, 'cmake-variants.yaml'), 'mode: {choices: {wrong: {short: Wrong}}}');
+    await service.discover(workspace);
+    const restarted = new CmakeService(path.join(root, 'settings'), { env: { PATH: '' } });
+    try {
+      const found = await restarted.inspect(nested);
+      expect(found.selection).toEqual({ mode: 'sim' });
+      expect(found).toMatchObject({ workspacePath: await fs.realpath(workspace), variantsFile });
+    } finally {
+      await restarted.dispose();
+    }
+  });
+
+  it('reads JSON variants and reports their path', async () => {
+    const nested = await project('firmware');
+    const variantsFile = path.join(workspace, 'cmake-variants.json');
+    await fs.writeFile(variantsFile, JSON.stringify({ mode: { choices: { unit: { short: 'UnitTest' } } } }));
+    const found = await service.inspect(workspace, true);
+    expect(found.selection).toEqual({ mode: 'unit' });
+    expect(found.variantsFile).toBe(variantsFile);
+    expect(found.projectPath).toBe(nested);
+  });
+
+  it('keeps project details and saved selections during a variants error and recovers after repair', async () => {
+    const nested = await project('firmware');
+    const variantsFile = path.join(workspace, 'cmake-variants.yaml');
+    const valid = 'mode: {choices: {sim: {short: Simulator}, unit: {short: UnitTest}}}';
+    await fs.writeFile(variantsFile, valid);
+    const initial = await service.inspect(workspace, true);
+    await service.save(nested, { ...initial.config, selections: { mode: 'unit' } });
+    await fs.writeFile(variantsFile, 'mode: \0 broken');
+    const invalid = await service.inspect(nested);
+    expect(invalid).toMatchObject({
+      projectPath: nested,
+      variantsFile,
+      dimensions: [],
+      config: { selections: { mode: 'unit' } },
+    });
+    expect(invalid.configurationError).toContain(variantsFile);
+    expect(invalid.buildDirectory).toBe('');
+    await service.save(nested, { ...invalid.config, jobs: 3 });
+    await fs.writeFile(variantsFile, valid);
+    expect(await service.inspect(nested)).toMatchObject({ selection: { mode: 'unit' }, config: { jobs: 3 } });
+  });
+
+  it.each(['check', 'configure', 'build', 'test', 'run'] as const)(
+    'rejects %s with invalid workspace variants before starting any process',
+    async (action) => {
+      const nested = await project('firmware');
+      await fs.writeFile(path.join(workspace, 'cmake-variants.yaml'), 'mode: \0 invalid');
+      await service.discover(workspace);
+      await expect(service.start(nested, action)).rejects.toThrow('cmake.invalidVariants');
+      expect(await fs.readdir(nested)).toEqual(['CMakeLists.txt']);
+    }
+  );
+
+  it('blocks debugger launch on invalid workspace variants', async () => {
+    const nested = await project('firmware');
+    await fs.writeFile(path.join(workspace, 'cmake-variants.yaml'), 'mode: \0 invalid');
+    await service.discover(workspace);
+    await expect(service.acquireDebugTarget(nested)).rejects.toThrow('cmake.invalidVariants');
+  });
+
+  it('retains the panel when individually valid dimensions conflict', async () => {
+    const nested = await project('firmware');
+    await fs.writeFile(
+      path.join(workspace, 'cmake-variants.yaml'),
+      'a: {choices: {x: {settings: {MODE: one}}}}\nb: {choices: {x: {settings: {MODE: two}}}}'
+    );
+    const found = await service.inspect(workspace, true);
+    expect(found.projectPath).toBe(nested);
+    expect(found.configurationError).toContain('cmake.variantConflict');
+    await expect(service.start(nested, 'build')).rejects.toThrow('cmake.variantConflict');
+  });
+
+  it('retains choices so a conflicting saved combination can be repaired in the panel', async () => {
+    const nested = await project('firmware');
+    await fs.writeFile(
+      path.join(workspace, 'cmake-variants.yaml'),
+      'a: {choices: {x: {settings: {MODE: one}}}}\nb: {choices: {ok: {settings: {MODE: one}}, conflict: {settings: {MODE: two}}}}'
+    );
+    const initial = await service.inspect(workspace, true);
+    const invalid = await service.save(nested, { ...initial.config, selections: { b: 'conflict' } });
+    expect(invalid.configurationError).toContain('cmake.variantConflict');
+    expect(invalid.dimensions).toHaveLength(2);
+    expect(invalid.selection).toEqual({ a: 'x', b: 'conflict' });
+    const repaired = await service.save(nested, { ...invalid.config, selections: { b: 'ok' } });
+    expect(repaired.configurationError).toBeUndefined();
+  });
+
+  it('uses a deterministic variants priority and never falls back past an invalid preferred file', async () => {
+    await project('firmware');
+    await fs.writeFile(path.join(workspace, 'cmake-variants.yaml'), 'mode: \0 invalid');
+    await fs.writeFile(path.join(workspace, 'cmake-variants.json'), '{"mode":{"choices":{"sim":{"short":"OK"}}}}');
+    const found = await service.inspect(workspace, true);
+    expect(found.variantsFile).toBe(path.join(workspace, 'cmake-variants.yaml'));
+    expect(found.configurationError).toContain('cmake.invalidVariants');
+  });
+
   it('automatically selects the only detected project without configuring or building', async () => {
     const nested = await project('firmware');
     const found = await service.discover(workspace);
