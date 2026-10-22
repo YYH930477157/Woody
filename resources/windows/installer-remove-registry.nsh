@@ -163,6 +163,17 @@
   StrCpy $AionUiCurrentOutDir "$TEMP"
 
   ${if} ${isUpdated}
+    ; Older installers staged the previous version beside $INSTDIR under this fixed name. Reclaim it when present;
+    ; it is no longer removed as part of the atomic swap, so it would otherwise linger forever.
+    StrCpy $AionUiAtomicStagingDir "$INSTDIR.__old"
+    ${If} ${FileExists} "$AionUiAtomicStagingDir\*.*"
+      StrCpy $AionUiRemoveResidueRoot "$AionUiAtomicStagingDir"
+      !insertmacro AIONUI_LOG_EVENT "remove-stale-staging start root=$AionUiRemoveResidueRoot"
+      !insertmacro AIONUI_REMOVE_INSTALL_DIR
+      StrCpy $AionUiRemoveResidueRoot "$INSTDIR"
+    ${EndIf}
+    StrCpy $AionUiAtomicStagingDir ""
+
     aionui_retry_atomic_rename:
       !insertmacro AIONUI_STAGE_INSTALL_DIR
     ${if} $AionUiAtomicMoveError != 0

@@ -74,7 +74,11 @@ describe('build-with-builder', () => {
     const script = readFileSync(resolve(repoRoot, 'resources/windows/installer-remove-registry.nsh'), 'utf8');
     expect(script).toContain('!macro AIONUI_STAGE_INSTALL_DIR');
     expect(script).toContain('GetTempFileName $AionUiAtomicStagingDir');
-    expect(script).not.toContain('StrCpy $AionUiAtomicStagingDir "$INSTDIR.__old"');
+    // The fixed __old name is only reclaimed, and always before the swap picks its own unique staging name.
+    const legacyCleanup = script.indexOf('StrCpy $AionUiAtomicStagingDir "$INSTDIR.__old"');
+    expect(legacyCleanup).toBeGreaterThan(-1);
+    expect(script.slice(legacyCleanup)).toContain('remove-stale-staging');
+    expect(legacyCleanup).toBeLessThan(script.indexOf('aionui_retry_atomic_rename:'));
     const failure = script.match(/aionui_continue_atomic_failed:([\s\S]*?)\$\{else\}/)?.[1];
     expect(failure).toBeTruthy();
     expect(failure).not.toContain('AIONUI_CLEAR_INSTALL_REGISTRY');
