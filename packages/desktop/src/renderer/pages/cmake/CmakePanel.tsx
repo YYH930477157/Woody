@@ -16,6 +16,7 @@ import {
 import { Config, Copy, Tool, Pause, Play, Refresh, Save, TestTube } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import type { CmakeAction } from '@/common/types/cmake';
+import { deepEqual } from '@/common/utils/deepEqual';
 import CmakeSettings from './CmakeSettings';
 import CmakeRecovery from './CmakeRecovery';
 import CmakeTools from './CmakeTools';
@@ -37,12 +38,16 @@ export default function CmakePanel({ projectPath }: { projectPath: string }) {
     setLogOpen(job?.status === 'running' || job?.status === 'failed');
   }, [job?.id, job?.status]);
   const toolChecks = project?.toolChecks;
-  const toolsChanged = !!draft && !!project && JSON.stringify(draft.tools) !== JSON.stringify(project.config.tools);
-  const toolsReady = !toolsChanged && toolChecks?.length === 5 && toolChecks.every((tool) => tool.status === 'found');
+  const toolsChanged = !!draft && !!project && !deepEqual(draft.tools, project.config.tools);
+  const toolsReady =
+    !toolsChanged &&
+    !!draft &&
+    toolChecks?.length === Object.keys(draft.tools).length &&
+    toolChecks.every((tool) => tool.status === 'found');
   const toolsBlocked = !toolsChanged && toolChecks?.some((tool) => tool.status !== 'found');
   const changeProject = (action: () => void) => {
     if (locked) return;
-    if (draft && project && JSON.stringify(draft) !== JSON.stringify(project.config)) {
+    if (draft && project && !deepEqual(draft, project.config)) {
       setProjectChange(() => action);
     } else action();
   };
@@ -306,7 +311,7 @@ export default function CmakePanel({ projectPath }: { projectPath: string }) {
                         {t('tools.cmake.buildDirectory')}: {job.buildDirectory}
                       </div>
                     )}
-                    {job.selection && (
+                    {Object.keys(job.selection ?? {}).length > 0 && (
                       <div className={styles.path}>
                         {Object.entries(job.selection)
                           .map(([name, choice]) => `${name}=${choice}`)

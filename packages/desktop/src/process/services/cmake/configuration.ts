@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import type { CmakeConfiguration, CmakeTools } from '@/common/types/cmake';
+import { powerShellExecutableName } from './workspace/powershell';
 import { isPrivateEnvironment, type ResolvedVariants } from './variants';
 
 export function defaultConfiguration(): CmakeConfiguration {
@@ -65,7 +66,9 @@ export function normalizeConfiguration(input: CmakeConfiguration): CmakeConfigur
     !['auto', 'direct', 'powershell'].includes(read.mode) ||
     !['auto', 'utf-8', 'gb18030', 'utf-16le', 'utf-16be'].includes(read.encoding) ||
     !validString(read.powershellPath) ||
-    (read.powershellPath !== '' && (!path.isAbsolute(read.powershellPath) || !/\.exe$/i.test(read.powershellPath)))
+    (read.powershellPath !== '' &&
+      (!path.isAbsolute(read.powershellPath) ||
+        path.basename(read.powershellPath).toLowerCase() !== powerShellExecutableName))
   )
     throw new Error('cmake.invalidConfiguration: reader settings');
   return structuredClone(config);

@@ -36,9 +36,12 @@ try {
 } finally { if ($null -ne $stream) { $stream.Dispose() } }
 `;
 
+/** The only executable the reader may start; saved paths must match this name exactly. */
+export const powerShellExecutableName = process.platform === 'win32' ? 'pwsh.exe' : 'pwsh';
+
 /** Resolve only a native PowerShell executable; never use cmd, scripts, or shell lookup. */
 export async function resolvePowerShell(saved: string, env: NodeJS.ProcessEnv): Promise<string> {
-  const name = process.platform === 'win32' ? 'pwsh.exe' : 'pwsh';
+  const name = powerShellExecutableName;
   if (saved && (!path.isAbsolute(saved) || saved.includes('\0') || path.basename(saved).toLowerCase() !== name))
     throw new Error('cmake.readPowerShellMissing');
   const variable = (variableName: string) =>
