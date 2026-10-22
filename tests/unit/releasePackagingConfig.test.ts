@@ -22,6 +22,15 @@ function yamlBlock(content: string, key: string): string {
 }
 
 describe('release packaging configuration', () => {
+  it('ships the bindings runtime dependency of better-sqlite3 unpacked', () => {
+    const config = readProjectFile('packages/desktop/electron-builder.yml');
+
+    // `bindings` requires `file-uri-to-path` at load time; without it the packaged addon throws
+    // "Cannot find module 'file-uri-to-path'" before the first query.
+    expect(yamlBlock(config, 'files')).toContain('node_modules/file-uri-to-path/**/*');
+    expect(yamlBlock(config, 'asarUnpack')).toContain('**/node_modules/file-uri-to-path/**/*');
+  });
+
   it('keeps mac zip artifacts enabled', () => {
     const config = readProjectFile('packages/desktop/electron-builder.yml');
     const macBlock = yamlBlock(config, 'mac');
