@@ -102,7 +102,7 @@ const tools = [
   ),
   tool(
     'open',
-    'Open or reuse a saved serial profile by profileId. Woody asks the user or grants access automatically according to Settings > Tools. Do not ask for a ticket. After approval use the returned connection id for read/send/close. Shell opening still requires an explicit Hand to AI ticket.',
+    'Open or reuse a saved serial profile by profileId. Woody asks the user or grants access automatically according to Settings > Tools. Do not ask for a ticket. After approval use the returned connection id for read/send/close. Reusing a port the user already has open only observes it; control moves to the AI on the first send. Shell opening still requires an explicit Hand to AI ticket.',
     { profileId: string },
     []
   ),

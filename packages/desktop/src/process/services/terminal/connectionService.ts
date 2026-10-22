@@ -422,6 +422,7 @@ export class TerminalConnectionService {
     if (Boolean(request.connectionId) === Boolean(request.profile)) {
       throw new Error('Grant must select one connection or profile');
     }
+    if (request.readOnly && !request.connectionId) throw new Error('Read-only grants must select one connection');
     const profile = request.profile ? cloneProfile(request.profile) : undefined;
     const state = request.connectionId ? this.connection(request.connectionId) : undefined;
     if (state?.info.status === 'closed') throw new Error('Terminal connection is closed');
@@ -436,7 +437,7 @@ export class TerminalConnectionService {
       }
     }
     if (this.grants.size >= 256) throw new Error('Terminal grant limit reached');
-    if (state) {
+    if (state && !request.readOnly) {
       state.info.owner = 'ai';
       state.info.aiAccessBlocked = false;
     }
@@ -446,7 +447,7 @@ export class TerminalConnectionService {
       createdAt: Date.now(),
       conversationId: request.conversationId,
       ...(profile ? { profile } : { connectionId: request.connectionId }),
-      canWrite: true,
+      canWrite: !request.readOnly,
     });
     return { ticket };
   }

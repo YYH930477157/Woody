@@ -320,6 +320,26 @@ describe('temporary terminal capabilities', () => {
     expect([transport.writes.length, transport.interrupts]).toEqual([1, 1]);
   });
 
+  it('lets a read-only grant observe without taking control or writing', async () => {
+    const { service, transport, id } = await setup();
+    const { ticket } = service.grant({ connectionId: id, conversationId: 'chat', readOnly: true });
+    const actor = { ticket, leaseId: 'lease' };
+    service.claim(ticket, 'lease');
+    expect(service.read(id, 0, 1024, actor).events).toBeDefined();
+    await expect(service.send(id, text('ai'), actor)).rejects.toThrow();
+    await service.send(id, text('manual'));
+    expect([service.list()[0].owner, transport.writes.map((bytes) => bytes.toString())]).toEqual([
+      'manual',
+      ['manual'],
+    ]);
+  });
+
+  it('rejects a read-only grant for a profile that has not been opened', async () => {
+    const { service } = await setup();
+    const profile = service.list()[0].profile;
+    expect(() => service.grant({ profile, conversationId: 'chat', readOnly: true })).toThrow();
+  });
+
   it('rechecks ownership before a previously queued manual write reaches the adapter', async () => {
     const { service, transport, id } = await setup();
     const blocked = deferred<number>();

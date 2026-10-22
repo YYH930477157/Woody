@@ -74,7 +74,13 @@ export type TerminalSendResult = {
   error?: string;
   wait?: { status: TerminalWaitStatus; data: string; byteLength: number; truncated: boolean };
 };
-export type TerminalGrantRequest = { connectionId?: string; profile?: TerminalProfile; conversationId: string };
+export type TerminalGrantRequest = {
+  connectionId?: string;
+  profile?: TerminalProfile;
+  conversationId: string;
+  /** Observe an open connection without taking control away from manual input. */
+  readOnly?: boolean;
+};
 export type TerminalCapability = {
   ticket: string;
   conversationId: string;
