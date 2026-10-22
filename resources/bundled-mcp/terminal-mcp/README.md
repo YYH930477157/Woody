@@ -11,6 +11,8 @@ persists in the terminal profile document. It does not change which tools a chat
 For serial work, call `terminal_profiles`, then `terminal_open` with a `profileId`, then
 `terminal_read` / `terminal_send` with the returned connection `id`. No ticket is required.
 An existing open serial connection can also be accessed by `connectionId` from `terminal_list`.
+Reading, or opening a port that is already open, only observes it: manual input keeps working
+until the AI first sends, cancels, interrupts or closes, and one approval covers both steps.
 Metadata discovery never opens or probes a device. Requests to control a port already owned
 by another AI are rejected. Prompts expire after one minute and are cancelled on disconnect.
 Switching modes revokes existing policy grants and cancels pending approval requests.

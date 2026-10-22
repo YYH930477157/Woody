@@ -204,15 +204,50 @@ describe('bundled terminal MCP with shared desktop connections', () => {
     expect(value(reused).id).toBe(connection.id);
   });
 
-  it('does not let another AI take an actively controlled serial port', async () => {
-    const { mcp, rpc, service } = await setup('auto');
-    await mcp.call('tools/call', { name: 'terminal_open', arguments: { profileId: 'device' } });
+  it('lets another AI observe but not take an actively controlled serial port', async () => {
+    const { mcp, rpc, service, sent } = await setup('auto');
+    const connection = value(
+      await mcp.call('tools/call', { name: 'terminal_open', arguments: { profileId: 'device' } })
+    );
     const other = client(rpc.port, rpc.token);
     children.push(other.process);
-    expect(
-      (await other.call('tools/call', { name: 'terminal_open', arguments: { profileId: 'device' } })).isError
-    ).toBe(true);
-    expect(service.list()).toHaveLength(1);
+    const attached = await other.call('tools/call', { name: 'terminal_open', arguments: { profileId: 'device' } });
+    const takeover = await other.call('tools/call', {
+      name: 'terminal_send',
+      arguments: { connectionId: connection.id, send: { data: 'AA', encoding: 'hex', ending: 'none' } },
+    });
+    expect([attached.isError, takeover.isError, sent.length, service.list().length]).toEqual([undefined, true, 0, 1]);
+    expect(failure(takeover)).toContain('terminal.accessBusy');
+  });
+
+  it('reads a manually used serial port without pausing manual input', async () => {
+    const { mcp, service } = await setup('auto');
+    const connection = await service.open(profile);
+    const read = await mcp.call('tools/call', { name: 'terminal_read', arguments: { connectionId: connection.id } });
+    expect([read.isError, service.list()[0].owner]).toEqual([undefined, 'manual']);
+    await expect(service.send(connection.id, { data: 'AA', encoding: 'hex', ending: 'none' })).resolves.toMatchObject({
+      status: 'completed',
+    });
+  });
+
+  it('takes control on the first AI write after a read without asking twice', async () => {
+    let asks = 0;
+    const { mcp, service, sent } = await setup('ask', async () => {
+      asks++;
+      return true;
+    });
+    const connection = await service.open(profile);
+    await mcp.call('tools/call', { name: 'terminal_read', arguments: { connectionId: connection.id } });
+    const send = await mcp.call('tools/call', {
+      name: 'terminal_send',
+      arguments: { connectionId: connection.id, send: { data: 'AA', encoding: 'hex', ending: 'none' } },
+    });
+    expect([send.isError, asks, service.list()[0].owner, sent.map((bytes) => bytes.toString('hex'))]).toEqual([
+      undefined,
+      1,
+      'ai',
+      ['aa'],
+    ]);
   });
 
   it('asks again after switching automatic access back to ask', async () => {
