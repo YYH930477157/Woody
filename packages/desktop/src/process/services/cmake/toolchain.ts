@@ -13,8 +13,12 @@ async function executable(candidates: string[]): Promise<string> {
   return '';
 }
 
-/** Resolve manual paths, companion tools, then PATH; no shell lookup is involved. */
-export async function resolveTools(config: CmakeTools, env: NodeJS.ProcessEnv): Promise<CmakeTools> {
+/** Resolve tools strictly, or collect independent failures for an inspection-only caller. */
+export async function resolveTools(
+  config: CmakeTools,
+  env: NodeJS.ProcessEnv,
+  errors?: Partial<Record<keyof CmakeTools, string>>
+): Promise<CmakeTools> {
   const directories = (Object.entries(env).find(([key]) => key.toLowerCase() === 'path')?.[1] ?? '')
     .split(path.delimiter)
     .filter(Boolean)
@@ -33,11 +37,25 @@ export async function resolveTools(config: CmakeTools, env: NodeJS.ProcessEnv): 
     );
     return executable(candidates);
   };
-  const cmake = await resolve(config.cmake, ['cmake']);
-  const cCompiler = await resolve(config.cCompiler, ['gcc']);
-  const ctest = await resolve(config.ctest, ['ctest'], cmake ? [path.dirname(cmake)] : []);
-  const cxxCompiler = await resolve(config.cxxCompiler, ['g++'], cCompiler ? [path.dirname(cCompiler)] : []);
-  const make = await resolve(config.make, ['mingw32-make', 'make'], cCompiler ? [path.dirname(cCompiler)] : []);
+  const checked = async (name: keyof CmakeTools, names: string[], companions: string[] = []): Promise<string> => {
+    try {
+      return await resolve(config[name], names, companions);
+    } catch (error) {
+      if (!errors) throw error;
+      const cause = error as NodeJS.ErrnoException;
+      errors[name] = cause.message?.startsWith('cmake.toolPath:')
+        ? 'cmake.toolPath'
+        : ['EACCES', 'EPERM'].includes(cause.code ?? '')
+          ? 'cmake.readDenied'
+          : 'cmake.readFailed';
+      return config[name];
+    }
+  };
+  const cmake = await checked('cmake', ['cmake']);
+  const cCompiler = await checked('cCompiler', ['gcc']);
+  const ctest = await checked('ctest', ['ctest'], cmake ? [path.dirname(cmake)] : []);
+  const cxxCompiler = await checked('cxxCompiler', ['g++'], cCompiler ? [path.dirname(cCompiler)] : []);
+  const make = await checked('make', ['mingw32-make', 'make'], cCompiler ? [path.dirname(cCompiler)] : []);
   return { cmake, ctest, cCompiler, cxxCompiler, make };
 }
 
@@ -46,7 +64,10 @@ export async function requireTools(tools: CmakeTools, names: (keyof CmakeTools)[
     if (!tools[name] || !(await executable([tools[name]]))) throw new Error(`cmake.toolNotFound: ${name}`);
 }
 
-export async function toolIdentity(tools: CmakeTools): Promise<Record<string, string>> {
+export async function toolIdentity(
+  tools: CmakeTools,
+  errors?: Partial<Record<keyof CmakeTools, string>>
+): Promise<Record<string, string>> {
   const identities: Record<string, string> = {};
   for (const [name, file] of Object.entries(tools)) {
     if (!file) continue;
@@ -54,7 +75,10 @@ export async function toolIdentity(tools: CmakeTools): Promise<Record<string, st
       const stat = await fs.stat(file);
       identities[name] = `${stat.size}:${stat.mtimeMs}`;
     } catch (error) {
-      if (!['ENOENT', 'ENOTDIR'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error;
+      const code = (error as NodeJS.ErrnoException).code ?? '';
+      if (['ENOENT', 'ENOTDIR'].includes(code)) continue;
+      if (!errors) throw error;
+      errors[name as keyof CmakeTools] = ['EACCES', 'EPERM'].includes(code) ? 'cmake.readDenied' : 'cmake.readFailed';
     }
   }
   return identities;

@@ -7,6 +7,8 @@ import CmakePanel from '@/renderer/pages/cmake/CmakePanel';
 const mocks = vi.hoisted(() => ({
   discover: vi.fn(),
   inspect: vi.fn(),
+  reload: vi.fn(),
+  revealConfiguration: vi.fn(),
   save: vi.fn(),
   start: vi.fn(),
   read: vi.fn(),
@@ -45,6 +47,7 @@ beforeEach(() => {
     selectedProjectPath: project.projectPath,
   });
   mocks.inspect.mockResolvedValue(project);
+  mocks.reload.mockResolvedValue(project);
   mocks.aiEnabled.mockResolvedValue(false);
   mocks.debug.mockResolvedValue({});
   mocks.debugAiEnabled.mockResolvedValue(false);
@@ -77,6 +80,166 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 describe('CMake build panel', () => {
+  it('shows the root directory name instead of a dot and keeps idle logs collapsed', async () => {
+    mocks.discover.mockResolvedValue({
+      workspacePath: project.projectPath,
+      projects: [{ projectPath: project.projectPath, relativePath: '.' }],
+      selectedProjectPath: project.projectPath,
+    });
+    render(<CmakePanel projectPath={project.projectPath} />);
+    await screen.findByRole('button', { name: 'tools.cmake.build' });
+    expect(screen.getByRole('heading', { name: 'meter' })).toBeInTheDocument();
+    expect(screen.queryByText('tools.cmake.noOutput')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'tools.cmake.cancel' })).not.toBeInTheDocument();
+  });
+  it('keeps unverified tool paths collapsed while tool inspection stays available', async () => {
+    render(<CmakePanel projectPath={project.projectPath} />);
+    await screen.findByRole('button', { name: 'tools.cmake.check' });
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('tools.cmake.toolPathColumn'));
+    expect(screen.getByRole('table')).toBeInTheDocument();
+  });
+  it('shows verified canonical tool paths even when they differ from saved path spelling', async () => {
+    mocks.inspect.mockResolvedValue({
+      ...project,
+      config: { ...project.config, tools: { ...project.config.tools, cmake: 'D:/alias/cmake.exe' } },
+      toolChecks: [{ name: 'cmake', path: 'D:\\real-tools\\cmake.exe', status: 'found', version: '3.29' }],
+    });
+    render(<CmakePanel projectPath={project.projectPath} />);
+    fireEvent.click(await screen.findByText('tools.cmake.toolPathColumn'));
+    expect(screen.getByText('tools.cmake.toolFound')).toBeInTheDocument();
+    expect(screen.getByText('D:\\real-tools\\cmake.exe')).toBeInTheDocument();
+  });
+  it('checks tools while invalid variants block builds', async () => {
+    mocks.inspect.mockResolvedValue({ ...project, configurationError: 'cmake.invalidVariants: broken' });
+    render(<CmakePanel projectPath={project.projectPath} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'tools.cmake.check' }));
+    await waitFor(() =>
+      expect(mocks.start).toHaveBeenCalledWith({
+        projectPath: project.projectPath,
+        action: 'check',
+        selection: {},
+      })
+    );
+  });
+  it('clears a previous tool readiness report after saving a different executable', async () => {
+    const toolChecks = Object.keys(project.config.tools).map((name) => ({
+      name,
+      path: `D:/tools/${name}.exe`,
+      status: 'found',
+      version: '1.2',
+    }));
+    const checked = {
+      ...project,
+      toolChecks,
+      latestJob: {
+        id: 'checked',
+        projectPath: project.projectPath,
+        action: 'check',
+        status: 'succeeded',
+        startedAt: '',
+        buildDirectory: '',
+        selection: {},
+        toolChecks,
+      },
+    };
+    mocks.inspect.mockResolvedValue(checked);
+    mocks.read.mockResolvedValue({ job: checked.latestJob, output: 'versions', cursor: 8, truncated: false });
+    render(<CmakePanel projectPath={project.projectPath} />);
+    await screen.findByText('tools.cmake.toolsReady');
+    fireEvent.click(screen.getByText('tools.cmake.settings'));
+    fireEvent.change(screen.getByRole('textbox', { name: 'tools.cmake.cmakePath' }), {
+      target: { value: 'D:/new/cmake.exe' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'tools.cmake.save' }));
+    await waitFor(() => expect(mocks.save).toHaveBeenCalled());
+    expect(screen.getByText('tools.cmake.toolsUnchecked')).toBeInTheDocument();
+  });
+  it('shows failed tool checks with expanded logs and no cancel button', async () => {
+    const failedJob = {
+      id: 'failed-check',
+      projectPath: project.projectPath,
+      action: 'check',
+      status: 'failed',
+      startedAt: '2026-10-22T00:00:00Z',
+      finishedAt: '2026-10-22T00:00:01Z',
+      buildDirectory: '',
+      selection: {},
+      error: 'cmake.toolNotFound',
+      toolChecks: [{ name: 'cmake', path: 'D:/missing.exe', status: 'missing' }],
+    };
+    mocks.inspect.mockResolvedValue({ ...project, latestJob: failedJob, toolChecks: failedJob.toolChecks });
+    mocks.read.mockResolvedValue({ job: failedJob, output: 'version command failed', cursor: 22, truncated: false });
+    render(<CmakePanel projectPath={project.projectPath} />);
+    expect(await screen.findByText('version command failed')).toBeInTheDocument();
+    expect(screen.getByText('tools.cmake.toolsBlocked')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'tools.cmake.cancel' })).not.toBeInTheDocument();
+  });
+  it('keeps edited settings available after an explicit configuration reload fails', async () => {
+    mocks.reload.mockRejectedValue(new Error('cmake.configurationReadTimeout'));
+    render(<CmakePanel projectPath={project.projectPath} />);
+    fireEvent.click(await screen.findByText('tools.cmake.settings'));
+    fireEvent.change(screen.getByRole('textbox', { name: 'tools.cmake.cmakePath' }), {
+      target: { value: 'D:/custom/cmake.exe' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'tools.cmake.reloadConfiguration' }));
+    await screen.findByText('tools.cmake.configurationReadTimeout');
+    expect(screen.getByRole('textbox', { name: 'tools.cmake.cmakePath' })).toHaveValue('D:/custom/cmake.exe');
+  });
+  it('reloads a read failure without losing tool edits and removes obsolete choices', async () => {
+    mocks.inspect.mockResolvedValue({
+      ...project,
+      config: { ...project.config, selections: { obsolete: 'old' } },
+      configurationError: 'cmake.invalidVariants: access denied',
+      diagnostic: { kind: 'read', message: 'access denied', file: 'D:/meter/cmake-variants.yaml' },
+    });
+    render(<CmakePanel projectPath={project.projectPath} />);
+    fireEvent.click(await screen.findByText('tools.cmake.settings'));
+    fireEvent.change(screen.getByRole('textbox', { name: 'tools.cmake.cmakePath' }), {
+      target: { value: 'D:/custom/cmake.exe' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'tools.cmake.reloadConfiguration' }));
+    await waitFor(() => expect(mocks.reload).toHaveBeenCalledWith({ projectPath: project.projectPath }));
+    fireEvent.click(screen.getByRole('button', { name: 'tools.cmake.save' }));
+    await waitFor(() =>
+      expect(mocks.save).toHaveBeenCalledWith({
+        projectPath: project.projectPath,
+        config: { ...project.config, tools: { ...project.config.tools, cmake: 'D:/custom/cmake.exe' } },
+      })
+    );
+  });
+  it('saves only reader settings during recovery and preserves unsaved tool edits', async () => {
+    render(<CmakePanel projectPath={project.projectPath} />);
+    fireEvent.click(await screen.findByText('tools.cmake.settings'));
+    fireEvent.change(screen.getByRole('textbox', { name: 'tools.cmake.cmakePath' }), {
+      target: { value: 'D:/unsaved/cmake.exe' },
+    });
+    fireEvent.click(screen.getByText('tools.cmake.readSettings'));
+    fireEvent.change(screen.getByRole('textbox', { name: 'tools.cmake.powershellPath' }), {
+      target: { value: 'D:/pwsh/pwsh.exe' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'tools.cmake.applyReadSettings' }));
+    await waitFor(() => expect(mocks.reload).toHaveBeenCalled());
+    expect(mocks.save).toHaveBeenCalledWith({
+      projectPath: project.projectPath,
+      config: {
+        ...project.config,
+        read: { mode: 'auto', encoding: 'auto', powershellPath: 'D:/pwsh/pwsh.exe' },
+      },
+    });
+    expect(screen.getByRole('textbox', { name: 'tools.cmake.cmakePath' })).toHaveValue('D:/unsaved/cmake.exe');
+  });
+  it('reveals the configuration through the validated project bridge and displays successful reader provenance', async () => {
+    mocks.inspect.mockResolvedValue({
+      ...project,
+      variantsFile: 'D:/meter/cmake-variants.yaml',
+      readInfo: { reader: 'powershell', encoding: 'utf-8', executable: 'D:/pwsh.exe' },
+    });
+    render(<CmakePanel projectPath={project.projectPath} />);
+    await screen.findByText('tools.cmake.effectiveReader');
+    fireEvent.click(screen.getByRole('button', { name: 'tools.cmake.revealConfiguration' }));
+    await waitFor(() => expect(mocks.revealConfiguration).toHaveBeenCalledWith({ projectPath: project.projectPath }));
+  });
   it('recovers removed selections after repairing variants while preserving unsaved tool edits', async () => {
     mocks.inspect.mockResolvedValue({
       ...project,
@@ -112,6 +275,7 @@ describe('CMake build panel', () => {
     });
     render(<CmakePanel projectPath='D:/workspace' />);
     await screen.findByText(/tools.cmake.invalidVariants: broken yaml/);
+    fireEvent.click(screen.getByText('tools.cmake.projectDetails'));
     expect(screen.getByText(/D:\/workspace\/cmake-variants.yaml/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'tools.cmake.build' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'tools.cmake.rescan' })).toBeEnabled();
@@ -365,5 +529,23 @@ describe('CMake build panel', () => {
     expect(await screen.findByRole('button', { name: 'tools.cmake.build' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'tools.cmake.cancel' }));
     await waitFor(() => expect(mocks.cancel).toHaveBeenCalledWith({ jobId: 'ai-job' }));
+  });
+  it('can cancel an externally started job before its first log read completes', async () => {
+    mocks.inspect.mockResolvedValue({
+      ...project,
+      latestJob: {
+        id: 'waiting-for-output',
+        projectPath: project.projectPath,
+        action: 'build',
+        status: 'running',
+        startedAt: '',
+        buildDirectory: project.buildDirectory,
+        selection: {},
+      },
+    });
+    mocks.read.mockReturnValue(new Promise(() => {}));
+    render(<CmakePanel projectPath={project.projectPath} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'tools.cmake.cancel' }));
+    await waitFor(() => expect(mocks.cancel).toHaveBeenCalledWith({ jobId: 'waiting-for-output' }));
   });
 });

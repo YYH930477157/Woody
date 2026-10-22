@@ -14,6 +14,7 @@ export function defaultConfiguration(): CmakeConfiguration {
     timeoutMs: 600000,
     require32Bit: true,
     gdbPath: '',
+    read: { mode: 'auto', encoding: 'auto', powershellPath: '' },
   };
 }
 
@@ -55,6 +56,18 @@ export function normalizeConfiguration(input: CmakeConfiguration): CmakeConfigur
     Object.values(config.selections).some((value) => !validString(value))
   )
     throw new Error('cmake.invalidConfiguration: selections');
+  const read = config.read;
+  if (
+    !read ||
+    typeof read !== 'object' ||
+    Array.isArray(read) ||
+    Object.keys(read).some((key) => !['mode', 'encoding', 'powershellPath'].includes(key)) ||
+    !['auto', 'direct', 'powershell'].includes(read.mode) ||
+    !['auto', 'utf-8', 'gb18030', 'utf-16le', 'utf-16be'].includes(read.encoding) ||
+    !validString(read.powershellPath) ||
+    (read.powershellPath !== '' && (!path.isAbsolute(read.powershellPath) || !/\.exe$/i.test(read.powershellPath)))
+  )
+    throw new Error('cmake.invalidConfiguration: reader settings');
   return structuredClone(config);
 }
 

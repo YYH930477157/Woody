@@ -13,6 +13,14 @@ Tools: `cmake_projects`, `cmake_inspect`, `cmake_start`, `cmake_read`,
 `cmake_cancel`. Starts return job IDs; inspect the job before retrying after a
 connection timeout. GUI and AI share jobs, logs and project locks.
 
+`check` reports each installed tool's executable path and version even when the
+variant configuration cannot be read. It does not configure the project or test
+32-bit linking. `configure` and `build` retain the actual compiler/link probes.
+Project inspection includes configuration diagnostics and the effective reader.
+The desktop's saved reader and encoding settings also apply to MCP calls.
+Automatic reading can retry access/decoding failures through installed PowerShell
+7; this does not rewrite source files or grant encryption-system permissions.
+
 The same MCP exposes `gdb_projects/start/status/stop/pause/continue/next/step/finish`,
 `gdb_breakpointAdd/breakpointRemove`, and `gdb_evaluate/memory/stack/locals`.
 Enable the separate AI debugging switch in the Debug tab. All conversations with

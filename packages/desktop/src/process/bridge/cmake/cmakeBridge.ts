@@ -1,5 +1,6 @@
 import { cmake } from '@/common/adapter/cmake';
 import { z } from 'zod';
+import { shell } from 'electron';
 import { getCmakeRuntime } from '@process/services/cmake/runtime';
 import { jobSchema, projectSchema, startSchema } from './validation';
 import { gdbRequestSchema } from '@process/services/cmake/gdb/validation';
@@ -24,6 +25,15 @@ export function initCmakeBridge(): void {
   cmake.inspect.provider(async (input) => {
     const { projectPath, discover } = projectSchema.extend({ discover: z.boolean().optional() }).parse(input);
     return (await getCmakeRuntime()).service.inspect(projectPath, discover === true);
+  });
+  cmake.reload.provider(async (input) =>
+    (await getCmakeRuntime()).service.reload(projectSchema.strict().parse(input).projectPath)
+  );
+  cmake.revealConfiguration.provider(async (input) => {
+    const file = await (
+      await getCmakeRuntime()
+    ).service.configurationPath(projectSchema.strict().parse(input).projectPath);
+    shell.showItemInFolder(file);
   });
   cmake.save.provider(async (input) => {
     const { projectPath } = projectSchema.parse(input);

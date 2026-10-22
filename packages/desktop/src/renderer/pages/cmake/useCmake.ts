@@ -1,6 +1,26 @@
 import { useEffect, useRef, useState } from 'react';
 import { cmake } from '@/common/adapter/cmake';
-import type { CmakeAction, CmakeConfiguration, CmakeJob, CmakeProject, CmakeWorkspace } from '@/common/types/cmake';
+import type {
+  CmakeAction,
+  CmakeConfiguration,
+  CmakeJob,
+  CmakeProject,
+  CmakeReadOptions,
+  CmakeWorkspace,
+} from '@/common/types/cmake';
+
+function preserveDraft(previous: CmakeConfiguration | undefined, result: CmakeProject) {
+  if (!previous) return result.config;
+  if (result.configurationError) return previous;
+  const selections = Object.fromEntries(
+    Object.entries(previous.selections).filter(([name, id]) =>
+      result.dimensions.some(
+        (dimension) => dimension.name === name && dimension.choices.some((choice) => choice.id === id)
+      )
+    )
+  );
+  return { ...previous, selections };
+}
 
 /** Poll the desktop-owned job without overwriting unsaved form edits. */
 export function useCmake(projectPath: string) {
@@ -45,26 +65,14 @@ export function useCmake(projectPath: string) {
     async function poll() {
       const observed = revision.current;
       try {
+        if (busy.current) return;
         const result = await cmake.inspect.invoke({ projectPath: sourcePath!, discover: false });
         sourcePath = result.projectPath;
         const enabled = await cmake.aiEnabled.invoke({ projectPath: result.projectPath });
         if (stopped || current !== generation.current || observed !== revision.current) return;
         setProject(result);
         setLoadError('');
-        setDraft((previous) => {
-          if (!previous) return result.config;
-          if (result.configurationError) return previous;
-          const selections = Object.fromEntries(
-            Object.entries(previous.selections).filter(([name, id]) =>
-              result.dimensions.some(
-                (dimension) => dimension.name === name && dimension.choices.some((choice) => choice.id === id)
-              )
-            )
-          );
-          return Object.keys(selections).length === Object.keys(previous.selections).length
-            ? previous
-            : { ...previous, selections };
-        });
+        setDraft((previous) => preserveDraft(previous, result));
         setAiEnabled(enabled);
         if (result.latestJob) {
           const id = result.latestJob.id;
@@ -152,6 +160,25 @@ export function useCmake(projectPath: string) {
       }
     });
   }
+  async function reloadConfiguration(read?: CmakeReadOptions) {
+    if (!project) return;
+    const sourcePath = project.projectPath;
+    const current = generation.current;
+    await perform(async () => {
+      if (read) {
+        // Reader recovery must not persist unrelated, unfinished form edits.
+        const saved = await cmake.save.invoke({ projectPath: sourcePath, config: { ...project.config, read } });
+        if (current !== generation.current) return;
+        setProject(saved);
+        setDraft((previous) => (previous ? { ...previous, read: saved.config.read || read } : saved.config));
+      }
+      const result = await cmake.reload.invoke({ projectPath: sourcePath });
+      if (current !== generation.current) return;
+      setProject(result);
+      setLoadError('');
+      setDraft((previous) => preserveDraft(previous, result));
+    });
+  }
   return {
     workspace,
     discovering,
@@ -168,9 +195,16 @@ export function useCmake(projectPath: string) {
     pending,
     aiEnabled,
     saveAndStart,
+    reloadConfiguration,
+    revealConfiguration: () =>
+      perform(async () => {
+        if (project) await cmake.revealConfiguration.invoke({ projectPath: project.projectPath });
+      }),
+    copy: (text: string) => perform(() => navigator.clipboard.writeText(text)),
     cancel: () =>
       perform(async () => {
-        if (job) await cmake.cancel.invoke({ jobId: job.id });
+        const active = job?.status === 'running' ? job : project?.latestJob;
+        if (active?.status === 'running') await cmake.cancel.invoke({ jobId: active.id });
       }),
     setAiEnabled: (enabled: boolean) =>
       perform(async () => {

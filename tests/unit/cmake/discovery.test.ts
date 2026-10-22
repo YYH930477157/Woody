@@ -105,7 +105,7 @@ describe('workspace CMake discovery', () => {
     expect(await service.inspect(nested)).toMatchObject({ selection: { mode: 'unit' }, config: { jobs: 3 } });
   });
 
-  it.each(['check', 'configure', 'build', 'test', 'run'] as const)(
+  it.each(['configure', 'build', 'test', 'run'] as const)(
     'rejects %s with invalid workspace variants before starting any process',
     async (action) => {
       const nested = await project('firmware');

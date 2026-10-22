@@ -2,9 +2,17 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import JSON5 from 'json5';
-import type { CmakeConfiguration, CmakeWorkspace } from '@/common/types/cmake';
-import { defaultConfiguration, normalizeConfiguration } from './configuration';
-import { parseVariants } from './variants';
+import type {
+  CmakeConfiguration,
+  CmakeDiagnostic,
+  CmakeReadInfo,
+  CmakeReadOptions,
+  CmakeWorkspace,
+} from '@/common/types/cmake';
+import { defaultConfiguration, normalizeConfiguration } from '../configuration';
+import { parseVariants } from '../variants';
+import { ConfigurationReader, readBoundedBytes } from './reader';
+export { ConfigurationReader } from './reader';
 
 export const projectKey = (root: string): string => (process.platform === 'win32' ? root.toLowerCase() : root);
 const missing = (error: unknown): boolean => (error as NodeJS.ErrnoException).code === 'ENOENT';
@@ -27,7 +35,11 @@ export async function discoverProject(input: string): Promise<string> {
   return canonicalProject(found.projects[0].projectPath);
 }
 
-export async function discoverProjects(input: string): Promise<CmakeWorkspace> {
+export async function discoverProjects(
+  input: string,
+  reader = new ConfigurationReader(),
+  options?: CmakeReadOptions
+): Promise<CmakeWorkspace> {
   if (typeof input !== 'string' || !input.trim() || input.includes('\0') || !path.isAbsolute(input))
     throw new Error('cmake.invalidProject');
   const root = await fs.realpath(input).catch((error: unknown) => {
@@ -60,7 +72,7 @@ export async function discoverProjects(input: string): Promise<CmakeWorkspace> {
       await visit(child, depth + 1);
     }
   }
-  const configured = await configuredSources(root);
+  const configured = await configuredSources(root, reader, options);
   if (configured) candidates.push(...configured);
   else await visit(root, 0);
   return {
@@ -71,17 +83,22 @@ export async function discoverProjects(input: string): Promise<CmakeWorkspace> {
   };
 }
 
-async function configuredSources(root: string): Promise<string[] | undefined> {
+async function configuredSources(
+  root: string,
+  reader: ConfigurationReader,
+  options?: CmakeReadOptions
+): Promise<string[] | undefined> {
   const file = path.join(root, '.vscode', 'settings.json');
-  let bytes: Buffer;
+  let text: string;
   try {
-    bytes = await readBoundedBytes(file);
+    const canonical = await containedConfiguration(root, file);
+    text = (await reader.read(canonical, options)).text;
   } catch (error) {
     if (missing(error)) return undefined;
     throw new Error(`cmake.invalidProject: ${file}`, { cause: error });
   }
   try {
-    const settings: unknown = JSON5.parse(decodeVariants(bytes, file));
+    const settings: unknown = JSON5.parse(text);
     if (!settings || typeof settings !== 'object' || Array.isArray(settings)) throw new Error('expected settings');
     const value = (settings as Record<string, unknown>)['cmake.sourceDirectory'];
     if (value === undefined) return undefined;
@@ -103,8 +120,7 @@ async function configuredSources(root: string): Promise<string[] | undefined> {
     }
     return [...directories.values()];
   } catch (cause) {
-    const detail = cause instanceof Error ? cause.message : String(cause);
-    throw new Error(`cmake.invalidProject: ${file} [cmake.sourceDirectory]\n${detail}`, { cause });
+    throw new Error(`cmake.invalidProject: ${file} [cmake.sourceDirectory]`, { cause });
   }
 }
 
@@ -112,35 +128,24 @@ export async function readBounded(file: string, limit = 262144): Promise<string>
   return (await readBoundedBytes(file, limit)).toString('utf8');
 }
 
-async function readBoundedBytes(file: string, limit = 262144): Promise<Buffer> {
-  const handle = await fs.open(file, 'r');
-  try {
-    if ((await handle.stat()).size > limit) throw new Error('cmake.fileTooLarge');
-    const buffer = Buffer.alloc(limit + 1);
-    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
-    if (bytesRead > limit) throw new Error('cmake.fileTooLarge');
-    return buffer.subarray(0, bytesRead);
-  } finally {
-    await handle.close();
-  }
-}
-
-function decodeVariants(bytes: Buffer, file: string): string {
-  // Windows editors can save YAML as UTF-16; honor its BOM before parsing.
-  let encoding = 'utf-8';
-  if (bytes[0] === 0xff && bytes[1] === 0xfe) encoding = 'utf-16le';
-  else if (bytes[0] === 0xfe && bytes[1] === 0xff) encoding = 'utf-16be';
-  try {
-    return new TextDecoder(encoding, { fatal: true }).decode(bytes);
-  } catch (cause) {
-    throw new Error(`cmake.invalidVariants: ${file} (${encoding})`, { cause });
-  }
+async function containedConfiguration(root: string, file: string): Promise<string> {
+  const [realRoot, realFile] = await Promise.all([fs.realpath(root), fs.realpath(file)]);
+  if (!isInside(realRoot, realFile)) throw new Error('cmake.readPath');
+  return realFile;
 }
 
 export async function loadVariantConfiguration(
   root: string,
-  workspace = root
-): Promise<{ dimensions: ReturnType<typeof parseVariants>; file?: string; error?: string }> {
+  workspace = root,
+  options?: CmakeReadOptions,
+  reader = new ConfigurationReader()
+): Promise<{
+  dimensions: ReturnType<typeof parseVariants>;
+  file?: string;
+  error?: string;
+  diagnostic?: CmakeDiagnostic;
+  readInfo?: CmakeReadInfo;
+}> {
   for (const directory of new Set([workspace, root])) {
     for (const file of [
       'cmake-variants.yaml',
@@ -151,29 +156,67 @@ export async function loadVariantConfiguration(
       '.vscode/cmake-variants.json',
     ]) {
       const absolute = path.join(directory, file);
-      let bytes: Buffer;
+      let result: Awaited<ReturnType<ConfigurationReader['read']>>;
       try {
-        bytes = await readBoundedBytes(absolute);
+        const canonical = await containedConfiguration(directory, absolute);
+        result = await reader.read(canonical, options);
       } catch (cause) {
         if (missing(cause)) continue;
-        return { dimensions: [], file: absolute, error: variantError(cause, absolute) };
+        const diagnostic = configurationDiagnostic(cause, absolute, 'read');
+        return { dimensions: [], file: absolute, error: variantError(diagnostic, absolute), diagnostic };
       }
       try {
-        const text = decodeVariants(bytes, absolute);
+        const text = result.text;
         const source = file.endsWith('.json') ? JSON.stringify(JSON5.parse(text)) : text;
-        return { dimensions: parseVariants(source), file: absolute };
+        return { dimensions: parseVariants(source), file: absolute, readInfo: result.info };
       } catch (cause) {
-        return { dimensions: [], file: absolute, error: variantError(cause, absolute) };
+        const diagnostic = configurationDiagnostic(cause, absolute);
+        return {
+          dimensions: [],
+          file: absolute,
+          error: variantError(diagnostic, absolute),
+          diagnostic,
+          readInfo: result.info,
+        };
       }
     }
   }
   return { dimensions: parseVariants(undefined) };
 }
 
-function variantError(cause: unknown, file: string): string {
-  const message = cause instanceof Error ? cause.message : String(cause);
-  const detail = message.startsWith('cmake.') ? message : `cmake.invalidVariants: ${message}`;
-  return `${detail.includes(':') ? detail : `${detail}:`}\n${file}`;
+/** Preserve parser locations but never include YAML snippets or JSON source tokens. */
+export function configurationDiagnostic(
+  cause: unknown,
+  file: string,
+  kind: CmakeDiagnostic['kind'] = 'syntax'
+): CmakeDiagnostic {
+  const error = cause as {
+    diagnostic?: CmakeDiagnostic;
+    message?: string;
+    mark?: { line: number; column: number };
+    lineNumber?: number;
+    columnNumber?: number;
+  };
+  if (error?.diagnostic) return { ...error.diagnostic, file };
+  const message =
+    typeof error?.message === 'string' && /^cmake\.[A-Za-z]+(?:$|:)/.test(error.message)
+      ? error.message
+      : 'cmake.invalidVariants';
+  return {
+    kind: message.startsWith('cmake.unsupportedVariants')
+      ? 'unsupported'
+      : message.startsWith('cmake.variantConflict')
+        ? 'conflict'
+        : kind,
+    message,
+    file,
+    ...(error?.mark ? { line: error.mark.line + 1, column: error.mark.column + 1 } : {}),
+    ...(Number.isInteger(error?.lineNumber) ? { line: error.lineNumber, column: error.columnNumber } : {}),
+  };
+}
+
+function variantError(diagnostic: CmakeDiagnostic, file: string): string {
+  return `${diagnostic.kind === 'read' ? 'cmake.invalidVariants: ' : ''}${diagnostic.message}\n${file}`;
 }
 
 export async function loadDimensions(root: string): Promise<ReturnType<typeof parseVariants>> {

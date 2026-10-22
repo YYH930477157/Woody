@@ -29,7 +29,7 @@ const tools = [
   ),
   tool(
     'start',
-    'Start one check/configure/build/test/run job using the shared desktop service. Build configures first. Run uses only the executable and arguments saved in the panel; this is not register inspection. Read returned job ID until terminal status. Do not repeat a timed-out start without inspecting latestJob.',
+    'Start one check/configure/build/test/run job using the shared desktop service. Check only reports installed tool paths and versions, works with unreadable variants, ignores variant selections, and does not prove 32-bit compilation support. Configure and build validate compiler linking; build configures first. Run uses only the executable and arguments saved in the panel; this is not register inspection. Read returned job ID until terminal status. Do not repeat a timed-out start without inspecting latestJob.',
     {
       projectPath: string,
       operation: { type: 'string', enum: ['check', 'configure', 'build', 'test', 'run'] },

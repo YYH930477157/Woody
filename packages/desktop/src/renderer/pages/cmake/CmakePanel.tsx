@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Button,
@@ -13,10 +13,12 @@ import {
   Tabs,
   Tooltip,
 } from '@arco-design/web-react';
-import { Check, Config, Tool, Pause, Play, Refresh, Save, TestTube } from '@icon-park/react';
+import { Config, Copy, Tool, Pause, Play, Refresh, Save, TestTube } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import type { CmakeAction } from '@/common/types/cmake';
 import CmakeSettings from './CmakeSettings';
+import CmakeRecovery from './CmakeRecovery';
+import CmakeTools from './CmakeTools';
 import { useCmake } from './useCmake';
 import { useGdb } from './useGdb';
 import GdbPanel from './GdbPanel';
@@ -30,6 +32,14 @@ export default function CmakePanel({ projectPath }: { projectPath: string }) {
   const running = job?.status === 'running' || project?.latestJob?.status === 'running';
   const locked = running || pending || debug.active || debug.pending || state.discovering;
   const [projectChange, setProjectChange] = useState<() => void>();
+  const [logOpen, setLogOpen] = useState(false);
+  useEffect(() => {
+    setLogOpen(job?.status === 'running' || job?.status === 'failed');
+  }, [job?.id, job?.status]);
+  const toolChecks = project?.toolChecks;
+  const toolsChanged = !!draft && !!project && JSON.stringify(draft.tools) !== JSON.stringify(project.config.tools);
+  const toolsReady = !toolsChanged && toolChecks?.length === 5 && toolChecks.every((tool) => tool.status === 'found');
+  const toolsBlocked = !toolsChanged && toolChecks?.some((tool) => tool.status !== 'found');
   const changeProject = (action: () => void) => {
     if (locked) return;
     if (draft && project && JSON.stringify(draft) !== JSON.stringify(project.config)) {
@@ -41,9 +51,8 @@ export default function CmakePanel({ projectPath }: { projectPath: string }) {
     return match ? t(`tools.${match[1]}` as 'tools.cmake.failed', { defaultValue: match[1] }) + (match[2] || '') : text;
   };
   const actions: Array<[CmakeAction, React.ReactNode]> = [
-    ['check', <Check key='check' />],
-    ['configure', <Config key='configure' />],
     ['build', <Tool key='build' />],
+    ['configure', <Config key='configure' />],
     ['test', <TestTube key='test' />],
     ['run', <Play key='run' />],
   ];
@@ -66,24 +75,39 @@ export default function CmakePanel({ projectPath }: { projectPath: string }) {
         {t('tools.cmake.discardChanges')}
       </Modal>
       <div className={styles.projectSelector}>
-        <Select
-          aria-label={t('tools.cmake.project')}
-          placeholder={t('tools.cmake.selectProject')}
-          value={state.workspace?.selectedProjectPath}
-          loading={state.discovering}
-          disabled={locked || !state.workspace?.projects.length}
-          onChange={(value: string) => {
-            const selected = state.workspace?.projects.find((candidate) => candidate.projectPath === value);
-            if (selected && value !== state.workspace?.selectedProjectPath)
-              changeProject(() => state.selectProject(selected.relativePath));
-          }}
-          options={
-            state.workspace?.projects.map((candidate) => ({
-              label: candidate.relativePath,
-              value: candidate.projectPath,
-            })) || []
-          }
-        />
+        {project && state.workspace?.projects.length === 1 ? (
+          <h2 className={styles.projectTitle}>
+            {project.projectPath
+              .replace(/[\\/]+$/, '')
+              .split(/[\\/]/)
+              .pop() || project.projectPath}
+          </h2>
+        ) : (
+          <Select
+            aria-label={t('tools.cmake.project')}
+            placeholder={t('tools.cmake.selectProject')}
+            value={state.workspace?.selectedProjectPath}
+            loading={state.discovering}
+            disabled={locked || !state.workspace?.projects.length}
+            onChange={(value: string) => {
+              const selected = state.workspace?.projects.find((candidate) => candidate.projectPath === value);
+              if (selected && value !== state.workspace?.selectedProjectPath)
+                changeProject(() => state.selectProject(selected.relativePath));
+            }}
+            options={
+              state.workspace?.projects.map((candidate) => ({
+                label:
+                  candidate.relativePath === '.'
+                    ? candidate.projectPath
+                        .replace(/[\\/]+$/, '')
+                        .split(/[\\/]/)
+                        .pop() || candidate.projectPath
+                    : candidate.relativePath,
+                value: candidate.projectPath,
+              })) || []
+            }
+          />
+        )}
         <Tooltip content={t('tools.cmake.rescan')}>
           <Button
             icon={<Refresh />}
@@ -114,17 +138,20 @@ export default function CmakePanel({ projectPath }: { projectPath: string }) {
             />
           ) : null}
           <div className={styles.header}>
-            <div className={styles.path}>
-              <div>
-                {t('tools.cmake.workspaceDirectory')}:{' '}
-                {project.workspacePath || state.workspace?.workspacePath || projectPath}
-              </div>
-              <div>
-                {t('tools.cmake.sourceDirectory')}: {project.projectPath}
-              </div>
-              <div>
-                {t('tools.cmake.variantsFile')}: {project.variantsFile || t('tools.cmake.defaultVariants')}
-              </div>
+            <div className={styles.readiness}>
+              <Tag color='green'>{t('tools.cmake.projectReady')}</Tag>
+              <Tag color={project.configurationError ? 'red' : 'green'}>
+                {t(project.configurationError ? 'tools.cmake.configurationBlocked' : 'tools.cmake.configurationReady')}
+              </Tag>
+              <Tag color={toolsReady ? 'green' : toolsBlocked ? 'red' : undefined}>
+                {t(
+                  toolsReady
+                    ? 'tools.cmake.toolsReady'
+                    : toolsBlocked
+                      ? 'tools.cmake.toolsBlocked'
+                      : 'tools.cmake.toolsUnchecked'
+                )}
+              </Tag>
             </div>
             <label className={styles.access}>
               <span>{t('tools.cmake.aiAccess')}</span>
@@ -138,18 +165,57 @@ export default function CmakePanel({ projectPath }: { projectPath: string }) {
               />
             </label>
           </div>
-          {project.configurationError && (
-            <Alert type='error' className={styles.path} content={errorText(project.configurationError)} />
-          )}
+          <Collapse bordered={false}>
+            <Collapse.Item name='project' header={t('tools.cmake.projectDetails')}>
+              <div className={styles.path}>
+                {t('tools.cmake.workspaceDirectory')}:{' '}
+                {project.workspacePath || state.workspace?.workspacePath || projectPath}
+              </div>
+              <div className={styles.path}>
+                {t('tools.cmake.sourceDirectory')}: {project.projectPath}
+              </div>
+              <div className={styles.path}>
+                {t('tools.cmake.variantsFile')}: {project.variantsFile || t('tools.cmake.defaultVariants')}
+              </div>
+              {project.buildDirectory && (
+                <div className={styles.path}>
+                  {t('tools.cmake.buildDirectory')}: {project.buildDirectory}
+                </div>
+              )}
+            </Collapse.Item>
+          </Collapse>
+          <CmakeRecovery
+            project={project}
+            draft={draft}
+            disabled={locked}
+            onChange={state.setDraft}
+            onReload={state.reloadConfiguration}
+            onReveal={state.revealConfiguration}
+            onCopy={state.copy}
+            errorText={errorText}
+          />
           <Tabs defaultActiveTab='build'>
             <Tabs.TabPane key='build' title={t('tools.gdb.buildTab')}>
               <div className={styles.panel}>
+                {!!project.dimensions.length && (
+                  <h3 className={styles.sectionTitle}>{t('tools.cmake.buildOptions')}</h3>
+                )}
                 <Form layout='vertical' className={styles.variants}>
                   {project.dimensions.map((dimension) => (
-                    <Form.Item key={dimension.name} label={dimension.label}>
+                    <Form.Item
+                      key={dimension.name}
+                      label={
+                        <span>
+                          {dimension.label}
+                          {dimension.label !== dimension.name && (
+                            <span className={styles.identifier}> {dimension.name}</span>
+                          )}
+                        </span>
+                      }
+                    >
                       <Select
                         aria-label={dimension.label}
-                        disabled={locked}
+                        disabled={locked || !!project.configurationError}
                         value={
                           (running ? (job || project.latestJob)?.selection?.[dimension.name] : undefined) ??
                           draft.selections[dimension.name] ??
@@ -162,6 +228,7 @@ export default function CmakePanel({ projectPath }: { projectPath: string }) {
                         {dimension.choices.map((choice) => (
                           <Select.Option key={choice.id} value={choice.id}>
                             {choice.label}
+                            {choice.label !== choice.id && <span className={styles.identifier}> {choice.id}</span>}
                           </Select.Option>
                         ))}
                       </Select>
@@ -182,21 +249,27 @@ export default function CmakePanel({ projectPath }: { projectPath: string }) {
                       {t(`tools.cmake.${action}`)}
                     </Button>
                   ))}
-                  <Button
-                    icon={<Pause />}
-                    disabled={!running || pending}
-                    onClick={() => {
-                      void state.cancel();
-                    }}
-                  >
-                    {t('tools.cmake.cancel')}
-                  </Button>
-                  {job && (
-                    <Tag color={job.status === 'failed' ? 'red' : job.status === 'succeeded' ? 'green' : undefined}>
-                      {t(`tools.cmake.${job.action}`)} · {t(`tools.cmake.${job.status}`)}
-                    </Tag>
+                  {running && (
+                    <Button
+                      icon={<Pause />}
+                      disabled={!running || pending}
+                      onClick={() => {
+                        void state.cancel();
+                      }}
+                    >
+                      {t('tools.cmake.cancel')}
+                    </Button>
                   )}
                 </div>
+                {!draft.runExecutable && <div className={styles.muted}>{t('tools.cmake.runMissingExecutable')}</div>}
+                <CmakeTools
+                  checks={toolsChanged ? undefined : toolChecks}
+                  tools={draft.tools}
+                  disabled={locked}
+                  invalid={!!project.configurationError}
+                  onCheck={() => state.saveAndStart('check')}
+                  errorText={errorText}
+                />
                 <Collapse bordered={false}>
                   <Collapse.Item header={t('tools.cmake.settings')} name='settings'>
                     <CmakeSettings value={draft} onChange={state.setDraft} disabled={locked} />
@@ -211,21 +284,62 @@ export default function CmakePanel({ projectPath }: { projectPath: string }) {
                     </Button>
                   </Collapse.Item>
                 </Collapse>
-                <div className={styles.path}>
-                  {t('tools.cmake.buildDirectory')}: {job?.buildDirectory || project.buildDirectory}
-                </div>
-                {job?.selection && (
-                  <div className={styles.path}>
-                    {Object.entries(job.selection)
-                      .map(([name, choice]) => `${name}=${choice}`)
-                      .join(' · ')}
-                  </div>
+                {job && (
+                  <section className={styles.section}>
+                    <div className={styles.header}>
+                      <h3 className={styles.sectionTitle}>{t('tools.cmake.result')}</h3>
+                      <Tag color={job.status === 'failed' ? 'red' : job.status === 'succeeded' ? 'green' : undefined}>
+                        {t(`tools.cmake.${job.action}`)} · {t(`tools.cmake.${job.status}`)}
+                      </Tag>
+                    </div>
+                    {job.finishedAt && Number.isFinite(Date.parse(job.startedAt)) && (
+                      <div className={styles.muted}>
+                        {t('tools.cmake.duration', {
+                          seconds: Math.max(0, (Date.parse(job.finishedAt) - Date.parse(job.startedAt)) / 1000).toFixed(
+                            1
+                          ),
+                        })}
+                      </div>
+                    )}
+                    {job.buildDirectory && (
+                      <div className={styles.path}>
+                        {t('tools.cmake.buildDirectory')}: {job.buildDirectory}
+                      </div>
+                    )}
+                    {job.selection && (
+                      <div className={styles.path}>
+                        {Object.entries(job.selection)
+                          .map(([name, choice]) => `${name}=${choice}`)
+                          .join(' · ')}
+                      </div>
+                    )}
+                    {job.error && <Alert type='error' content={errorText(job.error)} />}
+                    <Collapse
+                      bordered={false}
+                      activeKey={logOpen ? ['output'] : []}
+                      onChange={(keys) => setLogOpen(keys.includes('output'))}
+                    >
+                      <Collapse.Item name='output' header={t('tools.cmake.output')}>
+                        <div className={styles.logTools}>
+                          <Tooltip content={t('tools.cmake.copyOutput')}>
+                            <Button
+                              icon={<Copy />}
+                              aria-label={t('tools.cmake.copyOutput')}
+                              disabled={!state.output || pending}
+                              onClick={() => {
+                                void state.copy(state.output);
+                              }}
+                            />
+                          </Tooltip>
+                        </div>
+                        {state.truncated && <Alert type='warning' content={t('tools.cmake.truncated')} />}
+                        <pre className={styles.output} aria-label={t('tools.cmake.output')} tabIndex={0}>
+                          {state.output || t('tools.cmake.noOutput')}
+                        </pre>
+                      </Collapse.Item>
+                    </Collapse>
+                  </section>
                 )}
-                {job?.error && <Alert type='error' content={errorText(job.error)} />}
-                {state.truncated && <Alert type='warning' content={t('tools.cmake.truncated')} />}
-                <pre className={styles.output} aria-label={t('tools.cmake.output')} tabIndex={0}>
-                  {state.output || t('tools.cmake.noOutput')}
-                </pre>
               </div>
             </Tabs.TabPane>
             <Tabs.TabPane key='debug' title={t('tools.gdb.debugTab')}>

@@ -37,6 +37,8 @@ export const cmake = {
   debugAiEnabled: provider<boolean, ProjectInput>('cmake.debug-ai-enabled'),
   setDebugAiEnabled: provider<void, ProjectInput & { enabled: boolean }>('cmake.set-debug-ai-enabled'),
   inspect: provider<CmakeProject, ProjectInput & { discover?: boolean }>('cmake.inspect'),
+  reload: provider<CmakeProject, ProjectInput>('cmake.reload'),
+  revealConfiguration: provider<void, ProjectInput>('cmake.reveal-configuration'),
   save: provider<CmakeProject, ProjectInput & { config: CmakeConfiguration }>('cmake.save'),
   start: provider<CmakeJob, ProjectInput & { action: CmakeAction; selection?: Record<string, string> }>('cmake.start'),
   read: provider<CmakeJobRead, { jobId: string; cursor?: number }>('cmake.read'),
