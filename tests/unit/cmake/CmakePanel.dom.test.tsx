@@ -277,6 +277,32 @@ describe('CMake build panel', () => {
     );
   });
 
+  it('repairs a conflicting saved combination from the build options', async () => {
+    const choice = (id: string, mode: string) => ({ id, label: id, settings: { MODE: mode }, env: {} });
+    const dimensions = [
+      { name: 'board', label: 'Board', defaultChoice: 'meter', choices: [choice('meter', 'one')] },
+      { name: 'mode', label: 'Mode', defaultChoice: 'ok', choices: [choice('ok', 'one'), choice('clash', 'two')] },
+    ];
+    mocks.inspect.mockResolvedValue({
+      ...project,
+      dimensions,
+      config: { ...project.config, selections: { mode: 'clash' } },
+      selection: { board: 'meter', mode: 'clash' },
+      configurationError: 'cmake.variantConflict: setting conflict MODE',
+      diagnostic: { kind: 'conflict', message: 'cmake.variantConflict: setting conflict MODE' },
+    });
+    render(<CmakePanel projectPath={project.projectPath} />);
+    const selector = await screen.findByRole('combobox', { name: 'Mode' });
+    fireEvent.click(selector);
+    fireEvent.click(await screen.findByText('ok'));
+    fireEvent.click(screen.getByRole('button', { name: 'tools.cmake.build' }));
+    await waitFor(() =>
+      expect(mocks.save).toHaveBeenCalledWith({
+        projectPath: project.projectPath,
+        config: { ...project.config, selections: { mode: 'ok' } },
+      })
+    );
+  });
   it('keeps project paths and settings visible when variants fail, but blocks build and debug launch', async () => {
     mocks.inspect.mockResolvedValue({
       ...project,
