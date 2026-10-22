@@ -52,7 +52,8 @@ export async function startTerminalRpc(
 ): Promise<{ port: number; token: string; close: () => Promise<void> }> {
   const token = randomBytes(32).toString('hex');
   const server = createServer((_request, response) => response.writeHead(404).end());
-  const sockets = new WebSocketServer({ noServer: true, maxPayload: 256 * 1024 });
+  // terminalSendSchema allows 192 KiB of data plus a 64 KiB pattern in one request; JSON escaping needs headroom.
+  const sockets = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 });
   server.on('upgrade', (request, socket, head) => {
     const url = new URL(request.url || '/', 'http://127.0.0.1');
     const candidate = url.searchParams.get('token') || '';

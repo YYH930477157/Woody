@@ -119,6 +119,7 @@ describe('bundled terminal MCP with shared desktop connections', () => {
   }
   const value = (response: Record<string, unknown>) =>
     JSON.parse((response.content as Array<{ text: string }>)[0].text);
+  const failure = (response: Record<string, unknown>) => (response.content as Array<{ text: string }>)[0].text;
 
   it('opens a saved serial profile and sends without a ticket in automatic mode', async () => {
     const { mcp, sent } = await setup('auto');
@@ -182,9 +183,10 @@ describe('bundled terminal MCP with shared desktop connections', () => {
     const other = client(rpc.port, rpc.token);
     children.push(other.process);
     for (const requester of [mcp, other]) {
-      expect(
-        (await requester.call('tools/call', { name: 'terminal_open', arguments: { profileId: 'device' } })).isError
-      ).toBe(true);
+      const blocked = await requester.call('tools/call', { name: 'terminal_open', arguments: { profileId: 'device' } });
+      expect(blocked.isError).toBe(true);
+      // A stable code lets the agent tell a policy refusal apart from a transport or device failure.
+      expect(failure(blocked)).toContain('terminal.aiAccessBlocked');
     }
     expect(service.list()).toHaveLength(1);
   });
