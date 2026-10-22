@@ -14,12 +14,15 @@ export type TerminalProfile =
       xoff: boolean;
     };
 
+export type TerminalSerialAccessMode = 'ask' | 'auto';
 export type TerminalActor = { ticket: string; leaseId: string };
 export type TerminalConnection = {
   id: string;
   profile: TerminalProfile;
   status: 'open' | 'closed';
   owner: 'manual' | 'ai';
+  /** Automatic access cannot reclaim this connection after a manual takeover. */
+  aiAccessBlocked?: boolean;
   createdAt: number;
   error?: string;
 };

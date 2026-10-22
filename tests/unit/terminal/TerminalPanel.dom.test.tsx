@@ -3,9 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { TerminalConnection, TerminalProfile, TerminalSendResult } from '@/common/types/terminal';
 import TerminalPanel from '../../../packages/desktop/src/renderer/pages/terminal/TerminalPanel';
+import SerialAccessSettings from '../../../packages/desktop/src/renderer/pages/settings/ToolsSettings/SerialAccessSettings';
 
 const mocks = vi.hoisted(() => ({
   owner: 'ai' as 'ai' | 'manual',
+  aiAccessBlocked: false,
+  resumeAi: vi.fn().mockResolvedValue(undefined),
   send: vi.fn().mockResolvedValue({ status: 'completed', writtenBytes: 3 }),
   takeover: vi.fn().mockResolvedValue(undefined),
   profiles: [] as TerminalProfile[],
@@ -16,6 +19,8 @@ const mocks = vi.hoisted(() => ({
   report: vi.fn(),
   setSelectedId: vi.fn(),
   refreshConnections: vi.fn(),
+  accessMode: vi.fn().mockResolvedValue('ask'),
+  setAccessMode: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'zh-CN' } }),
@@ -23,8 +28,11 @@ vi.mock('react-i18next', () => ({
 vi.mock('../../../packages/desktop/src/common', () => ({
   ipcBridge: {
     terminal: {
+      serialAccessMode: { invoke: mocks.accessMode },
+      setSerialAccessMode: { invoke: mocks.setAccessMode },
       send: { invoke: mocks.send },
       takeover: { invoke: mocks.takeover },
+      resumeAi: { invoke: mocks.resumeAi },
       saveProfile: { invoke: mocks.saveProfile },
       open: { invoke: mocks.open },
       close: { invoke: mocks.close },
@@ -50,6 +58,7 @@ vi.mock('../../../packages/desktop/src/renderer/pages/terminal/useTerminal', () 
     selected: {
       id: 'shared-device',
       owner: mocks.owner,
+      aiAccessBlocked: mocks.aiAccessBlocked,
       status: 'open',
       createdAt: 1,
       profile: {
@@ -72,11 +81,37 @@ vi.mock('../../../packages/desktop/src/renderer/pages/terminal/useTerminal', () 
 const input = () => screen.getByRole('textbox', { name: 'tools.terminal.input' });
 const sendButton = () => screen.getByRole('button', { name: 'tools.terminal.send' });
 
+describe('global serial access settings', () => {
+  beforeEach(() => {
+    mocks.accessMode.mockReset().mockResolvedValue('ask');
+    mocks.setAccessMode.mockReset().mockResolvedValue(undefined);
+  });
+  afterEach(cleanup);
+  it('loads the global mode and saves automatic authorization', async () => {
+    render(<SerialAccessSettings />);
+    const auto = await screen.findByRole('radio', { name: 'tools.terminal.accessAuto' });
+    await waitFor(() => expect(auto).toBeEnabled());
+    fireEvent.click(auto);
+    await waitFor(() => expect(mocks.setAccessMode).toHaveBeenCalledWith({ mode: 'auto' }));
+    await waitFor(() => expect(auto).toBeChecked());
+  });
+  it('preserves the old mode and displays an error when saving fails', async () => {
+    mocks.setAccessMode.mockRejectedValue(new Error('disk full'));
+    render(<SerialAccessSettings />);
+    const auto = await screen.findByRole('radio', { name: 'tools.terminal.accessAuto' });
+    await waitFor(() => expect(auto).toBeEnabled());
+    fireEvent.click(auto);
+    expect(await screen.findByText('tools.terminal.accessSettingsError')).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'tools.terminal.accessAsk' })).toBeChecked();
+  });
+});
+
 describe('manual terminal controls', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
     mocks.owner = 'ai';
+    mocks.aiAccessBlocked = false;
     mocks.profiles = [];
     mocks.connections = [];
     mocks.send.mockReset().mockResolvedValue({ status: 'completed', writtenBytes: 3 });
@@ -90,6 +125,13 @@ describe('manual terminal controls', () => {
     });
   });
   afterEach(cleanup);
+  it('can resume global AI access after takeover without a conversation', async () => {
+    mocks.owner = 'manual';
+    mocks.aiAccessBlocked = true;
+    render(<TerminalPanel />);
+    fireEvent.click(screen.getByRole('button', { name: 'tools.terminal.resumeAi' }));
+    await waitFor(() => expect(mocks.resumeAi).toHaveBeenCalledWith({ id: 'shared-device' }));
+  });
   it('keeps manual send disabled while AI controls the connection', () => {
     render(<TerminalPanel conversationId='chat' />);
     fireEvent.change(input(), { target: { value: '7E' } });

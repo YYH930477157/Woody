@@ -75,6 +75,25 @@ afterEach(async () => {
 });
 
 describe('CMake workbench service', () => {
+  it('uses workspace variants for actual configure arguments after selecting a nested source', async () => {
+    const calls: ProcessRequest[] = [];
+    const instance = await service(async (request) => {
+      calls.push(request);
+      return normalRunner(request);
+    });
+    await fs.writeFile(
+      path.join(root, 'cmake-variants.json'),
+      JSON.stringify({
+        meter: { choices: { unit: { settings: { UNIT_TEST: true, METER: '3P4W_CT' } } } },
+      })
+    );
+    await instance.discover(root);
+    const job = await instance.start(project, 'build');
+    expect((await finish(instance, job.id)).job.status).toBe('succeeded');
+    const configure = calls.find((call) => call.args.includes('-G'))!;
+    expect(configure.args).toContain('-DUNIT_TEST=ON');
+    expect(configure.args).toContain('-DMETER=3P4W_CT');
+  });
   it('configures and builds the source root discovered inside a workspace', async () => {
     const calls: ProcessRequest[] = [];
     const instance = await service(async (request) => {
@@ -112,6 +131,25 @@ describe('CMake workbench service', () => {
     const instance = await service();
     await expect(instance.acquireDebugTarget(project)).rejects.toThrow('cmake.notConfigured');
     await expect(instance.save(project, (await instance.inspect(project)).config)).resolves.toBeDefined();
+  });
+
+  it('allows reopening the same workspace during a running build but rejects rebinding it', async () => {
+    const instance = await service(
+      async (request) =>
+        new Promise((_resolve, reject) => {
+          request.signal.addEventListener('abort', () => reject(new Error('cmake.cancelled')), { once: true });
+          if (request.signal.aborted) reject(new Error('cmake.cancelled'));
+        })
+    );
+    await instance.discover(root);
+    const job = await instance.start(project, 'check');
+    try {
+      expect((await instance.discover(root)).selectedProjectPath).toBe(await fs.realpath(project));
+      expect((await instance.inspect(project)).latestJob?.id).toBe(job.id);
+      await expect(instance.discover(project)).rejects.toThrow('cmake.busy');
+    } finally {
+      await instance.cancel(job.id);
+    }
   });
   it('persists configuration outside the project and restores it in a new service', async () => {
     const first = await service();

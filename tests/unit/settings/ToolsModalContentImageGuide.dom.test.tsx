@@ -91,6 +91,10 @@ vi.mock('@/renderer/services/clientBusinessSettings', () => ({
 
 vi.mock('@/common/adapter/ipcBridge', () => ({
   mcpService: {},
+  terminal: {
+    serialAccessMode: { invoke: vi.fn().mockResolvedValue('ask') },
+    setSerialAccessMode: { invoke: vi.fn().mockResolvedValue(undefined) },
+  },
 }));
 
 import ToolsModalContent from '@/renderer/components/settings/SettingsModal/contents/ToolsModalContent';

@@ -60,6 +60,10 @@
     "noOutput": "デバッグ出力はありません。"
   },
   "cmake": {
+    "workspaceDirectory": "ワークスペースディレクトリ",
+    "sourceDirectory": "CMake ソースディレクトリ",
+    "variantsFile": "バリアントファイル",
+    "defaultVariants": "既定の Debug / Release",
     "project": "CMake プロジェクト",
     "selectProject": "CMake プロジェクトを選択",
     "rescan": "プロジェクトを再検出",
@@ -195,6 +199,16 @@
     "delete": "削除"
   },
   "terminal": {
+    "resumeAi": "AI アクセスを許可",
+    "accessTitle": "AI シリアルアクセス",
+    "accessAsk": "確認する",
+    "accessAuto": "自動許可",
+    "accessScope": "woody-terminal を使うすべてのチャットに適用します。接続の制御前に確認するか、保存済みシリアル設定を自動許可します。Shell は別途許可が必要です。",
+    "accessSettingsError": "シリアルアクセス設定を読み込みまたは保存できませんでした。",
+    "accessPrompt": "AI にこのシリアル接続の制御を許可しますか？",
+    "accessDetails": "{{name}}\nポート: {{port}} | ボーレート: {{baud}} | {{dataBits}} / {{parity}} / {{stopBits}}\n接続、読み取り、データ送信、切断を許可します。手動操作に切り替えると AI の書き込みを停止します。",
+    "accessDeny": "拒否",
+    "accessAllow": "許可",
     "title": "Terminal & Serial",
     "name": "Profile name",
     "kind": "Connection type",

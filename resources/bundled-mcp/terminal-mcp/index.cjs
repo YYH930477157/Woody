@@ -55,7 +55,7 @@ async function request(action, args) {
     const timer = setTimeout(() => {
       pending.delete(id);
       reject(new Error('Terminal request timed out; do not automatically resend device data'));
-    }, 125000);
+    }, 185000);
     pending.set(id, { resolve, reject, timer });
     socket.send(JSON.stringify({ ...args, id, action }));
   });
@@ -64,7 +64,8 @@ async function request(action, args) {
 const string = { type: 'string' };
 const ticket = {
   type: 'string',
-  description: 'Temporary ticket sent only to this chat by the user. Never invent a ticket or chat ID.',
+  description:
+    'Optional legacy Hand to AI grant, mainly for shell connections. Serial access uses Woody Settings > Tools authorization automatically; never ask the user to supply or invent a ticket.',
 };
 function tool(action, description, properties, required) {
   return {
@@ -73,7 +74,7 @@ function tool(action, description, properties, required) {
     inputSchema: {
       type: 'object',
       properties: { ticket, ...properties },
-      required: ['ticket', ...required],
+      required,
       additionalProperties: false,
     },
   };
@@ -82,13 +83,29 @@ const connection = { connectionId: string };
 const tools = [
   tool(
     'claim',
-    'Claim the user-provided ticket in this MCP process. Returns authorized connection/profile and control state.',
+    'Claim an explicit Hand to AI ticket already delivered by Woody. For serial connections use terminal_profiles then terminal_open instead; never ask the user for a ticket.',
+    {},
+    ['ticket']
+  ),
+  tool(
+    'profiles',
+    'List saved serial profiles and their profileId (id field). No ticket required. If empty, ask the user to save a serial configuration in the terminal panel.',
     {},
     []
   ),
-  tool('ports', 'Enumerate local serial ports after user authorization. Does not open or probe devices.', {}, []),
-  tool('list', 'List only connections authorized by this ticket.', {}, []),
-  tool('open', 'Open the exact saved profile authorized by this ticket; cannot override device, shell or cwd.', {}, []),
+  tool('ports', 'Enumerate local serial ports without opening or probing devices. No ticket required.', {}, []),
+  tool(
+    'list',
+    'List serial connection metadata without a ticket. Reading or writing uses the global authorization setting. With an explicit ticket, list only its scoped connection.',
+    {},
+    []
+  ),
+  tool(
+    'open',
+    'Open or reuse a saved serial profile by profileId. Woody asks the user or grants access automatically according to Settings > Tools. Do not ask for a ticket. After approval use the returned connection id for read/send/close. Shell opening still requires an explicit Hand to AI ticket.',
+    { profileId: string },
+    []
+  ),
   tool(
     'read',
     'Read raw output with an independent byte cursor. Data is base64; inspect lost/more flags. At most 64 KiB per read.',

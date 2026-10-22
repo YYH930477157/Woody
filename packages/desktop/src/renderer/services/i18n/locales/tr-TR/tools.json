@@ -60,6 +60,10 @@
     "noOutput": "Henüz hata ayıklama çıktısı yok."
   },
   "cmake": {
+    "workspaceDirectory": "Çalışma alanı dizini",
+    "sourceDirectory": "CMake kaynak dizini",
+    "variantsFile": "Varyant dosyası",
+    "defaultVariants": "Varsayılan Debug / Release",
     "project": "CMake projesi",
     "selectProject": "CMake projesi seçin",
     "rescan": "Projeleri yeniden tara",
@@ -195,6 +199,16 @@
     "delete": "sil"
   },
   "terminal": {
+    "resumeAi": "YZ erişimine izin ver",
+    "accessTitle": "YZ seri bağlantı erişimi",
+    "accessAsk": "Sor",
+    "accessAuto": "Otomatik",
+    "accessScope": "woody-terminal kullanan tüm sohbetlere uygulanır. Kontrol öncesi sorar veya kayıtlı seri profillerine otomatik izin verir. Shell ayrı izin gerektirir.",
+    "accessSettingsError": "Seri erişim ayarları yüklenemedi veya kaydedilemedi.",
+    "accessPrompt": "YZ bu seri bağlantıyı kontrol edebilsin mi?",
+    "accessDetails": "{{name}}\nPort: {{port}} | Baud: {{baud}} | {{dataBits}} / {{parity}} / {{stopBits}}\nBağlanma, okuma, gönderme ve kapatmaya izin verir. Manuel kontrol YZ yazmalarını durdurur.",
+    "accessDeny": "Reddet",
+    "accessAllow": "İzin ver",
     "title": "Terminal & Serial",
     "name": "Profile name",
     "kind": "Connection type",

@@ -16,6 +16,22 @@ afterEach(async () => {
 });
 
 describe('TerminalProfileStore', () => {
+  it('defaults to ask and persists global serial access without losing profiles', async () => {
+    const { file, store } = await setup();
+    expect(await store.getSerialAccessMode()).toBe('ask');
+    await store.upsert({ id: 'one', name: 'One', kind: 'shell' });
+    await store.setSerialAccessMode('auto');
+    const reopened = new TerminalProfileStore(file);
+    expect(await reopened.getSerialAccessMode()).toBe('auto');
+    expect(await reopened.list()).toHaveLength(1);
+  });
+
+  it('fails closed on unknown modes and rejects invalid setting writes', async () => {
+    const { file, store } = await setup();
+    await writeFile(file, JSON.stringify({ version: 1, profiles: [], serialAccessMode: 'invalid' }));
+    expect(await store.getSerialAccessMode()).toBe('ask');
+    await expect(store.setSerialAccessMode('invalid' as never)).rejects.toThrow();
+  });
   it('loads no connections at startup and saves additive versioned profiles', async () => {
     const { file, store } = await setup();
     expect(await store.list()).toEqual([]);

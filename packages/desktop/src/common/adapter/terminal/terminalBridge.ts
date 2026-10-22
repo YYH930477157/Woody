@@ -5,6 +5,7 @@ import type {
   TerminalReadResult,
   TerminalSendRequest,
   TerminalSendResult,
+  TerminalSerialAccessMode,
 } from '@/common/types/terminal';
 
 type TerminalReply<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -33,6 +34,8 @@ function terminalProvider<T, P = void>(name: string) {
 }
 
 export const terminal = {
+  serialAccessMode: terminalProvider<TerminalSerialAccessMode>('terminal.serial-access-mode'),
+  setSerialAccessMode: terminalProvider<void, { mode: TerminalSerialAccessMode }>('terminal.set-serial-access-mode'),
   profiles: terminalProvider<TerminalProfile[]>('terminal.profiles'),
   saveProfile: terminalProvider<TerminalProfile, TerminalProfile>('terminal.save-profile'),
   removeProfile: terminalProvider<void, { id: string }>('terminal.remove-profile'),
@@ -43,6 +46,7 @@ export const terminal = {
   send: terminalProvider<TerminalSendResult, { id: string; request: TerminalSendRequest }>('terminal.send'),
   cancel: terminalProvider<void, { id: string }>('terminal.cancel'),
   takeover: terminalProvider<void, { id: string }>('terminal.takeover'),
+  resumeAi: terminalProvider<void, { id: string }>('terminal.resume-ai'),
   interrupt: terminalProvider<void, { id: string }>('terminal.interrupt'),
   close: terminalProvider<void, { id: string }>('terminal.close'),
   setBaud: terminalProvider<TerminalConnection, { id: string; baudRate: number }>('terminal.set-baud'),

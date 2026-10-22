@@ -60,6 +60,10 @@
     "noOutput": "Sin salida de depuración."
   },
   "cmake": {
+    "workspaceDirectory": "Directorio del espacio de trabajo",
+    "sourceDirectory": "Directorio de fuentes CMake",
+    "variantsFile": "Archivo de variantes",
+    "defaultVariants": "Predeterminado Debug / Release",
     "project": "Proyecto CMake",
     "selectProject": "Seleccionar proyecto CMake",
     "rescan": "Volver a buscar proyectos",
@@ -195,6 +199,16 @@
     "delete": "eliminar"
   },
   "terminal": {
+    "resumeAi": "Permitir acceso a la IA",
+    "accessTitle": "Acceso serie de la IA",
+    "accessAsk": "Preguntar",
+    "accessAuto": "Automático",
+    "accessScope": "Se aplica a los chats con woody-terminal. Preguntar antes de tomar el control o permitir automáticamente perfiles serie guardados. Shell requiere un permiso separado.",
+    "accessSettingsError": "No se pudieron cargar o guardar los ajustes de acceso serie.",
+    "accessPrompt": "¿Permitir que la IA controle esta conexión serie?",
+    "accessDetails": "{{name}}\nPuerto: {{port}} | Baudios: {{baud}} | {{dataBits}} / {{parity}} / {{stopBits}}\nPermite conectar, leer, enviar y cerrar. El control manual detiene las escrituras de la IA.",
+    "accessDeny": "Denegar",
+    "accessAllow": "Permitir",
     "title": "Terminal & Serial",
     "name": "Profile name",
     "kind": "Connection type",

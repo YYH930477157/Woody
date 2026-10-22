@@ -60,6 +60,10 @@
     "noOutput": "No debug output yet."
   },
   "cmake": {
+    "workspaceDirectory": "Workspace directory",
+    "sourceDirectory": "CMake source directory",
+    "variantsFile": "Variants file",
+    "defaultVariants": "Default Debug / Release",
     "project": "CMake project",
     "selectProject": "Select a CMake project",
     "rescan": "Rescan projects",
@@ -195,6 +199,16 @@
     "delete": "delete"
   },
   "terminal": {
+    "resumeAi": "Allow AI access",
+    "accessTitle": "AI serial access",
+    "accessAsk": "Ask",
+    "accessAuto": "Automatic",
+    "accessScope": "Applies across chats using woody-terminal. Ask before taking control of a serial connection, or automatically allow saved serial profiles. Shell access still requires a separate grant.",
+    "accessSettingsError": "Could not load or save serial access settings.",
+    "accessPrompt": "Allow AI to control this serial connection?",
+    "accessDetails": "{{name}}\nPort: {{port}} | Baud: {{baud}} | {{dataBits}} / {{parity}} / {{stopBits}}\nAllows connecting, reading, sending data and closing this connection. Manual takeover stops AI writes.",
+    "accessDeny": "Deny",
+    "accessAllow": "Allow",
     "title": "Terminal & Serial",
     "name": "Profile name",
     "kind": "Connection type",

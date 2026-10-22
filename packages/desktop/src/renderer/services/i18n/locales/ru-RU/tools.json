@@ -60,6 +60,10 @@
     "noOutput": "Вывода отладки пока нет."
   },
   "cmake": {
+    "workspaceDirectory": "Каталог рабочей области",
+    "sourceDirectory": "Каталог исходников CMake",
+    "variantsFile": "Файл вариантов",
+    "defaultVariants": "По умолчанию Debug / Release",
     "project": "Проект CMake",
     "selectProject": "Выбрать проект CMake",
     "rescan": "Повторить поиск проектов",
@@ -195,6 +199,16 @@
     "delete": "удалить"
   },
   "terminal": {
+    "resumeAi": "Разрешить доступ ИИ",
+    "accessTitle": "Доступ ИИ к последовательному порту",
+    "accessAsk": "Спрашивать",
+    "accessAuto": "Автоматически",
+    "accessScope": "Для всех чатов с woody-terminal. Запрашивать разрешение перед управлением или автоматически разрешать сохранённые профили портов. Shell требует отдельного разрешения.",
+    "accessSettingsError": "Не удалось загрузить или сохранить настройки доступа к порту.",
+    "accessPrompt": "Разрешить ИИ управлять этим соединением?",
+    "accessDetails": "{{name}}\nПорт: {{port}} | Скорость: {{baud}} | {{dataBits}} / {{parity}} / {{stopBits}}\nРазрешает подключение, чтение, отправку и закрытие. Ручное управление останавливает запись ИИ.",
+    "accessDeny": "Отклонить",
+    "accessAllow": "Разрешить",
     "title": "Terminal & Serial",
     "name": "Profile name",
     "kind": "Connection type",

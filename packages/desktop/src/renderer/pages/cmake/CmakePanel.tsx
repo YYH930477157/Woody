@@ -114,7 +114,18 @@ export default function CmakePanel({ projectPath }: { projectPath: string }) {
             />
           ) : null}
           <div className={styles.header}>
-            <strong className={styles.path}>{project.projectPath}</strong>
+            <div className={styles.path}>
+              <div>
+                {t('tools.cmake.workspaceDirectory')}:{' '}
+                {project.workspacePath || state.workspace?.workspacePath || projectPath}
+              </div>
+              <div>
+                {t('tools.cmake.sourceDirectory')}: {project.projectPath}
+              </div>
+              <div>
+                {t('tools.cmake.variantsFile')}: {project.variantsFile || t('tools.cmake.defaultVariants')}
+              </div>
+            </div>
             <label className={styles.access}>
               <span>{t('tools.cmake.aiAccess')}</span>
               <Switch
@@ -127,6 +138,9 @@ export default function CmakePanel({ projectPath }: { projectPath: string }) {
               />
             </label>
           </div>
+          {project.configurationError && (
+            <Alert type='error' className={styles.path} content={errorText(project.configurationError)} />
+          )}
           <Tabs defaultActiveTab='build'>
             <Tabs.TabPane key='build' title={t('tools.gdb.buildTab')}>
               <div className={styles.panel}>
@@ -160,7 +174,7 @@ export default function CmakePanel({ projectPath }: { projectPath: string }) {
                       key={action}
                       icon={icon}
                       type={action === 'build' ? 'primary' : 'secondary'}
-                      disabled={locked || (action === 'run' && !draft.runExecutable)}
+                      disabled={locked || !!project.configurationError || (action === 'run' && !draft.runExecutable)}
                       onClick={() => {
                         void state.saveAndStart(action);
                       }}
@@ -221,6 +235,7 @@ export default function CmakePanel({ projectPath }: { projectPath: string }) {
                 draft={draft}
                 onChange={state.setDraft}
                 buildBusy={running || pending}
+                configurationInvalid={!!project.configurationError}
               />
             </Tabs.TabPane>
           </Tabs>

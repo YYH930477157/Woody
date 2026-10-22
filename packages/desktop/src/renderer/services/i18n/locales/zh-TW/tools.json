@@ -60,6 +60,10 @@
     "noOutput": "尚無偵錯輸出。"
   },
   "cmake": {
+    "workspaceDirectory": "工作區目錄",
+    "sourceDirectory": "CMake 原始碼目錄",
+    "variantsFile": "變體設定檔",
+    "defaultVariants": "預設 Debug / Release",
     "project": "CMake 專案",
     "selectProject": "請選擇 CMake 專案",
     "rescan": "重新偵測專案",
@@ -195,6 +199,16 @@
     "delete": "刪除"
   },
   "terminal": {
+    "resumeAi": "允許 AI 存取",
+    "accessTitle": "AI 串列埠授權",
+    "accessAsk": "詢問",
+    "accessAuto": "自動授權",
+    "accessScope": "適用於所有使用 woody-terminal 的對話。詢問模式在接管串列埠前確認；自動模式允許使用已儲存的串列埠設定。Shell 終端仍需單獨授權。",
+    "accessSettingsError": "無法讀取或儲存串列埠授權設定。",
+    "accessPrompt": "允許 AI 控制此串列埠連線嗎？",
+    "accessDetails": "{{name}}\n串列埠：{{port}} | 鮑率：{{baud}} | {{dataBits}} / {{parity}} / {{stopBits}}\n允許連線、讀取、傳送資料和關閉此連線。手動接管後停止 AI 寫入。",
+    "accessDeny": "拒絕",
+    "accessAllow": "允許",
     "title": "終端與序列埠",
     "name": "設定名稱",
     "kind": "連線類型",

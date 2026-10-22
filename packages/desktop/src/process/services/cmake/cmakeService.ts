@@ -20,12 +20,13 @@ import type { DebugTarget } from './gdb';
 import {
   buildDirectory,
   canonicalProject,
-  discoverProject,
   discoverProjects,
   loadWorkspaceSelection,
   storeWorkspaceSelection,
   loadConfiguration,
-  loadDimensions,
+  loadVariantConfiguration,
+  loadProjectWorkspace,
+  storeProjectWorkspace,
   projectKey,
   readBounded,
   storeConfiguration,
@@ -73,12 +74,15 @@ export class CmakeService {
     root: string,
     selection?: Record<string, string>,
     override?: CmakeConfiguration,
-    recoverSelections = false
+    recoverSelections = false,
+    allowInvalidVariants = false
   ): Promise<ProjectState> {
     const config = override ?? (await loadConfiguration(this.storagePath, root));
-    const dimensions = await loadDimensions(root);
+    const workspacePath = await loadProjectWorkspace(this.storagePath, root);
+    const loaded = await loadVariantConfiguration(root, workspacePath);
+    const dimensions = loaded.dimensions;
     const invalidSelections: string[] = [];
-    if (recoverSelections) {
+    if (!loaded.error && recoverSelections) {
       for (const [name, id] of Object.entries(config.selections)) {
         const dimension = dimensions.find((candidate) => candidate.name === name);
         if (!dimension?.choices.some((choice) => choice.id === id)) {
@@ -87,15 +91,49 @@ export class CmakeService {
         }
       }
     }
-    const variants = resolveVariants(dimensions, { ...config.selections, ...selection });
+    let variants: ResolvedVariants = { selection: {}, settings: {}, env: {} };
+    if (!loaded.error) {
+      try {
+        variants = resolveVariants(dimensions, { ...config.selections, ...selection });
+      } catch (error) {
+        if (!(error instanceof Error) || !error.message.startsWith('cmake.variantConflict')) throw error;
+        loaded.error = `${error.message}\n${loaded.file || workspacePath}`;
+      }
+    }
+    if (loaded.error && !allowInvalidVariants) throw new Error(loaded.error);
+    const lastId = this.latest.get(projectKey(root));
+    const last = lastId ? this.jobs.get(lastId)?.job : undefined;
+    if (loaded.error) {
+      return {
+        project: {
+          projectPath: root,
+          workspacePath,
+          variantsFile: loaded.file,
+          configurationError: loaded.error,
+          config,
+          dimensions,
+          selection: Object.fromEntries(
+            dimensions.map((dimension) => [
+              dimension.name,
+              config.selections[dimension.name] ?? dimension.defaultChoice,
+            ])
+          ),
+          buildDirectory: '',
+          ...(last ? { latestJob: structuredClone(last) } : {}),
+        },
+        variants: { selection: {}, settings: {}, env: {} },
+        tools: config.tools,
+        hash: '',
+      };
+    }
     const tools = await resolveTools(config.tools, childEnvironment(this.env, variants.env, []));
     const hash = configurationHash(config, variants, tools, await toolIdentity(tools));
     const build = await buildDirectory(root, hash);
-    const lastId = this.latest.get(projectKey(root));
-    const last = lastId ? this.jobs.get(lastId)?.job : undefined;
     return {
       project: {
         projectPath: root,
+        workspacePath,
+        variantsFile: loaded.file,
         config,
         dimensions,
         selection: variants.selection,
@@ -120,13 +158,36 @@ export class CmakeService {
     }
     found.selectedProjectPath =
       candidate?.projectPath ?? (found.projects.length === 1 ? found.projects[0].projectPath : undefined);
+    if (found.selectedProjectPath) {
+      const source = found.selectedProjectPath;
+      const key = projectKey(source);
+      if (this.disposed) throw new Error('cmake.disposed');
+      if (this.locks.has(key)) {
+        const current = await loadProjectWorkspace(this.storagePath, source);
+        if (projectKey(current) !== projectKey(found.workspacePath)) throw new Error('cmake.busy');
+      } else {
+        this.locks.add(key);
+        try {
+          await storeProjectWorkspace(this.storagePath, source, found.workspacePath);
+        } finally {
+          this.locks.delete(key);
+        }
+      }
+    }
     return found;
   }
 
   /** Inspect settings, variants and the latest operation without launching tools. */
   async inspect(projectPath: string, discover = false): Promise<CmakeProject> {
-    const root = await (discover ? discoverProject(projectPath) : canonicalProject(projectPath));
-    return (await this.project(root, undefined, undefined, true)).project;
+    let root: string;
+    if (discover) {
+      const found = await this.discover(projectPath);
+      if (!found.projects.length) throw new Error(`cmake.projectMissing: ${found.workspacePath}`);
+      if (!found.selectedProjectPath)
+        throw new Error(`cmake.ambiguousProject: ${found.projects.map((entry) => entry.relativePath).join(', ')}`);
+      root = found.selectedProjectPath;
+    } else root = await canonicalProject(projectPath);
+    return (await this.project(root, undefined, undefined, true, true)).project;
   }
 
   /** Save validated settings outside the source tree. */
@@ -137,7 +198,7 @@ export class CmakeService {
     if (this.locks.has(key)) throw new Error('cmake.busy');
     this.locks.add(key);
     try {
-      const next = await this.project(root, undefined, normalizeConfiguration(config));
+      const next = await this.project(root, undefined, normalizeConfiguration(config), false, true);
       await storeConfiguration(this.storagePath, root, next.project.config);
       return next.project;
     } finally {

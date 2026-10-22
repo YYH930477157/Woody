@@ -325,6 +325,7 @@ export class TerminalConnectionService {
   takeover(id: string): TerminalConnection {
     const state = this.connection(id);
     state.info.owner = 'manual';
+    state.info.aiAccessBlocked = true;
     for (const grant of this.grants.values()) {
       if (grant.connectionId === id) grant.canWrite = false;
     }
@@ -332,6 +333,15 @@ export class TerminalConnectionService {
       if (operation.actor) operation.cancel('taken-over');
     }
     return this.snapshot(state);
+  }
+
+  /** A UI action may allow future policy requests again without granting a chat ticket. */
+  resumeAiAccess(id: string): void {
+    const state = this.connection(id);
+    if (state.info.profile.kind !== 'serial' || state.info.status !== 'open' || state.info.owner !== 'manual') {
+      throw new Error('terminal.invalidConnection');
+    }
+    state.info.aiAccessBlocked = false;
   }
 
   /** Change baud on an open serial port without dropping the connection. */
@@ -426,7 +436,10 @@ export class TerminalConnectionService {
       }
     }
     if (this.grants.size >= 256) throw new Error('Terminal grant limit reached');
-    if (state) state.info.owner = 'ai';
+    if (state) {
+      state.info.owner = 'ai';
+      state.info.aiAccessBlocked = false;
+    }
     const ticket = randomBytes(32).toString('base64url');
     this.grants.set(ticket, {
       ticket,

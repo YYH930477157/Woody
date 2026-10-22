@@ -60,6 +60,10 @@
     "noOutput": "디버그 출력이 없습니다."
   },
   "cmake": {
+    "workspaceDirectory": "작업 영역 디렉터리",
+    "sourceDirectory": "CMake 소스 디렉터리",
+    "variantsFile": "변형 설정 파일",
+    "defaultVariants": "기본 Debug / Release",
     "project": "CMake 프로젝트",
     "selectProject": "CMake 프로젝트 선택",
     "rescan": "프로젝트 다시 검색",
@@ -195,6 +199,16 @@
     "delete": "삭제"
   },
   "terminal": {
+    "resumeAi": "AI 접근 허용",
+    "accessTitle": "AI 직렬 포트 권한",
+    "accessAsk": "확인",
+    "accessAuto": "자동 허용",
+    "accessScope": "woody-terminal을 사용하는 모든 대화에 적용됩니다. 연결 제어 전에 확인하거나 저장된 직렬 포트 설정을 자동 허용합니다. Shell은 별도 권한이 필요합니다.",
+    "accessSettingsError": "직렬 포트 권한 설정을 읽거나 저장할 수 없습니다.",
+    "accessPrompt": "AI가 이 직렬 연결을 제어하도록 허용할까요?",
+    "accessDetails": "{{name}}\n포트: {{port}} | 전송 속도: {{baud}} | {{dataBits}} / {{parity}} / {{stopBits}}\n연결, 읽기, 데이터 전송 및 연결 종료를 허용합니다. 수동 제어로 전환하면 AI 쓰기가 중지됩니다.",
+    "accessDeny": "거부",
+    "accessAllow": "허용",
     "title": "Terminal & Serial",
     "name": "Profile name",
     "kind": "Connection type",

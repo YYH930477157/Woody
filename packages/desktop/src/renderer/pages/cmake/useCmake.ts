@@ -51,7 +51,20 @@ export function useCmake(projectPath: string) {
         if (stopped || current !== generation.current || observed !== revision.current) return;
         setProject(result);
         setLoadError('');
-        setDraft((previous) => previous ?? result.config);
+        setDraft((previous) => {
+          if (!previous) return result.config;
+          if (result.configurationError) return previous;
+          const selections = Object.fromEntries(
+            Object.entries(previous.selections).filter(([name, id]) =>
+              result.dimensions.some(
+                (dimension) => dimension.name === name && dimension.choices.some((choice) => choice.id === id)
+              )
+            )
+          );
+          return Object.keys(selections).length === Object.keys(previous.selections).length
+            ? previous
+            : { ...previous, selections };
+        });
         setAiEnabled(enabled);
         if (result.latestJob) {
           const id = result.latestJob.id;

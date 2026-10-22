@@ -432,6 +432,12 @@ export default function TerminalPanel({
               }
               onReconnect={reconnect}
               onGrant={grant}
+              onResumeAi={() =>
+                void run(async () => {
+                  await ipcBridge.terminal.resumeAi.invoke({ id: selected.id });
+                  await model.refreshConnections();
+                })
+              }
             />
             {selected.owner === 'ai' && selected.status === 'open' && (
               <div className='shrink-0 flex items-center gap-10px px-16px py-8px bg-primary-light-1 text-13px text-t-primary'>

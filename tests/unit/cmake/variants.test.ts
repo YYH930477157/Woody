@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parseVariants, resolveVariants } from '../../../packages/desktop/src/process/services/cmake/variants';
+import { loadDimensions } from '../../../packages/desktop/src/process/services/cmake/workspace';
 import { configureCommand } from '../../../packages/desktop/src/process/services/cmake/commands';
 import {
   defaultConfiguration,
@@ -34,6 +38,58 @@ meterType:
       settings:
         METER: 2
 `;
+
+describe('CMake variants file encoding', () => {
+  let root: string;
+  const source = yaml.replace('First meter', '\u4e09\u76f8\u7535\u8868');
+  const encodings = [
+    { name: 'UTF-8', bytes: Buffer.from(source) },
+    { name: 'UTF-8 BOM', bytes: Buffer.from('\ufeff' + source) },
+    { name: 'UTF-16LE BOM', bytes: Buffer.from('\ufeff' + source, 'utf16le') },
+    { name: 'UTF-16BE BOM', bytes: Buffer.from('\ufeff' + source, 'utf16le').swap16() },
+  ];
+
+  beforeEach(async () => {
+    root = await fs.mkdtemp(path.join(os.tmpdir(), 'woody-variants-'));
+  });
+  afterEach(async () => {
+    await fs.rm(root, { recursive: true, force: true });
+  });
+
+  for (const filename of [
+    'cmake-variants.yaml',
+    'cmake-variants.yml',
+    '.vscode/cmake-variants.yaml',
+    '.vscode/cmake-variants.yml',
+  ]) {
+    it.each(encodings)(`loads ${filename} in $name without changing variant values`, async ({ bytes }) => {
+      const file = path.join(root, filename);
+      await fs.mkdir(path.dirname(file), { recursive: true });
+      await fs.writeFile(file, bytes);
+      expect(await loadDimensions(root)).toEqual(parseVariants(source));
+      expect(await fs.readFile(file)).toEqual(bytes);
+    });
+  }
+
+  it.each([
+    { name: 'literal NUL', bytes: Buffer.from(yaml.replace('First meter', 'First\0meter')) },
+    { name: 'truncated UTF-16', bytes: Buffer.from('\ufeff' + yaml, 'utf16le').subarray(0, -1) },
+    { name: 'invalid UTF-8', bytes: Buffer.concat([Buffer.from(yaml + '# '), Buffer.from([0xff])]) },
+  ])('rejects $name rather than silently repairing the configuration', async ({ bytes }) => {
+    const file = path.join(root, 'cmake-variants.yaml');
+    await fs.writeFile(file, bytes);
+    await expect(loadDimensions(root)).rejects.toThrow('cmake.invalidVariants');
+    await expect(loadDimensions(root)).rejects.toThrow(file);
+  });
+
+  it('keeps the byte limit for UTF-16 files', async () => {
+    await fs.writeFile(
+      path.join(root, 'cmake-variants.yaml'),
+      Buffer.from('\ufeff' + yaml + '# ' + 'x'.repeat(131072), 'utf16le')
+    );
+    await expect(loadDimensions(root)).rejects.toThrow('cmake.fileTooLarge');
+  });
+});
 
 describe('CMake variants and commands', () => {
   it('keeps YAML values as literal individual command arguments with legacy configure syntax', () => {

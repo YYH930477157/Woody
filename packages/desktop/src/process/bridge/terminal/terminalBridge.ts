@@ -10,6 +10,20 @@ const idSchema = z.object({ id: z.string().min(1).max(128) });
 
 export function initTerminalBridge(): void {
   const api = ipcBridge.terminal;
+  api.serialAccessMode.provider(async () => (await getTerminalRuntime()).profiles.getSerialAccessMode());
+  api.setSerialAccessMode.provider(async (input) => {
+    const { mode } = z
+      .object({ mode: z.enum(['ask', 'auto']) })
+      .strict()
+      .parse(input);
+    const { profiles, access } = await getTerminalRuntime();
+    access.invalidate();
+    try {
+      await profiles.setSerialAccessMode(mode);
+    } finally {
+      access.invalidate();
+    }
+  });
   api.profiles.provider(async () => (await getTerminalRuntime()).profiles.list());
   api.saveProfile.provider(async (profile) => (await getTerminalRuntime()).profiles.upsert(profile));
   api.removeProfile.provider(async (input) => {
@@ -34,6 +48,9 @@ export function initTerminalBridge(): void {
   });
   api.takeover.provider(async (input) => {
     (await getTerminalRuntime()).service.takeover(idSchema.parse(input).id);
+  });
+  api.resumeAi.provider(async (input) => {
+    (await getTerminalRuntime()).access.resume(idSchema.parse(input).id);
   });
   api.interrupt.provider(async (input) => {
     await (await getTerminalRuntime()).service.interrupt(idSchema.parse(input).id);
