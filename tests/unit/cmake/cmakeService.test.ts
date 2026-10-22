@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CmakeService } from '../../../packages/desktop/src/process/services/cmake/cmakeService';
 import type { ProcessRequest, ProcessRunner } from '../../../packages/desktop/src/process/services/cmake/processRunner';
 import type { CmakeJobRead } from '../../../packages/desktop/src/common/types/cmake';
@@ -70,11 +70,175 @@ beforeEach(async () => {
     await fs.writeFile(path.join(toolsDir, `${name}.exe`), 'fake');
 });
 afterEach(async () => {
+  vi.restoreAllMocks();
   await Promise.all(services.splice(0).map((instance) => instance.dispose()));
   await fs.rm(root, { recursive: true, force: true });
 });
 
 describe('CMake workbench service', () => {
+  it.each([1, 2])('keeps tool settings recoverable when tool metadata read %i is denied', async (deniedRead) => {
+    const instance = await service();
+    const initial = await instance.inspect(project);
+    const blocked = path.join(toolsDir, 'cmake.exe');
+    const config = { ...initial.config, tools: { ...initial.config.tools, cmake: blocked } };
+    await instance.save(project, config);
+    const stat = fs.stat.bind(fs);
+    let reads = 0;
+    vi.spyOn(fs, 'stat').mockImplementation((async (...args: Parameters<typeof fs.stat>) => {
+      if (String(args[0]).toLowerCase() === blocked.toLowerCase() && ++reads >= deniedRead)
+        throw Object.assign(new Error('denied'), { code: 'EACCES' });
+      return stat(...args);
+    }) as typeof fs.stat);
+    const inspected = await instance.inspect(project);
+    expect(inspected.config.tools.cmake).toBe(blocked);
+    expect(inspected.toolChecks).toContainEqual({
+      name: 'cmake',
+      path: blocked,
+      status: 'failed',
+      error: 'cmake.readDenied',
+    });
+    expect(inspected.configurationError).toBeUndefined();
+    expect(inspected.buildDirectory).toBe('');
+    await expect(instance.save(project, config)).resolves.toMatchObject({ config });
+    await expect(instance.start(project, 'configure')).rejects.toThrow('denied');
+  });
+  it('reports an inaccessible tool as failed while checking the other tools independently', async () => {
+    const instance = await service();
+    const blocked = path.join(toolsDir, 'cmake.exe');
+    const stat = fs.stat.bind(fs);
+    vi.spyOn(fs, 'stat').mockImplementation((async (...args: Parameters<typeof fs.stat>) => {
+      if (String(args[0]).toLowerCase() === blocked.toLowerCase())
+        throw Object.assign(new Error('denied'), { code: 'EACCES' });
+      return stat(...args);
+    }) as typeof fs.stat);
+    const result = await finish(instance, (await instance.start(project, 'check')).id);
+    expect(result.job.toolChecks?.find((tool) => tool.name === 'cmake')).toMatchObject({
+      status: 'failed',
+      error: 'cmake.readDenied',
+    });
+    expect(result.job.toolChecks?.filter((tool) => tool.status === 'found')).toHaveLength(4);
+  });
+  it('checks installed tools with broken variants without reading project code or writing build files', async () => {
+    const calls: ProcessRequest[] = [];
+    const instance = await service(async (request) => {
+      calls.push(request);
+      return normalRunner(request);
+    });
+    await fs.writeFile(path.join(project, 'cmake-variants.yaml'), 'broken: [');
+    await fs.writeFile(path.join(project, 'CMakeLists.txt'), Buffer.from([0xff, 0xfe, 0xff]));
+    const read = await finish(instance, (await instance.start(project, 'check')).id);
+    expect(read.job.status).toBe('succeeded');
+    expect(calls.every((call) => call.args.length === 1 && call.args[0] === '--version')).toBe(true);
+    expect(read.job.toolChecks?.map((tool) => tool.status)).toEqual(Array(5).fill('found'));
+    expect((await fs.readdir(project)).sort()).toEqual(['CMakeLists.txt', 'cmake-variants.yaml'].sort());
+  });
+  it('reports all missing tools and retains the explicitly configured path', async () => {
+    const instance = await service();
+    const initial = await instance.inspect(project);
+    const missingPath = path.join(root, 'missing-cmake.exe');
+    await instance.save(project, { ...initial.config, tools: { ...initial.config.tools, cmake: missingPath } });
+    await fs.rm(path.join(toolsDir, 'gcc.exe'));
+    const read = await finish(instance, (await instance.start(project, 'check')).id);
+    expect(read.job.toolChecks?.filter((tool) => tool.status === 'missing').map((tool) => tool.name)).toEqual([
+      'cmake',
+      'cCompiler',
+    ]);
+    expect(read.job.toolChecks?.find((tool) => tool.name === 'cmake')?.path).toBe(missingPath);
+    expect(read.job.status).toBe('failed');
+  });
+  it('defaults old settings to automatic reading and persists explicit reader settings', async () => {
+    const instance = await service();
+    const initial = await instance.inspect(project);
+    expect(initial.config.read).toEqual({ mode: 'auto', encoding: 'auto', powershellPath: '' });
+    const read = { mode: 'direct', encoding: 'utf-8', powershellPath: '' } as const;
+    await instance.save(project, { ...initial.config, read });
+    expect((await (await service()).inspect(project)).config.read).toEqual(read);
+  });
+  it('reuses the selected project reader settings for workspace discovery after restart', async () => {
+    const instance = await service();
+    await instance.discover(root);
+    const initial = await instance.inspect(project);
+    await instance.save(project, {
+      ...initial.config,
+      read: { mode: 'direct', encoding: 'utf-16le', powershellPath: '' },
+    });
+    await fs.mkdir(path.join(root, '.vscode'));
+    await fs.writeFile(
+      path.join(root, '.vscode', 'settings.json'),
+      Buffer.from(JSON.stringify({ 'cmake.sourceDirectory': 'project with spaces' }), 'utf16le')
+    );
+    const reopened = await (await service()).discover(root);
+    expect(reopened.selectedProjectPath).toBe(await fs.realpath(project));
+  });
+  it('rejects invalid reader options before saving them', async () => {
+    const instance = await service();
+    const initial = await instance.inspect(project);
+    await expect(
+      instance.save(project, { ...initial.config, read: { mode: 'direct', encoding: 'auto', powershellPath: 'x.ps1' } })
+    ).rejects.toThrow('cmake.invalidConfiguration');
+  });
+  it('reloads repaired variants without changing saved tool paths and only reveals an in-workspace file', async () => {
+    const instance = await service();
+    const file = path.join(project, 'cmake-variants.yaml');
+    await fs.writeFile(file, 'mode: [');
+    const invalid = await instance.inspect(project);
+    await instance.save(project, {
+      ...invalid.config,
+      tools: { ...invalid.config.tools, cmake: path.join(toolsDir, 'cmake.exe') },
+    });
+    await fs.writeFile(file, 'mode: {choices: {normal: {}}}');
+    const recovered = await instance.reload(project);
+    expect(recovered.configurationError).toBeUndefined();
+    expect(recovered.config.tools.cmake).toBe(path.join(toolsDir, 'cmake.exe'));
+    expect(await instance.configurationPath(project)).toBe(await fs.realpath(file));
+  });
+  it('can save a repaired encoding when the replacement variants removed the old selections', async () => {
+    const instance = await service();
+    const file = path.join(project, 'cmake-variants.yaml');
+    await fs.writeFile(file, 'mode: {choices: {old: {}}}');
+    const initial = await instance.inspect(project);
+    await instance.save(project, {
+      ...initial.config,
+      read: { mode: 'direct', encoding: 'utf-8', powershellPath: '' },
+      selections: { mode: 'old' },
+    });
+    await fs.writeFile(file, Buffer.from('mode: {choices: {new: {short: "\u65b0"}}}', 'utf16le'));
+    const invalid = await instance.inspect(project);
+    expect(invalid.configurationError).toBeDefined();
+    const saved = await instance.save(project, {
+      ...invalid.config,
+      read: { mode: 'direct', encoding: 'utf-16le', powershellPath: '' },
+    });
+    expect(saved.config.selections).toEqual({});
+    expect(saved.selection).toEqual({ mode: 'new' });
+    expect((await instance.inspect(project)).configurationError).toBeUndefined();
+  });
+  it('invalidates an earlier successful tool report as soon as a new check starts', async () => {
+    let block = false;
+    const instance = await service(async (request) => {
+      if (block)
+        return new Promise((_resolve, reject) => {
+          const abort = () => reject(new Error('cmake.cancelled'));
+          request.signal.addEventListener('abort', abort, { once: true });
+          if (request.signal.aborted) abort();
+        });
+      return normalRunner(request);
+    });
+    await finish(instance, (await instance.start(project, 'check')).id);
+    expect((await instance.inspect(project)).toolChecks?.every((tool) => tool.status === 'found')).toBe(true);
+    block = true;
+    const job = await instance.start(project, 'check');
+    await instance.cancel(job.id);
+    expect((await instance.inspect(project)).toolChecks).toBeUndefined();
+  });
+  it('does not reveal variants through a directory junction outside the workspace', async () => {
+    const outside = path.join(root, 'outside');
+    await fs.mkdir(outside);
+    const file = path.join(outside, 'cmake-variants.yaml');
+    await fs.writeFile(file, 'mode: {choices: {normal: {}}}');
+    await fs.symlink(outside, path.join(project, '.vscode'), 'junction');
+    await expect((await service()).configurationPath(project)).rejects.toThrow();
+  });
   it('uses workspace variants for actual configure arguments after selecting a nested source', async () => {
     const calls: ProcessRequest[] = [];
     const instance = await service(async (request) => {
@@ -162,7 +326,7 @@ describe('CMake workbench service', () => {
   });
   it('records one-off job selections while preserving saved defaults', async () => {
     const instance = await service();
-    const job = await instance.start(project, 'check', { buildType: 'Release' });
+    const job = await instance.start(project, 'configure', { buildType: 'Release' });
     expect(job.selection).toEqual({ buildType: 'Release' });
     expect((await finish(instance, job.id)).job.selection).toEqual({ buildType: 'Release' });
     expect((await instance.inspect(project)).selection).toEqual({ buildType: 'Debug' });
@@ -180,7 +344,7 @@ describe('CMake workbench service', () => {
     expect(recovered.config.selections).toEqual({});
     expect(recovered.selection).toEqual({ mode: 'current' });
     expect(recovered.latestJob?.id).toBe(previous.job.id);
-    await expect(instance.start(project, 'check')).rejects.toThrow(/selection/);
+    await expect(instance.start(project, 'build')).rejects.toThrow(/selection/);
     await instance.save(project, recovered.config);
     expect((await finish(instance, (await instance.start(project, 'check')).id)).job.status).toBe('succeeded');
   });
@@ -191,8 +355,8 @@ describe('CMake workbench service', () => {
     await fs.writeFile(path.join(project, 'cmake-variants.yaml'), 'buildType: {choices: {Debug: {buildType: Debug}}}');
     const recovered = await instance.inspect(project);
     await instance.save(project, recovered.config);
-    await expect(instance.start(project, 'check', { buildType: 'Release' })).rejects.toThrow(/selection/);
-    await expect(instance.start(project, 'check', { obsolete: 'x' })).rejects.toThrow(/selection/);
+    await expect(instance.start(project, 'build', { buildType: 'Release' })).rejects.toThrow(/selection/);
+    await expect(instance.start(project, 'build', { obsolete: 'x' })).rejects.toThrow(/selection/);
   });
   it('preserves flags while configuring and building in a managed isolated directory', async () => {
     const calls: ProcessRequest[] = [];
@@ -228,6 +392,7 @@ describe('CMake workbench service', () => {
     });
     const job = await instance.start(project, 'check');
     await waiting;
+    await expect(instance.reload(project)).rejects.toThrow('cmake.busy');
     const cancelled = instance.cancel(job.id);
     await expect(instance.start(project, 'check')).rejects.toThrow(/busy/);
     release?.();
@@ -255,9 +420,9 @@ describe('CMake workbench service', () => {
     const instance = await service(async (request) =>
       request.args.includes('-m32') ? { code: 1, output: 'cannot find -lstdc++' } : normalRunner(request)
     );
-    expect((await finish(instance, (await instance.start(project, 'check')).id)).job.error).toMatch(/exit|probe/i);
+    expect((await finish(instance, (await instance.start(project, 'configure')).id)).job.error).toMatch(/exit|probe/i);
     await fs.rm(path.join(toolsDir, 'gcc.exe'));
-    expect((await finish(instance, (await instance.start(project, 'check')).id)).job.error).toMatch(/toolNotFound/);
+    expect((await finish(instance, (await instance.start(project, 'configure')).id)).job.error).toMatch(/toolNotFound/);
   });
   it('rejects a successful compiler that actually produced an x64 executable', async () => {
     const instance = await service(async (request) => {
@@ -265,7 +430,7 @@ describe('CMake workbench service', () => {
       if (request.args.includes('-o')) await pe(request.args[request.args.indexOf('-o') + 1], 0x8664);
       return result;
     });
-    expect((await finish(instance, (await instance.start(project, 'check')).id)).job.error).toMatch(/architecture/);
+    expect((await finish(instance, (await instance.start(project, 'configure')).id)).job.error).toMatch(/architecture/);
   });
   it('does not run an executable outside the managed build tree', async () => {
     const instance = await service();
@@ -376,9 +541,9 @@ describe('CMake workbench service', () => {
     const instance = await service();
     await fs.rm(path.join(toolsDir, 'g++.exe'));
     await fs.writeFile(path.join(project, 'CMakeLists.txt'), 'project(test LANGUAGES C)');
-    expect((await finish(instance, (await instance.start(project, 'check')).id)).job.status).toBe('succeeded');
+    expect((await finish(instance, (await instance.start(project, 'configure')).id)).job.status).toBe('succeeded');
     await fs.writeFile(path.join(project, 'CMakeLists.txt'), 'project(C)');
-    expect((await finish(instance, (await instance.start(project, 'check')).id)).job.error).toMatch(/cxxCompiler/);
+    expect((await finish(instance, (await instance.start(project, 'configure')).id)).job.error).toMatch(/cxxCompiler/);
   });
   it('does not launch a job racing service shutdown', async () => {
     let calls = 0;

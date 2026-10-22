@@ -1,7 +1,9 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { CmakeTools } from '@/common/types/cmake';
+import { resolveTools } from '@/process/services/cmake/toolchain';
 import { parseVariants, resolveVariants } from '../../../packages/desktop/src/process/services/cmake/variants';
 import { loadDimensions } from '../../../packages/desktop/src/process/services/cmake/workspace';
 import { configureCommand } from '../../../packages/desktop/src/process/services/cmake/commands';
@@ -88,6 +90,56 @@ describe('CMake variants file encoding', () => {
       Buffer.from('\ufeff' + yaml + '# ' + 'x'.repeat(131072), 'utf16le')
     );
     await expect(loadDimensions(root)).rejects.toThrow('cmake.fileTooLarge');
+  });
+});
+
+describe('independent CMake tool discovery', () => {
+  let root: string;
+  beforeEach(async () => {
+    root = await fs.mkdtemp(path.join(os.tmpdir(), 'woody-tools-'));
+    for (const name of ['cmake', 'ctest', 'gcc', 'g++', 'mingw32-make'])
+      await fs.writeFile(path.join(root, `${name}.exe`), 'fixture');
+  });
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    await fs.rm(root, { recursive: true, force: true });
+  });
+  function denyCmake(): string {
+    const denied = path.join(root, 'cmake.exe');
+    const original = fs.stat;
+    vi.spyOn(fs, 'stat').mockImplementation(((file, ...args) => {
+      if (file === denied)
+        return Promise.reject(Object.assign(new Error('private operating system detail'), { code: 'EACCES' }));
+      return Reflect.apply(original, fs, [file, ...args]);
+    }) as typeof fs.stat);
+    return denied;
+  }
+  it('keeps accessible tools discoverable when one configured executable denies access', async () => {
+    const denied = denyCmake();
+    const errors: Partial<Record<keyof CmakeTools, string>> = {};
+    const tools = await resolveTools({ ...defaultConfiguration().tools, cmake: denied }, { PATH: root }, errors);
+    expect(errors).toEqual({ cmake: 'cmake.readDenied' });
+    expect(tools).toEqual({
+      cmake: denied,
+      ctest: path.join(root, 'ctest.exe'),
+      cCompiler: path.join(root, 'gcc.exe'),
+      cxxCompiler: path.join(root, 'g++.exe'),
+      make: path.join(root, 'mingw32-make.exe'),
+    });
+  });
+  it('keeps strict configure resolution failures when no error collector was requested', async () => {
+    const denied = denyCmake();
+    await expect(
+      resolveTools({ ...defaultConfiguration().tools, cmake: denied }, { PATH: root })
+    ).rejects.toMatchObject({ code: 'EACCES' });
+  });
+  it('isolates invalid manual scripts without substituting another executable', async () => {
+    const manual = path.join(root, 'cmake.cmd');
+    const errors: Partial<Record<keyof CmakeTools, string>> = {};
+    const tools = await resolveTools({ ...defaultConfiguration().tools, cmake: manual }, { PATH: root }, errors);
+    expect(errors).toEqual({ cmake: 'cmake.toolPath' });
+    expect(tools.cmake).toBe(manual);
+    expect(tools.cCompiler).toBe(path.join(root, 'gcc.exe'));
   });
 });
 

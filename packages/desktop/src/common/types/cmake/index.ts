@@ -1,5 +1,26 @@
 export type CmakeAction = 'check' | 'configure' | 'build' | 'test' | 'run';
 export type CmakeTools = { cmake: string; ctest: string; cCompiler: string; cxxCompiler: string; make: string };
+export type CmakeReadOptions = {
+  mode: 'auto' | 'direct' | 'powershell';
+  encoding: 'auto' | 'utf-8' | 'gb18030' | 'utf-16le' | 'utf-16be';
+  powershellPath: string;
+};
+export type CmakeReadInfo = { reader: 'direct' | 'powershell'; encoding: string; executable?: string };
+export type CmakeDiagnostic = {
+  kind: 'read' | 'syntax' | 'unsupported' | 'conflict';
+  message: string;
+  file?: string;
+  line?: number;
+  column?: number;
+  attempts?: Array<{ reader: 'direct' | 'powershell'; code: string; executable?: string }>;
+};
+export type CmakeToolCheck = {
+  name: keyof CmakeTools;
+  path: string;
+  status: 'found' | 'missing' | 'failed';
+  version?: string;
+  error?: string;
+};
 export type CmakeConfiguration = {
   tools: CmakeTools;
   selections: Record<string, string>;
@@ -10,6 +31,7 @@ export type CmakeConfiguration = {
   timeoutMs: number;
   require32Bit: boolean;
   gdbPath?: string;
+  read?: CmakeReadOptions;
 };
 export type CmakeChoice = {
   id: string;
@@ -30,12 +52,16 @@ export type CmakeJob = {
   error?: string;
   buildDirectory: string;
   selection: Record<string, string>;
+  toolChecks?: CmakeToolCheck[];
 };
 export type CmakeProject = {
   projectPath: string;
   workspacePath?: string;
   variantsFile?: string;
   configurationError?: string;
+  diagnostic?: CmakeDiagnostic;
+  readInfo?: CmakeReadInfo;
+  toolChecks?: CmakeToolCheck[];
   config: CmakeConfiguration;
   dimensions: CmakeDimension[];
   selection: Record<string, string>;

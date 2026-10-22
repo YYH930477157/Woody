@@ -8,6 +8,7 @@ import type {
   CmakeJobRead,
   CmakeProject,
   CmakeTools,
+  CmakeToolCheck,
   CmakeWorkspace,
 } from '@/common/types/cmake';
 import { childEnvironment, configurationHash, normalizeConfiguration } from './configuration';
@@ -32,6 +33,8 @@ import {
   storeConfiguration,
   validateExecutable,
   verifyArchitecture,
+  ConfigurationReader,
+  isInside,
 } from './workspace';
 
 type Dependencies = {
@@ -59,6 +62,8 @@ export class CmakeService {
   private readonly logLimit: number;
   private readonly retention: number;
   private disposed = false;
+  private readonly reader: ConfigurationReader;
+  private readonly toolChecks = new Map<string, { settings: string; checks: CmakeToolCheck[] }>();
 
   constructor(
     private readonly storagePath: string,
@@ -66,6 +71,7 @@ export class CmakeService {
   ) {
     this.runner = dependencies.runner ?? runProcess;
     this.env = { ...(dependencies.env ?? process.env) };
+    this.reader = new ConfigurationReader({ env: this.env });
     this.logLimit = Math.max(1024, Math.min(dependencies.maxLogChars ?? 1048576, 4194304));
     this.retention = Math.max(1, Math.min(dependencies.maxCompletedJobs ?? 40, 100));
   }
@@ -79,7 +85,9 @@ export class CmakeService {
   ): Promise<ProjectState> {
     const config = override ?? (await loadConfiguration(this.storagePath, root));
     const workspacePath = await loadProjectWorkspace(this.storagePath, root);
-    const loaded = await loadVariantConfiguration(root, workspacePath);
+    const loaded = await loadVariantConfiguration(root, workspacePath, config.read, this.reader);
+    const checked = this.toolChecks.get(projectKey(root));
+    const toolChecks = checked?.settings === JSON.stringify(config.tools) ? structuredClone(checked.checks) : undefined;
     const dimensions = loaded.dimensions;
     const invalidSelections: string[] = [];
     if (!loaded.error && recoverSelections) {
@@ -98,6 +106,7 @@ export class CmakeService {
       } catch (error) {
         if (!(error instanceof Error) || !error.message.startsWith('cmake.variantConflict')) throw error;
         loaded.error = `${error.message}\n${loaded.file || workspacePath}`;
+        loaded.diagnostic = { kind: 'conflict', message: error.message, file: loaded.file };
       }
     }
     if (loaded.error && !allowInvalidVariants) throw new Error(loaded.error);
@@ -110,6 +119,9 @@ export class CmakeService {
           workspacePath,
           variantsFile: loaded.file,
           configurationError: loaded.error,
+          diagnostic: loaded.diagnostic,
+          readInfo: loaded.readInfo,
+          toolChecks,
           config,
           dimensions,
           selection: Object.fromEntries(
@@ -126,14 +138,25 @@ export class CmakeService {
         hash: '',
       };
     }
-    const tools = await resolveTools(config.tools, childEnvironment(this.env, variants.env, []));
-    const hash = configurationHash(config, variants, tools, await toolIdentity(tools));
-    const build = await buildDirectory(root, hash);
+    // Inspection must retain settings even when a tool cannot be accessed; execution stays strict.
+    const toolErrors: Partial<Record<keyof CmakeTools, string>> | undefined = allowInvalidVariants ? {} : undefined;
+    const tools = await resolveTools(config.tools, childEnvironment(this.env, variants.env, []), toolErrors);
+    const identities = await toolIdentity(tools, toolErrors);
+    const failedChecks: CmakeToolCheck[] = Object.entries(toolErrors ?? {}).map(([name, error]) => ({
+      name: name as keyof CmakeTools,
+      path: tools[name as keyof CmakeTools],
+      status: 'failed',
+      error,
+    }));
+    const hash = failedChecks.length ? '' : configurationHash(config, variants, tools, identities);
+    const build = hash ? await buildDirectory(root, hash) : '';
     return {
       project: {
         projectPath: root,
         workspacePath,
         variantsFile: loaded.file,
+        readInfo: loaded.readInfo,
+        toolChecks: failedChecks.length ? failedChecks : toolChecks,
         config,
         dimensions,
         selection: variants.selection,
@@ -149,8 +172,25 @@ export class CmakeService {
 
   /** Discover a workspace and remember only a validated, explicitly selected source root. */
   async discover(workspacePath: string, selection?: string): Promise<CmakeWorkspace> {
-    const found = await discoverProjects(workspacePath);
-    const selected = selection ?? (await loadWorkspaceSelection(this.storagePath, found.workspacePath));
+    if (this.disposed) throw new Error('cmake.disposed');
+    if (typeof workspacePath !== 'string' || !path.isAbsolute(workspacePath) || workspacePath.includes('\0'))
+      throw new Error('cmake.invalidProject');
+    const workspace = await fs.realpath(workspacePath).catch(() => {
+      throw new Error(`cmake.projectMissing: ${workspacePath}`);
+    });
+    const remembered = await loadWorkspaceSelection(this.storagePath, workspace);
+    let settingsRoot = workspace;
+    if (remembered) {
+      const candidate = path.resolve(workspace, remembered);
+      if (projectKey(candidate) === projectKey(workspace) || isInside(workspace, candidate)) {
+        const canonical = await canonicalProject(candidate).catch((): undefined => undefined);
+        if (canonical && (projectKey(canonical) === projectKey(workspace) || isInside(workspace, canonical)))
+          settingsRoot = canonical;
+      }
+    }
+    const readerSettings = (await loadConfiguration(this.storagePath, settingsRoot)).read;
+    const found = await discoverProjects(workspace, this.reader, readerSettings);
+    const selected = selection ?? remembered;
     const candidate = found.projects.find((entry) => entry.relativePath === selected);
     if (selection !== undefined) {
       if (!candidate) throw new Error('cmake.invalidProject');
@@ -169,6 +209,11 @@ export class CmakeService {
         this.locks.add(key);
         try {
           await storeProjectWorkspace(this.storagePath, source, found.workspacePath);
+          await storeWorkspaceSelection(
+            this.storagePath,
+            found.workspacePath,
+            found.projects.find((entry) => entry.projectPath === source)!.relativePath
+          );
         } finally {
           this.locks.delete(key);
         }
@@ -179,6 +224,7 @@ export class CmakeService {
 
   /** Inspect settings, variants and the latest operation without launching tools. */
   async inspect(projectPath: string, discover = false): Promise<CmakeProject> {
+    if (this.disposed) throw new Error('cmake.disposed');
     let root: string;
     if (discover) {
       const found = await this.discover(projectPath);
@@ -190,6 +236,25 @@ export class CmakeService {
     return (await this.project(root, undefined, undefined, true, true)).project;
   }
 
+  /** Refresh project diagnostics without discarding the caller's unsaved form fields. */
+  async reload(projectPath: string): Promise<CmakeProject> {
+    const root = await canonicalProject(projectPath);
+    if (this.disposed) throw new Error('cmake.disposed');
+    if (this.locks.has(projectKey(root))) throw new Error('cmake.busy');
+    this.reader.clear();
+    return this.inspect(root);
+  }
+
+  /** Reveal only the selected configuration within the canonical workspace. */
+  async configurationPath(projectPath: string): Promise<string> {
+    const project = await this.inspect(projectPath);
+    if (!project.variantsFile) throw new Error('cmake.configurationMissing');
+    const file = await fs.realpath(project.variantsFile);
+    const workspace = project.workspacePath || project.projectPath;
+    if (!isInside(workspace, file) || !(await fs.stat(file)).isFile()) throw new Error('cmake.invalidProject');
+    return file;
+  }
+
   /** Save validated settings outside the source tree. */
   async save(projectPath: string, config: CmakeConfiguration): Promise<CmakeProject> {
     const root = await canonicalProject(projectPath);
@@ -198,7 +263,11 @@ export class CmakeService {
     if (this.locks.has(key)) throw new Error('cmake.busy');
     this.locks.add(key);
     try {
-      const next = await this.project(root, undefined, normalizeConfiguration(config), false, true);
+      const normalized = normalizeConfiguration(config);
+      const old = await loadConfiguration(this.storagePath, root);
+      const readerChanged = JSON.stringify(old.read) !== JSON.stringify(normalized.read);
+      if (readerChanged) this.reader.clear();
+      const next = await this.project(root, undefined, normalized, readerChanged, true);
       await storeConfiguration(this.storagePath, root, next.project.config);
       return next.project;
     } finally {
@@ -269,8 +338,10 @@ export class CmakeService {
     if (this.locks.has(key)) throw new Error('cmake.busy');
     this.locks.add(key);
     try {
-      const context = await this.project(root, selection);
+      // Tool inspection deliberately avoids variants and CMakeLists contents.
+      const context = action === 'check' ? await this.toolContext(root) : await this.project(root, selection);
       if (this.disposed) throw new Error('cmake.disposed');
+      if (action === 'check') this.toolChecks.delete(key);
       const job: CmakeJob = {
         id: randomUUID(),
         projectPath: root,
@@ -335,11 +406,76 @@ export class CmakeService {
 
   async dispose(): Promise<void> {
     this.disposed = true;
+    const readersStopped = this.reader.dispose();
     const active = [...this.jobs.values()];
     active.forEach((state) => {
       if (state.job.status === 'running') state.controller.abort();
     });
-    await Promise.all(active.map((state) => state.completion));
+    await Promise.all([readersStopped, ...active.map((state) => state.completion)]);
+  }
+
+  private async toolContext(root: string): Promise<ProjectState> {
+    const config = await loadConfiguration(this.storagePath, root);
+    return {
+      project: { projectPath: root, config, dimensions: [], selection: {}, buildDirectory: '' },
+      variants: { selection: {}, settings: {}, env: {} },
+      tools: config.tools,
+      hash: '',
+    };
+  }
+
+  private async checkInstalledTools(state: JobState, context: ProjectState): Promise<void> {
+    const { config, projectPath } = context.project;
+    const checks: CmakeToolCheck[] = [];
+    state.job.toolChecks = checks;
+    const env = childEnvironment(this.env, {}, []);
+    const problems: Partial<Record<keyof CmakeTools, string>> = {};
+    const resolved = await resolveTools(config.tools, env, problems);
+    const deadline = Date.now() + Math.min(config.timeoutMs, 60000);
+    for (const name of Object.keys(config.tools) as (keyof CmakeTools)[]) {
+      if (state.controller.signal.aborted) throw new Error('cmake.cancelled');
+      if (Date.now() >= deadline) throw new Error('cmake.timeout');
+      const entry: CmakeToolCheck = { name, path: config.tools[name], status: 'failed' };
+      checks.push(entry);
+      try {
+        entry.path = resolved[name];
+        if (problems[name]) throw new Error(problems[name]);
+        await requireTools({ ...config.tools, [name]: entry.path }, [name]);
+        entry.status = 'failed';
+        const result = await this.runner({
+          executable: entry.path,
+          args: ['--version'],
+          cwd: projectPath,
+          env: childEnvironment(env, {}, [path.dirname(entry.path)]),
+          timeoutMs: Math.max(1, Math.min(10000, deadline - Date.now())),
+          signal: state.controller.signal,
+          onOutput: (text) => this.append(state, text),
+        });
+        if (state.controller.signal.aborted) throw new Error('cmake.cancelled');
+        if (result.code !== 0) throw new Error(`cmake.processExit: ${name} exit ${result.code}`);
+        if (name === 'cmake') {
+          const version = /cmake version\s+(\d+)\.(\d+)/i.exec(result.output);
+          if (!version || Number(version[1]) < 3 || (Number(version[1]) === 3 && Number(version[2]) < 5))
+            throw new Error('cmake.version');
+        }
+        entry.status = 'found';
+        entry.version = result.output
+          .split(/[\r\n]/)
+          .find((line) => line.trim())
+          ?.slice(0, 240);
+      } catch (error) {
+        if (state.controller.signal.aborted) throw error;
+        entry.error = error instanceof Error ? error.message : 'cmake.failed';
+        if (entry.error.startsWith('cmake.toolNotFound:')) entry.status = 'missing';
+      }
+      this.append(state, `\n${name}: ${entry.path || '-'} [${entry.status}]${entry.error ? ` ${entry.error}` : ''}\n`);
+    }
+    this.toolChecks.set(projectKey(projectPath), {
+      settings: JSON.stringify(config.tools),
+      checks: structuredClone(checks),
+    });
+    if (checks.some((tool) => tool.status !== 'found')) throw new Error('cmake.toolsIncomplete');
+    state.job.status = 'succeeded';
   }
 
   /** Trim in batches: slicing the capped log for every line would copy all of it once per line. */
@@ -365,6 +501,7 @@ export class CmakeService {
   }
 
   private async execute(state: JobState, context: ProjectState): Promise<void> {
+    if (state.job.action === 'check') return this.checkInstalledTools(state, context);
     const { project, tools, variants, hash } = context;
     const { config } = project;
     const signal = state.controller.signal;
@@ -420,10 +557,9 @@ export class CmakeService {
       }
     } else {
       await buildDirectory(project.projectPath, hash, true);
-      const lists = (await readBounded(path.join(project.projectPath, 'CMakeLists.txt'), 1048576)).replace(
-        /#[^\n]*/g,
-        ''
-      );
+      const lists = (
+        await this.reader.read(path.join(project.projectPath, 'CMakeLists.txt'), config.read, 1048576)
+      ).text.replace(/#[^\n]*/g, '');
       const declaration = /\bproject\s*\(([^)]*)\)/i.exec(lists)?.[1]?.split(/\s+/).filter(Boolean).slice(1) ?? [];
       const explicitLanguage = declaration.some((token) => ['C', 'CXX', 'NONE'].includes(token));
       const c = !explicitLanguage || declaration.includes('C');
@@ -468,12 +604,10 @@ export class CmakeService {
       } finally {
         await fs.rm(probe, { recursive: true, force: true });
       }
-      if (state.job.action !== 'check') {
-        await fs.rm(marker, { force: true });
-        await invoke(configureCommand(project.projectPath, config, variants, tools));
-        await fs.writeFile(marker, JSON.stringify({ hash }));
-        if (state.job.action === 'build') await invoke(buildCommand(config, tools));
-      }
+      await fs.rm(marker, { force: true });
+      await invoke(configureCommand(project.projectPath, config, variants, tools));
+      await fs.writeFile(marker, JSON.stringify({ hash }));
+      if (state.job.action === 'build') await invoke(buildCommand(config, tools));
     }
     assertActive();
     state.job.status = 'succeeded';
