@@ -10,6 +10,29 @@ Var /GLOBAL AionUiActiveMarkerResult
 
 !define AIONUI_ACTIVE_INSTALLER_MARKER "aionui-installer-active.marker"
 
+; Nsis7z reports extraction-only percentages on the same control that NSIS uses
+; for the whole install. A busy indicator avoids false completion and resets.
+!ifndef BUILD_UNINSTALLER
+Function AionUiShowInstallProgress
+  Push $0
+  Push $1
+  FindWindow $0 "#32770" "" $HWNDPARENT
+  GetDlgItem $0 $0 1004
+  ${If} $0 != 0
+    System::Call 'user32::GetWindowLongW(p r0, i -16) i .r1'
+    IntOp $1 $1 | 0x08 ; PBS_MARQUEE
+    System::Call 'user32::SetWindowLongW(p r0, i -16, i r1)'
+    SendMessage $0 0x040A 1 40 ; PBM_SETMARQUEE
+  ${EndIf}
+  Pop $1
+  Pop $0
+FunctionEnd
+
+!macro customPageAfterChangeDir
+  !define MUI_PAGE_CUSTOMFUNCTION_SHOW AionUiShowInstallProgress
+!macroend
+!endif
+
 !macro AIONUI_BRING_UPDATED_INSTALLER_TO_FRONT
   ${If} ${isUpdated}
     BringToFront
