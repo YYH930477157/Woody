@@ -675,6 +675,11 @@
       "noChanges": "Sin cambios",
       "loading": "Cargando cambios…",
       "loadFailed": "No se pudieron cargar los cambios",
+      "diagnostics": {
+        "checkedFolders": "Carpetas de proyecto comprobadas",
+        "backendReason": "Motivo del backend",
+        "notARepositoryHint": "«Cambios» solo muestra repositorios Git y únicamente comprueba las carpetas añadidas al proyecto. Si la lista está vacía: añade primero la carpeta del proyecto; si no tiene .git, ejecuta git init en ella; si el repositorio está en la carpeta superior, añade esa carpeta superior."
+      },
       "monitorScope": {
         "label": "Ámbito de visualización",
         "tooltip": "Solo filtra los cambios mostrados; todo el proyecto sigue supervisándose en segundo plano. Si no existe la carpeta software, se muestra todo el proyecto.",

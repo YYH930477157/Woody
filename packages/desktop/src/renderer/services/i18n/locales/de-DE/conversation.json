@@ -675,6 +675,11 @@
       "noChanges": "Keine Änderungen",
       "loading": "Änderungen werden geladen…",
       "loadFailed": "Änderungen konnten nicht geladen werden",
+      "diagnostics": {
+        "checkedFolders": "Geprüfte Projektordner",
+        "backendReason": "Meldung des Backends",
+        "notARepositoryHint": "„Änderungen“ zeigt nur Git-Repositories und prüft ausschließlich die zum Projekt hinzugefügten Ordner. Ist die Liste leer: zuerst den Projektordner hinzufügen; fehlt dort .git, im Ordner git init ausführen; liegt das Repository eine Ebene höher, stattdessen den übergeordneten Ordner hinzufügen."
+      },
       "monitorScope": {
         "label": "Anzeigebereich",
         "tooltip": "Filtert nur die angezeigten Änderungen; das gesamte Projekt wird weiterhin im Hintergrund überwacht. Fehlt der software-Ordner, wird das gesamte Projekt angezeigt.",

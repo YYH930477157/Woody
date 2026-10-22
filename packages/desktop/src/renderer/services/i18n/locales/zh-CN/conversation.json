@@ -674,6 +674,11 @@
       "noChanges": "没有变更",
       "loading": "正在加载变更…",
       "loadFailed": "无法加载变更",
+      "diagnostics": {
+        "checkedFolders": "已检查的项目文件夹",
+        "backendReason": "后端返回的原因",
+        "notARepositoryHint": "「变更」只显示 Git 仓库，且只检查已加入项目的文件夹。列表为空时：先把项目文件夹加入项目；该文件夹没有 .git 就在其中执行 git init；仓库在上一层目录就把上一层目录加入项目。"
+      },
       "monitorScope": {
         "label": "显示范围",
         "tooltip": "仅筛选显示的改动，后台仍监控整个项目。没有 software 文件夹时，显示整个项目。",
