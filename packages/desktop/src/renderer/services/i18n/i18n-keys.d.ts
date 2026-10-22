@@ -3188,6 +3188,7 @@ export type I18nKey =
   | 'tools.cmake.selectionChanged'
   | 'tools.cmake.settings'
   | 'tools.cmake.sourceDirectory'
+  | 'tools.cmake.sourceSettingsUnreadable'
   | 'tools.cmake.succeeded'
   | 'tools.cmake.target'
   | 'tools.cmake.test'

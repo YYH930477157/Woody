@@ -122,6 +122,13 @@ export default function CmakePanel({ projectPath }: { projectPath: string }) {
           />
         </Tooltip>
       </div>
+      {state.workspace?.settingsDiagnostic && (
+        <Alert
+          type='warning'
+          title={t('tools.cmake.sourceSettingsUnreadable')}
+          content={errorText(state.workspace.settingsDiagnostic.message)}
+        />
+      )}
       {state.error && <Alert type='error' content={errorText(state.error)} />}
       {!draft || !project ? (
         !state.error &&

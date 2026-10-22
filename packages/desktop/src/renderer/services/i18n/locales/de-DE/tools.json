@@ -184,7 +184,8 @@
     "readPowerShellMissing": "PowerShell-7-Programmdatei nicht gefunden",
     "readPowerShellVersion": "Zum Lesen der Konfiguration ist PowerShell 7 oder neuer erforderlich",
     "readPath": "Der Konfigurationspfad ist ungültig oder liegt außerhalb des Arbeitsbereichs",
-    "readBusy": "Zu viele ausstehende Lesevorgänge für Konfigurationen"
+    "readBusy": "Zu viele ausstehende Lesevorgänge für Konfigurationen",
+    "sourceSettingsUnreadable": ".vscode/settings.json konnte nicht gelesen werden, daher wurde cmake.sourceDirectory ignoriert und Projekte wurden per Ordnersuche gefunden. Wählen Sie ein Projekt, stellen Sie das Einlesen der Konfiguration ein und suchen Sie erneut."
   },
   "unknownFile": "Unbekannte Datei",
   "newFile": "Neue Datei",

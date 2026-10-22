@@ -184,7 +184,8 @@
     "readPowerShellMissing": "未找到 PowerShell 7 可执行文件",
     "readPowerShellVersion": "配置读取需要 PowerShell 7 或更高版本",
     "readPath": "配置文件路径无效或位于工作区外",
-    "readBusy": "正在读取的配置文件过多"
+    "readBusy": "正在读取的配置文件过多",
+    "sourceSettingsUnreadable": "无法读取 .vscode/settings.json，已忽略 cmake.sourceDirectory，改为扫描文件夹查找工程。选择工程后设置配置读取方式，再重新检测工程。"
   },
   "unknownFile": "未知文件",
   "newFile": "新文件",
