@@ -1,4 +1,4 @@
-import { mkdtempSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, existsSync, linkSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -17,12 +17,15 @@ afterEach(async () => {
 });
 
 describe('installerLastFailure service', () => {
-  it('consumes both migrated hardlink names so legacy fallback cannot repeat the same failure', async () => {
-    const { consumeInstallerLastFailure } = await import('@/process/services/installerLastFailure');
-    const { migrateUserData } = await import('@/process/startup/userDataMigration');
+  it('consumes both hard-linked names left by an earlier data migration so the legacy fallback cannot repeat', async () => {
+    const { consumeInstallerLastFailure, getInstallerLastFailureMarkerPath } =
+      await import('@/process/services/installerLastFailure');
     const appDataDir = makeAppDataDir();
     const legacyPath = path.join(appDataDir, 'AionUi', 'installer-last-failure.json');
-    await import('node:fs/promises').then((fs) => fs.mkdir(path.dirname(legacyPath)));
+    const markerPath = getInstallerLastFailureMarkerPath(appDataDir);
+    await import('node:fs/promises').then((fs) =>
+      Promise.all([fs.mkdir(path.dirname(legacyPath)), fs.mkdir(path.dirname(markerPath))])
+    );
     writeFileSync(
       legacyPath,
       JSON.stringify({
@@ -37,7 +40,7 @@ describe('installerLastFailure service', () => {
         at: '2026-10-21',
       })
     );
-    migrateUserData(appDataDir, { assertIdle: () => {} });
+    linkSync(legacyPath, markerPath);
     await expect(consumeInstallerLastFailure({ appDataDir })).resolves.toMatchObject({ kind: 'app-cannot-be-closed' });
     await expect(consumeInstallerLastFailure({ appDataDir })).resolves.toBeNull();
     expect(existsSync(legacyPath)).toBe(false);
