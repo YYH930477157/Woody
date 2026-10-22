@@ -266,6 +266,26 @@ describe('configuration reading', () => {
     });
     expect((await reader.read(file, { ...direct, encoding: 'gb18030' })).text).toBe('\u4e2d\u6587');
   });
+  it('accepts any ASCII-compatible encoding when the caller only scans ASCII tokens', async () => {
+    await fs.writeFile(
+      file,
+      Buffer.concat([Buffer.from([0x23, 0xd6, 0xd0, 0xce, 0xc4, 0x0a]), Buffer.from('project(m C)')])
+    );
+    expect(await new ConfigurationReader().read(file, direct, 1024, true)).toMatchObject({
+      text: expect.stringContaining('project(m C)'),
+      info: { reader: 'direct', encoding: 'ascii-compatible' },
+    });
+  });
+  it('still treats binary bytes as unreadable for ASCII scans so PowerShell can recover them', async () => {
+    const reader = new ConfigurationReader({
+      directRead: async () => Buffer.from([0x8f, 0x02, 0xc1, 0x00, 0x17, 0xff]),
+      powershellRead: async () => ({ bytes: Buffer.from('project(m C)'), executable: 'pwsh.exe' }),
+    });
+    expect(await reader.read(file, undefined, 1024, true)).toMatchObject({
+      text: 'project(m C)',
+      info: { reader: 'powershell' },
+    });
+  });
   it('honors UTF-16 BOMs without a fallback', async () => {
     await fs.writeFile(file, Buffer.from('\ufeffhello', 'utf16le'));
     expect(await new ConfigurationReader().read(file)).toMatchObject({ text: 'hello', info: { encoding: 'utf-16le' } });

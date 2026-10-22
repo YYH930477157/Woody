@@ -560,6 +560,17 @@ describe('CMake workbench service', () => {
     await fs.writeFile(path.join(project, 'CMakeLists.txt'), 'project(C)');
     expect((await finish(instance, (await instance.start(project, 'configure')).id)).job.error).toMatch(/cxxCompiler/);
   });
+  it('reads the project languages from a CMakeLists.txt with GBK comments', async () => {
+    const instance = await service();
+    await fs.rm(path.join(toolsDir, 'g++.exe'));
+    // "# 电表固件" in GBK is not valid UTF-8; only the ASCII declaration matters.
+    const comment = Buffer.from([0x23, 0x20, 0xb5, 0xe7, 0xb1, 0xed, 0xb9, 0xcc, 0xbc, 0xfe, 0x0a]);
+    await fs.writeFile(
+      path.join(project, 'CMakeLists.txt'),
+      Buffer.concat([comment, Buffer.from('project(meter LANGUAGES C)\n')])
+    );
+    expect((await finish(instance, (await instance.start(project, 'configure')).id)).job.status).toBe('succeeded');
+  });
   it('does not launch a job racing service shutdown', async () => {
     let calls = 0;
     const instance = await service(async (request) => {
