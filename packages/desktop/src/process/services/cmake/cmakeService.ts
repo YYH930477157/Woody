@@ -11,6 +11,7 @@ import type {
   CmakeToolCheck,
   CmakeWorkspace,
 } from '@/common/types/cmake';
+import { deepEqual } from '@/common/utils/deepEqual';
 import { childEnvironment, configurationHash, normalizeConfiguration } from './configuration';
 import { buildCommand, configureCommand, type CmakeCommand } from './commands';
 import { runProcess, type ProcessRunner } from './processRunner';
@@ -63,7 +64,7 @@ export class CmakeService {
   private readonly retention: number;
   private disposed = false;
   private readonly reader: ConfigurationReader;
-  private readonly toolChecks = new Map<string, { settings: string; checks: CmakeToolCheck[] }>();
+  private readonly toolChecks = new Map<string, { settings: CmakeTools; checks: CmakeToolCheck[] }>();
 
   constructor(
     private readonly storagePath: string,
@@ -87,7 +88,8 @@ export class CmakeService {
     const workspacePath = await loadProjectWorkspace(this.storagePath, root);
     const loaded = await loadVariantConfiguration(root, workspacePath, config.read, this.reader);
     const checked = this.toolChecks.get(projectKey(root));
-    const toolChecks = checked?.settings === JSON.stringify(config.tools) ? structuredClone(checked.checks) : undefined;
+    const toolChecks =
+      checked && deepEqual(checked.settings, config.tools) ? structuredClone(checked.checks) : undefined;
     const dimensions = loaded.dimensions;
     const invalidSelections: string[] = [];
     if (!loaded.error && recoverSelections) {
@@ -264,10 +266,11 @@ export class CmakeService {
     this.locks.add(key);
     try {
       const normalized = normalizeConfiguration(config);
-      const old = await loadConfiguration(this.storagePath, root);
-      const readerChanged = JSON.stringify(old.read) !== JSON.stringify(normalized.read);
-      if (readerChanged) this.reader.clear();
-      const next = await this.project(root, undefined, normalized, readerChanged, true);
+      const stored = await loadConfiguration(this.storagePath, root);
+      if (!deepEqual(stored.read, normalized.read)) this.reader.clear();
+      // Saving reconciles the caller's draft with the variants on disk, so stale selections are pruned instead of
+      // failing the whole save; execution stays strict about the selection it is given.
+      const next = await this.project(root, undefined, normalized, true, true);
       await storeConfiguration(this.storagePath, root, next.project.config);
       return next.project;
     } finally {
@@ -441,7 +444,6 @@ export class CmakeService {
         entry.path = resolved[name];
         if (problems[name]) throw new Error(problems[name]);
         await requireTools({ ...config.tools, [name]: entry.path }, [name]);
-        entry.status = 'failed';
         const result = await this.runner({
           executable: entry.path,
           args: ['--version'],
@@ -471,7 +473,7 @@ export class CmakeService {
       this.append(state, `\n${name}: ${entry.path || '-'} [${entry.status}]${entry.error ? ` ${entry.error}` : ''}\n`);
     }
     this.toolChecks.set(projectKey(projectPath), {
-      settings: JSON.stringify(config.tools),
+      settings: structuredClone(config.tools),
       checks: structuredClone(checks),
     });
     if (checks.some((tool) => tool.status !== 'found')) throw new Error('cmake.toolsIncomplete');

@@ -213,6 +213,21 @@ describe('CMake workbench service', () => {
     expect(saved.selection).toEqual({ mode: 'new' });
     expect((await instance.inspect(project)).configurationError).toBeUndefined();
   });
+  it('reconciles a stale selection even when the reader settings are unchanged', async () => {
+    const instance = await service();
+    const file = path.join(project, 'cmake-variants.yaml');
+    await fs.writeFile(file, 'mode: {choices: {old: {}}}');
+    const initial = await instance.inspect(project);
+    const saved = await instance.save(project, { ...initial.config, selections: { mode: 'old' } });
+    expect(saved.selection).toEqual({ mode: 'old' });
+    await fs.writeFile(file, 'mode: {choices: {new: {short: "\u65b0"}}}');
+    // Only the draft reconciliation can rescue this save: neither the reader settings nor the variants selection
+    // changed in the payload, yet the new file no longer contains the saved choice.
+    const reconciled = await instance.save(project, { ...saved.config, jobs: 4 });
+    expect(reconciled.config.selections).toEqual({});
+    expect(reconciled.selection).toEqual({ mode: 'new' });
+    expect(reconciled.invalidSelections).toEqual(['mode=old']);
+  });
   it('invalidates an earlier successful tool report as soon as a new check starts', async () => {
     let block = false;
     const instance = await service(async (request) => {
