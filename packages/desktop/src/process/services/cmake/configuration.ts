@@ -19,6 +19,15 @@ export function defaultConfiguration(): CmakeConfiguration {
   };
 }
 
+/** Older releases accepted any absolute .exe; the reader may only start pwsh. */
+function unsupportedPowerShellPath(value: unknown): boolean {
+  return (
+    typeof value === 'string' &&
+    value !== '' &&
+    (!path.isAbsolute(value) || path.basename(value).toLowerCase() !== powerShellExecutableName)
+  );
+}
+
 /** Validate data coming from IPC, persisted JSON or MCP before using process arguments. */
 export function normalizeConfiguration(input: CmakeConfiguration): CmakeConfiguration {
   if (!input || typeof input !== 'object') throw new Error('cmake.invalidConfiguration');
@@ -66,12 +75,21 @@ export function normalizeConfiguration(input: CmakeConfiguration): CmakeConfigur
     !['auto', 'direct', 'powershell'].includes(read.mode) ||
     !['auto', 'utf-8', 'gb18030', 'utf-16le', 'utf-16be'].includes(read.encoding) ||
     !validString(read.powershellPath) ||
-    (read.powershellPath !== '' &&
-      (!path.isAbsolute(read.powershellPath) ||
-        path.basename(read.powershellPath).toLowerCase() !== powerShellExecutableName))
+    unsupportedPowerShellPath(read.powershellPath)
   )
     throw new Error('cmake.invalidConfiguration: reader settings');
   return structuredClone(config);
+}
+
+/**
+ * Stored configurations are repaired before validation so a PowerShell path accepted by an older release cannot hide
+ * the project from the panel. Saving still uses normalizeConfiguration and rejects unsupported executables.
+ */
+export function normalizeStoredConfiguration(input: CmakeConfiguration): CmakeConfiguration {
+  const read = input?.read;
+  if (!read || typeof read !== 'object' || Array.isArray(read) || !unsupportedPowerShellPath(read.powershellPath))
+    return normalizeConfiguration(input);
+  return normalizeConfiguration({ ...input, read: { ...read, powershellPath: '' } });
 }
 
 function sorted(value: unknown): unknown {

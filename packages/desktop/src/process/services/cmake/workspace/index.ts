@@ -9,7 +9,7 @@ import type {
   CmakeReadOptions,
   CmakeWorkspace,
 } from '@/common/types/cmake';
-import { defaultConfiguration, normalizeConfiguration } from '../configuration';
+import { defaultConfiguration, normalizeStoredConfiguration } from '../configuration';
 import { parseVariants } from '../variants';
 import { ConfigurationReader, readBoundedBytes, readErrorCode } from './reader';
 export { ConfigurationReader } from './reader';
@@ -254,7 +254,7 @@ export async function storeProjectWorkspace(storage: string, root: string, works
 
 export async function loadConfiguration(storage: string, root: string): Promise<CmakeConfiguration> {
   try {
-    return normalizeConfiguration(
+    return normalizeStoredConfiguration(
       JSON.parse(await readBounded(configurationFile(storage, root))) as CmakeConfiguration
     );
   } catch (error) {
