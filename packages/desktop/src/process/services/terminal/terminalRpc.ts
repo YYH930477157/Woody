@@ -44,6 +44,10 @@ const requestSchema = z
   })
   .strict();
 
+// Each code unit in `data` or `pattern` may become a six-byte \uXXXX escape, so the schema maximum
+// (192 KiB + 64 KiB) can serialize to roughly 1.5 MiB. Leave room for the envelope and future fields.
+const MAX_TERMINAL_FRAME_BYTES = 2 * 1024 * 1024;
+
 /** Private socket credentials authorize transport; serial policy or explicit grants scope device access. */
 export async function startTerminalRpc(
   service: TerminalConnectionService,
@@ -52,8 +56,7 @@ export async function startTerminalRpc(
 ): Promise<{ port: number; token: string; close: () => Promise<void> }> {
   const token = randomBytes(32).toString('hex');
   const server = createServer((_request, response) => response.writeHead(404).end());
-  // terminalSendSchema allows 192 KiB of data plus a 64 KiB pattern in one request; JSON escaping needs headroom.
-  const sockets = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 });
+  const sockets = new WebSocketServer({ noServer: true, maxPayload: MAX_TERMINAL_FRAME_BYTES });
   server.on('upgrade', (request, socket, head) => {
     const url = new URL(request.url || '/', 'http://127.0.0.1');
     const candidate = url.searchParams.get('token') || '';
