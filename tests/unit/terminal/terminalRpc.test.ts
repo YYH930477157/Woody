@@ -54,4 +54,50 @@ describe('private terminal RPC', () => {
     });
     expect(rejected).toBe(403);
   });
+  it('accepts a schema-valid send whose JSON escaping exceeds one MiB', async () => {
+    const sends: Array<{ data: string }> = [];
+    const bridge = await startTerminalRpc(
+      {
+        send: async (_id: string, send: { data: string }) => {
+          sends.push(send);
+          return { status: 'completed', byteLength: 1 };
+        },
+        revokeLease: () => undefined,
+      } as never,
+      async () => [],
+      {
+        actor: async () => ({ ticket: 'ticket', leaseId: 'lease' }),
+        release: () => undefined,
+      } as never
+    );
+    cleanup.push(bridge.close);
+    const socket = new WebSocket(`ws://127.0.0.1:${bridge.port}/terminal?token=${bridge.token}`);
+    await new Promise<void>((resolve, reject) => {
+      socket.once('open', resolve);
+      socket.once('error', reject);
+    });
+    const data = '\u0001'.repeat(196608);
+    const pattern = '\u0002'.repeat(65536);
+    const response = await new Promise<Record<string, unknown>>((resolve, reject) => {
+      socket.once('message', (raw) => resolve(JSON.parse(raw.toString())));
+      socket.once('error', reject);
+      socket.once('close', (code) => reject(new Error(`socket closed early (${code})`)));
+      socket.send(
+        JSON.stringify({
+          id: 1,
+          action: 'send',
+          connectionId: 'connection',
+          send: {
+            data,
+            encoding: 'utf8',
+            ending: 'none',
+            wait: { mode: 'pattern', pattern, patternEncoding: 'utf8', timeoutMs: 1000 },
+          },
+        })
+      );
+    });
+    expect(response).toMatchObject({ id: 1, result: { status: 'completed' } });
+    expect(sends).toHaveLength(1);
+    expect(sends[0].data).toHaveLength(196608);
+  });
 });
