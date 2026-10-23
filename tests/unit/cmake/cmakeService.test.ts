@@ -3,6 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CmakeService } from '../../../packages/desktop/src/process/services/cmake/cmakeService';
+import { defaultConfiguration } from '../../../packages/desktop/src/process/services/cmake/configuration';
+import { storeConfiguration } from '../../../packages/desktop/src/process/services/cmake/workspace';
 import type { ProcessRequest, ProcessRunner } from '../../../packages/desktop/src/process/services/cmake/processRunner';
 import type { CmakeJobRead } from '../../../packages/desktop/src/common/types/cmake';
 
@@ -154,6 +156,17 @@ describe('CMake workbench service', () => {
     await instance.save(project, { ...initial.config, read });
     expect((await (await service()).inspect(project)).config.read).toEqual(read);
   });
+  it('repairs a legacy saved PowerShell path instead of failing to load the project', async () => {
+    const legacy = defaultConfiguration();
+    legacy.read = {
+      mode: 'auto',
+      encoding: 'auto',
+      powershellPath: path.join(root, 'powershell.exe'),
+    };
+    await storeConfiguration(storage, project, legacy);
+    const loaded = await (await service()).inspect(project);
+    expect(loaded.config.read).toEqual({ mode: 'auto', encoding: 'auto', powershellPath: '' });
+  });
   it('reuses the selected project reader settings for workspace discovery after restart', async () => {
     const instance = await service();
     await instance.discover(root);
@@ -175,6 +188,20 @@ describe('CMake workbench service', () => {
     const initial = await instance.inspect(project);
     await expect(
       instance.save(project, { ...initial.config, read: { mode: 'direct', encoding: 'auto', powershellPath: 'x.ps1' } })
+    ).rejects.toThrow('cmake.invalidConfiguration');
+  });
+  it('rejects a non-pwsh PowerShell path when saving', async () => {
+    const instance = await service();
+    const initial = await instance.inspect(project);
+    await expect(
+      instance.save(project, {
+        ...initial.config,
+        read: {
+          mode: 'auto',
+          encoding: 'auto',
+          powershellPath: path.join(root, 'powershell.exe'),
+        },
+      })
     ).rejects.toThrow('cmake.invalidConfiguration');
   });
   it('reloads repaired variants without changing saved tool paths and only reveals an in-workspace file', async () => {
