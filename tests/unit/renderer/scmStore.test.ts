@@ -225,7 +225,19 @@ describe('openScmProject', () => {
 
     expect(getScmSnapshot().repositories).toEqual([]);
     expect(getScmSnapshot().loadState).toBe('ready');
+    expect(getScmSnapshot().discoveryFailures).toEqual([]);
     expect(h.subscribeCalls).toEqual([]); // nothing to subscribe
+  });
+
+  it('keeps the folders whose repository failed to open, and drops them with the project', async () => {
+    const failure = { pe_id: 'pe1', label: 'proj', path: 'D:/work/proj', message: 'bad config line 1' };
+    configureScmStore({ ...h.port, listRepositories: async () => ({ repositories: [], failures: [failure] }) });
+    await openScmProject('p1');
+
+    expect(getScmSnapshot().discoveryFailures).toEqual([failure]);
+    expect(getScmSnapshot().loadState).toBe('ready');
+    closeScmProject();
+    expect(getScmSnapshot().discoveryFailures).toEqual([]);
   });
 
   it('surfaces a listRepositories failure as an error state', async () => {
@@ -356,6 +368,20 @@ describe('scm/repositoriesChanged', () => {
   beforeEach(async () => {
     h.setRepos([repo()]);
     await openScmProject('p1');
+  });
+
+  it('replaces the failed folders only when a frame carries them, for the open project only', () => {
+    const failure = { pe_id: 'pe2', label: 'lib', path: 'D:/work/lib', message: 'bad config line 1' };
+    applyScmNotification('scm/repositoriesChanged', { project_id: 'p1', failures: [failure] });
+    expect(getScmSnapshot().discoveryFailures).toEqual([failure]);
+
+    // Absent means unchanged; another project's frame never touches this one.
+    applyScmNotification('scm/repositoriesChanged', { project_id: 'p1', removed: [] });
+    applyScmNotification('scm/repositoriesChanged', { project_id: 'p2', failures: [] });
+    expect(getScmSnapshot().discoveryFailures).toEqual([failure]);
+
+    applyScmNotification('scm/repositoriesChanged', { project_id: 'p1', failures: [] });
+    expect(getScmSnapshot().discoveryFailures).toEqual([]);
   });
 
   it('adds a new repo and subscribes to it', async () => {

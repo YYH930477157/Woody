@@ -336,6 +336,10 @@
   "hardwareAccelerationAutoDisabledNotice": "偵測到顯示卡渲染反覆崩潰，已自動關閉硬體加速以維持應用程式穩定。可在 設定 → 系統 中重新開啟。",
   "hardwareAccelerationRestartConfirm": "重新啟動 WoodyUi 以套用新的硬體加速設定？",
   "hardwareAccelerationUpdateFailed": "更新硬體加速設定失敗",
+  "scmSystemGit": "透過系統 Git 讀取儲存庫",
+  "scmSystemGitDesc": "適用於裝有檔案加密軟體的電腦：「變更」面板改用本機安裝的 git 指令讀取儲存庫，由加密軟體信任的 git 讀到明文。重新啟動後生效。",
+  "scmSystemGitRestartConfirm": "重新啟動 WoodyUi 以套用新的儲存庫讀取設定？",
+  "scmSystemGitUpdateFailed": "更新儲存庫讀取設定失敗",
   "browserNotification": {
     "enable": "開啟瀏覽器通知",
     "granted": "瀏覽器通知已開啟",

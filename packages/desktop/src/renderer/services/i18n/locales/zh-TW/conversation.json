@@ -671,13 +671,15 @@
     },
     "scm": {
       "notARepository": "該資料夾未納入版本控制",
+      "openFailed": "無法開啟該資料夾中的儲存庫",
       "noChanges": "沒有變更",
       "loading": "正在載入變更…",
       "loadFailed": "無法載入變更",
       "diagnostics": {
         "checkedFolders": "已檢查的專案資料夾",
         "backendReason": "後端回傳的原因",
-        "notARepositoryHint": "「變更」只顯示 Git 儲存庫，且只檢查已加入專案的資料夾。清單為空時：先把專案資料夾加入專案；該資料夾沒有 .git 就在其中執行 git init；儲存庫在上一層目錄就把上一層目錄加入專案。"
+        "notARepositoryHint": "「變更」只顯示 Git 儲存庫，且只檢查已加入專案的資料夾。清單為空時：先把專案資料夾加入專案；該資料夾沒有 .git 就在其中執行 git init；儲存庫在上一層目錄就把上一層目錄加入專案。",
+        "openFailedHint": "該資料夾有 Git 儲存庫，但後端讀取失敗，原因見上方。如果這台電腦裝有檔案加密軟體，請在 設定 → 系統 中開啟「透過系統 Git 讀取儲存庫」並重新啟動。"
       },
       "monitorScope": {
         "label": "顯示範圍",

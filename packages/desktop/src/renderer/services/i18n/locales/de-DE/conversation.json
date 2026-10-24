@@ -672,13 +672,15 @@
     },
     "scm": {
       "notARepository": "Dieser Ordner steht nicht unter Versionskontrolle",
+      "openFailed": "Das Repository in diesem Ordner konnte nicht geöffnet werden",
       "noChanges": "Keine Änderungen",
       "loading": "Änderungen werden geladen…",
       "loadFailed": "Änderungen konnten nicht geladen werden",
       "diagnostics": {
         "checkedFolders": "Geprüfte Projektordner",
         "backendReason": "Meldung des Backends",
-        "notARepositoryHint": "„Änderungen“ zeigt nur Git-Repositories und prüft ausschließlich die zum Projekt hinzugefügten Ordner. Ist die Liste leer: zuerst den Projektordner hinzufügen; fehlt dort .git, im Ordner git init ausführen; liegt das Repository eine Ebene höher, stattdessen den übergeordneten Ordner hinzufügen."
+        "notARepositoryHint": "„Änderungen“ zeigt nur Git-Repositories und prüft ausschließlich die zum Projekt hinzugefügten Ordner. Ist die Liste leer: zuerst den Projektordner hinzufügen; fehlt dort .git, im Ordner git init ausführen; liegt das Repository eine Ebene höher, stattdessen den übergeordneten Ordner hinzufügen.",
+        "openFailedHint": "Der Ordner enthält ein Git-Repository, das das Backend nicht lesen konnte; den Grund sehen Sie oben. Läuft auf diesem Computer eine Dateiverschlüsselungssoftware, aktivieren Sie unter Einstellungen → System „Repositorys über System-Git lesen“ und starten Sie neu."
       },
       "monitorScope": {
         "label": "Anzeigebereich",

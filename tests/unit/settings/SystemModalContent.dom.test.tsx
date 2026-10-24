@@ -24,6 +24,11 @@ const { systemInfoMock, updateSystemInfoMock, restartMock, showOpenMock, message
       setLocal: vi.fn(),
     },
   }));
+const scmSystemGitMocks = vi.hoisted(() => ({
+  get: vi.fn(() => Promise.resolve(false)),
+  set: vi.fn(() => Promise.resolve()),
+  messageError: vi.fn(),
+}));
 const clientBusinessSettingsMocks = vi.hoisted(() => ({
   getClientBusinessSetting: vi.fn(),
   setClientBusinessSetting: vi.fn(() => Promise.resolve()),
@@ -75,6 +80,8 @@ vi.mock('@/common', () => ({
     systemSettings: {
       getCloseToTray: { invoke: vi.fn(() => Promise.resolve(false)) },
       setCloseToTray: { invoke: vi.fn(() => Promise.resolve()) },
+      getScmSystemGit: { invoke: scmSystemGitMocks.get },
+      setScmSystemGit: { invoke: scmSystemGitMocks.set },
     },
     dialog: {
       showOpen: { invoke: showOpenMock },
@@ -92,6 +99,7 @@ vi.mock('@arco-design/web-react', async (importOriginal) => {
     Message: {
       ...actual.Message,
       info: messageInfoMock,
+      error: scmSystemGitMocks.messageError,
     },
     Modal: {
       ...actual.Modal,
@@ -177,6 +185,35 @@ describe('SystemModalContent directory settings', () => {
     });
     expect(restartMock).toHaveBeenCalledTimes(1);
     expect(container).toHaveTextContent('/new-logs');
+  });
+
+  it('stores the system git switch and restarts so the backend picks it up', async () => {
+    renderContent();
+    const row = (await screen.findByText('settings.scmSystemGit')).parentElement?.parentElement as HTMLElement;
+    const toggle = within(row).getByRole('switch');
+    await waitFor(() => expect(scmSystemGitMocks.get).toHaveBeenCalled());
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+
+    fireEvent.click(toggle);
+
+    await waitFor(() => expect(restartMock).toHaveBeenCalledTimes(1));
+    expect(scmSystemGitMocks.set).toHaveBeenCalledWith({ enabled: true });
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('turns the system git switch back and explains when it cannot be stored', async () => {
+    scmSystemGitMocks.set.mockRejectedValueOnce(new Error('disk full'));
+    renderContent();
+    const row = (await screen.findByText('settings.scmSystemGit')).parentElement?.parentElement as HTMLElement;
+    const toggle = within(row).getByRole('switch');
+
+    fireEvent.click(toggle);
+
+    await waitFor(() =>
+      expect(scmSystemGitMocks.messageError).toHaveBeenCalledWith('settings.scmSystemGitUpdateFailed')
+    );
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    expect(restartMock).not.toHaveBeenCalled();
   });
 
   it('shows the update failure reason when changing a directory fails', async () => {

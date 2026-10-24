@@ -33,6 +33,7 @@ import type {
   ContentRef,
   ScmActionFailure,
   ScmActionKind,
+  ScmDiscoveryFailure,
   ScmFileRef,
   ScmHead,
   ScmRepositoriesChanged,
@@ -67,7 +68,7 @@ export type ScmActionResult = {
  * without a socket (same seam as `MonitorPort` / `SearchPort`).
  */
 export type ScmPort = {
-  listRepositories: (projectId: string) => Promise<{ repositories: ScmRepository[] }>;
+  listRepositories: (projectId: string) => Promise<{ repositories: ScmRepository[]; failures?: ScmDiscoveryFailure[] }>;
   subscribe: (repoIds: string[]) => Promise<{ statuses: ScmStatus[] }>;
   unsubscribe: (repoIds: string[]) => void;
   status: (repoId: string) => Promise<ScmStatus>;
@@ -88,6 +89,8 @@ export type ScmView = {
   loadState: ScmLoadState;
   /** Set when `loadState === 'error'`; an i18n-agnostic message for the panel. */
   error?: string;
+  /** Project folders the backend could not open, with its reason; empty when every folder opened. */
+  discoveryFailures: ScmDiscoveryFailure[];
   /**
    * Which repo's changes the multi-repo panel body shows. `null` means "fall back
    * to the first repo" — the default on open and the landing spot after the selected
@@ -133,6 +136,7 @@ const EMPTY_VIEW: ScmView = {
   repositories: [],
   statuses: {},
   loadState: 'idle',
+  discoveryFailures: [],
   selectedRepoId: null,
   selectedResource: null,
   actionBusy: false,
@@ -152,6 +156,7 @@ let appliedSeq = new Map<string, number>();
 let subscribed = new Set<string>();
 let loadState: ScmLoadState = 'idle';
 let error: string | undefined;
+let discoveryFailures: ScmDiscoveryFailure[] = [];
 let selectedRepoId: string | null = null;
 let selectedResource: string | null = null;
 let actionBusy = false;
@@ -169,6 +174,7 @@ const rebuild = (): void => {
     statuses: Object.fromEntries(statuses),
     loadState,
     error,
+    discoveryFailures,
     selectedRepoId,
     selectedResource,
     actionBusy,
@@ -268,6 +274,8 @@ const applyRepositoriesChanged = (delta: ScmRepositoriesChanged | undefined): vo
   // corrupt the current view. A malformed frame missing `project_id` also fails this
   // guard (`undefined !== projectId`) and is dropped — the safe outcome.
   if (delta.project_id !== projectId) return;
+  // A full replacement list, sent only when it changed; absent means "unchanged".
+  if (delta.failures !== undefined) discoveryFailures = delta.failures;
   const removed = new Set(delta.removed ?? []);
   const byId = new Map(repositories.map((r) => [r.repo_id, r]));
 
@@ -356,6 +364,7 @@ export const openScmProject = async (id: string): Promise<void> => {
   selectedRepoId = null;
   selectedResource = null;
   error = undefined;
+  discoveryFailures = [];
   // Action state is per-project (same reason as in `closeScmProject`): a report
   // saying "these files failed" must not survive onto a different project's list.
   actionBusy = false;
@@ -375,6 +384,7 @@ export const openScmProject = async (id: string): Promise<void> => {
     const result = await port.listRepositories(id);
     if (projectId !== id) return; // switched away while in flight
     repositories = result.repositories ?? [];
+    discoveryFailures = result.failures ?? [];
     loadState = 'ready';
     commit();
     await subscribeRepos(repositories.map((r) => r.repo_id));
@@ -418,6 +428,7 @@ export const rediscoverRepos = async (): Promise<void> => {
       added: next.filter((r) => !currentIds.has(r.repo_id)),
       changed: next.filter((r) => currentIds.has(r.repo_id)),
       removed: [...currentIds].filter((id) => !nextIds.has(id)),
+      failures: result.failures ?? [],
     });
   } catch {
     // A failed re-list leaves the current repository list intact.
@@ -446,6 +457,7 @@ export const closeScmProject = (): void => {
   selectedResource = null;
   loadState = 'idle';
   error = undefined;
+  discoveryFailures = [];
   // Action state is per-project: carrying a report across a close would attach one
   // project's "these files failed" to another project's file list.
   actionBusy = false;
@@ -701,6 +713,7 @@ export const resetScmStoreForTest = (): void => {
   subscribed = new Set();
   loadState = 'idle';
   error = undefined;
+  discoveryFailures = [];
   selectedRepoId = null;
   selectedResource = null;
   actionBusy = false;

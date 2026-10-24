@@ -671,13 +671,15 @@
     },
     "scm": {
       "notARepository": "Not a version-controlled folder",
+      "openFailed": "The repository in this folder could not be opened",
       "noChanges": "No changes",
       "loading": "Loading changes…",
       "loadFailed": "Couldn't load changes",
       "diagnostics": {
         "checkedFolders": "Checked project folders",
         "backendReason": "Backend reason",
-        "notARepositoryHint": "Changes only lists Git repositories, and only folders attached to the project are checked. If the list is empty: attach the project folder first; if it has no .git, run git init in it; if the repository sits one level up, attach that parent folder instead."
+        "notARepositoryHint": "Changes only lists Git repositories, and only folders attached to the project are checked. If the list is empty: attach the project folder first; if it has no .git, run git init in it; if the repository sits one level up, attach that parent folder instead.",
+        "openFailedHint": "The folder has a Git repository that the backend could not read; the reason is above. If this computer runs file encryption software, turn on \"Read repositories through system Git\" in Settings → System and restart."
       },
       "monitorScope": {
         "label": "Display scope",

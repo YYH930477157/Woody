@@ -671,13 +671,15 @@
     },
     "scm": {
       "notARepository": "该文件夹未纳入版本控制",
+      "openFailed": "无法打开该文件夹中的仓库",
       "noChanges": "没有变更",
       "loading": "正在加载变更…",
       "loadFailed": "无法加载变更",
       "diagnostics": {
         "checkedFolders": "已检查的项目文件夹",
         "backendReason": "后端返回的原因",
-        "notARepositoryHint": "「变更」只显示 Git 仓库，且只检查已加入项目的文件夹。列表为空时：先把项目文件夹加入项目；该文件夹没有 .git 就在其中执行 git init；仓库在上一层目录就把上一层目录加入项目。"
+        "notARepositoryHint": "「变更」只显示 Git 仓库，且只检查已加入项目的文件夹。列表为空时：先把项目文件夹加入项目；该文件夹没有 .git 就在其中执行 git init；仓库在上一层目录就把上一层目录加入项目。",
+        "openFailedHint": "该文件夹有 Git 仓库，但后端读取失败，原因见上方。如果这台电脑装有文件加密软件，请在 设置 → 系统 中打开「通过系统 Git 读取仓库」并重启。"
       },
       "monitorScope": {
         "label": "显示范围",

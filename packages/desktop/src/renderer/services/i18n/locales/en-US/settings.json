@@ -336,6 +336,10 @@
   "hardwareAccelerationAutoDisabledNotice": "Repeated graphics crashes were detected, so hardware acceleration was turned off automatically to keep WoodyUi stable. You can re-enable it in Settings → System.",
   "hardwareAccelerationRestartConfirm": "Restart WoodyUi to apply the new hardware acceleration setting?",
   "hardwareAccelerationUpdateFailed": "Failed to update hardware acceleration setting",
+  "scmSystemGit": "Read repositories through system Git",
+  "scmSystemGitDesc": "For computers with file encryption software: the Changes panel uses the installed git command, which the encryption software trusts, to read repositories. Takes effect after a restart.",
+  "scmSystemGitRestartConfirm": "Restart WoodyUi to apply the new repository reading setting?",
+  "scmSystemGitUpdateFailed": "Failed to update the repository reading setting",
   "browserNotification": {
     "enable": "Enable browser notifications",
     "granted": "Browser notifications enabled",

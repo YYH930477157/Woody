@@ -336,6 +336,10 @@
   "hardwareAccelerationAutoDisabledNotice": "グラフィックスの繰り返しクラッシュを検出したため、アプリを安定させるためにハードウェアアクセラレーションを自動的に無効化しました。設定 → システム から再度有効にできます。",
   "hardwareAccelerationRestartConfirm": "新しいハードウェアアクセラレーション設定を反映するため WoodyUi を再起動しますか？",
   "hardwareAccelerationUpdateFailed": "ハードウェアアクセラレーション設定の更新に失敗しました",
+  "scmSystemGit": "システムの Git でリポジトリを読み取る",
+  "scmSystemGitDesc": "ファイル暗号化ソフトを導入した PC 向け：「変更」パネルは、暗号化ソフトが信頼するインストール済みの git コマンドでリポジトリを読み取ります。再起動後に反映されます。",
+  "scmSystemGitRestartConfirm": "新しいリポジトリ読み取り設定を反映するため WoodyUi を再起動しますか？",
+  "scmSystemGitUpdateFailed": "リポジトリ読み取り設定の更新に失敗しました",
   "browserNotification": {
     "enable": "ブラウザ通知を有効にする",
     "granted": "ブラウザ通知が有効になりました",

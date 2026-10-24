@@ -336,6 +336,10 @@
   "hardwareAccelerationAutoDisabledNotice": "Tekrarlanan grafik çökmeleri algılandı; uygulamayı kararlı tutmak için donanım hızlandırma otomatik olarak kapatıldı. Ayarlar → Sistem bölümünden yeniden etkinleştirebilirsiniz.",
   "hardwareAccelerationRestartConfirm": "Yeni donanım hızlandırma ayarını uygulamak için WoodyUi yeniden başlatılsın mı?",
   "hardwareAccelerationUpdateFailed": "Donanım hızlandırma ayarı güncellenemedi",
+  "scmSystemGit": "Depoları sistem Git ile oku",
+  "scmSystemGitDesc": "Dosya şifreleme yazılımı olan bilgisayarlar için: Değişiklikler paneli depoları, şifreleme yazılımının güvendiği yüklü git komutuyla okur. Yeniden başlatmadan sonra geçerli olur.",
+  "scmSystemGitRestartConfirm": "Yeni depo okuma ayarını uygulamak için WoodyUi yeniden başlatılsın mı?",
+  "scmSystemGitUpdateFailed": "Depo okuma ayarı güncellenemedi",
   "browserNotification": {
     "enable": "Tarayıcı bildirimlerini etkinleştir",
     "granted": "Tarayıcı bildirimleri etkinleştirildi",

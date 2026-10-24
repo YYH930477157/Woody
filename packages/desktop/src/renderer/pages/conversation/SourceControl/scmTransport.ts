@@ -20,7 +20,7 @@ import { wsEmitter, wsSend } from '@/common/adapter/httpBridge';
 
 import type { MonitorTransport } from '../explorer/monitorClient';
 import { MonitorClient } from '../explorer/monitorClient';
-import type { ScmActionKind, ScmRepository, ScmStatus } from './scmModel';
+import type { ScmActionKind, ScmDiscoveryFailure, ScmRepository, ScmStatus } from './scmModel';
 import {
   applyScmNotification,
   configureScmStore,
@@ -67,7 +67,10 @@ export function initScmRuntime(): MonitorClient {
 
   configureScmStore({
     listRepositories: async (projectId) =>
-      (await scm.request('scm/listRepositories', { project_id: projectId })) as { repositories: ScmRepository[] },
+      (await scm.request('scm/listRepositories', { project_id: projectId })) as {
+        repositories: ScmRepository[];
+        failures?: ScmDiscoveryFailure[];
+      },
     subscribe: async (repoIds) =>
       (await scm.request('scm/subscribe', { repositories: repoIds })) as { statuses: ScmStatus[] },
     unsubscribe: (repoIds) => {

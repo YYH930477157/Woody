@@ -57,6 +57,9 @@ export interface IConfigStorageRefer {
   'system.cronNotificationEnabled'?: boolean;
   // 阻止系统休眠以保证定时任务执行 / Prevent system sleep to ensure scheduled tasks run
   'system.keepAwake'?: boolean;
+  // Read repositories for the Changes panel through the system git executable instead of the backend's built-in
+  // engine, for machines whose file encryption decrypts files only for trusted programs. Applied at backend start.
+  'scm.systemGit'?: boolean;
   // Automatically preview newly created Office files in the current workspace
   // Skills Market: whether the external skills market source is enabled
   'skillsMarket.enabled'?: boolean;

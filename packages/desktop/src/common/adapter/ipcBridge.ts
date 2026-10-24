@@ -1564,6 +1564,8 @@ export const systemSettings = {
   setPetDnd: bridge.buildProvider<void, { dnd: boolean }>('system-settings:set-pet-dnd'),
   getPetConfirmEnabled: bridge.buildProvider<boolean, void>('system-settings:get-pet-confirm-enabled'),
   setPetConfirmEnabled: bridge.buildProvider<void, { enabled: boolean }>('system-settings:set-pet-confirm-enabled'),
+  getScmSystemGit: bridge.buildProvider<boolean, void>('system-settings:get-scm-system-git'),
+  setScmSystemGit: bridge.buildProvider<void, { enabled: boolean }>('system-settings:set-scm-system-git'),
   ensureNodeRuntime: httpPost<{ ready: boolean }, { scope: IRuntimeStatusScope }>('/api/system/ensure-node-runtime'),
   ensureManagedAcpTool: httpPost<{ ready: boolean }, { scope: IRuntimeStatusScope; tool_id: string }>(
     '/api/system/ensure-managed-acp-tool'
