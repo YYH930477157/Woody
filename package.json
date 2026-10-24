@@ -265,7 +265,8 @@
   "engines": {
     "node": ">=22 <25"
   },
-  "aioncoreVersion": "v0.2.2",
+  "aioncoreRepo": "YYH930477157/AionCore",
+  "aioncoreVersion": "v0.2.2-woody.1",
   "electronRebuild": {
     "electronVersion": "^37.3.1"
   },

@@ -335,7 +335,7 @@ Module._load = function patchedLoad(request, parent, isMain) {
   }
 
   if (request === './resolveAioncoreVersion.js' || request.endsWith('/resolveAioncoreVersion.js')) {
-    return { resolveAioncoreVersion: () => 'v-test' };
+    return { resolveAioncoreRepo: () => 'owner/repo-test', resolveAioncoreVersion: () => 'v-test' };
   }
 
   return originalLoad.call(this, request, parent, isMain);
@@ -397,7 +397,7 @@ childProcess.execSync = function mockedExecSync(command) {
       }
 
       const calls = JSON.parse(readFileSync(callsPath, 'utf8')) as Array<{ arch?: string } | null>;
-      expect(calls).toContainEqual(expect.objectContaining({ arch: expectedArch }));
+      expect(calls).toContainEqual(expect.objectContaining({ arch: expectedArch, repo: 'owner/repo-test' }));
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
     }

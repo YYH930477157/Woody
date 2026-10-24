@@ -4,7 +4,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { execSync } = require('child_process');
 const { prepareAioncore } = require('../packages/shared-scripts/src/prepare-aioncore.js');
-const { resolveAioncoreVersion } = require('./resolveAioncoreVersion.js');
+const { resolveAioncoreRepo, resolveAioncoreVersion } = require('./resolveAioncoreVersion.js');
 
 const projectRoot = path.resolve(__dirname, '..');
 const platform = process.env.PACK_PLATFORM || process.platform;
@@ -30,6 +30,7 @@ prepareAioncore({
   platform,
   arch,
   version: resolveAioncoreVersion(projectRoot),
+  repo: resolveAioncoreRepo(projectRoot),
 });
 
 // 2. Create staging dir
