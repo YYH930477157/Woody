@@ -457,7 +457,7 @@ function prepareAioncore(options) {
       tag = resolved;
       console.log(`Resolved aioncore "latest" → ${tag}`);
     } else {
-      tag = version.startsWith('v') ? version : `v${version}`;
+      tag = releaseTag(version);
     }
   }
 
@@ -488,6 +488,7 @@ function prepareAioncore(options) {
       const manifest = {
         platform,
         arch,
+        repo,
         version: tag || `actions-run-${actionsRunId}` || 'local-bundle',
         generatedAt: new Date().toISOString(),
         sourceType: 'local-bundle',
@@ -563,6 +564,7 @@ function prepareAioncore(options) {
     const manifest = {
       platform,
       arch,
+      repo,
       version: tag || `actions-run-${actionsRunId}`,
       generatedAt: new Date().toISOString(),
       sourceType,
@@ -584,10 +586,70 @@ function prepareAioncore(options) {
   throw new Error(`aioncore binary not found for ${runtimeKey} (tag: ${tag})`);
 }
 
+function releaseTag(version) {
+  return version.startsWith('v') ? version : `v${version}`;
+}
+
+/**
+ * Whether resources/bundled-aioncore already holds the pinned release, judged from the manifest that
+ * prepareAioncore writes. A 'latest' pin accepts any prepared version from the same repository.
+ */
+function isPreparedAioncoreCurrent(options) {
+  const { projectRoot, platform, arch, version = 'latest', repo = DEFAULT_REPO } = options;
+  const targetDir = path.join(projectRoot, 'resources', 'bundled-aioncore', `${platform}-${arch}`);
+  let manifest;
+  try {
+    manifest = JSON.parse(fs.readFileSync(path.join(targetDir, 'manifest.json'), 'utf8'));
+  } catch {
+    return false;
+  }
+  const actionsRunId = (process.env.AIONUI_BACKEND_RUN_ID || '').trim();
+  const expected = actionsRunId ? `actions-run-${actionsRunId}` : version === 'latest' ? null : releaseTag(version);
+  return (
+    manifest?.repo === repo &&
+    (expected === null || manifest.version === expected) &&
+    fs.existsSync(path.join(targetDir, getBinaryName(platform))) &&
+    fs.existsSync(path.join(targetDir, 'managed-resources', 'manifest.json'))
+  );
+}
+
+/**
+ * Development startup: prepare aioncore only when the pin changed. The previous bundle is moved aside first and
+ * restored if the refresh fails, so an offline start keeps the backend it already had.
+ */
+function ensurePreparedAioncore(options) {
+  const { projectRoot, platform, arch } = options;
+  const runtimeKey = `${platform}-${arch}`;
+  const targetDir = path.join(projectRoot, 'resources', 'bundled-aioncore', runtimeKey);
+  if (isPreparedAioncoreCurrent(options)) return { prepared: false, dir: targetDir };
+
+  // Outside bundled-aioncore, which electron-builder ships whole.
+  const backupDir = path.join(projectRoot, 'resources', 'bundled-aioncore-previous', runtimeKey);
+  removeDirectorySafe(backupDir);
+  const hadPrevious = fs.existsSync(targetDir);
+  if (hadPrevious) {
+    ensureDirectory(path.dirname(backupDir));
+    fs.renameSync(targetDir, backupDir);
+  }
+  try {
+    const result = prepareAioncore(options);
+    removeDirectorySafe(backupDir);
+    return result;
+  } catch (error) {
+    if (hadPrevious) {
+      removeDirectorySafe(targetDir);
+      fs.renameSync(backupDir, targetDir);
+    }
+    throw error;
+  }
+}
+
 module.exports = {
+  ensurePreparedAioncore,
   getActionsArtifactMissingMessage,
   getActionsArtifactName,
   getDownloadUrl,
+  isPreparedAioncoreCurrent,
   prepareAioncore,
   verifyPreparedAioncoreBundle,
 };
