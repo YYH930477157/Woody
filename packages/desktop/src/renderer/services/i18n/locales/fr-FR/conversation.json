@@ -671,13 +671,15 @@
     },
     "scm": {
       "notARepository": "Ce dossier n'est pas sous gestion de version",
+      "openFailed": "Le dépôt de ce dossier n'a pas pu être ouvert",
       "noChanges": "Aucune modification",
       "loading": "Chargement des modifications…",
       "loadFailed": "Impossible de charger les modifications",
       "diagnostics": {
         "checkedFolders": "Dossiers de projet vérifiés",
         "backendReason": "Motif renvoyé par le backend",
-        "notARepositoryHint": "« Modifications » n'affiche que les dépôts Git et ne vérifie que les dossiers ajoutés au projet. Si la liste est vide : ajoutez d'abord le dossier du projet ; s'il n'a pas de .git, lancez git init dedans ; si le dépôt se trouve un niveau au-dessus, ajoutez plutôt ce dossier parent."
+        "notARepositoryHint": "« Modifications » n'affiche que les dépôts Git et ne vérifie que les dossiers ajoutés au projet. Si la liste est vide : ajoutez d'abord le dossier du projet ; s'il n'a pas de .git, lancez git init dedans ; si le dépôt se trouve un niveau au-dessus, ajoutez plutôt ce dossier parent.",
+        "openFailedHint": "Le dossier contient un dépôt Git que le backend n'a pas pu lire ; le motif figure ci-dessus. Si cet ordinateur utilise un logiciel de chiffrement de fichiers, activez « Lire les dépôts avec le Git du système » dans Paramètres → Système, puis redémarrez."
       },
       "monitorScope": {
         "label": "Périmètre d’affichage",

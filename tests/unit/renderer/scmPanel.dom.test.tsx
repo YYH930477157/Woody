@@ -233,6 +233,36 @@ describe('ScmPanel empty / failure states', () => {
     expect(screen.getByText('not a repository: D:/work/proj')).toBeInTheDocument();
   });
 
+  it('says a folder repository could not be opened, and why, instead of claiming there is none', async () => {
+    configureScmStore({
+      listRepositories: async () => ({
+        repositories: [],
+        failures: [
+          {
+            pe_id: 'pe1',
+            label: 'proj',
+            path: 'D:/work/proj',
+            message: 'scm operation failed during discover: bad config line 1',
+          },
+        ],
+      }),
+      subscribe: async () => ({ statuses: [] }),
+      unsubscribe: () => {},
+      status: async () => status('x', 1, []),
+      diff: async () => ({}),
+    });
+    render(<ScmPanel projectId='p1' repoPaths={{ pe1: 'D:/work/proj' }} />);
+
+    expect(await screen.findByText('conversation.explorer.scm.openFailed')).toBeInTheDocument();
+    expect(screen.queryByText('conversation.explorer.scm.notARepository')).not.toBeInTheDocument();
+    expect(screen.getByText('conversation.explorer.scm.diagnostics.checkedFolders')).toBeInTheDocument();
+    expect(screen.getByText('conversation.explorer.scm.diagnostics.backendReason')).toBeInTheDocument();
+    expect(
+      screen.getByText('D:/work/proj: scm operation failed during discover: bad config line 1')
+    ).toBeInTheDocument();
+    expect(screen.getByText('conversation.explorer.scm.diagnostics.openFailedHint')).toBeInTheDocument();
+  });
+
   it('shows `no changes` for a clean repo', async () => {
     installPort({ repositories: [repo()], firstFrames: { 'scm:pe1': status('scm:pe1', 1, []) } });
     render(<ScmPanel projectId='p1' />);

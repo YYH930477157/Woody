@@ -336,6 +336,10 @@
   "hardwareAccelerationAutoDisabledNotice": "检测到显卡渲染反复崩溃，已自动关闭硬件加速以保持应用稳定。可在 设置 → 系统 中重新开启。",
   "hardwareAccelerationRestartConfirm": "重启 WoodyUi 以应用新的硬件加速设置？",
   "hardwareAccelerationUpdateFailed": "更新硬件加速设置失败",
+  "scmSystemGit": "通过系统 Git 读取仓库",
+  "scmSystemGitDesc": "适用于装有文件加密软件的电脑：「变更」面板改用本机安装的 git 命令读取仓库，由加密软件信任的 git 读到明文。重启后生效。",
+  "scmSystemGitRestartConfirm": "重启 WoodyUi 以应用新的仓库读取设置？",
+  "scmSystemGitUpdateFailed": "更新仓库读取设置失败",
   "browserNotification": {
     "enable": "开启浏览器通知",
     "granted": "浏览器通知已开启",

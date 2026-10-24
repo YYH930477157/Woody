@@ -858,6 +858,20 @@ const handleAppReady = async (): Promise<void> => {
     console.error('[Todo] failed to publish data dir:', error);
   }
 
+  /**
+   * 发布「变更」面板使用的 git 后端（设置里的「通过系统 Git 读取仓库」）。与上面同一继承链：
+   * aioncore 只在启动时读一次，必须在 backend 启动前写入 env。
+   *
+   * Publish the Changes panel git backend (the "read repositories through system Git" setting). Same inheritance
+   * chain as above: aioncore reads it once at startup, so it must be in env before the backend starts.
+   */
+  try {
+    const { publishScmGitBackend } = await import('./process/bridge/systemSettingsBridge');
+    await publishScmGitBackend();
+  } catch (error) {
+    console.error('[SourceControl] failed to read the system git setting:', error);
+  }
+
   try {
     const { getTerminalRuntime } = await import('./process/services/terminal/runtime');
     await getTerminalRuntime();

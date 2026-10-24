@@ -677,13 +677,15 @@
     },
     "scm": {
       "notARepository": "Esta pasta não está sob controle de versão",
+      "openFailed": "Não foi possível abrir o repositório desta pasta",
       "noChanges": "Nenhuma alteração",
       "loading": "Carregando alterações…",
       "loadFailed": "Não foi possível carregar as alterações",
       "diagnostics": {
         "checkedFolders": "Pastas do projeto verificadas",
         "backendReason": "Motivo do backend",
-        "notARepositoryHint": "«Alterações» lista apenas repositórios Git e verifica somente as pastas adicionadas ao projeto. Se a lista estiver vazia: adicione primeiro a pasta do projeto; se ela não tiver .git, execute git init nela; se o repositório estiver um nível acima, adicione essa pasta superior."
+        "notARepositoryHint": "«Alterações» lista apenas repositórios Git e verifica somente as pastas adicionadas ao projeto. Se a lista estiver vazia: adicione primeiro a pasta do projeto; se ela não tiver .git, execute git init nela; se o repositório estiver um nível acima, adicione essa pasta superior.",
+        "openFailedHint": "A pasta tem um repositório Git que o backend não conseguiu ler; o motivo aparece acima. Se este computador usa software de criptografia de arquivos, ative \"Ler repositórios pelo Git do sistema\" em Configurações → Sistema e reinicie."
       },
       "monitorScope": {
         "label": "Escopo de exibição",

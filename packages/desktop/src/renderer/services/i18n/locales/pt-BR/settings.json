@@ -336,6 +336,10 @@
   "hardwareAccelerationAutoDisabledNotice": "Foram detectadas falhas repetidas de renderização gráfica, então a aceleração de hardware foi desativada automaticamente para manter o aplicativo estável. Você pode reativá-la em Configurações → Sistema.",
   "hardwareAccelerationRestartConfirm": "Reiniciar o WoodyUi para aplicar a nova configuração de aceleração de hardware?",
   "hardwareAccelerationUpdateFailed": "Falha ao atualizar a configuração de aceleração de hardware",
+  "scmSystemGit": "Ler repositórios pelo Git do sistema",
+  "scmSystemGitDesc": "Para computadores com software de criptografia de arquivos: o painel de alterações lê os repositórios com o comando git instalado, no qual o software de criptografia confia. Entra em vigor após reiniciar.",
+  "scmSystemGitRestartConfirm": "Reiniciar o WoodyUi para aplicar a nova configuração de leitura de repositórios?",
+  "scmSystemGitUpdateFailed": "Falha ao atualizar a configuração de leitura de repositórios",
   "browserNotification": {
     "enable": "Ativar notificações do navegador",
     "granted": "Notificações do navegador ativadas",

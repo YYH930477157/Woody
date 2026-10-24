@@ -673,13 +673,15 @@
     },
     "scm": {
       "notARepository": "Bu klasör sürüm denetiminde değil",
+      "openFailed": "Bu klasördeki depo açılamadı",
       "noChanges": "Değişiklik yok",
       "loading": "Değişiklikler yükleniyor…",
       "loadFailed": "Değişiklikler yüklenemedi",
       "diagnostics": {
         "checkedFolders": "Denetlenen proje klasörleri",
         "backendReason": "Arka uç gerekçesi",
-        "notARepositoryHint": "«Değişiklikler» yalnızca Git depolarını listeler ve yalnızca projeye eklenen klasörleri denetler. Liste boşsa: önce proje klasörünü ekleyin; içinde .git yoksa o klasörde git init çalıştırın; depo bir üst dizindeyse o üst klasörü ekleyin."
+        "notARepositoryHint": "«Değişiklikler» yalnızca Git depolarını listeler ve yalnızca projeye eklenen klasörleri denetler. Liste boşsa: önce proje klasörünü ekleyin; içinde .git yoksa o klasörde git init çalıştırın; depo bir üst dizindeyse o üst klasörü ekleyin.",
+        "openFailedHint": "Klasörde arka ucun okuyamadığı bir Git deposu var; gerekçe yukarıda. Bu bilgisayarda dosya şifreleme yazılımı varsa Ayarlar → Sistem bölümünden \"Depoları sistem Git ile oku\" seçeneğini açıp yeniden başlatın."
       },
       "monitorScope": {
         "label": "Görüntüleme kapsamı",

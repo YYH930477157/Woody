@@ -55,6 +55,7 @@ const SystemModalContent: React.FC = () => {
     platform: 'web',
   });
   const [closeToTray, setCloseToTray] = useState(false);
+  const [scmSystemGit, setScmSystemGit] = useState(false);
   const [gpuStatus, setGpuStatus] = useState<IGpuStatus | null>(null);
   const [notificationEnabled, setNotificationEnabled] = useState(true);
   const [cronNotificationEnabled, setCronNotificationEnabled] = useState(false);
@@ -97,6 +98,11 @@ const SystemModalContent: React.FC = () => {
           setGpuStatus(result.data);
         }
       })
+      .catch(() => {});
+
+    ipcBridge.systemSettings.getScmSystemGit
+      .invoke()
+      .then(setScmSystemGit)
       .catch(() => {});
   }, [isDesktop]);
 
@@ -218,6 +224,30 @@ const SystemModalContent: React.FC = () => {
       });
     },
     [gpuStatus, modal, t]
+  );
+
+  // The backend picks its git engine once at startup, so the switch is stored and then the app restarts.
+  const handleScmSystemGitChange = useCallback(
+    (checked: boolean) => {
+      const previous = scmSystemGit;
+      setScmSystemGit(checked);
+      modal.confirm({
+        title: t('settings.updateConfirm'),
+        content: t('settings.scmSystemGitRestartConfirm'),
+        onOk: () => {
+          ipcBridge.systemSettings.setScmSystemGit
+            .invoke({ enabled: checked })
+            .then(() => ipcBridge.application.restart.invoke())
+            .then((restartResult) => notifyManualRestartRequired(restartResult, t))
+            .catch(() => {
+              setScmSystemGit(previous);
+              Message.error(t('settings.scmSystemGitUpdateFailed'));
+            });
+        },
+        onCancel: () => setScmSystemGit(previous),
+      });
+    },
+    [modal, scmSystemGit, t]
   );
 
   const handleStartOnBootChange = useCallback(
@@ -441,6 +471,16 @@ const SystemModalContent: React.FC = () => {
       label: t('settings.saveUploadToWorkspace'),
       component: <Switch checked={saveUploadToWorkspace} onChange={handleSaveUploadToWorkspaceChange} />,
     },
+    ...(isDesktop
+      ? [
+          {
+            key: 'scmSystemGit',
+            label: t('settings.scmSystemGit'),
+            description: t('settings.scmSystemGitDesc'),
+            component: <Switch checked={scmSystemGit} onChange={handleScmSystemGitChange} />,
+          },
+        ]
+      : []),
     {
       // Positive wording, default on (spec §5.7): every other switch on this
       // page is phrased affirmatively, and a negated one would read as a double

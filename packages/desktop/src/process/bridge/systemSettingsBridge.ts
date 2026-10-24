@@ -22,6 +22,21 @@ import { readCloseToTraySetting, writeCloseToTraySetting } from '@process/utils/
 type LanguageChangeListener = () => void;
 let _languageChangeListener: LanguageChangeListener | null = null;
 
+/** Read by aioncore once at startup; `cli` makes the Changes panel use the system git executable. */
+export const SCM_GIT_BACKEND_ENV = 'AIONUI_SCM_GIT_BACKEND';
+
+/**
+ * Publish the Changes panel git backend before aioncore starts. aioncore inherits our environment at spawn time
+ * and reads the value once, so a changed setting applies after a restart. An explicit value already in the
+ * environment wins over the setting.
+ */
+export async function publishScmGitBackend(): Promise<void> {
+  if (process.env[SCM_GIT_BACKEND_ENV]) return;
+  if ((await ProcessConfig.get('scm.systemGit')) === true) {
+    process.env[SCM_GIT_BACKEND_ENV] = 'cli';
+  }
+}
+
 /**
  * 注册语言变更监听器（供主进程 index.ts 使用）
  * Register a listener for language changes (used by main process index.ts)
@@ -110,5 +125,12 @@ export function initSystemSettingsBridge(): void {
     await ProcessConfig.set('pet.confirmEnabled', enabled);
     const { setPetConfirmEnabled } = await import('@process/pet/petManager');
     setPetConfirmEnabled(enabled);
+  });
+
+  // Stored only: the running backend keeps its engine until the app restarts (see publishScmGitBackend).
+  ipcBridge.systemSettings.getScmSystemGit.provider(async () => (await ProcessConfig.get('scm.systemGit')) === true);
+
+  ipcBridge.systemSettings.setScmSystemGit.provider(async ({ enabled }) => {
+    await ProcessConfig.set('scm.systemGit', enabled);
   });
 }

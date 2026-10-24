@@ -147,6 +147,21 @@ export type ScmRepositoriesChanged = {
   added?: ScmRepository[];
   removed?: string[];
   changed?: ScmRepository[];
+  /** When present, the project's complete current list of folders that failed to open (empty clears it). */
+  failures?: ScmDiscoveryFailure[];
+};
+
+/**
+ * A project folder whose repository the backend could not open (an unreadable or encrypted `.git`, an ownership
+ * refusal). Listed so the panel can say why a folder shows no repository instead of claiming it has none.
+ */
+export type ScmDiscoveryFailure = {
+  pe_id: string;
+  label: string;
+  /** Absolute path of the folder. */
+  path: string;
+  /** The backend's own message, which usually names the file it could not read. */
+  message: string;
 };
 
 // ── state classification (forward-compatible) ───────────────────────────────

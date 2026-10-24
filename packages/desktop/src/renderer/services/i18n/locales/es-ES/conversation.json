@@ -672,13 +672,15 @@
     },
     "scm": {
       "notARepository": "Esta carpeta no está bajo control de versiones",
+      "openFailed": "No se pudo abrir el repositorio de esta carpeta",
       "noChanges": "Sin cambios",
       "loading": "Cargando cambios…",
       "loadFailed": "No se pudieron cargar los cambios",
       "diagnostics": {
         "checkedFolders": "Carpetas de proyecto comprobadas",
         "backendReason": "Motivo del backend",
-        "notARepositoryHint": "«Cambios» solo muestra repositorios Git y únicamente comprueba las carpetas añadidas al proyecto. Si la lista está vacía: añade primero la carpeta del proyecto; si no tiene .git, ejecuta git init en ella; si el repositorio está en la carpeta superior, añade esa carpeta superior."
+        "notARepositoryHint": "«Cambios» solo muestra repositorios Git y únicamente comprueba las carpetas añadidas al proyecto. Si la lista está vacía: añade primero la carpeta del proyecto; si no tiene .git, ejecuta git init en ella; si el repositorio está en la carpeta superior, añade esa carpeta superior.",
+        "openFailedHint": "La carpeta tiene un repositorio Git que el backend no pudo leer; el motivo aparece arriba. Si este equipo usa software de cifrado de archivos, activa «Leer repositorios con el Git del sistema» en Ajustes → Sistema y reinicia."
       },
       "monitorScope": {
         "label": "Ámbito de visualización",

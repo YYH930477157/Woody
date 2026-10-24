@@ -367,26 +367,38 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
       <PanelNotice
         text={t('conversation.explorer.scm.loadFailed')}
         details={
-          view.error
-            ? { label: t('conversation.explorer.scm.diagnostics.backendReason'), values: [view.error] }
-            : undefined
+          view.error ? [{ label: t('conversation.explorer.scm.diagnostics.backendReason'), values: [view.error] }] : []
         }
       />
     );
   }
   // No pe root of this project is a repository → say so, do not fabricate a repo.
   // The checked folders and the next step turn that dead end into a reportable state.
+  // A folder whose repository failed to open is not "no repository": show the backend's reason instead.
   if (view.repositories.length === 0 || !selectedRepo) {
     const checked = [...new Set(Object.values(repoPaths).filter(Boolean))];
+    const failures = view.discoveryFailures;
     return (
       <PanelNotice
-        text={t('conversation.explorer.scm.notARepository')}
-        details={
-          checked.length
-            ? { label: t('conversation.explorer.scm.diagnostics.checkedFolders'), values: checked }
-            : undefined
-        }
-        hint={t('conversation.explorer.scm.diagnostics.notARepositoryHint')}
+        text={t(failures.length ? 'conversation.explorer.scm.openFailed' : 'conversation.explorer.scm.notARepository')}
+        details={[
+          ...(checked.length
+            ? [{ label: t('conversation.explorer.scm.diagnostics.checkedFolders'), values: checked }]
+            : []),
+          ...(failures.length
+            ? [
+                {
+                  label: t('conversation.explorer.scm.diagnostics.backendReason'),
+                  values: failures.map((failure) => `${failure.path}: ${failure.message}`),
+                },
+              ]
+            : []),
+        ]}
+        hint={t(
+          failures.length
+            ? 'conversation.explorer.scm.diagnostics.openFailedHint'
+            : 'conversation.explorer.scm.diagnostics.notARepositoryHint'
+        )}
       />
     );
   }
@@ -1334,25 +1346,27 @@ const ActionReportExtras: React.FC<{
 const PanelNotice: React.FC<{
   text: string;
   hint?: string;
-  details?: { label: string; values: string[] };
-}> = ({ text, hint, details }) => (
+  details?: Array<{ label: string; values: string[] }>;
+}> = ({ text, hint, details = [] }) => (
   // The scroll container and the `min-h-full` inner box keep a tall notice (folders + hint) scrollable instead of
   // clipped at the top, which is what a plain `justify-center` + `overflow-auto` would do in a short sidebar.
   <div className='h-full overflow-auto px-16px py-16px text-center text-t-secondary text-13px'>
     <div className='min-h-full flex flex-col items-center justify-center gap-8px'>
       <div>{text}</div>
-      {details && details.values.length > 0 && (
-        <div className='text-12px' data-scm-diagnostic='details'>
-          <div className='text-t-tertiary'>{details.label}</div>
-          <ul className='m-0 p-0 list-none'>
-            {details.values.map((value) => (
-              <li key={value} className='break-all font-mono'>
-                {value}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {details
+        .filter((group) => group.values.length > 0)
+        .map((group) => (
+          <div key={group.label} className='text-12px' data-scm-diagnostic='details'>
+            <div className='text-t-tertiary'>{group.label}</div>
+            <ul className='m-0 p-0 list-none'>
+              {group.values.map((value) => (
+                <li key={value} className='break-all font-mono'>
+                  {value}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
       {hint && (
         <div className='max-w-420px text-12px text-t-tertiary' data-scm-diagnostic='hint'>
           {hint}

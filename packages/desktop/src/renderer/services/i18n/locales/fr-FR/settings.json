@@ -336,6 +336,10 @@
   "hardwareAccelerationAutoDisabledNotice": "Des plantages graphiques répétés ont été détectés ; l'accélération matérielle a donc été désactivée automatiquement pour garder l'application stable. Vous pouvez la réactiver dans Paramètres → Système.",
   "hardwareAccelerationRestartConfirm": "Redémarrer WoodyUi pour appliquer le nouveau paramètre d'accélération matérielle ?",
   "hardwareAccelerationUpdateFailed": "Échec de la mise à jour du paramètre d'accélération matérielle",
+  "scmSystemGit": "Lire les dépôts avec le Git du système",
+  "scmSystemGitDesc": "Pour les ordinateurs équipés d'un logiciel de chiffrement de fichiers : le panneau Modifications lit les dépôts avec la commande git installée, à laquelle le logiciel de chiffrement fait confiance. Prend effet après un redémarrage.",
+  "scmSystemGitRestartConfirm": "Redémarrer WoodyUi pour appliquer le nouveau paramètre de lecture des dépôts ?",
+  "scmSystemGitUpdateFailed": "Échec de la mise à jour du paramètre de lecture des dépôts",
   "browserNotification": {
     "enable": "Activer les notifications du navigateur",
     "granted": "Notifications du navigateur activées",
