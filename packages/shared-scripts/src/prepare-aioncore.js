@@ -21,8 +21,8 @@ const os = require('os');
 const path = require('path');
 const { verifyBundledAioncoreResources } = require('./verify-bundled-aioncore-resources');
 
-const GITHUB_OWNER = 'iOfficeAI';
-const GITHUB_REPO = 'AionCore';
+// Callers pass the repository pinned as `aioncoreRepo` next to `aioncoreVersion` in package.json.
+const DEFAULT_REPO = 'iOfficeAI/AionCore';
 
 const ACTIONS_ARTIFACT_TARGETS = {
   'darwin-arm64': {
@@ -161,12 +161,12 @@ function verifyPreparedAioncoreBundle(projectRoot, platform, arch) {
  * Uses GitHub API via `gh` CLI (needs GH_TOKEN in CI) or falls back to
  * `curl` with an optional Authorization header (GITHUB_TOKEN / GH_TOKEN).
  */
-function resolveLatestTag() {
+function resolveLatestTag(repo) {
   const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || '';
 
   // 1. Try gh CLI (honours GH_TOKEN automatically)
   try {
-    const out = execSync(`gh api repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest --jq .tag_name`, {
+    const out = execSync(`gh api repos/${repo}/releases/latest --jq .tag_name`, {
       encoding: 'utf-8',
       timeout: 15000,
     }).trim();
@@ -178,7 +178,7 @@ function resolveLatestTag() {
   // 2. Curl with optional token to avoid rate-limit 403
   try {
     const authArgs = token ? ['-H', `Authorization: token ${token}`] : [];
-    const args = ['-fsSL', ...authArgs, `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`];
+    const args = ['-fsSL', ...authArgs, `https://api.github.com/repos/${repo}/releases/latest`];
     const out = execFileSync('curl', args, { encoding: 'utf-8', timeout: 15000 });
     const tag = JSON.parse(out).tag_name;
     if (tag) return tag;
@@ -209,8 +209,8 @@ function getAssetName(platform, arch, tag) {
   return `aioncore-${tag}-${normalizedArch}-${normalizedPlatform}${ext}`;
 }
 
-function getDownloadUrl(assetName, tag) {
-  return `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases/download/${tag}/${assetName}`;
+function getDownloadUrl(assetName, tag, repo) {
+  return `https://github.com/${repo}/releases/download/${tag}/${assetName}`;
 }
 
 function downloadFile(url, outputPath) {
@@ -335,20 +335,18 @@ function downloadFileWithAuth(url, outputPath) {
   });
 }
 
-function listActionsArtifacts(runId) {
-  const response = githubApiGetJson(
-    `repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs/${runId}/artifacts?per_page=100`
-  );
+function listActionsArtifacts(runId, repo) {
+  const response = githubApiGetJson(`repos/${repo}/actions/runs/${runId}/artifacts?per_page=100`);
   return Array.isArray(response?.artifacts) ? response.artifacts : [];
 }
 
-function downloadAndExtractActionsArtifact(platform, arch, runId) {
+function downloadAndExtractActionsArtifact(platform, arch, runId, repo) {
   const expectedArtifactName = getActionsArtifactName(platform, arch);
   if (!expectedArtifactName) {
     throw new Error(`Unsupported AionCore Actions artifact target: ${platform}-${arch}`);
   }
 
-  const artifacts = listActionsArtifacts(runId);
+  const artifacts = listActionsArtifacts(runId, repo);
   const availableArtifactNames = artifacts
     .map((artifact) => artifact.name)
     .filter(Boolean)
@@ -375,9 +373,8 @@ function downloadAndExtractActionsArtifact(platform, arch, runId) {
   ensureDirectory(tempDir);
 
   const downloadUrl =
-    artifact.archive_download_url ||
-    `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/artifacts/${artifact.id}/zip`;
-  console.log(`  Downloading aioncore from AionCore run ${runId} artifact ${expectedArtifactName}`);
+    artifact.archive_download_url || `https://api.github.com/repos/${repo}/actions/artifacts/${artifact.id}/zip`;
+  console.log(`  Downloading aioncore from ${repo} run ${runId} artifact ${expectedArtifactName}`);
   downloadFileWithAuth(downloadUrl, artifactZipPath);
   extractArchive(artifactZipPath, artifactExtractDir, platform);
 
@@ -403,13 +400,13 @@ function downloadAndExtractActionsArtifact(platform, arch, runId) {
   };
 }
 
-function downloadAndExtract(platform, arch, tag) {
+function downloadAndExtract(platform, arch, tag, repo) {
   const assetName = getAssetName(platform, arch, tag);
   if (!assetName) {
     throw new Error(`Unsupported aioncore target: ${platform}-${arch}`);
   }
 
-  const url = getDownloadUrl(assetName, tag);
+  const url = getDownloadUrl(assetName, tag, repo);
   const tempDir = path.join(os.tmpdir(), 'aioncore-prepare', tag, `${platform}-${arch}`);
   const archivePath = path.join(tempDir, assetName);
   const extractDir = path.join(tempDir, 'extracted');
@@ -441,10 +438,11 @@ function downloadAndExtract(platform, arch, tag) {
  * @param {string} options.platform - Target platform (process.platform)
  * @param {string} options.arch - Target architecture (process.arch)
  * @param {string} options.version - Backend version (default: 'latest')
+ * @param {string} options.repo - GitHub repository ("owner/name") that publishes releases and Actions runs
  * @returns {{ prepared: true; dir: string; sourceType: string }}
  */
 function prepareAioncore(options) {
-  const { projectRoot, platform, arch, version = 'latest' } = options;
+  const { projectRoot, platform, arch, version = 'latest', repo = DEFAULT_REPO } = options;
   const runtimeKey = `${platform}-${arch}`;
   const actionsRunId = (process.env.AIONUI_BACKEND_RUN_ID || '').trim();
 
@@ -452,7 +450,7 @@ function prepareAioncore(options) {
   if (!actionsRunId) {
     // Resolve the actual version tag — release asset filenames include the tag.
     if (version === 'latest') {
-      const resolved = resolveLatestTag();
+      const resolved = resolveLatestTag(repo);
       if (!resolved) {
         throw new Error('Failed to resolve latest aioncore release tag from GitHub API');
       }
@@ -468,7 +466,7 @@ function prepareAioncore(options) {
   const targetBinaryPath = path.join(targetDir, binaryName);
 
   console.log(
-    `Preparing aioncore for ${runtimeKey} (${actionsRunId ? `actions run: ${actionsRunId}` : `version: ${tag}`})`
+    `Preparing aioncore for ${runtimeKey} from ${repo} (${actionsRunId ? `actions run: ${actionsRunId}` : `version: ${tag}`})`
   );
 
   removeDirectorySafe(targetDir);
@@ -511,7 +509,7 @@ function prepareAioncore(options) {
 
   // 1. Download from GitHub Actions artifacts when manual build run id is provided.
   if (actionsRunId) {
-    const result = downloadAndExtractActionsArtifact(platform, arch, actionsRunId);
+    const result = downloadAndExtractActionsArtifact(platform, arch, actionsRunId, repo);
     sourcePath = result.binaryPath;
     tempDir = result.tempDir;
     sourceType = 'actions-artifact';
@@ -526,7 +524,7 @@ function prepareAioncore(options) {
   // 2. Download from GitHub releases.
   if (!sourcePath && tag) {
     try {
-      const result = downloadAndExtract(platform, arch, tag);
+      const result = downloadAndExtract(platform, arch, tag, repo);
       sourcePath = result.binaryPath;
       tempDir = result.tempDir;
       sourceType = 'download';
@@ -589,6 +587,7 @@ function prepareAioncore(options) {
 module.exports = {
   getActionsArtifactMissingMessage,
   getActionsArtifactName,
+  getDownloadUrl,
   prepareAioncore,
   verifyPreparedAioncoreBundle,
 };
