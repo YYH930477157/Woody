@@ -26,6 +26,11 @@ Push only `-woody.N` tags. The fork releases every pushed `v*` tag, so never
 use `git push --tags` or `--follow-tags` there: an upstream tag such as
 `v0.2.3` would publish upstream code as the newest release.
 
-Not on `woody` yet: the usage-event engine change behind the chat status bar
-(aionrs `emit_usage` and AionCore `AgentStreamEvent::Usage`). It also needs a
-fork of aionrs, because AionCore depends on aionrs by git tag.
+AionCore depends on aionrs crates by git tag, so the engine has a fork too:
+<https://github.com/YYH930477157/aionrs>, branch `woody`, tagged
+`vX.Y.Z-woody.N` (no release build; the tag is what AionCore's `Cargo.toml`
+pins). It adds per-call usage reporting (`OutputSink::emit_usage`) that the
+chat status bar reads. When AionCore's upstream bumps aionrs, merge that
+upstream aionrs tag into the aionrs `woody` branch, tag it, and point
+AionCore's `aion-*` dependencies at the new tag. Keep Actions disabled on the
+aionrs fork so its upstream release workflows never run there.
