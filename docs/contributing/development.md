@@ -25,7 +25,7 @@ workspace/
 `-- AionUi/
 ```
 
-The desktop development server resolves the backend from the `PATH` inherited by `bun run start`. Install AionCore first, verify the binary is discoverable in the same terminal, then start AionUi.
+`bun run start` first checks `resources/bundled-aioncore` against `aioncoreRepo` and `aioncoreVersion` in `package.json` and downloads the pinned release when it is missing or outdated; if that fails it keeps the previous bundle and only warns. The development server uses that bundle, then falls back to the `PATH` inherited by `bun run start`. To run a backend you built yourself, set `AIONUI_BACKEND_BIN` to its path; the check is skipped then.
 
 ## Quick Start
 
