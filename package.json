@@ -266,7 +266,7 @@
     "node": ">=22 <25"
   },
   "aioncoreRepo": "YYH930477157/AionCore",
-  "aioncoreVersion": "v0.2.2-woody.2",
+  "aioncoreVersion": "v0.2.2-woody.3",
   "electronRebuild": {
     "electronVersion": "^37.3.1"
   },
