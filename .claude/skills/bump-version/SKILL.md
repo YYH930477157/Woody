@@ -11,7 +11,7 @@ Automate the AionUi release preparation: query AionCore release → verify artif
 
 - `/bump-version` — auto patch + latest AionCore
 - `/bump-version 2.2.0` — explicit AionUi version + latest AionCore
-- `/bump-version 2.2.0 --core v0.1.12` — explicit both versions
+- `/bump-version 2.2.0 --core v0.2.2-woody.1` — explicit both versions
 - `/bump-version --skip-core` — pure frontend release (don't touch aioncoreVersion)
 
 ## Workflow
@@ -47,8 +47,10 @@ Display: "Bumping AionUi: {current} → {target}"
 
 **Skip entirely if `--skip-core` is set.**
 
+Releases come from the repository pinned as `aioncoreRepo` in `package.json` (`{core repo}` below). Woody pins its fork, whose releases are `vX.Y.Z-woody.N` tags on the `woody` branch; see `patches/README.md` to cut one from a new upstream release first.
+
 ```bash
-gh release view --repo iOfficeAI/AionCore --json tagName,body
+gh release view --repo {core repo} --json tagName,body
 ```
 
 - If `--core <version>` provided → use that tag instead of latest
@@ -60,7 +62,7 @@ gh release view --repo iOfficeAI/AionCore --json tagName,body
 **Skip if `--skip-core`.**
 
 ```bash
-gh release view <tag> --repo iOfficeAI/AionCore --json assets --jq '.assets[].name'
+gh release view <tag> --repo {core repo} --json assets --jq '.assets[].name'
 ```
 
 Verify all 7 expected assets exist:
@@ -105,7 +107,13 @@ git log v{previous}..HEAD --oneline --no-merges --format="%s"
 
 #### 7c: Collect AionCore Changes
 
-From step 4's release body (already in conventional-changelog format from release-please). Parse into same grouped format.
+Fork release bodies are GitHub-generated stubs, so read the commits between the old and new core tags instead:
+
+```bash
+gh api repos/{core repo}/compare/{old core tag}...{new core tag} --jq '.commits[].commit.message | split("\n")[0]'
+```
+
+Filter and group them like the frontend changes.
 
 **Skip if `--skip-core`.**
 
@@ -131,7 +139,7 @@ Prepend the new entry in this format:
 
 - **thinking:** add streaming indicator (#3015)
 
-### Core ([{core tag}](https://github.com/iOfficeAI/AionCore/releases/tag/{core tag}))
+### Core ([{core tag}](https://github.com/{core repo}/releases/tag/{core tag}))
 
 #### Bug Fixes
 
