@@ -1,8 +1,10 @@
 import React from 'react';
+import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { CmakeProject } from '@/common/types/cmake';
+import { cleanup, fireEvent, getByText, render, screen, waitFor, within } from '@testing-library/react';
+import type { CmakeProject, CmakeToolCheck } from '@/common/types/cmake';
 import CmakePanel from '@/renderer/pages/cmake/CmakePanel';
+import CmakeTools from '@/renderer/pages/cmake/CmakeTools';
 
 const mocks = vi.hoisted(() => ({
   discover: vi.fn(),
@@ -585,5 +587,68 @@ describe('CMake build panel', () => {
     render(<CmakePanel projectPath={project.projectPath} />);
     fireEvent.click(await screen.findByRole('button', { name: 'tools.cmake.cancel' }));
     await waitFor(() => expect(mocks.cancel).toHaveBeenCalledWith({ jobId: 'waiting-for-output' }));
+  });
+});
+describe('CMake tool details', () => {
+  const found: CmakeToolCheck[] = [{ name: 'cmake', path: 'D:/tools/cmake.exe', status: 'found', version: '3.29' }];
+  const missing: CmakeToolCheck[] = [{ name: 'cmake', path: 'D:/tools/cmake.exe', status: 'missing' }];
+  const tools = (checks?: CmakeToolCheck[]) => (
+    <CmakeTools
+      checks={checks}
+      tools={project.config.tools}
+      disabled={false}
+      invalid={false}
+      onCheck={async () => {}}
+      errorText={(text) => text}
+    />
+  );
+
+  it('keeps a click that lands before the first render has settled', async () => {
+    // Outside act, a non-urgent render commits before its effects run. Clicking in that gap is what a slow test
+    // machine does after findBy* resolves; the details must still open.
+    const actEnvironment = (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT;
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = false;
+    const container = document.body.appendChild(document.createElement('div'));
+    const root = createRoot(container);
+    try {
+      const committed = new Promise<void>((resolve) => {
+        const observer = new MutationObserver(() => {
+          observer.disconnect();
+          resolve();
+        });
+        observer.observe(container, { childList: true, subtree: true });
+      });
+      root.render(tools(found));
+      await committed;
+      fireEvent.click(getByText(container, 'tools.cmake.toolPathColumn'));
+      await waitFor(() => expect(within(container).getByText('tools.cmake.toolFound')).toBeInTheDocument());
+    } finally {
+      root.unmount();
+      container.remove();
+      (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = actEnvironment;
+    }
+  });
+
+  it('collapses the details when the header is clicked again', () => {
+    render(tools(found));
+    fireEvent.click(screen.getByText('tools.cmake.toolPathColumn'));
+    expect(screen.getByText('tools.cmake.toolFound')).toBeVisible();
+    fireEvent.click(screen.getAllByText('tools.cmake.toolPathColumn')[0]);
+    expect(screen.getByRole('button', { name: 'tools.cmake.toolPathColumn' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
+  });
+
+  it('opens the details when a later check fails and closes them once it passes', () => {
+    const { rerender } = render(tools(found));
+    expect(screen.queryByText('tools.cmake.toolMissing')).not.toBeInTheDocument();
+    rerender(tools(missing));
+    expect(screen.getByText('tools.cmake.toolMissing')).toBeInTheDocument();
+    rerender(tools(found));
+    expect(screen.getByRole('button', { name: 'tools.cmake.toolPathColumn' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
   });
 });

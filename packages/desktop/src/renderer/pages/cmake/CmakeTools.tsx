@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Button, Collapse, Table, Tag } from '@arco-design/web-react';
 import { Check } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
@@ -23,9 +23,13 @@ export default function CmakeTools({
   const { t } = useTranslation();
   const hasFailures = !!checks?.some((check) => check.status !== 'found');
   const [detailsOpen, setDetailsOpen] = useState(hasFailures);
-  useEffect(() => {
+  // Follow failures during render rather than in an effect: an effect runs after the first commit and would undo a
+  // click that lands before it.
+  const [failuresShown, setFailuresShown] = useState(hasFailures);
+  if (failuresShown !== hasFailures) {
+    setFailuresShown(hasFailures);
     setDetailsOpen(hasFailures);
-  }, [hasFailures]);
+  }
   const labels = {
     cmake: 'cmakePath',
     ctest: 'ctestPath',
@@ -66,7 +70,7 @@ export default function CmakeTools({
       <Collapse
         bordered={false}
         activeKey={detailsOpen ? ['tools'] : []}
-        onChange={(keys) => setDetailsOpen(keys.includes('tools'))}
+        onChange={(_key, keys) => setDetailsOpen(keys.includes('tools'))}
       >
         <Collapse.Item name='tools' header={t('tools.cmake.toolPathColumn')}>
           <Table
