@@ -50,7 +50,12 @@ import type {
   GitWorkflowState,
   GitWorkflowSession,
 } from '@/common/types/sourceControl/gitWorkflowTypes';
-import type { StaticScanConfig, StaticScanDiagnostic } from '@/common/types/sourceControl/staticScanTypes';
+import type {
+  CommitCheckOptions,
+  StaticScanConfig,
+  StaticScanDiagnostic,
+  StaticScanTool,
+} from '@/common/types/sourceControl/staticScanTypes';
 import { CommitWorkflowModal } from './CommitWorkflowModal';
 import { discardAllTargets, ScmChangesView, stageAllTargets } from './ScmChangesView';
 import { ScmSection, ScmSectionDivider } from './ScmSection';
@@ -131,6 +136,8 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
   const [workflowDiagnostics, setWorkflowDiagnostics] = useState<StaticScanDiagnostic[]>([]);
   const [workflowOutput, setWorkflowOutput] = useState('');
   const [draftReady, setDraftReady] = useState(false);
+  const [checkSettings, setCheckSettings] = useState<{ repoPath: string; checks: CommitCheckOptions }>();
+  const [checkConfigError, setCheckConfigError] = useState<string>();
   const activeRequest = useRef<string | undefined>(undefined);
   const workflowBusy = useRef(false);
   const ownAgentTurns = useRef(new Set<string>());
@@ -225,6 +232,44 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
 
   const selectedRepoStatus = selectedRepo ? view.statuses[selectedRepo.repo_id] : undefined;
   const selectedRepoPath = selectedRepo ? resolveRepositoryPath(selectedRepo, repoPaths) : undefined;
+  const checks = checkSettings?.repoPath === selectedRepoPath ? checkSettings?.checks : undefined;
+
+  useEffect(() => {
+    if (!workflowVisible || !selectedRepoPath) return;
+    if (workflowBusy.current && checkSettings?.repoPath === selectedRepoPath) return;
+    let cancelled = false;
+    setCheckSettings(undefined);
+    setCheckConfigError(undefined);
+    void ipcBridge.staticScan.getProjectConfig
+      .invoke({ repoPath: selectedRepoPath })
+      .then((config) => {
+        if (cancelled) return;
+        const scanners: StaticScanTool[] = [];
+        if (config.clangTidy) scanners.push('clang-tidy');
+        if (config.pcLint) scanners.push('pc-lint');
+        setCheckSettings({
+          repoPath: selectedRepoPath,
+          checks: config.commitChecks ?? { scanners, compile: true, autoRepair: true },
+        });
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setCheckConfigError(error instanceof Error ? error.message : String(error));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [workflowVisible, selectedRepoPath]);
+
+  const updateChecks = (next: CommitCheckOptions): void => {
+    if (!selectedRepoPath || workflowBusy.current) return;
+    setCheckSettings({ repoPath: selectedRepoPath, checks: next });
+    activeRequest.current = undefined;
+    setWorkflowSessionId(undefined);
+    setWorkflowState(draftReady ? 'draft_ready' : 'idle');
+    setWorkflowMessage(undefined);
+    setWorkflowDiagnostics([]);
+    setWorkflowOutput('');
+  };
 
   useEffect(() => {
     if (ui.monitorScope !== 'software') {
@@ -443,6 +488,8 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
       setWorkflowMessage(t('conversation.explorer.scm.commit.repoPathUnavailable'));
       return;
     }
+    // A new automatic draft must reload disk settings, unlike reopening a running workflow.
+    if (!workflowVisible) setCheckSettings(undefined);
     workflowBusy.current = true;
     const requestId = crypto.randomUUID();
     activeRequest.current = requestId;
@@ -485,7 +532,7 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
   };
 
   const startStaticScanWorkflow = (): void => {
-    if (workflowBusy.current || selectedResources.length === 0) return;
+    if (workflowBusy.current || selectedResources.length === 0 || !checks) return;
     if (workflowVisible && workflowTarget.current && workflowTarget.current.repo.repo_id !== selectedRepo.repo_id) {
       setWorkflowState('blocked');
       setWorkflowMessage(t('conversation.explorer.scm.commit.snapshotChanged'));
@@ -507,40 +554,41 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
     setWorkflowMessage(t('conversation.explorer.scm.commit.readingGit'));
     const selectedPaths = [...new Set(selectedResources.map((resource) => resource.repo_relative_path))];
     void Promise.all([
-      ipcBridge.staticScan?.getProjectConfig.invoke({ repoPath: selectedRepoPath }),
-      ipcBridge.staticScan?.getMachineConfig.invoke(),
+      ipcBridge.staticScan.saveCommitChecks.invoke({ repoPath: selectedRepoPath, checks }),
+      ipcBridge.staticScan.getMachineConfig.invoke(),
     ])
       .then(([projectConfig, machineConfig]) => {
+        if (activeRequest.current !== requestId) return;
         if (!projectConfig || !machineConfig) throw new Error('Static scan configuration is unavailable');
         const scannerConfigs: StaticScanConfig[] = [];
-        const clang = projectConfig.clangTidy;
-        const clangExecutable = clang?.executablePath ?? machineConfig.tools['clang-tidy'];
-        if (clang && clangExecutable)
-          scannerConfigs.push({ ...clang, tool: 'clang-tidy', executablePath: clangExecutable });
-        const pcLint = projectConfig.pcLint;
-        const pcLintExecutable = pcLint?.executablePath ?? machineConfig.tools['pc-lint'];
-        if (pcLint && pcLintExecutable)
-          scannerConfigs.push({ ...pcLint, tool: 'pc-lint', executablePath: pcLintExecutable });
-        if (scannerConfigs.length === 0) throw new Error('No static scanner configured');
+        for (const tool of checks.scanners) {
+          const config = tool === 'clang-tidy' ? projectConfig.clangTidy : projectConfig.pcLint;
+          const executablePath = config?.executablePath ?? machineConfig.tools[tool];
+          if (!config || !executablePath?.trim())
+            throw new Error(`${tool}: ${t('conversation.explorer.scm.commit.scanConfigRequired')}`);
+          scannerConfigs.push({ ...config, tool, executablePath });
+        }
         return ipcBridge.sourceControl.workflowPrepare.invoke({
           repoPath: selectedRepoPath,
           branch: selectedRepo.head?.name ?? '',
           selectedPaths,
           scannerConfigs,
+          checks,
           messageFields,
           conversationId: conversationId ?? undefined,
           requestId,
         });
       })
       .then((session) => {
-        if (activeRequest.current !== requestId) return;
+        if (activeRequest.current !== requestId || !session) return;
         applyWorkflowSession(session);
         void refreshAllRepos();
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (activeRequest.current !== requestId) return;
         setWorkflowState('failed');
-        setWorkflowMessage(t('conversation.explorer.scm.commit.scanFailed'));
+        setWorkflowMessage(t('conversation.explorer.scm.commit.checksFailed'));
+        setWorkflowOutput(error instanceof Error ? error.message : String(error));
       })
       .finally(() => {
         workflowBusy.current = false;
@@ -660,6 +708,9 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
         diagnostics={workflowDiagnostics}
         output={workflowOutput}
         draftReady={draftReady}
+        checks={checks}
+        checkConfigError={checkConfigError}
+        onChecksChange={updateChecks}
         onCancel={() => setWorkflowVisible(false)}
         onDraft={generateCommitDraft}
         onStart={startStaticScanWorkflow}

@@ -11,9 +11,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ScmRepository, ScmResource, ScmStatus } from '@/renderer/pages/conversation/SourceControl/scmModel';
 import type { ScmPort } from '@/renderer/pages/conversation/SourceControl/scmStore';
 import type { GitWorkflowSession } from '@/common/types/sourceControl/gitWorkflowTypes';
+import type { CommitCheckOptions, StaticScanProjectConfig } from '@/common/types/sourceControl/staticScanTypes';
 import type { IConversationTurnCompletedEvent } from '@/common/adapter/ipcBridge';
 
 const gitBridge = vi.hoisted(() => ({
+  projectConfig: vi.fn<(...args: unknown[]) => Promise<StaticScanProjectConfig>>(),
+  saveChecks: vi.fn<(request: { repoPath: string; checks: CommitCheckOptions }) => Promise<StaticScanProjectConfig>>(),
   branches: vi.fn(async () => ({ branches: [] })),
   softwareDirectory: vi.fn(async () => ({ isDirectory: true })),
   draft: vi.fn<(...args: unknown[]) => Promise<Partial<GitWorkflowSession>>>(async () => ({
@@ -70,7 +73,8 @@ vi.mock('@/common', () => ({
     },
     staticScan: {
       getMachineConfig: { invoke: async () => ({ tools: { 'clang-tidy': 'clang-tidy' } }) },
-      getProjectConfig: { invoke: async () => ({ clangTidy: { scope: 'selected', arguments: [] } }) },
+      getProjectConfig: { invoke: gitBridge.projectConfig },
+      saveCommitChecks: { invoke: gitBridge.saveChecks },
     },
     fs: {
       getFileMetadata: { invoke: gitBridge.softwareDirectory },
@@ -163,6 +167,13 @@ const installPort = (setup: PortSetup): void => {
 };
 
 beforeEach(() => {
+  gitBridge.projectConfig.mockReset();
+  gitBridge.projectConfig.mockResolvedValue({ clangTidy: { scope: 'selected', arguments: [] } });
+  gitBridge.saveChecks.mockReset();
+  gitBridge.saveChecks.mockImplementation(async ({ checks }) => ({
+    ...(await gitBridge.projectConfig()),
+    commitChecks: checks,
+  }));
   resetScmStoreForTest();
   resetScmUiStoreForTest();
   localStorage.clear();
@@ -272,6 +283,151 @@ describe('ScmPanel empty / failure states', () => {
 });
 
 describe('ScmPanel nested repository workflow', () => {
+  const openDraft = async (): Promise<void> => {
+    installPort({ repositories: [repo()], firstFrames: { 'scm:pe1': status('scm:pe1', 1, [resource('a.c')]) } });
+    render(<ScmPanel projectId='p1' repoPaths={{ pe1: 'C:/workspace' }} conversationId='chat' />);
+    await screen.findByText('a.c');
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'conversation.explorer.scm.commit.action' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.generate' }));
+  };
+
+  it('saves all-disabled choices and continues to explicit confirmation without checks', async () => {
+    await openDraft();
+    const clang = await screen.findByRole('checkbox', { name: 'conversation.explorer.scm.commit.checks.clangTidy' });
+    await waitFor(() => expect(clang).toBeEnabled());
+    fireEvent.click(clang);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'conversation.explorer.scm.commit.checks.compile' }));
+    const next = screen.getByRole('button', { name: 'conversation.explorer.scm.commit.continueCommit' });
+    await waitFor(() => expect(next).toBeEnabled());
+    fireEvent.click(next);
+    await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.confirm' });
+    expect(gitBridge.saveChecks).toHaveBeenCalledWith({
+      repoPath: 'C:/workspace',
+      checks: { scanners: [], compile: false, autoRepair: true },
+    });
+    expect(gitBridge.prepare).toHaveBeenCalledWith(
+      expect.objectContaining({ scannerConfigs: [], checks: { scanners: [], compile: false, autoRepair: true } })
+    );
+    expect(gitBridge.commit).not.toHaveBeenCalled();
+  });
+
+  it('restores an explicit empty selection and invalidates confirmation when choices change', async () => {
+    gitBridge.projectConfig.mockResolvedValue({ commitChecks: { scanners: [], compile: false, autoRepair: false } });
+    await openDraft();
+    const next = await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.continueCommit' });
+    await waitFor(() => expect(next).toBeEnabled());
+    fireEvent.click(next);
+    await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.confirm' });
+    fireEvent.click(screen.getByRole('checkbox', { name: 'conversation.explorer.scm.commit.checks.compile' }));
+    expect(screen.queryByRole('button', { name: 'conversation.explorer.scm.commit.confirm' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'conversation.explorer.scm.commit.runChecks' })).toBeEnabled();
+  });
+
+  it('does not start checks if preferences cannot be saved', async () => {
+    gitBridge.saveChecks.mockRejectedValue(new Error('access denied'));
+    await openDraft();
+    const run = await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.runChecks' });
+    await waitFor(() => expect(run).toBeEnabled());
+    fireEvent.click(run);
+    await screen.findByText('access denied');
+    expect(gitBridge.prepare).not.toHaveBeenCalled();
+  });
+
+  it('reports a selected unconfigured scanner instead of silently dropping it', async () => {
+    await openDraft();
+    const pcLint = await screen.findByRole('checkbox', { name: 'conversation.explorer.scm.commit.checks.pcLint' });
+    await waitFor(() => expect(pcLint).toBeEnabled());
+    fireEvent.click(pcLint);
+    const run = await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.runChecks' });
+    await waitFor(() => expect(run).toBeEnabled());
+    fireEvent.click(run);
+    await screen.findByText('pc-lint: conversation.explorer.scm.commit.scanConfigRequired');
+    expect(gitBridge.prepare).not.toHaveBeenCalled();
+  });
+
+  it('passes only PC-lint when clang-tidy, compilation and automatic repair are deselected', async () => {
+    gitBridge.projectConfig.mockResolvedValue({
+      clangTidy: { scope: 'selected', arguments: [] },
+      pcLint: { scope: 'selected', arguments: ['project.lnt'], executablePath: 'C:/tools/pclp.exe' },
+    });
+    await openDraft();
+    const clang = await screen.findByRole('checkbox', { name: 'conversation.explorer.scm.commit.checks.clangTidy' });
+    await waitFor(() => expect(clang).toBeEnabled());
+    fireEvent.click(clang);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'conversation.explorer.scm.commit.checks.compile' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'conversation.explorer.scm.commit.checks.autoRepair' }));
+    const run = await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.runChecks' });
+    await waitFor(() => expect(run).toBeEnabled());
+    fireEvent.click(run);
+    await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.confirm' });
+    expect(gitBridge.prepare).toHaveBeenCalledWith(
+      expect.objectContaining({
+        checks: { scanners: ['pc-lint'], compile: false, autoRepair: false },
+        scannerConfigs: [
+          { tool: 'pc-lint', scope: 'selected', arguments: ['project.lnt'], executablePath: 'C:/tools/pclp.exe' },
+        ],
+      })
+    );
+  });
+
+  it('reloads saved repository choices when the dialog is reopened', async () => {
+    let stored: StaticScanProjectConfig = { commitChecks: { scanners: [], compile: false, autoRepair: false } };
+    gitBridge.projectConfig.mockImplementation(async () => stored);
+    gitBridge.saveChecks.mockImplementation(async ({ checks }) => {
+      stored = { ...stored, commitChecks: checks };
+      return stored;
+    });
+    await openDraft();
+    const compile = await screen.findByRole('checkbox', { name: 'conversation.explorer.scm.commit.checks.compile' });
+    await waitFor(() => expect(compile).toBeEnabled());
+    fireEvent.click(compile);
+    fireEvent.click(await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.runChecks' }));
+    await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.confirm' });
+    fireEvent.click(screen.getByRole('button', { name: 'common.close' }));
+    fireEvent.click(screen.getByRole('button', { name: 'conversation.explorer.scm.commit.action' }));
+    await waitFor(() =>
+      expect(screen.getByRole('checkbox', { name: 'conversation.explorer.scm.commit.checks.compile' })).toBeChecked()
+    );
+    expect(
+      screen.getByRole('checkbox', { name: 'conversation.explorer.scm.commit.checks.clangTidy' })
+    ).not.toBeChecked();
+  });
+
+  it('ignores a delayed configuration response after the repository path changes', async () => {
+    let resolveFirst!: (config: StaticScanProjectConfig) => void;
+    gitBridge.projectConfig.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveFirst = resolve;
+      })
+    );
+    gitBridge.projectConfig.mockResolvedValue({ commitChecks: { scanners: [], compile: false, autoRepair: false } });
+    installPort({ repositories: [repo()], firstFrames: { 'scm:pe1': status('scm:pe1', 1, [resource('a.c')]) } });
+    const { rerender } = render(<ScmPanel projectId='p1' repoPaths={{ pe1: 'C:/first' }} conversationId='chat' />);
+    await screen.findByText('a.c');
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'conversation.explorer.scm.commit.action' }));
+    await waitFor(() => expect(gitBridge.projectConfig).toHaveBeenCalledWith({ repoPath: 'C:/first' }));
+    rerender(<ScmPanel projectId='p1' repoPaths={{ pe1: 'C:/second' }} conversationId='chat' />);
+    const compile = await screen.findByRole('checkbox', { name: 'conversation.explorer.scm.commit.checks.compile' });
+    await waitFor(() => expect(compile).toBeEnabled());
+    await act(async () =>
+      resolveFirst({ commitChecks: { scanners: ['clang-tidy'], compile: true, autoRepair: true } })
+    );
+    expect(compile).not.toBeChecked();
+    expect(
+      screen.getByRole('checkbox', { name: 'conversation.explorer.scm.commit.checks.clangTidy' })
+    ).not.toBeChecked();
+  });
+
+  it('shows a project configuration error and prevents using fallback choices', async () => {
+    gitBridge.projectConfig.mockRejectedValue(new Error('invalid JSON'));
+    await openDraft();
+    expect(await screen.findByText('invalid JSON')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'conversation.explorer.scm.commit.checks.clangTidy' })).toBeDisabled();
+    expect(gitBridge.prepare).not.toHaveBeenCalled();
+  });
+
   it('uses the worktree root and repository-relative files for scan and commit', async () => {
     const nested = repo({
       repo_id: 'scm:pe1/feature',
@@ -289,7 +445,7 @@ describe('ScmPanel nested repository workflow', () => {
     fireEvent.click(screen.getByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', { name: 'conversation.explorer.scm.commit.action' }));
     fireEvent.click(await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.generate' }));
-    const submitButton = await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.submitForScan' });
+    const submitButton = await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.runChecks' });
     await waitFor(() => expect(submitButton).toBeEnabled());
     fireEvent.click(submitButton);
 
@@ -314,6 +470,26 @@ describe('ScmPanel nested repository workflow', () => {
 });
 
 describe('ScmPanel automatic workflow', () => {
+  it('reloads disk choices for a new automatic draft after closing unsaved edits', async () => {
+    await installSelected();
+    fireEvent.click(screen.getByRole('button', { name: 'conversation.explorer.scm.commit.action' }));
+    const compile = await screen.findByRole('checkbox', { name: 'conversation.explorer.scm.commit.checks.compile' });
+    await waitFor(() => expect(compile).toBeEnabled());
+    fireEvent.click(compile);
+    fireEvent.click(screen.getByRole('button', { name: 'common.close' }));
+    let finishDraft!: (session: Partial<GitWorkflowSession>) => void;
+    gitBridge.draft.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishDraft = resolve;
+      })
+    );
+    await act(async () => finishTurn());
+    await waitFor(() => expect(gitBridge.projectConfig).toHaveBeenCalledTimes(2));
+    await act(async () => finishDraft({ id: 'draft', state: 'draft_ready', diagnostics: [] }));
+    expect(screen.getByRole('checkbox', { name: 'conversation.explorer.scm.commit.checks.compile' })).toBeChecked();
+    expect(gitBridge.saveChecks).not.toHaveBeenCalled();
+  });
+
   const finishTurn = (conversationId = 'current-chat', turnId = 'user-turn'): void => {
     const event = {
       session_id: conversationId,
@@ -345,7 +521,7 @@ describe('ScmPanel automatic workflow', () => {
       messageFields: fields,
     });
     await installSelected();
-    act(() => finishTurn());
+    await act(async () => finishTurn());
     await waitFor(() =>
       expect(gitBridge.draft).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -362,7 +538,7 @@ describe('ScmPanel automatic workflow', () => {
 
   it('ignores completion in another conversation', async () => {
     await installSelected();
-    act(() => finishTurn('other-chat'));
+    await act(async () => finishTurn('other-chat'));
     expect(gitBridge.prepare).not.toHaveBeenCalled();
   });
 
@@ -374,22 +550,22 @@ describe('ScmPanel automatic workflow', () => {
       agentTurnIds: ['workflow-draft-turn'],
     });
     await installSelected();
-    act(() => finishTurn());
+    await act(async () => finishTurn());
     await screen.findByText('conversation.explorer.scm.commit.states.draft_ready');
-    act(() => finishTurn('current-chat', 'workflow-draft-turn'));
+    await act(async () => finishTurn('current-chat', 'workflow-draft-turn'));
     expect(gitBridge.draft).toHaveBeenCalledOnce();
   });
 
   it('regenerates AI fields while preserving only fields manually edited for this selection', async () => {
     await installSelected();
-    act(() => finishTurn());
-    const submitButton = await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.submitForScan' });
+    await act(async () => finishTurn());
+    const submitButton = await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.runChecks' });
     await waitFor(() => expect(submitButton).toBeEnabled());
     fireEvent.change(screen.getByRole('textbox', { name: 'conversation.explorer.scm.commit.message.reason' }), {
       target: { value: 'user reason' },
     });
 
-    act(() => finishTurn('current-chat', 'next-user-turn'));
+    await act(async () => finishTurn('current-chat', 'next-user-turn'));
 
     await waitFor(() => expect(gitBridge.draft).toHaveBeenCalledTimes(2));
     expect(gitBridge.draft).toHaveBeenLastCalledWith(
@@ -406,15 +582,15 @@ describe('ScmPanel automatic workflow', () => {
     );
     await screen.findByText('a.c');
     fireEvent.click(screen.getByRole('checkbox'));
-    act(() => finishTurn());
-    const submitButton = await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.submitForScan' });
+    await act(async () => finishTurn());
+    const submitButton = await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.runChecks' });
     await waitFor(() => expect(submitButton).toBeEnabled());
     fireEvent.change(screen.getByRole('textbox', { name: 'conversation.explorer.scm.commit.message.reason' }), {
       target: { value: 'old conversation user reason' },
     });
     rerender(<ScmPanel projectId='p1' repoPaths={{ pe1: 'C:/workspace' }} conversationId='next-chat' />);
 
-    act(() => finishTurn('next-chat'));
+    await act(async () => finishTurn('next-chat'));
 
     await waitFor(() => expect(gitBridge.draft).toHaveBeenCalledTimes(2));
     expect(gitBridge.draft).toHaveBeenLastCalledWith(
@@ -438,7 +614,7 @@ describe('ScmPanel automatic workflow', () => {
     );
     await screen.findByText('a.c');
     fireEvent.click(screen.getByRole('checkbox'));
-    act(() => finishTurn());
+    await act(async () => finishTurn());
     await waitFor(() => expect(gitBridge.draft).toHaveBeenCalledOnce());
     rerender(<ScmPanel projectId='p1' repoPaths={{ pe1: 'C:/workspace' }} conversationId='next-chat' />);
 
@@ -452,7 +628,7 @@ describe('ScmPanel automatic workflow', () => {
     );
 
     expect(screen.queryByDisplayValue('【conversation.explorer.scm.commit.message.reason】:old draft')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'conversation.explorer.scm.commit.submitForScan' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'conversation.explorer.scm.commit.runChecks' })).toBeNull();
   });
 
   it('does not restore commit fields when a commit finishes in a previous conversation', async () => {
@@ -468,8 +644,8 @@ describe('ScmPanel automatic workflow', () => {
     );
     await screen.findByText('a.c');
     fireEvent.click(screen.getByRole('checkbox'));
-    act(() => finishTurn());
-    const scan = await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.submitForScan' });
+    await act(async () => finishTurn());
+    const scan = await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.runChecks' });
     await waitFor(() => expect(scan).toBeEnabled());
     fireEvent.click(scan);
     fireEvent.click(await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.confirm' }));
@@ -491,8 +667,8 @@ describe('ScmPanel automatic workflow', () => {
   it('retains the push retry session when committed files disappear from status', async () => {
     gitBridge.commit.mockResolvedValueOnce({ id: 'committed-session', state: 'push', diagnostics: [] });
     await installSelected();
-    act(() => finishTurn());
-    const scan = await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.submitForScan' });
+    await act(async () => finishTurn());
+    const scan = await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.runChecks' });
     await waitFor(() => expect(scan).toBeEnabled());
     fireEvent.click(scan);
     fireEvent.click(await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.confirm' }));
@@ -518,8 +694,8 @@ describe('ScmPanel automatic workflow', () => {
     );
     await screen.findByText('a.c');
     fireEvent.click(screen.getByRole('checkbox'));
-    act(() => finishTurn());
-    const scan = await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.submitForScan' });
+    await act(async () => finishTurn());
+    const scan = await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.runChecks' });
     await waitFor(() => expect(scan).toBeEnabled());
     fireEvent.click(scan);
     fireEvent.click(await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.confirm' }));
@@ -548,14 +724,14 @@ describe('ScmPanel automatic workflow', () => {
       compileResult: { ok: false, stdout: 'building original project', stderr: 'compiler failed at a.c:5' },
     });
     await installSelected();
-    act(() => finishTurn());
+    await act(async () => finishTurn());
     await screen.findByDisplayValue('【conversation.explorer.scm.commit.message.reason】:generated');
-    const submitButton = screen.getByRole('button', { name: 'conversation.explorer.scm.commit.submitForScan' });
+    const submitButton = screen.getByRole('button', { name: 'conversation.explorer.scm.commit.runChecks' });
     await waitFor(() => expect(submitButton).toBeEnabled());
     fireEvent.click(submitButton);
     expect(await screen.findByText('conversation.explorer.scm.commit.buildFailed')).toBeInTheDocument();
     expect(document.querySelector('[data-scm-workflow-output]')?.textContent).toContain('compiler failed at a.c:5');
-    expect(screen.getByRole('button', { name: 'conversation.explorer.scm.commit.submitForScan' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'conversation.explorer.scm.commit.runChecks' })).toBeEnabled();
     expect(screen.queryByRole('button', { name: 'conversation.explorer.scm.commit.confirm' })).toBeNull();
   });
 });

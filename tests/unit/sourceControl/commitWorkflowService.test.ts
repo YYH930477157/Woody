@@ -47,6 +47,125 @@ const snapshot = { head: 'head-1', branch: 'main', tree: 'tree-1' };
 const getCommitSnapshot = () => vi.fn().mockResolvedValue(snapshot);
 
 describe('commit workflow service', () => {
+  it.each([false, true])('allows no scanners with compile=%s without running repair', async (compileEnabled) => {
+    const scan = vi.fn();
+    const repair = vi.fn();
+    const compile = vi.fn().mockResolvedValue({ ok: true });
+    const createCommit = vi.fn().mockResolvedValue({ ok: true, commit: 'abc123' });
+    const states: string[] = [];
+    const service = createCommitWorkflowService({
+      getCommitSnapshot: getCommitSnapshot(),
+      createCommit,
+      push: vi.fn().mockResolvedValue({ ok: true, stdout: '', stderr: '' }),
+    });
+    const session = await service.prepare({
+      repoPath: 'D:/repo',
+      branch: 'main',
+      selectedPaths: ['src/a.cpp'],
+      scannerConfigs: [config],
+      checks: { scanners: [], compile: compileEnabled, autoRepair: true },
+      messageFields: fields,
+      scan,
+      repair,
+      compile,
+      onStateChange: (state) => states.push(state),
+    });
+    expect(session.state).toBe('confirmation');
+    expect(scan).not.toHaveBeenCalled();
+    expect(repair).not.toHaveBeenCalled();
+    expect(compile).toHaveBeenCalledTimes(compileEnabled ? 1 : 0);
+    expect(states).toEqual(compileEnabled ? ['collecting', 'compile', 'confirmation'] : ['collecting', 'confirmation']);
+    await service.commitAndPush(session.id, fields);
+    expect(createCommit).toHaveBeenCalledWith('D:/repo', ['src/a.cpp'], expect.any(String), snapshot);
+  });
+
+  it.each(['tree', 'head', 'branch'] as const)('still detects %s changes with every check disabled', async (key) => {
+    const service = createCommitWorkflowService({
+      getCommitSnapshot: vi
+        .fn()
+        .mockResolvedValueOnce(snapshot)
+        .mockResolvedValue({ ...snapshot, [key]: 'changed' }),
+      createCommit: vi.fn(),
+      push: vi.fn(),
+    });
+    const session = await service.prepare({
+      repoPath: 'D:/repo',
+      branch: 'main',
+      selectedPaths: ['src/a.cpp'],
+      scannerConfigs: [],
+      checks: { scanners: [], compile: false, autoRepair: false },
+      messageFields: fields,
+      scan: vi.fn(),
+    });
+    expect(session).toMatchObject({ state: 'blocked', reasonCode: 'snapshotChanged' });
+  });
+
+  it('reports remaining diagnostics without invoking disabled repair or compilation', async () => {
+    const repair = vi.fn();
+    const compile = vi.fn();
+    const service = createCommitWorkflowService({
+      getCommitSnapshot: getCommitSnapshot(),
+      createCommit: vi.fn(),
+      push: vi.fn(),
+    });
+    const session = await service.prepare({
+      repoPath: 'D:/repo',
+      branch: 'main',
+      selectedPaths: ['src/a.cpp'],
+      scannerConfigs: [config],
+      checks: { scanners: ['clang-tidy'], compile: false, autoRepair: false },
+      messageFields: fields,
+      scan: vi.fn().mockResolvedValue(finding()),
+      repair,
+      compile,
+    });
+    expect(session).toMatchObject({ state: 'blocked', reasonCode: 'diagnosticsRemain' });
+    expect(repair).not.toHaveBeenCalled();
+    expect(compile).not.toHaveBeenCalled();
+  });
+
+  it.each([['pc-lint'], ['clang-tidy', 'pc-lint']] as const)(
+    'runs exactly the chosen scanners: %j',
+    async (...tools) => {
+      const scanners = tools.flat();
+      const scan = vi.fn().mockResolvedValue(clean());
+      const service = createCommitWorkflowService({
+        getCommitSnapshot: getCommitSnapshot(),
+        createCommit: vi.fn(),
+        push: vi.fn(),
+      });
+      const session = await service.prepare({
+        repoPath: 'D:/repo',
+        branch: 'main',
+        selectedPaths: ['src/a.cpp'],
+        scannerConfigs: [config, { ...config, tool: 'pc-lint' }],
+        checks: { scanners, compile: false, autoRepair: false },
+        messageFields: fields,
+        scan,
+      });
+      expect(session.state).toBe('confirmation');
+      expect(scan.mock.calls.map(([request]) => request.config.tool)).toEqual(scanners);
+    }
+  );
+
+  it('blocks a selected scanner without configuration', async () => {
+    const service = createCommitWorkflowService({
+      getCommitSnapshot: getCommitSnapshot(),
+      createCommit: vi.fn(),
+      push: vi.fn(),
+    });
+    const session = await service.prepare({
+      repoPath: 'D:/repo',
+      branch: 'main',
+      selectedPaths: ['src/a.cpp'],
+      scannerConfigs: [],
+      checks: { scanners: ['pc-lint'], compile: false, autoRepair: false },
+      messageFields: fields,
+      scan: vi.fn(),
+    });
+    expect(session).toMatchObject({ state: 'blocked', reasonCode: 'scanConfigRequired' });
+  });
+
   it('runs scan, repair, rescan and compile before confirmation', async () => {
     const scan = vi.fn().mockResolvedValueOnce(finding()).mockResolvedValueOnce(clean());
     const repair = vi.fn().mockResolvedValue({ changedPaths: ['src/a.cpp'] });

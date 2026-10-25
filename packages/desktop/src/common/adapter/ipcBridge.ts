@@ -1784,6 +1784,10 @@ export const staticScan = {
   saveProjectConfig: bridge.buildProvider<boolean, { repoPath: string; config: StaticScanProjectConfig }>(
     'source-control.static-scan.config.project.save'
   ),
+  saveCommitChecks: bridge.buildProvider<
+    StaticScanProjectConfig,
+    { repoPath: string; checks: NonNullable<StaticScanProjectConfig['commitChecks']> }
+  >('source-control.static-scan.config.commit-checks.save'),
 };
 
 // ---------------------------------------------------------------------------

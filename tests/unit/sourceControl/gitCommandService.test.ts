@@ -36,6 +36,31 @@ afterEach(async () => {
 });
 
 describe('git command service', () => {
+  it('blocks changed files at final confirmation even when every check was skipped', async () => {
+    const repoPath = await makeRepo();
+    const originalHead = await runGit(repoPath, ['rev-parse', 'HEAD']);
+    await writeFile(join(repoPath, 'a.c'), 'int value = 1;\n');
+    const git = createGitCommandService();
+    const push = vi.fn();
+    const workflow = createCommitWorkflowService({ ...git, push });
+    const fields = { reason: 'update', scope: 'driver', solution: 'value', impact: 'none', tests: 'skipped' };
+    const session = await workflow.prepare({
+      repoPath,
+      branch: 'main',
+      selectedPaths: ['a.c'],
+      scannerConfigs: [],
+      checks: { scanners: [], compile: false, autoRepair: false },
+      messageFields: fields,
+      scan: vi.fn(),
+    });
+    expect(session.state).toBe('confirmation');
+    await writeFile(join(repoPath, 'a.c'), 'int value = 2;\n');
+    const result = await workflow.commitAndPush(session.id, fields);
+    expect(result).toMatchObject({ state: 'blocked', reasonCode: 'snapshotChanged' });
+    expect(await runGit(repoPath, ['rev-parse', 'HEAD'])).toBe(originalHead);
+    expect(push).not.toHaveBeenCalled();
+  });
+
   it('reports current branch and selected working-tree changes', async () => {
     const repoPath = await makeRepo();
     await writeFile(join(repoPath, 'a.c'), 'int main(void) { return 1; }\n', 'utf8');

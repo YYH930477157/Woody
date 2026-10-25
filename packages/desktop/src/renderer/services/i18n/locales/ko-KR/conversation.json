@@ -698,13 +698,12 @@
         "changes": "변경"
       },
       "commit": {
-        "snapshotChanged": "검사 후 파일이나 Git 브랜치가 변경되었습니다. 커밋하기 전에 다시 검사하세요.",
+        "snapshotChanged": "파일, Git HEAD 또는 브랜치가 변경되었습니다. 커밋을 다시 준비한 후 확인하세요.",
         "action": "Commit and push",
         "title": "Commit and push",
         "generate": "Generate commit message",
         "generating": "Generating commit message",
         "draftFailed": "Couldn't generate the commit message",
-        "submitForScan": "Submit and start scan",
         "start": "Start scan",
         "repository": "Repository: {{repository}}",
         "selectedFiles": "Selected files to process",
@@ -744,13 +743,28 @@
           "failed": "Workflow failed"
         },
         "conversationRequired": "작업을 시작하기 전에 대화를 열어 주세요.",
-        "conversationBusy": "대화 또는 저장소가 처리 중입니다. 완료 후 다시 검사하세요.",
+        "conversationBusy": "대화 또는 저장소가 작업 중입니다. 완료 후 다시 시도하세요.",
         "agentFailed": "AI 작업이 실패했거나 초안 형식이 잘못되었습니다. 대화를 확인하고 다시 시도하세요.",
         "repairOutsideSelection": "허용 범위 밖의 파일 또는 Git 상태가 변경되었습니다. 커밋을 차단하고 로컬 변경을 유지했습니다.",
         "repairLimit": "두 번의 자동 수정 후에도 진단이 남아 있습니다. 직접 수정한 후 다시 검사하세요.",
         "buildConfigRequired": "IAR 또는 CMake 프로젝트를 찾지 못했습니다. .woody/static-scan.json에서 빌드를 설정하세요.",
         "buildAmbiguous": "여러 빌드 시스템 또는 프로젝트를 찾았습니다. .woody/static-scan.json에서 선택하세요.",
-        "buildFailed": "빌드 검증에 실패했습니다. 출력을 확인하고 수정한 후 다시 검사하세요."
+        "buildFailed": "컴파일에 실패했습니다. 출력을 확인하고 문제를 수정한 후 다시 시도하세요.",
+        "runChecks": "검사 실행",
+        "continueCommit": "커밋 계속",
+        "checksFailed": "검사를 준비할 수 없습니다. 아래 세부 내용을 확인하세요.",
+        "scanConfigRequired": ".woody/static-scan.json 에서 선택한 검사기를 설정하고 프로젝트 또는 컴퓨터 설정에서 실행 파일을 지정하세요.",
+        "diagnosticsRemain": "검사 결과 문제가 남아 있습니다. 직접 수정하거나 AI 수정을 켜고 다시 실행하세요.",
+        "checks": {
+          "title": "커밋 전 검사",
+          "compile": "컴파일 검증",
+          "autoRepair": "AI 자동 수정 (최대 두 번, 선택한 검사에만 적용)",
+          "configHint": "계속하면 이 저장소의 .woody/static-scan.json 에 저장됩니다.",
+          "configFailed": "프로젝트 검사 설정을 읽을 수 없습니다. 설정을 수정한 후 창을 다시 여세요.",
+          "none": "모든 검사를 건너뜁니다. 최종 커밋 확인은 여전히 필요합니다.",
+          "clangTidy": "clang-tidy",
+          "pcLint": "PC-lint"
+        }
       },
       "branch": {
         "select": "Select branch",

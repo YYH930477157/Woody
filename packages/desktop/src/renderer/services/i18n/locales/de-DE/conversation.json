@@ -699,13 +699,12 @@
         "changes": "Änderungen"
       },
       "commit": {
-        "snapshotChanged": "Dateien oder der Git-Branch wurden nach der Prüfung geändert. Führen Sie vor dem Commit die Prüfung erneut aus.",
+        "snapshotChanged": "Dateien, Git HEAD oder Branch wurden geändert. Bereiten Sie den Commit vor der Bestätigung erneut vor.",
         "action": "Commit and push",
         "title": "Commit and push",
         "generate": "Generate commit message",
         "generating": "Generating commit message",
         "draftFailed": "Couldn't generate the commit message",
-        "submitForScan": "Submit and start scan",
         "start": "Start scan",
         "repository": "Repository: {{repository}}",
         "selectedFiles": "Selected files to process",
@@ -745,13 +744,28 @@
           "failed": "Workflow failed"
         },
         "conversationRequired": "Öffnen Sie vor dem Start einen Chat.",
-        "conversationBusy": "Chat oder Repository ist beschäftigt. Warten Sie und scannen Sie erneut.",
+        "conversationBusy": "Die Unterhaltung oder das Repository ist beschäftigt. Warten Sie auf den Abschluss und versuchen Sie es erneut.",
         "agentFailed": "Die KI-Aufgabe ist fehlgeschlagen oder der Entwurf ist ungültig. Prüfen Sie den Chat und versuchen Sie es erneut.",
         "repairOutsideSelection": "Eine Datei außerhalb der Auswahl oder der Git-Zustand wurde geändert. Der Commit ist blockiert; lokale Änderungen bleiben erhalten.",
         "repairLimit": "Nach zwei Reparaturversuchen bestehen weiterhin Diagnosen. Beheben Sie diese manuell und scannen Sie erneut.",
         "buildConfigRequired": "Kein IAR- oder CMake-Projekt gefunden. Konfigurieren Sie den Build in .woody/static-scan.json.",
         "buildAmbiguous": "Mehrere Build-Systeme oder Projekte gefunden. Wählen Sie eines in .woody/static-scan.json.",
-        "buildFailed": "Die Build-Prüfung ist fehlgeschlagen. Prüfen Sie die Ausgabe und scannen Sie nach der Korrektur erneut."
+        "buildFailed": "Kompilierung fehlgeschlagen. Prüfen Sie die Ausgabe, beheben Sie das Problem und versuchen Sie es erneut.",
+        "runChecks": "Prüfungen ausführen",
+        "continueCommit": "Weiter zum Commit",
+        "checksFailed": "Prüfungen konnten nicht vorbereitet werden. Details siehe unten.",
+        "scanConfigRequired": "Konfigurieren Sie den gewählten Scanner in .woody/static-scan.json und dessen Programm in den Projekt- oder Rechnereinstellungen.",
+        "diagnosticsRemain": "Es liegen weiterhin Diagnosen vor. Beheben Sie diese manuell oder aktivieren Sie die KI-Korrektur und prüfen Sie erneut.",
+        "checks": {
+          "title": "Prüfungen vor dem Commit",
+          "compile": "Kompilierung prüfen",
+          "autoRepair": "KI-Korrektur (höchstens zwei Versuche; nur gewählte Scans)",
+          "configHint": "Wird beim Fortfahren in .woody/static-scan.json dieses Repositorys gespeichert.",
+          "configFailed": "Prüfeinstellungen können nicht gelesen werden. Korrigieren Sie die Konfiguration und öffnen Sie den Dialog erneut.",
+          "none": "Alle Prüfungen werden übersprungen. Der Commit muss weiterhin bestätigt werden.",
+          "clangTidy": "clang-tidy",
+          "pcLint": "PC-lint"
+        }
       },
       "branch": {
         "select": "Select branch",

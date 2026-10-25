@@ -698,13 +698,12 @@
         "changes": "تغییرات"
       },
       "commit": {
-        "snapshotChanged": "فایل‌ها یا شاخه Git پس از اسکن تغییر کرده‌اند. پیش از ثبت تغییرات، اسکن را دوباره اجرا کنید.",
+        "snapshotChanged": "فایل‌ها، Git HEAD یا شاخه تغییر کرده‌اند. پیش از تأیید، ثبت را دوباره آماده کنید.",
         "action": "Commit and push",
         "title": "Commit and push",
         "generate": "Generate commit message",
         "generating": "Generating commit message",
         "draftFailed": "Couldn't generate the commit message",
-        "submitForScan": "Submit and start scan",
         "start": "Start scan",
         "repository": "Repository: {{repository}}",
         "selectedFiles": "Selected files to process",
@@ -744,13 +743,28 @@
           "failed": "Workflow failed"
         },
         "conversationRequired": "پیش از شروع این فرایند، یک گفتگو باز کنید.",
-        "conversationBusy": "گفتگو یا مخزن مشغول است. منتظر پایان بمانید و دوباره اسکن کنید.",
+        "conversationBusy": "گفتگو یا مخزن مشغول است. پس از پایان دوباره تلاش کنید.",
         "agentFailed": "کار هوش مصنوعی ناموفق بود یا پیش‌نویس نامعتبر است. گفتگو را بررسی و دوباره تلاش کنید.",
         "repairOutsideSelection": "فایلی خارج از انتخاب یا وضعیت Git تغییر کرده است. ثبت تغییرات مسدود شد و تغییرات محلی حفظ شدند.",
         "repairLimit": "پس از دو تلاش برای اصلاح، هنوز خطاهایی وجود دارد. دستی اصلاح و دوباره اسکن کنید.",
         "buildConfigRequired": "پروژه IAR یا CMake پیدا نشد. ساخت را در .woody/static-scan.json تنظیم کنید.",
         "buildAmbiguous": "چند سیستم ساخت یا پروژه پیدا شد. یکی را در .woody/static-scan.json انتخاب کنید.",
-        "buildFailed": "اعتبارسنجی ساخت ناموفق بود. خروجی را بررسی، مشکل را رفع و دوباره اسکن کنید."
+        "buildFailed": "کامپایل ناموفق بود. خروجی را بررسی کنید، مشکل را برطرف کرده و دوباره تلاش کنید.",
+        "runChecks": "اجرای بررسی‌ها",
+        "continueCommit": "ادامه به ثبت تغییرات",
+        "checksFailed": "آماده‌سازی بررسی‌ها ممکن نشد. جزئیات زیر را ببینید.",
+        "scanConfigRequired": "اسکنر انتخابی را در .woody/static-scan.json و مسیر اجرایی آن را در تنظیمات پروژه یا رایانه تنظیم کنید.",
+        "diagnosticsRemain": "هنوز مواردی گزارش شده‌اند. آن‌ها را دستی اصلاح کنید یا ترمیم هوش مصنوعی را فعال کرده و دوباره بررسی کنید.",
+        "checks": {
+          "title": "بررسی‌های پیش از ثبت",
+          "compile": "بررسی کامپایل",
+          "autoRepair": "ترمیم هوش مصنوعی (حداکثر دو تلاش؛ فقط اسکن‌های انتخاب‌شده)",
+          "configHint": "با ادامه، در .woody/static-scan.json این مخزن ذخیره می‌شود.",
+          "configFailed": "خواندن تنظیمات بررسی پروژه ممکن نیست. تنظیمات را اصلاح کرده و پنجره را دوباره باز کنید.",
+          "none": "همه بررسی‌ها رد می‌شوند. تأیید نهایی ثبت همچنان لازم است.",
+          "clangTidy": "clang-tidy",
+          "pcLint": "PC-lint"
+        }
       },
       "branch": {
         "select": "Select branch",

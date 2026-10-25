@@ -2,6 +2,7 @@ import type {
   StaticScanConfig,
   StaticScanDiagnostic,
   StaticScanResult,
+  CommitCheckOptions,
 } from '@/common/types/sourceControl/staticScanTypes';
 import type {
   CommitMessageFields,
@@ -50,6 +51,7 @@ export type CommitWorkflowGit = {
 };
 
 export type CommitWorkflowInput = {
+  checks?: CommitCheckOptions;
   repoPath: string;
   branch: string;
   selectedPaths: string[];
@@ -130,9 +132,16 @@ export const createCommitWorkflowService = (git: CommitWorkflowGit): CommitWorkf
       session.reason = 'No files selected';
       return session;
     }
-    if (input.scannerConfigs.length === 0) {
+    const scannerConfigs = input.checks
+      ? input.checks.scanners.flatMap((tool) => input.scannerConfigs.filter((config) => config.tool === tool))
+      : input.scannerConfigs;
+    if (
+      input.checks?.scanners.some(
+        (tool) => !scannerConfigs.some((config) => config.tool === tool && config.executablePath.trim())
+      )
+    ) {
+      session.reasonCode = 'scanConfigRequired';
       update('blocked');
-      session.reason = 'No static scanner configured';
       return session;
     }
 
@@ -140,7 +149,20 @@ export const createCommitWorkflowService = (git: CommitWorkflowGit): CommitWorkf
 
     let diagnostics: StaticScanDiagnostic[] = [];
     let scannedSnapshot: GitCommitSnapshot | undefined;
+    if (scannerConfigs.length === 0) {
+      try {
+        scannedSnapshot = await git.getCommitSnapshot(session.repoPath, session.selectedPaths);
+        if (scannedSnapshot.branch !== session.branch) {
+          session.reasonCode = 'snapshotChanged';
+          update('blocked');
+          return session;
+        }
+      } catch (error) {
+        return fail(error);
+      }
+    }
     for (let attempt = 0; attempt <= MAX_REPAIR_ATTEMPTS; attempt += 1) {
+      if (scannerConfigs.length === 0) break;
       update(attempt === 0 ? 'scan' : 'rescan');
       try {
         scannedSnapshot = await git.getCommitSnapshot(session.repoPath, session.selectedPaths);
@@ -150,7 +172,7 @@ export const createCommitWorkflowService = (git: CommitWorkflowGit): CommitWorkf
           return session;
         }
         const results = await Promise.all(
-          input.scannerConfigs.map((config) =>
+          scannerConfigs.map((config) =>
             input.scan({
               repoPath: session.repoPath,
               selectedPaths: session.selectedPaths,
@@ -176,9 +198,9 @@ export const createCommitWorkflowService = (git: CommitWorkflowGit): CommitWorkf
       }
       session.diagnostics = diagnostics;
       if (diagnostics.length === 0) break;
-      if (attempt === MAX_REPAIR_ATTEMPTS || !input.repair) {
+      if (attempt === MAX_REPAIR_ATTEMPTS || !input.repair || input.checks?.autoRepair === false) {
         session.reason = 'Static scan diagnostics remain';
-        session.reasonCode = 'repairLimit';
+        session.reasonCode = attempt === MAX_REPAIR_ATTEMPTS ? 'repairLimit' : 'diagnosticsRemain';
         update('blocked');
         return session;
       }
@@ -201,8 +223,13 @@ export const createCommitWorkflowService = (git: CommitWorkflowGit): CommitWorkf
       }
     }
 
-    update('compile');
-    if (input.compile) {
+    if (input.checks?.compile && !input.compile) {
+      session.reasonCode = 'buildConfigRequired';
+      update('blocked');
+      return session;
+    }
+    if (input.compile && input.checks?.compile !== false) {
+      update('compile');
       try {
         const compile = await input.compile({ repoPath: session.repoPath, selectedPaths: session.selectedPaths });
         session.compileResult = compile;

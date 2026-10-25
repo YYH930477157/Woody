@@ -699,13 +699,12 @@
         "changes": "Cambios"
       },
       "commit": {
-        "snapshotChanged": "Los archivos o la rama de Git cambiaron después del análisis. Repita el análisis antes de confirmar.",
+        "snapshotChanged": "Los archivos, Git HEAD o la rama han cambiado. Prepare de nuevo el commit antes de confirmar.",
         "action": "Commit and push",
         "title": "Commit and push",
         "generate": "Generate commit message",
         "generating": "Generating commit message",
         "draftFailed": "Couldn't generate the commit message",
-        "submitForScan": "Submit and start scan",
         "start": "Start scan",
         "repository": "Repository: {{repository}}",
         "selectedFiles": "Selected files to process",
@@ -745,13 +744,28 @@
           "failed": "Workflow failed"
         },
         "conversationRequired": "Abra una conversación antes de iniciar el proceso.",
-        "conversationBusy": "La conversación o el repositorio está ocupado. Espere y vuelva a analizar.",
+        "conversationBusy": "La conversación o el repositorio está ocupado. Espere a que termine e inténtelo de nuevo.",
         "agentFailed": "La tarea de IA falló o el borrador no es válido. Revise la conversación y reintente.",
         "repairOutsideSelection": "Cambió un archivo fuera de la selección o el estado de Git. Se bloqueó el commit y se conservaron los cambios locales.",
         "repairLimit": "Persisten diagnósticos tras dos intentos de reparación. Corríjalos manualmente y repita el análisis.",
         "buildConfigRequired": "No se detectó un proyecto IAR o CMake. Configure la compilación en .woody/static-scan.json.",
         "buildAmbiguous": "Se encontraron varios sistemas de compilación o proyectos. Seleccione uno en .woody/static-scan.json.",
-        "buildFailed": "La verificación de compilación falló. Revise la salida, corrija el problema y repita el análisis."
+        "buildFailed": "La compilación falló. Revise la salida, corrija el problema e inténtelo de nuevo.",
+        "runChecks": "Ejecutar comprobaciones",
+        "continueCommit": "Continuar al commit",
+        "checksFailed": "No se pudieron preparar las comprobaciones. Consulte los detalles siguientes.",
+        "scanConfigRequired": "Configure el analizador elegido en .woody/static-scan.json y su ejecutable en los ajustes del proyecto o del equipo.",
+        "diagnosticsRemain": "Quedan diagnósticos. Corríjalos manualmente o active la reparación con IA y vuelva a comprobar.",
+        "checks": {
+          "title": "Comprobaciones antes del commit",
+          "compile": "Verificar compilación",
+          "autoRepair": "Reparación con IA (máximo dos intentos; solo análisis seleccionados)",
+          "configHint": "Se guarda en .woody/static-scan.json de este repositorio al continuar.",
+          "configFailed": "No se puede leer la configuración. Corríjala y vuelva a abrir esta ventana.",
+          "none": "Se omiten todas las comprobaciones. Aún se requiere confirmar el commit.",
+          "clangTidy": "clang-tidy",
+          "pcLint": "PC-lint"
+        }
       },
       "branch": {
         "select": "Select branch",

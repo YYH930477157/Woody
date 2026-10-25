@@ -117,8 +117,11 @@ export function initSourceControlBridge(
         ...request,
         messageFields: request.messageFields,
         scan: scanner.scan,
-        repair: agent.repair(request.conversationId, onTurnAccepted),
-        compile: builder.compile,
+        repair:
+          request.checks?.autoRepair === false || request.checks?.scanners.length === 0
+            ? undefined
+            : agent.repair(request.conversationId, onTurnAccepted),
+        compile: request.checks?.compile === false ? undefined : builder.compile,
         onStateChange: (_state, current) => {
           if (request.requestId)
             ipcBridge.sourceControl.workflowProgress.emit({

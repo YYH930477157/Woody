@@ -706,13 +706,12 @@
         "changes": "Зміни"
       },
       "commit": {
-        "snapshotChanged": "Після перевірки файли або гілка Git змінилися. Повторіть перевірку перед комітом.",
+        "snapshotChanged": "Файли, Git HEAD або гілка змінилися. Підготуйте коміт заново перед підтвердженням.",
         "action": "Commit and push",
         "title": "Commit and push",
         "generate": "Generate commit message",
         "generating": "Generating commit message",
         "draftFailed": "Couldn't generate the commit message",
-        "submitForScan": "Submit and start scan",
         "start": "Start scan",
         "repository": "Repository: {{repository}}",
         "selectedFiles": "Selected files to process",
@@ -752,13 +751,28 @@
           "failed": "Workflow failed"
         },
         "conversationRequired": "Відкрийте діалог перед запуском процесу.",
-        "conversationBusy": "Діалог або репозиторій зайнятий. Дочекайтеся завершення та повторіть перевірку.",
+        "conversationBusy": "Розмова або репозиторій зайняті. Дочекайтеся завершення та повторіть спробу.",
         "agentFailed": "Завдання ШІ завершилося помилкою або повернуло некоректну чернетку. Перевірте діалог і повторіть спробу.",
         "repairOutsideSelection": "Змінено файл поза вибраним списком або стан Git. Коміт заблоковано, локальні зміни збережено.",
         "repairLimit": "Після двох спроб виправлення залишилися зауваження. Виправте їх вручну та повторіть перевірку.",
         "buildConfigRequired": "Проєкт IAR або CMake не знайдено. Налаштуйте збирання в .woody/static-scan.json.",
         "buildAmbiguous": "Знайдено кілька систем збирання або проєктів. Виберіть один у .woody/static-scan.json.",
-        "buildFailed": "Перевірка збирання не вдалася. Перегляньте вивід, виправте проблему та повторіть перевірку."
+        "buildFailed": "Помилка компіляції. Перегляньте вивід, усуньте проблему та повторіть спробу.",
+        "runChecks": "Запустити перевірки",
+        "continueCommit": "Перейти до коміту",
+        "checksFailed": "Не вдалося підготувати перевірки. Подробиці нижче.",
+        "scanConfigRequired": "Налаштуйте вибраний аналізатор у .woody/static-scan.json і вкажіть виконуваний файл у налаштуваннях проєкту або комп’ютера.",
+        "diagnosticsRemain": "Залишилися зауваження. Виправте їх вручну або ввімкніть виправлення ШІ та повторіть перевірку.",
+        "checks": {
+          "title": "Перевірки перед комітом",
+          "compile": "Перевірка компіляції",
+          "autoRepair": "Виправлення ШІ (до двох спроб; лише вибрані аналізатори)",
+          "configHint": "Під час продовження налаштування зберігаються у .woody/static-scan.json цього репозиторію.",
+          "configFailed": "Не вдалося прочитати налаштування. Виправте конфігурацію та знову відкрийте вікно.",
+          "none": "Усі перевірки пропущено. Остаточне підтвердження коміту все одно потрібне.",
+          "clangTidy": "clang-tidy",
+          "pcLint": "PC-lint"
+        }
       },
       "branch": {
         "select": "Select branch",
