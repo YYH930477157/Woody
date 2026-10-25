@@ -5,11 +5,37 @@ import path from 'node:path';
 import {
   buildWindowsHydratedPath,
   hydrateWindowsProcessPath,
+  publishBundledOfficeCli,
   parseWindowsProfilePathEntries,
   parseWindowsRegistryPathOutput,
 } from '@/process/startup/windowsPath';
 
 const windowsOnlyIt = process.platform === 'win32' ? it : it.skip;
+
+describe('publishBundledOfficeCli', () => {
+  it('prefers the bundled executable and preserves PATH without duplicates', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'woody-officecli-'));
+    const dir = path.join(root, 'bundled-aioncore', 'win32-x64', 'officecli');
+    const executable = path.join(dir, 'officecli.exe');
+    const env = { Path: 'C:\\Windows\\System32;C:\\ExternalOffice' };
+    try {
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(executable, 'fixture');
+      expect(publishBundledOfficeCli(root, 'x64', env)).toBe(executable);
+      expect(publishBundledOfficeCli(root, 'x64', env)).toBe(executable);
+      expect(env.Path.split(';')).toEqual([dir, 'C:\\Windows\\System32', 'C:\\ExternalOffice']);
+      expect((env as NodeJS.ProcessEnv).PATH).toBe(env.Path);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('leaves the environment unchanged when the bundle is absent', () => {
+    const env = { Path: 'C:\\Windows\\System32' };
+    expect(publishBundledOfficeCli('missing-officecli-bundle', 'arm64', env)).toBeUndefined();
+    expect(env).toEqual({ Path: 'C:\\Windows\\System32' });
+  });
+});
 
 describe('parseWindowsRegistryPathOutput', () => {
   it('extracts and expands the Path value from reg.exe output', () => {
