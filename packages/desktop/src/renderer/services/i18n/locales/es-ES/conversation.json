@@ -760,7 +760,7 @@
           "title": "Comprobaciones antes del commit",
           "compile": "Verificar compilación",
           "autoRepair": "Reparación con IA (máximo dos intentos; solo análisis seleccionados)",
-          "configHint": "Se guarda en .woody/static-scan.json de este repositorio al continuar.",
+          "configHint": "Los cambios en la selección se guardan en .woody/static-scan.json de este repositorio al continuar.",
           "configFailed": "No se puede leer la configuración. Corríjala y vuelva a abrir esta ventana.",
           "none": "Se omiten todas las comprobaciones. Aún se requiere confirmar el commit.",
           "clangTidy": "clang-tidy",

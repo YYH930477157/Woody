@@ -761,7 +761,7 @@
           "title": "Commit öncesi kontroller",
           "compile": "Derleme doğrulaması",
           "autoRepair": "AI onarımı (en fazla iki deneme; yalnızca seçili taramalar)",
-          "configHint": "Devam ettiğinizde bu deponun .woody/static-scan.json dosyasına kaydedilir.",
+          "configHint": "Değiştirilen seçimler, devam ettiğinizde bu deponun .woody/static-scan.json dosyasına kaydedilir.",
           "configFailed": "Proje kontrol ayarları okunamıyor. Yapılandırmayı düzeltip pencereyi yeniden açın.",
           "none": "Tüm kontroller atlanıyor. Son commit onayı yine gereklidir.",
           "clangTidy": "clang-tidy",

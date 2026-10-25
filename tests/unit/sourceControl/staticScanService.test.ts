@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -33,6 +33,56 @@ describe('static scan service', () => {
       expect(await store.getProjectConfig(repo)).toEqual({ ...existing, commitChecks: checks });
       expect(await store.getProjectConfig(otherRepo)).toEqual({});
       expect(await readFile(join(repo, '.woody/static-scan.json'), 'utf8')).not.toContain('executablePath');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('leaves a repository without saved choices untouched when the defaults are kept', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'woody-check-defaults-'));
+    try {
+      const store = createStaticScanConfigStore(join(root, 'user'));
+      await store.saveCommitChecks(root, { scanners: [], compile: true, autoRepair: true });
+      await expect(stat(join(root, '.woody'))).rejects.toMatchObject({ code: 'ENOENT' });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('treats the configured scanners in another order as unchanged defaults', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'woody-check-order-'));
+    try {
+      const store = createStaticScanConfigStore(join(root, 'user'));
+      const scanner = { scope: 'selected' as const, arguments: [] };
+      await store.saveProjectConfig(root, { clangTidy: scanner, pcLint: scanner });
+      const before = await readFile(join(root, '.woody/static-scan.json'), 'utf8');
+      await store.saveCommitChecks(root, { scanners: ['pc-lint', 'clang-tidy'], compile: true, autoRepair: true });
+      expect(await readFile(join(root, '.woody/static-scan.json'), 'utf8')).toBe(before);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('saves a return to the defaults after other choices were saved', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'woody-check-revert-'));
+    try {
+      const store = createStaticScanConfigStore(join(root, 'user'));
+      await store.saveCommitChecks(root, { scanners: [], compile: false, autoRepair: false });
+      const defaults = { scanners: [], compile: true, autoRepair: true };
+      await store.saveCommitChecks(root, defaults);
+      expect((await store.getProjectConfig(root)).commitChecks).toEqual(defaults);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reads a project config saved with a UTF-8 byte order mark', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'woody-check-bom-'));
+    try {
+      const config = { pcLint: { scope: 'selected', arguments: ['project.lnt'] } };
+      await mkdir(join(root, '.woody'));
+      await writeFile(join(root, '.woody/static-scan.json'), `\uFEFF${JSON.stringify(config)}`);
+      expect(await createStaticScanConfigStore(root).getProjectConfig(root)).toEqual(config);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

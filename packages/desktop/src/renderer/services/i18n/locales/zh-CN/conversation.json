@@ -759,7 +759,7 @@
           "title": "提交前检查",
           "compile": "编译验证",
           "autoRepair": "AI 自动修复（最多两轮，仅作用于已选扫描）",
-          "configHint": "点击继续时保存到当前仓库的 .woody/static-scan.json。",
+          "configHint": "修改过的选项会在点击继续时保存到当前仓库的 .woody/static-scan.json。",
           "configFailed": "无法读取项目检查配置，请修正配置后重新打开此窗口。",
           "none": "已跳过所有检查，仍需最终确认提交。",
           "clangTidy": "clang-tidy",

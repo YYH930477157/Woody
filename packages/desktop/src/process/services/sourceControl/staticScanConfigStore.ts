@@ -3,10 +3,12 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import type {
-  CommitCheckOptions,
-  StaticScanMachineConfig,
-  StaticScanProjectConfig,
+import {
+  defaultCommitChecks,
+  sameCommitChecks,
+  type CommitCheckOptions,
+  type StaticScanMachineConfig,
+  type StaticScanProjectConfig,
 } from '@/common/types/sourceControl/staticScanTypes';
 
 const MACHINE_CONFIG_FILE = 'static-scan-tools.json';
@@ -26,7 +28,11 @@ const validateChecks = (value: unknown): void => {
   }
 };
 
-const readProjectConfig = async (repoPath: string): Promise<StaticScanProjectConfig> => {
+/**
+ * Read a repository's `.woody/static-scan.json`; a missing file is an empty config.
+ * Throws on unreadable or invalid JSON instead of falling back to defaults.
+ */
+export const readProjectConfig = async (repoPath: string): Promise<StaticScanProjectConfig> => {
   let contents: string;
   try {
     contents = await readFile(join(repoPath, PROJECT_CONFIG_FILE), 'utf8');
@@ -34,7 +40,8 @@ const readProjectConfig = async (repoPath: string): Promise<StaticScanProjectCon
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return {};
     throw error;
   }
-  const config: unknown = JSON.parse(contents);
+  // Windows editors and PowerShell 5.1 may save UTF-8 with a byte order mark, which JSON.parse rejects.
+  const config: unknown = JSON.parse(contents.replace(/^\uFEFF/, ''));
   if (!config || typeof config !== 'object' || Array.isArray(config)) {
     throw new Error('Expected an object in .woody/static-scan.json');
   }
@@ -80,9 +87,10 @@ export const createStaticScanConfigStore = (userDataPath: string): StaticScanCon
     async saveCommitChecks(repoPath, checks) {
       validateChecks(checks);
       const config = await readProjectConfig(repoPath);
+      // Unchanged choices, including untouched defaults, leave the repository as it is.
+      if (sameCommitChecks(config.commitChecks ?? defaultCommitChecks(config), checks)) return config;
       // Merge the current file, not the renderer's possibly stale configuration.
       const updated = { ...config, commitChecks: checks };
-      if (JSON.stringify(config.commitChecks) === JSON.stringify(checks)) return updated;
       const path = join(repoPath, PROJECT_CONFIG_FILE);
       const temporary = `${path}.${randomUUID()}.tmp`;
       await mkdir(join(repoPath, '.woody'), { recursive: true });

@@ -40,6 +40,27 @@ describe('project build verification', () => {
     expect(result.stdout).toBe('built\n');
   });
 
+  it('runs the configured command from a config saved with a UTF-8 byte order mark', async () => {
+    await mkdir(join(root, '.woody'), { recursive: true });
+    await writeFile(
+      join(root, '.woody/static-scan.json'),
+      `\uFEFF${JSON.stringify({ build: { executable: 'builder', arguments: [] } })}`
+    );
+    const run = runner();
+    const result = await createProjectBuildService(run).compile({ repoPath: root });
+    expect(result.ok).toBe(true);
+    expect(run).toHaveBeenCalledWith('builder', [], expect.objectContaining({ cwd: root }));
+  });
+
+  it('reports an unreadable project config as a failed build', async () => {
+    await mkdir(join(root, '.woody'), { recursive: true });
+    await writeFile(join(root, '.woody/static-scan.json'), '{broken');
+    const run = runner();
+    const result = await createProjectBuildService(run).compile({ repoPath: root });
+    expect(result).toMatchObject({ ok: false, reasonCode: 'buildFailed' });
+    expect(run).not.toHaveBeenCalled();
+  });
+
   it('does not silently select between IAR and CMake', async () => {
     await writeFile(join(root, 'firmware.ewp'), '');
     await writeFile(join(root, 'CMakeLists.txt'), '');

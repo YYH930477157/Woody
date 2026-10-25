@@ -30,8 +30,10 @@ conversation and the files selected in the Changes panel.
 
 The commit dialog loads its choices from `<repository-root>/.woody/static-scan.json`.
 Each Git repository or worktree has its own file, including nested repositories
-inside one workspace. Choices are saved when you click **Run checks** or
-**Continue to commit**, before the Git snapshot is captured:
+inside one workspace. Changed choices are saved when you click **Run checks** or
+**Continue to commit**, before the Git snapshot is captured. Choices that match the
+saved ones, or the defaults when none are saved, leave the file untouched, so a
+repository only gets the file once you change a choice:
 
 ```json
 {
@@ -68,7 +70,8 @@ Configure scanner executables in the machine settings (`static-scan-tools.json`
 under user data), or supply a project scanner's `executablePath` override.
 Selecting an unconfigured scanner reports an error instead of silently skipping it.
 Saving choices preserves existing build commands, scanner arguments and other JSON
-fields, and does not copy machine paths into the project file. Unreadable or invalid
+fields, and does not copy machine paths into the project file. A UTF-8 byte order
+mark, as some Windows editors write, is accepted. Unreadable or invalid
 project JSON and failed saves are reported; checks do not start on those errors.
 Repair the file and reopen the dialog to reload it.
 
