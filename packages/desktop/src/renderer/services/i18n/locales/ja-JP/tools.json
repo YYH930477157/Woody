@@ -185,7 +185,11 @@
     "readPowerShellVersion": "設定の読み取りには PowerShell 7 以降が必要です",
     "readPath": "設定ファイルのパスが無効か、ワークスペース外にあります",
     "readBusy": "読み取り待ちの設定ファイルが多すぎます",
-    "sourceSettingsUnreadable": ".vscode/settings.json を読み取れないため、cmake.sourceDirectory を無視してフォルダーをスキャンしプロジェクトを検出しました。プロジェクトを選択して設定の読み取り方法を設定し、再検出してください。"
+    "sourceSettingsUnreadable": ".vscode/settings.json を読み取れないため、cmake.sourceDirectory を無視してフォルダーをスキャンしプロジェクトを検出しました。プロジェクトを選択して設定の読み取り方法を設定し、再検出してください。",
+    "variantCompatibility": "設定の互換性",
+    "descriptionAlias": "この説明は long として読み込まれました。設定ファイルは変更されていません。",
+    "descriptionShadowed": "両方のフィールドがあるため、long が優先されます。設定ファイルは変更されていません。",
+    "supportedVariantFields": "この位置で使用できるフィールド"
   },
   "unknownFile": "不明なファイル",
   "newFile": "新規ファイル",

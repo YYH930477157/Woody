@@ -12,7 +12,13 @@ export type CmakeDiagnostic = {
   file?: string;
   line?: number;
   column?: number;
+  fieldPath?: string;
+  supportedFields?: string[];
   attempts?: Array<{ reader: 'direct' | 'powershell'; code: string; executable?: string }>;
+};
+export type CmakeVariantWarning = {
+  code: 'descriptionAlias' | 'descriptionShadowed';
+  fieldPath: string;
 };
 export type CmakeToolCheck = {
   name: keyof CmakeTools;
@@ -41,7 +47,13 @@ export type CmakeChoice = {
   settings: Record<string, string | number | boolean>;
   env: Record<string, string>;
 };
-export type CmakeDimension = { name: string; label: string; defaultChoice: string; choices: CmakeChoice[] };
+export type CmakeDimension = {
+  name: string;
+  label: string;
+  description?: string;
+  defaultChoice: string;
+  choices: CmakeChoice[];
+};
 export type CmakeJob = {
   id: string;
   projectPath: string;
@@ -59,6 +71,7 @@ export type CmakeProject = {
   workspacePath?: string;
   variantsFile?: string;
   configurationError?: string;
+  configurationWarnings?: CmakeVariantWarning[];
   diagnostic?: CmakeDiagnostic;
   readInfo?: CmakeReadInfo;
   toolChecks?: CmakeToolCheck[];

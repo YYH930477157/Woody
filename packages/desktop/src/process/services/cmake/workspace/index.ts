@@ -7,6 +7,7 @@ import type {
   CmakeDiagnostic,
   CmakeReadInfo,
   CmakeReadOptions,
+  CmakeVariantWarning,
   CmakeWorkspace,
 } from '@/common/types/cmake';
 import { defaultConfiguration, normalizeStoredConfiguration } from '../configuration';
@@ -148,6 +149,7 @@ export async function loadVariantConfiguration(
   error?: string;
   diagnostic?: CmakeDiagnostic;
   readInfo?: CmakeReadInfo;
+  warnings?: CmakeVariantWarning[];
 }> {
   for (const directory of new Set([workspace, root])) {
     for (const file of [
@@ -171,7 +173,9 @@ export async function loadVariantConfiguration(
       try {
         const text = result.text;
         const source = file.endsWith('.json') ? JSON.stringify(JSON5.parse(text)) : text;
-        return { dimensions: parseVariants(source), file: absolute, readInfo: result.info };
+        const warnings: CmakeVariantWarning[] = [];
+        const dimensions = parseVariants(source, warnings);
+        return { dimensions, file: absolute, readInfo: result.info, ...(warnings.length ? { warnings } : {}) };
       } catch (cause) {
         const diagnostic = configurationDiagnostic(cause, absolute);
         return {

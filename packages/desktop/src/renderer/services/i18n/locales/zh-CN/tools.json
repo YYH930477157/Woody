@@ -185,7 +185,11 @@
     "readPowerShellVersion": "配置读取需要 PowerShell 7 或更高版本",
     "readPath": "配置文件路径无效或位于工作区外",
     "readBusy": "正在读取的配置文件过多",
-    "sourceSettingsUnreadable": "无法读取 .vscode/settings.json，已忽略 cmake.sourceDirectory，改为扫描文件夹查找工程。选择工程后设置配置读取方式，再重新检测工程。"
+    "sourceSettingsUnreadable": "无法读取 .vscode/settings.json，已忽略 cmake.sourceDirectory，改为扫描文件夹查找工程。选择工程后设置配置读取方式，再重新检测工程。",
+    "variantCompatibility": "配置兼容提示",
+    "descriptionAlias": "已将该说明字段按 long 兼容读取，未修改配置文件。",
+    "descriptionShadowed": "两个字段同时存在，优先使用 long，未修改配置文件。",
+    "supportedVariantFields": "此位置支持的字段"
   },
   "unknownFile": "未知文件",
   "newFile": "新文件",

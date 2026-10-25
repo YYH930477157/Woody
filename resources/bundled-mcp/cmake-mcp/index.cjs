@@ -23,7 +23,7 @@ const tools = [
   ),
   tool(
     'inspect',
-    'Read project variants, saved tool paths, selected build directory and latest job. Does not build.',
+    'Read project variants, saved tool paths, selected build directory, latest job and configuration diagnostics. configurationWarnings reports compatible description aliases; configurationError blocks configure/build/test/run but does not hide an authorized project. Does not build or change source files.',
     { projectPath: string },
     ['projectPath']
   ),

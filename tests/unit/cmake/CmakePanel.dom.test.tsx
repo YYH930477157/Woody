@@ -82,6 +82,43 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 describe('CMake build panel', () => {
+  it('shows compatibility notices without blocking build or tool inspection', async () => {
+    mocks.inspect.mockResolvedValue({
+      ...project,
+      variantsFile: 'D:/meter/cmake-variants.yaml',
+      configurationWarnings: [
+        { code: 'descriptionAlias', fieldPath: 'buildType.description' },
+        { code: 'descriptionShadowed', fieldPath: 'buildType.choices.debug.description' },
+      ],
+    });
+    render(<CmakePanel projectPath={project.projectPath} />);
+    expect(await screen.findByText('tools.cmake.descriptionAlias')).toBeInTheDocument();
+    expect(screen.getByText('tools.cmake.descriptionShadowed')).toBeInTheDocument();
+    expect(screen.getByText('buildType.description')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'tools.cmake.build' })).not.toBeDisabled();
+  });
+  it('explains unsupported fields while leaving AI authorization and recovery available', async () => {
+    mocks.inspect.mockResolvedValue({
+      ...project,
+      variantsFile: 'D:/meter/cmake-variants.yaml',
+      configurationError: 'cmake.unsupportedVariants: buildType.generator',
+      diagnostic: {
+        kind: 'unsupported',
+        message: 'cmake.unsupportedVariants: buildType.generator',
+        fieldPath: 'buildType.generator',
+        supportedFields: ['default', 'choices', 'short', 'long', 'description'],
+      },
+    });
+    render(<CmakePanel projectPath={project.projectPath} />);
+    expect(await screen.findByText('default, choices, short, long, description')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'tools.cmake.build' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'tools.cmake.reloadConfiguration' })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'tools.cmake.revealConfiguration' })).not.toBeDisabled();
+    fireEvent.click(screen.getByRole('switch', { name: 'tools.cmake.aiAccess' }));
+    await waitFor(() =>
+      expect(mocks.setAiEnabled).toHaveBeenCalledWith({ projectPath: project.projectPath, enabled: true })
+    );
+  });
   it('shows the root directory name instead of a dot and keeps idle logs collapsed', async () => {
     mocks.discover.mockResolvedValue({
       workspacePath: project.projectPath,

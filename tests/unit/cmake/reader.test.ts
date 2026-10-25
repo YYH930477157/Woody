@@ -410,7 +410,12 @@ describe('configuration reading', () => {
     await fs.rename(file, path.join(root, 'cmake-variants.yml'));
     await fs.writeFile(path.join(root, 'cmake-variants.yml'), 'mode: {choices: {sim: {unknown: value}}}');
     const result = await loadVariantConfiguration(root);
-    expect(result.diagnostic).toMatchObject({ kind: 'unsupported', message: 'cmake.unsupportedVariants: unknown' });
+    expect(result.diagnostic).toMatchObject({
+      kind: 'unsupported',
+      message: 'cmake.unsupportedVariants: mode.choices.sim.unknown',
+      fieldPath: 'mode.choices.sim.unknown',
+      supportedFields: ['short', 'long', 'description', 'buildType', 'settings', 'env'],
+    });
     expect(result.file).toBe(path.join(root, 'cmake-variants.yml'));
   });
   it('uses the reader for VS Code settings discovery', async () => {

@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CmakeTools } from '@/common/types/cmake';
+import type { CmakeTools, CmakeVariantWarning } from '@/common/types/cmake';
 import { resolveTools } from '@/process/services/cmake/toolchain';
 import { parseVariants, resolveVariants } from '../../../packages/desktop/src/process/services/cmake/variants';
 import { loadDimensions } from '../../../packages/desktop/src/process/services/cmake/workspace';
@@ -144,6 +144,68 @@ describe('independent CMake tool discovery', () => {
 });
 
 describe('CMake variants and commands', () => {
+  it('accepts description metadata on dimensions and choices without changing build inputs', () => {
+    const source = `buildType:
+  description: Build configuration
+  choices:
+    debug:
+      description: Debug symbols
+      buildType: Debug
+      settings: {FEATURE: true}
+`;
+    const warnings: CmakeVariantWarning[] = [];
+    const dimensions = parseVariants(source, warnings);
+    expect(dimensions[0]).toMatchObject({
+      description: 'Build configuration',
+      choices: [{ description: 'Debug symbols', buildType: 'Debug' }],
+    });
+    expect(warnings).toEqual([
+      { code: 'descriptionAlias', fieldPath: 'buildType.description' },
+      { code: 'descriptionAlias', fieldPath: 'buildType.choices.debug.description' },
+    ]);
+    expect(configurationHash(defaultConfiguration(), resolveVariants(dimensions, {}))).toBe(
+      configurationHash(
+        defaultConfiguration(),
+        resolveVariants(parseVariants(source.replaceAll('description:', 'long:')), {})
+      )
+    );
+  });
+  it('prefers long over description at both metadata levels and explains the ignored alias', () => {
+    const warnings: CmakeVariantWarning[] = [];
+    const dimensions = parseVariants(
+      'axis: {long: Canonical axis, description: Alias axis, choices: {debug: {long: Canonical choice, description: Alias choice}}}',
+      warnings
+    );
+    expect(dimensions[0]).toMatchObject({
+      description: 'Canonical axis',
+      choices: [{ description: 'Canonical choice' }],
+    });
+    expect(warnings).toEqual([
+      { code: 'descriptionShadowed', fieldPath: 'axis.description' },
+      { code: 'descriptionShadowed', fieldPath: 'axis.choices.debug.description' },
+    ]);
+  });
+  it('keeps multiline descriptions as display metadata', () => {
+    const dimensions = parseVariants('axis:\n  description: |\n    First line\n    Second line\n  choices: {ok: {}}');
+    expect(dimensions[0].description).toBe('First line\nSecond line\n');
+    expect(resolveVariants(dimensions, {}).settings).toEqual({});
+  });
+  it.each(['[]', '{}', '42', 'null', '"\\0"'])('rejects invalid description metadata: %s', (value) => {
+    expect(() => parseVariants(`axis: {description: ${value}, choices: {ok: {}}}`)).toThrow(/invalidVariants/);
+    expect(() => parseVariants(`axis: {choices: {ok: {description: ${value}}}}`)).toThrow(/invalidVariants/);
+  });
+  it('reports the full path and supported fields for an unsupported choice property', () => {
+    expect(() => parseVariants('axis: {choices: {ok: {generator: Ninja}}}')).toThrowError(
+      expect.objectContaining({
+        message: 'cmake.unsupportedVariants: axis.choices.ok.generator',
+        diagnostic: expect.objectContaining({
+          kind: 'unsupported',
+          fieldPath: 'axis.choices.ok.generator',
+          supportedFields: ['short', 'long', 'description', 'buildType', 'settings', 'env'],
+        }),
+      })
+    );
+  });
   it('keeps YAML values as literal individual command arguments with legacy configure syntax', () => {
     const config = defaultConfiguration();
     const resolved = resolveVariants(parseVariants(yaml), {});

@@ -185,7 +185,11 @@
     "readPowerShellVersion": "Yapılandırmayı okumak için PowerShell 7 veya üzeri gerekir",
     "readPath": "Yapılandırma dosyasının yolu geçersiz veya çalışma alanının dışında",
     "readBusy": "Çok fazla yapılandırma okuma isteği bekliyor",
-    "sourceSettingsUnreadable": ".vscode/settings.json okunamadı; cmake.sourceDirectory yok sayıldı ve projeler klasörler taranarak bulundu. Bir proje seçtikten sonra yapılandırma okuma ayarını yapıp yeniden tarayın."
+    "sourceSettingsUnreadable": ".vscode/settings.json okunamadı; cmake.sourceDirectory yok sayıldı ve projeler klasörler taranarak bulundu. Bir proje seçtikten sonra yapılandırma okuma ayarını yapıp yeniden tarayın.",
+    "variantCompatibility": "Yapılandırma uyumluluğu",
+    "descriptionAlias": "Bu açıklama long olarak okundu. Yapılandırma dosyası değiştirilmedi.",
+    "descriptionShadowed": "Her iki alan da mevcut; long önceliklidir. Yapılandırma dosyası değiştirilmedi.",
+    "supportedVariantFields": "Bu konumda desteklenen alanlar"
   },
   "unknownFile": "Bilinmeyen dosya",
   "newFile": "Yeni Dosya",
