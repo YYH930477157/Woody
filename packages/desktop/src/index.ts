@@ -41,7 +41,7 @@ import { setInitialLanguage } from '@process/services/i18n';
 import { setupApplicationMenu } from './process/utils/appMenu';
 import { startWebHost } from '@aionui/web-host';
 import { initializeZoomFactor, setupZoomForWindow } from './process/utils/zoom';
-import { hydrateWindowsProcessPath } from './process/startup/windowsPath';
+import { hydrateWindowsProcessPath, publishBundledOfficeCli } from './process/startup/windowsPath';
 import { registerWindowsAppUserModelId } from './process/startup/windowsAppUserModelId';
 import {
   MIN_WINDOW_WIDTH,
@@ -827,6 +827,10 @@ const handleAppReady = async (): Promise<void> => {
    * unset and the MCP falls back to npx.
    */
   if (app.isPackaged) {
+    if (process.platform === 'win32') {
+      const officeCli = publishBundledOfficeCli(process.resourcesPath, process.arch);
+      if (officeCli) console.log(`[BundledOfficeCli] Published offline executable at ${officeCli}`);
+    }
     const bundledMcpDir = path.join(process.resourcesPath, 'bundled-mcp');
     if (fs.existsSync(bundledMcpDir)) {
       process.env.AIONUI_BUILTIN_MCP_DIR = bundledMcpDir;

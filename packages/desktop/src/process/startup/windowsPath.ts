@@ -272,3 +272,23 @@ export function hydrateWindowsProcessPath(env: NodeJS.ProcessEnv = process.env):
 
   return getCurrentWindowsPath(env);
 }
+
+/** Publish the offline OfficeCLI bundle before starting the backend and its children. */
+export function publishBundledOfficeCli(
+  resourcesPath: string,
+  arch: string,
+  env: NodeJS.ProcessEnv = process.env
+): string | undefined {
+  const directory = path.join(resourcesPath, 'bundled-aioncore', `win32-${arch}`, 'officecli');
+  const executable = path.join(directory, 'officecli.exe');
+  try {
+    if (!statSync(executable).isFile()) return undefined;
+  } catch {
+    return undefined;
+  }
+  setCurrentWindowsPath(
+    env,
+    dedupeWindowsPathEntries([directory, ...splitWindowsPathEntries(getCurrentWindowsPath(env))]).join(';')
+  );
+  return executable;
+}
