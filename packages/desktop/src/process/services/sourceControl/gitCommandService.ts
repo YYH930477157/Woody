@@ -88,8 +88,17 @@ export const createGitCommandService = (runner: GitCommandRunner = defaultRunner
     return result.stdout.trim();
   };
 
+  /** Current branch, or an empty name on a detached HEAD. `git branch --show-current` needs Git 2.22+. */
+  const readBranch = async (repoPath: string): Promise<GitCommandOutput> => {
+    const result = await runner(['symbolic-ref', '--quiet', '--short', 'HEAD'], { cwd: repoPath });
+    // Exit code 1 without a message is a detached HEAD, not a failure.
+    return result.exitCode === 1 && !result.stderr ? { ...result, stdout: '', exitCode: 0 } : result;
+  };
+
   const readHead = async (repoPath: string): Promise<Pick<GitCommitSnapshot, 'head' | 'branch'>> => {
-    const branch = await requireSuccess(['branch', '--show-current'], { cwd: repoPath });
+    const branchResult = await readBranch(repoPath);
+    if (branchResult.exitCode !== 0) throw new Error(branchResult.stderr || 'Unable to read Git branch');
+    const branch = branchResult.stdout.trim();
     const revision = await runner(['rev-parse', '--verify', '--quiet', 'HEAD'], { cwd: repoPath });
     if (revision.exitCode !== 0 && (revision.exitCode !== 1 || !branch || revision.stderr)) {
       throw new Error(revision.stderr || 'Unable to read Git HEAD');
@@ -139,7 +148,7 @@ export const createGitCommandService = (runner: GitCommandRunner = defaultRunner
   return {
     async getStatus(repoPath) {
       const [branchResult, statusResult] = await Promise.all([
-        runner(['branch', '--show-current'], { cwd: repoPath }),
+        readBranch(repoPath),
         runner(['status', '--porcelain=v1', '-z'], { cwd: repoPath }),
       ]);
       if (branchResult.exitCode !== 0 || statusResult.exitCode !== 0) {
@@ -235,7 +244,7 @@ export const createGitCommandService = (runner: GitCommandRunner = defaultRunner
 
     async push(repoPath, branch) {
       if (!branch) return pushFailed('Cannot push from a detached HEAD');
-      const current = await runner(['branch', '--show-current'], { cwd: repoPath });
+      const current = await readBranch(repoPath);
       if (current.exitCode !== 0) return pushFailed(current.stderr || 'Unable to read Git branch', current.stdout);
       if (current.stdout.trim() !== branch) {
         return pushFailed(
