@@ -185,7 +185,11 @@
     "readPowerShellVersion": "La lectura de configuración requiere PowerShell 7 o posterior",
     "readPath": "La ruta de configuración no es válida o está fuera del espacio de trabajo",
     "readBusy": "Hay demasiadas lecturas de configuración pendientes",
-    "sourceSettingsUnreadable": "No se pudo leer .vscode/settings.json, así que se ignoró cmake.sourceDirectory y los proyectos se encontraron explorando carpetas. Elige un proyecto, ajusta la lectura de configuración y vuelve a buscar."
+    "sourceSettingsUnreadable": "No se pudo leer .vscode/settings.json, así que se ignoró cmake.sourceDirectory y los proyectos se encontraron explorando carpetas. Elige un proyecto, ajusta la lectura de configuración y vuelve a buscar.",
+    "variantCompatibility": "Compatibilidad de la configuración",
+    "descriptionAlias": "Esta descripción se ha leído como long. El archivo de configuración no se ha modificado.",
+    "descriptionShadowed": "Ambos campos están presentes; long tiene prioridad. El archivo de configuración no se ha modificado.",
+    "supportedVariantFields": "Campos admitidos en esta ubicación"
   },
   "unknownFile": "Archivo desconocido",
   "newFile": "Nuevo archivo",

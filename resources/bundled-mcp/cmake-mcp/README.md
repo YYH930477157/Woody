@@ -17,6 +17,16 @@ connection timeout. GUI and AI share jobs, logs and project locks.
 variant configuration cannot be read. It does not configure the project or test
 32-bit linking. `configure` and `build` retain the actual compiler/link probes.
 Project inspection includes configuration diagnostics and the effective reader.
+Dimension and choice `description` fields are accepted as display-only aliases
+of `long`; `long` takes precedence when both are present. `configurationWarnings`
+identifies each alias by field path without rewriting the source file. Descriptions
+do not affect build arguments or build-directory identity.
+Unknown variant fields remain errors; diagnostics identify their full field path
+and supported keys. Configuration errors do not prevent explicit AI authorization:
+`cmake_projects` lists authorized projects even when their configuration is invalid,
+and `cmake_inspect` explains the error. An empty list means no projects are currently
+authorized, not that project discovery failed. `configure/build/test/run` still
+reject invalid configuration before running any project commands.
 The desktop's saved reader and encoding settings also apply to MCP calls.
 Automatic reading can retry access/decoding failures through installed PowerShell
 7; this does not rewrite source files or grant encryption-system permissions.

@@ -185,7 +185,11 @@
     "readPowerShellVersion": "讀取組態需要 PowerShell 7 或更新版本",
     "readPath": "組態檔案路徑無效或位於工作區外",
     "readBusy": "等待讀取的組態檔案過多",
-    "sourceSettingsUnreadable": "無法讀取 .vscode/settings.json，已忽略 cmake.sourceDirectory，改為掃描資料夾尋找專案。選擇專案後設定組態讀取方式，再重新偵測專案。"
+    "sourceSettingsUnreadable": "無法讀取 .vscode/settings.json，已忽略 cmake.sourceDirectory，改為掃描資料夾尋找專案。選擇專案後設定組態讀取方式，再重新偵測專案。",
+    "variantCompatibility": "設定相容提示",
+    "descriptionAlias": "已將此說明欄位視為 long 讀取，未修改設定檔。",
+    "descriptionShadowed": "兩個欄位同時存在，優先使用 long，未修改設定檔。",
+    "supportedVariantFields": "此位置支援的欄位"
   },
   "unknownFile": "未知檔案",
   "newFile": "新檔案",

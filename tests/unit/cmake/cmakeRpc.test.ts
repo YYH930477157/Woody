@@ -1,9 +1,9 @@
-import { mkdtemp, mkdir, realpath, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, realpath, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { startCmakeRpc } from '@/process/services/cmake/runtime/cmakeRpc';
-import type { CmakeService } from '@/process/services/cmake/cmakeService';
+import { CmakeService } from '@/process/services/cmake/cmakeService';
 
 describe('shared CMake AI access', () => {
   const cleanups: Array<() => Promise<unknown>> = [];
@@ -34,6 +34,67 @@ describe('shared CMake AI access', () => {
       });
     return { rpc, service, debug, projectPath, call };
   }
+
+  async function setupRealProject(source: string) {
+    const directory = await mkdtemp(path.join(tmpdir(), 'woody-cmake-rpc-real-'));
+    const projectPath = await realpath(directory);
+    const variantsFile = path.join(projectPath, 'cmake-variants.yaml');
+    await writeFile(
+      path.join(projectPath, 'CMakeLists.txt'),
+      'cmake_minimum_required(VERSION 3.5)\nproject(example)\n'
+    );
+    await writeFile(variantsFile, source);
+    const runner = vi.fn(async () => {
+      throw new Error('No project command should be run during inspection or rejection');
+    });
+    const service = new CmakeService(path.join(projectPath, 'settings'), { runner, env: { PATH: '' } });
+    const rpc = await startCmakeRpc(service);
+    cleanups.push(async () => {
+      await rpc.close();
+      await service.dispose();
+      await rm(directory, { recursive: true, force: true });
+    });
+    const call = async (body: unknown) =>
+      (
+        await fetch(`http://127.0.0.1:${rpc.port}/cmake`, {
+          method: 'POST',
+          headers: { authorization: `Bearer ${rpc.token}`, 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+      ).json();
+    return { rpc, projectPath, variantsFile, runner, call };
+  }
+
+  it('keeps description-compatible projects inspectable through the real service without rewriting YAML', async () => {
+    const source = 'buildType: {description: Build mode, choices: {debug: {buildType: Debug}}}';
+    const { rpc, projectPath, variantsFile, call } = await setupRealProject(source);
+    expect(await call({ action: 'projects' })).toEqual({ result: [] });
+    await rpc.setEnabled(projectPath, true);
+    expect((await call({ action: 'inspect', projectPath })).result).toMatchObject({
+      configurationWarnings: [{ code: 'descriptionAlias', fieldPath: 'buildType.description' }],
+      dimensions: [{ name: 'buildType', description: 'Build mode' }],
+    });
+    expect(await readFile(variantsFile, 'utf8')).toBe(source);
+  });
+
+  it('lists an authorized invalid project, explains the field, and refuses to execute it', async () => {
+    const { rpc, projectPath, runner, call } = await setupRealProject(
+      'buildType: {generator: Ninja, choices: {debug: {buildType: Debug}}}'
+    );
+    await rpc.setEnabled(projectPath, true);
+    expect(await call({ action: 'projects' })).toEqual({ result: [projectPath] });
+    expect((await call({ action: 'inspect', projectPath })).result.diagnostic).toMatchObject({
+      kind: 'unsupported',
+      fieldPath: 'buildType.generator',
+      supportedFields: ['default', 'choices', 'short', 'long', 'description'],
+    });
+    expect(await call({ action: 'start', projectPath, operation: 'build' })).toEqual({
+      error: expect.stringContaining('cmake.unsupportedVariants: buildType.generator'),
+    });
+    expect(runner).not.toHaveBeenCalled();
+    await rpc.setEnabled(projectPath, false);
+    expect(await call({ action: 'projects' })).toEqual({ result: [] });
+  });
 
   it('denies invalid credentials and browser origins', async () => {
     const { call } = await setup();

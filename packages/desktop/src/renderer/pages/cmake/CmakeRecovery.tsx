@@ -27,6 +27,8 @@ export default function CmakeRecovery({
   const { t } = useTranslation();
   const read = draft.read || { mode: 'auto', encoding: 'auto', powershellPath: '' };
   const diagnostic = project.diagnostic;
+  const warnings = project.configurationWarnings ?? [];
+  const hasDiagnostics = !!project.configurationError || warnings.length > 0;
   const issueKeys = {
     read: 'issueRead',
     syntax: 'issueSyntax',
@@ -38,6 +40,7 @@ export default function CmakeRecovery({
     {
       projectPath: project.projectPath,
       configurationError: project.configurationError,
+      configurationWarnings: warnings,
       diagnostic,
       readInfo: project.readInfo,
     },
@@ -54,6 +57,11 @@ export default function CmakeRecovery({
             <div className={styles.path}>
               {diagnostic?.file && <strong>{diagnostic.file.split(/[\\/]/).pop()}</strong>}
               <div>{errorText(diagnostic?.message || project.configurationError)}</div>
+              {diagnostic?.supportedFields && (
+                <div>
+                  {t('tools.cmake.supportedVariantFields')}: <code>{diagnostic.supportedFields.join(', ')}</code>
+                </div>
+              )}
               {diagnostic?.line && (
                 <div>
                   {diagnostic.column
@@ -61,6 +69,24 @@ export default function CmakeRecovery({
                     : t('tools.cmake.lineLocation', { line: diagnostic.line })}
                 </div>
               )}
+            </div>
+          }
+        />
+      )}
+      {warnings.length > 0 && (
+        <Alert
+          type='warning'
+          title={t('tools.cmake.variantCompatibility')}
+          content={
+            <div className={styles.path}>
+              {project.variantsFile && <strong>{project.variantsFile.split(/[\\/]/).pop()}</strong>}
+              <ul>
+                {warnings.map((warning) => (
+                  <li key={warning.fieldPath}>
+                    <code>{warning.fieldPath}</code>: <span>{t(`tools.cmake.${warning.code}`)}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           }
         />
@@ -86,7 +112,7 @@ export default function CmakeRecovery({
             {t('tools.cmake.revealConfiguration')}
           </Button>
         )}
-        {project.configurationError && (
+        {hasDiagnostics && (
           <Button
             icon={<Copy />}
             disabled={disabled}
@@ -153,7 +179,7 @@ export default function CmakeRecovery({
             {t('tools.cmake.applyReadSettings')}
           </Button>
         </Collapse.Item>
-        {project.configurationError && (
+        {hasDiagnostics && (
           <Collapse.Item name='diagnostic' header={t('tools.cmake.diagnosticDetails')}>
             <pre className={styles.output}>{diagnosticText}</pre>
           </Collapse.Item>

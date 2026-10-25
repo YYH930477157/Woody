@@ -1,5 +1,5 @@
 import { JSON_SCHEMA, load } from 'js-yaml';
-import type { CmakeDimension } from '@/common/types/cmake';
+import type { CmakeDiagnostic, CmakeDimension, CmakeVariantWarning } from '@/common/types/cmake';
 
 export type ResolvedVariants = {
   selection: Record<string, string>;
@@ -28,13 +28,45 @@ function text(value: unknown, allowEmpty = false): string {
     throw new Error('cmake.invalidVariants: invalid string');
   return value;
 }
-function keysOnly(value: Record<string, unknown>, allowed: string[]): void {
-  for (const key of Object.keys(value))
-    if (!allowed.includes(key)) throw new Error(`cmake.unsupportedVariants: ${key}`);
+function keysOnly(value: Record<string, unknown>, allowed: string[], parent: string): void {
+  for (const key of Object.keys(value)) {
+    if (allowed.includes(key)) continue;
+    const fieldPath = `${parent}.${key}`;
+    const message = `cmake.unsupportedVariants: ${fieldPath}`;
+    const diagnostic: CmakeDiagnostic = { kind: 'unsupported', message, fieldPath, supportedFields: allowed };
+    throw Object.assign(new Error(message), { diagnostic });
+  }
+}
+
+/** Descriptions are bounded display text, never command arguments or environment values. */
+function descriptionText(value: unknown, fieldPath: string): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || value.length > 8192 || value.includes('\0')) {
+    const message = `cmake.invalidVariants: ${fieldPath}`;
+    const diagnostic: CmakeDiagnostic = { kind: 'syntax', message, fieldPath };
+    throw Object.assign(new Error(message), { diagnostic });
+  }
+  return value;
+}
+
+function readDescription(
+  value: Record<string, unknown>,
+  parent: string,
+  warnings: CmakeVariantWarning[]
+): string | undefined {
+  const canonical = descriptionText(value.long, `${parent}.long`);
+  const alias = descriptionText(value.description, `${parent}.description`);
+  if (alias !== undefined) {
+    warnings.push({
+      code: canonical === undefined ? 'descriptionAlias' : 'descriptionShadowed',
+      fieldPath: `${parent}.description`,
+    });
+  }
+  return canonical ?? alias;
 }
 
 /** Parse the bounded CMake Tools variant subset without executing YAML tags. */
-export function parseVariants(source: string | undefined): CmakeDimension[] {
+export function parseVariants(source: string | undefined, warnings: CmakeVariantWarning[] = []): CmakeDimension[] {
   if (source === undefined)
     return [
       {
@@ -52,13 +84,16 @@ export function parseVariants(source: string | undefined): CmakeDimension[] {
     if (!keyPattern.test(name) || ['__proto__', 'constructor', 'prototype'].includes(name))
       throw new Error('cmake.invalidVariants: dimension name');
     const dimension = record(raw);
-    keysOnly(dimension, ['default', 'choices', 'short', 'long']);
+    keysOnly(dimension, ['default', 'choices', 'short', 'long', 'description'], name);
+    const description = readDescription(dimension, name, warnings);
     const entries = Object.entries(record(dimension.choices));
     if (!entries.length || entries.length > 100) throw new Error('cmake.invalidVariants: choice count');
     const choices = entries.map(([id, rawChoice]) => {
       text(id);
       const choice = record(rawChoice);
-      keysOnly(choice, ['short', 'long', 'buildType', 'settings', 'env']);
+      const choicePath = `${name}.choices.${id}`;
+      keysOnly(choice, ['short', 'long', 'description', 'buildType', 'settings', 'env'], choicePath);
+      const choiceDescription = readDescription(choice, choicePath, warnings);
       const settings: Record<string, string | number | boolean> = {};
       for (const [key, value] of Object.entries(choice.settings === undefined ? {} : record(choice.settings))) {
         if (
@@ -90,7 +125,7 @@ export function parseVariants(source: string | undefined): CmakeDimension[] {
       return {
         id,
         label: choice.short === undefined ? id : text(choice.short),
-        description: choice.long === undefined ? undefined : text(choice.long),
+        description: choiceDescription,
         buildType: choice.buildType === undefined ? undefined : text(choice.buildType),
         settings,
         env,
@@ -99,7 +134,13 @@ export function parseVariants(source: string | undefined): CmakeDimension[] {
     const defaultChoice = dimension.default === undefined ? choices[0].id : text(dimension.default);
     if (!choices.some((choice) => choice.id === defaultChoice))
       throw new Error('cmake.invalidVariants: default choice missing');
-    return { name, label: dimension.short === undefined ? name : text(dimension.short), defaultChoice, choices };
+    return {
+      name,
+      label: dimension.short === undefined ? name : text(dimension.short),
+      description,
+      defaultChoice,
+      choices,
+    };
   });
 }
 
