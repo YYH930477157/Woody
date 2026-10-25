@@ -72,6 +72,40 @@ describe('git command service', () => {
     expect(status.changedPaths).toEqual(['a.c']);
   });
 
+  it('reads the branch and HEAD with Git older than 2.22, which lacks branch --show-current', async () => {
+    const repoPath = await makeRepo();
+    const legacyGit = async (args: string[], options: { cwd: string; env?: NodeJS.ProcessEnv }) => {
+      if (args[0] === 'branch' && args.includes('--show-current')) {
+        return { stdout: '', stderr: "error: unknown option `show-current'", exitCode: 129 };
+      }
+      try {
+        const result = await execFileAsync('git', ['--literal-pathspecs', ...args], { ...options, encoding: 'utf8' });
+        return { stdout: result.stdout, stderr: result.stderr, exitCode: 0 };
+      } catch (error) {
+        const failure = error as { stdout?: string; stderr?: string; code?: number };
+        return { stdout: failure.stdout ?? '', stderr: failure.stderr ?? '', exitCode: failure.code ?? 1 };
+      }
+    };
+    const service = createGitCommandService(legacyGit);
+
+    expect((await service.getStatus(repoPath)).branch).toBe('main');
+    expect((await service.getCommitSnapshot(repoPath, ['a.c'])).branch).toBe('main');
+  });
+
+  it('reports an empty branch on a detached HEAD', async () => {
+    const repoPath = await makeRepo();
+    await runGit(repoPath, ['checkout', '--detach']);
+
+    expect((await createGitCommandService().getStatus(repoPath)).branch).toBe('');
+  });
+
+  it('reports a branch read failure outside a repository', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'woody-not-a-repo-'));
+    tempDirs.push(dir);
+
+    await expect(createGitCommandService().getStatus(dir)).rejects.toThrow();
+  });
+
   it('reports a staged rename by its destination without inventing a path from its source', async () => {
     const repoPath = await makeRepo();
     await writeFile(join(repoPath, 'module.c'), 'int value;\n', 'utf8');
