@@ -698,13 +698,12 @@
         "changes": "Modifications"
       },
       "commit": {
-        "snapshotChanged": "Les fichiers ou la branche Git ont changé après l'analyse. Relancez l'analyse avant de créer le commit.",
+        "snapshotChanged": "Les fichiers, Git HEAD ou la branche ont changé. Préparez à nouveau le commit avant de confirmer.",
         "action": "Commit and push",
         "title": "Commit and push",
         "generate": "Generate commit message",
         "generating": "Generating commit message",
         "draftFailed": "Couldn't generate the commit message",
-        "submitForScan": "Submit and start scan",
         "start": "Start scan",
         "repository": "Repository: {{repository}}",
         "selectedFiles": "Selected files to process",
@@ -744,13 +743,28 @@
           "failed": "Workflow failed"
         },
         "conversationRequired": "Ouvrez une conversation avant de démarrer ce processus.",
-        "conversationBusy": "La conversation ou le dépôt est occupé. Attendez puis relancez l’analyse.",
+        "conversationBusy": "La conversation ou le dépôt est occupé. Attendez la fin, puis réessayez.",
         "agentFailed": "La tâche IA a échoué ou le brouillon est invalide. Vérifiez la conversation et réessayez.",
         "repairOutsideSelection": "Un fichier hors sélection ou l’état Git a changé. Le commit est bloqué et les modifications locales sont conservées.",
         "repairLimit": "Des diagnostics subsistent après deux tentatives. Corrigez-les manuellement et relancez l’analyse.",
         "buildConfigRequired": "Aucun projet IAR ou CMake détecté. Configurez la compilation dans .woody/static-scan.json.",
         "buildAmbiguous": "Plusieurs systèmes de compilation ou projets détectés. Choisissez-en un dans .woody/static-scan.json.",
-        "buildFailed": "La vérification de compilation a échoué. Consultez la sortie, corrigez le problème et relancez l’analyse."
+        "buildFailed": "La compilation a échoué. Consultez la sortie, corrigez le problème et réessayez.",
+        "runChecks": "Lancer les vérifications",
+        "continueCommit": "Continuer vers le commit",
+        "checksFailed": "Impossible de préparer les vérifications. Consultez les détails ci-dessous.",
+        "scanConfigRequired": "Configurez le scanner choisi dans .woody/static-scan.json et son exécutable dans les paramètres du projet ou de la machine.",
+        "diagnosticsRemain": "Des diagnostics subsistent. Corrigez-les manuellement ou activez la correction IA, puis relancez.",
+        "checks": {
+          "title": "Vérifications avant commit",
+          "compile": "Vérification de compilation",
+          "autoRepair": "Correction IA (deux tentatives maximum, analyses sélectionnées uniquement)",
+          "configHint": "Enregistré dans .woody/static-scan.json de ce dépôt lorsque vous continuez.",
+          "configFailed": "Impossible de lire la configuration. Corrigez-la puis rouvrez cette fenêtre.",
+          "none": "Toutes les vérifications sont ignorées. La confirmation finale du commit reste nécessaire.",
+          "clangTidy": "clang-tidy",
+          "pcLint": "PC-lint"
+        }
       },
       "branch": {
         "select": "Select branch",

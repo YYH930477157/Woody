@@ -1,11 +1,46 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import type { StaticScanMachineConfig, StaticScanProjectConfig } from '@/common/types/sourceControl/staticScanTypes';
+import type {
+  CommitCheckOptions,
+  StaticScanMachineConfig,
+  StaticScanProjectConfig,
+} from '@/common/types/sourceControl/staticScanTypes';
 
 const MACHINE_CONFIG_FILE = 'static-scan-tools.json';
 const PROJECT_CONFIG_FILE = '.woody/static-scan.json';
+
+const validateChecks = (value: unknown): void => {
+  const checks = value as CommitCheckOptions | null;
+  if (
+    !checks ||
+    !Array.isArray(checks.scanners) ||
+    checks.scanners.some((tool) => tool !== 'clang-tidy' && tool !== 'pc-lint') ||
+    new Set(checks.scanners).size !== checks.scanners.length ||
+    typeof checks.compile !== 'boolean' ||
+    typeof checks.autoRepair !== 'boolean'
+  ) {
+    throw new Error('Invalid commitChecks in .woody/static-scan.json');
+  }
+};
+
+const readProjectConfig = async (repoPath: string): Promise<StaticScanProjectConfig> => {
+  let contents: string;
+  try {
+    contents = await readFile(join(repoPath, PROJECT_CONFIG_FILE), 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return {};
+    throw error;
+  }
+  const config: unknown = JSON.parse(contents);
+  if (!config || typeof config !== 'object' || Array.isArray(config)) {
+    throw new Error('Expected an object in .woody/static-scan.json');
+  }
+  if ('commitChecks' in config) validateChecks(config.commitChecks);
+  return config as StaticScanProjectConfig;
+};
 
 const readJson = async <T>(path: string, fallback: T): Promise<T> => {
   try {
@@ -20,6 +55,7 @@ export type StaticScanConfigStore = {
   saveMachineConfig: (config: StaticScanMachineConfig) => Promise<void>;
   getProjectConfig: (repoPath: string) => Promise<StaticScanProjectConfig>;
   saveProjectConfig: (repoPath: string, config: StaticScanProjectConfig) => Promise<void>;
+  saveCommitChecks: (repoPath: string, checks: CommitCheckOptions) => Promise<StaticScanProjectConfig>;
 };
 
 export const createStaticScanConfigStore = (userDataPath: string): StaticScanConfigStore => {
@@ -39,7 +75,24 @@ export const createStaticScanConfigStore = (userDataPath: string): StaticScanCon
       await writeFile(machinePath, JSON.stringify(config, null, 2), 'utf8');
     },
     async getProjectConfig(repoPath) {
-      return readJson(join(repoPath, PROJECT_CONFIG_FILE), {});
+      return readProjectConfig(repoPath);
+    },
+    async saveCommitChecks(repoPath, checks) {
+      validateChecks(checks);
+      const config = await readProjectConfig(repoPath);
+      // Merge the current file, not the renderer's possibly stale configuration.
+      const updated = { ...config, commitChecks: checks };
+      if (JSON.stringify(config.commitChecks) === JSON.stringify(checks)) return updated;
+      const path = join(repoPath, PROJECT_CONFIG_FILE);
+      const temporary = `${path}.${randomUUID()}.tmp`;
+      await mkdir(join(repoPath, '.woody'), { recursive: true });
+      try {
+        await writeFile(temporary, `${JSON.stringify(updated, null, 2)}\n`, 'utf8');
+        await rename(temporary, path);
+      } finally {
+        await rm(temporary, { force: true });
+      }
+      return updated;
     },
     async saveProjectConfig(repoPath, config) {
       const path = join(repoPath, PROJECT_CONFIG_FILE);

@@ -205,7 +205,7 @@ export const createGitCommandService = (runner: GitCommandRunner = defaultRunner
             ok: false,
             kind: 'snapshot-changed',
             stdout: '',
-            stderr: 'Files or Git HEAD changed after the static scan',
+            stderr: 'Files or Git HEAD changed after preparing the commit',
           };
         }
         const commit = await runner(['commit', '-m', message], { cwd: repoPath, env: index.env });

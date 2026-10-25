@@ -698,13 +698,12 @@
         "changes": "变更"
       },
       "commit": {
-        "snapshotChanged": "扫描后文件内容或 Git 分支发生了变化，请重新扫描后再提交。",
+        "snapshotChanged": "文件内容、Git HEAD 或分支发生了变化，请重新准备提交并确认。",
         "action": "提交并推送",
         "title": "提交并推送",
         "generate": "生成提交说明",
         "generating": "正在生成提交说明",
         "draftFailed": "提交说明生成失败",
-        "submitForScan": "提交并开始扫描",
         "start": "开始扫描",
         "repository": "仓库：{{repository}}",
         "selectedFiles": "将处理以下已选文件",
@@ -744,13 +743,28 @@
           "failed": "流程失败"
         },
         "conversationRequired": "请先打开当前对话，再启动提交流程。",
-        "conversationBusy": "当前对话或仓库正在处理中，请等待结束后重新扫描。",
+        "conversationBusy": "当前对话或仓库正在处理中，请等待结束后重试。",
         "agentFailed": "AI 任务失败或返回的草稿格式无效，请查看当前对话后重试。",
         "repairOutsideSelection": "检测到允许范围外的文件或 Git 状态发生变化，已阻止提交并保留本地修改。",
         "repairLimit": "两轮自动修复后仍有诊断，请手工处理后重新扫描。",
         "buildConfigRequired": "未检测到 IAR 或 CMake 工程，请在 .woody/static-scan.json 中配置构建。",
         "buildAmbiguous": "检测到多个构建系统或工程，请在 .woody/static-scan.json 中明确选择。",
-        "buildFailed": "编译验证失败，请查看输出，处理问题后重新扫描。"
+        "buildFailed": "编译验证失败，请查看输出，处理问题后重试。",
+        "runChecks": "运行检查",
+        "continueCommit": "继续提交",
+        "checksFailed": "无法准备检查，请查看下方错误详情。",
+        "scanConfigRequired": "请在 .woody/static-scan.json 中配置所选扫描器，并设置项目或本机的工具路径。",
+        "diagnosticsRemain": "扫描仍有诊断，请手工处理，或开启 AI 自动修复后重新检查。",
+        "checks": {
+          "title": "提交前检查",
+          "compile": "编译验证",
+          "autoRepair": "AI 自动修复（最多两轮，仅作用于已选扫描）",
+          "configHint": "点击继续时保存到当前仓库的 .woody/static-scan.json。",
+          "configFailed": "无法读取项目检查配置，请修正配置后重新打开此窗口。",
+          "none": "已跳过所有检查，仍需最终确认提交。",
+          "clangTidy": "clang-tidy",
+          "pcLint": "PC-lint"
+        }
       },
       "branch": {
         "select": "选择分支",

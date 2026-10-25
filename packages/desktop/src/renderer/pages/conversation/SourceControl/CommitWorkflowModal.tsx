@@ -1,9 +1,9 @@
-import { Button, Input, Modal, Spin } from '@arco-design/web-react';
+import { Button, Checkbox, Input, Modal, Spin } from '@arco-design/web-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { CommitMessageFields, GitWorkflowState } from '@/common/types/sourceControl/gitWorkflowTypes';
-import type { StaticScanDiagnostic } from '@/common/types/sourceControl/staticScanTypes';
+import type { CommitCheckOptions, StaticScanDiagnostic } from '@/common/types/sourceControl/staticScanTypes';
 
 import { resourceName, type ScmRepository, type ScmResource } from './scmModel';
 
@@ -18,6 +18,9 @@ export type CommitWorkflowModalProps = {
   diagnostics: StaticScanDiagnostic[];
   output?: string;
   draftReady: boolean;
+  checks?: CommitCheckOptions;
+  checkConfigError?: string;
+  onChecksChange: (checks: CommitCheckOptions) => void;
   onCancel: () => void;
   onDraft: () => void;
   onStart: () => void;
@@ -45,6 +48,9 @@ export const CommitWorkflowModal: React.FC<CommitWorkflowModalProps> = ({
   diagnostics,
   output,
   draftReady,
+  checks,
+  checkConfigError,
+  onChecksChange,
   onCancel,
   onDraft,
   onStart,
@@ -54,6 +60,8 @@ export const CommitWorkflowModal: React.FC<CommitWorkflowModalProps> = ({
 }) => {
   const { t } = useTranslation();
   const busy = isBusyState(state);
+  const checksDisabled = busy || !checks || state === 'completed';
+  const hasChecks = Boolean(checks?.scanners.length || checks?.compile);
   const templateLabel = (field: keyof CommitMessageFields): string =>
     `【${t(`conversation.explorer.scm.commit.message.${field}`)}】`;
   const displayedFieldValue = (field: keyof CommitMessageFields): string =>
@@ -83,8 +91,12 @@ export const CommitWorkflowModal: React.FC<CommitWorkflowModalProps> = ({
               {t('conversation.explorer.scm.commit.confirm')}
             </Button>
           ) : draftReady ? (
-            <Button type='primary' disabled={resources.length === 0 || busy} onClick={onStart}>
-              {t('conversation.explorer.scm.commit.submitForScan')}
+            <Button type='primary' disabled={resources.length === 0 || checksDisabled} onClick={onStart}>
+              {t(
+                hasChecks
+                  ? 'conversation.explorer.scm.commit.runChecks'
+                  : 'conversation.explorer.scm.commit.continueCommit'
+              )}
             </Button>
           ) : (
             <Button type='primary' disabled={resources.length === 0 || busy} onClick={onDraft}>
@@ -112,6 +124,58 @@ export const CommitWorkflowModal: React.FC<CommitWorkflowModalProps> = ({
         <div data-scm-commit-state className='flex items-center gap-6px text-12px text-t-secondary'>
           {busy && <Spin size={14} />}
           <span>{statusMessage ?? t(`conversation.explorer.scm.commit.states.${state}`)}</span>
+        </div>
+        <div className='flex flex-col gap-6px' data-scm-commit-checks>
+          <div className='text-12px text-t-tertiary'>{t('conversation.explorer.scm.commit.checks.title')}</div>
+          <div className='flex flex-wrap gap-12px'>
+            {(['clang-tidy', 'pc-lint'] as const).map((tool) => (
+              <Checkbox
+                key={tool}
+                disabled={checksDisabled}
+                checked={checks?.scanners.includes(tool) ?? false}
+                onChange={(checked) =>
+                  checks &&
+                  onChecksChange({
+                    ...checks,
+                    scanners: checked
+                      ? [...checks.scanners, tool]
+                      : checks.scanners.filter((selected) => selected !== tool),
+                  })
+                }
+              >
+                {t(
+                  tool === 'pc-lint'
+                    ? 'conversation.explorer.scm.commit.checks.pcLint'
+                    : 'conversation.explorer.scm.commit.checks.clangTidy'
+                )}
+              </Checkbox>
+            ))}
+            <Checkbox
+              disabled={checksDisabled}
+              checked={checks?.compile ?? false}
+              onChange={(compile) => checks && onChecksChange({ ...checks, compile })}
+            >
+              {t('conversation.explorer.scm.commit.checks.compile')}
+            </Checkbox>
+          </div>
+          <Checkbox
+            disabled={checksDisabled || !checks?.scanners.length}
+            checked={checks?.autoRepair ?? false}
+            onChange={(autoRepair) => checks && onChecksChange({ ...checks, autoRepair })}
+          >
+            {t('conversation.explorer.scm.commit.checks.autoRepair')}
+          </Checkbox>
+          <div className='text-12px text-t-tertiary'>{t('conversation.explorer.scm.commit.checks.configHint')}</div>
+          {checkConfigError ? (
+            <div role='alert' className='text-12px text-danger'>
+              <div>{t('conversation.explorer.scm.commit.checks.configFailed')}</div>
+              <div>{checkConfigError}</div>
+            </div>
+          ) : !checks ? (
+            <Spin size={14} />
+          ) : !hasChecks ? (
+            <div className='text-12px text-t-secondary'>{t('conversation.explorer.scm.commit.checks.none')}</div>
+          ) : null}
         </div>
         <div className='flex flex-col gap-6px'>
           <div className='text-12px text-t-tertiary'>{t('conversation.explorer.scm.commit.messageTitle')}</div>

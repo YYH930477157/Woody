@@ -700,13 +700,12 @@
         "changes": "Değişiklikler"
       },
       "commit": {
-        "snapshotChanged": "Taramadan sonra dosyalar veya Git dalı değişti. Commit yapmadan önce taramayı yeniden çalıştırın.",
+        "snapshotChanged": "Dosyalar, Git HEAD veya dal değişti. Onaylamadan önce commit işlemini yeniden hazırlayın.",
         "action": "Commit and push",
         "title": "Commit and push",
         "generate": "Generate commit message",
         "generating": "Generating commit message",
         "draftFailed": "Couldn't generate the commit message",
-        "submitForScan": "Submit and start scan",
         "start": "Start scan",
         "repository": "Repository: {{repository}}",
         "selectedFiles": "Selected files to process",
@@ -746,13 +745,28 @@
           "failed": "Workflow failed"
         },
         "conversationRequired": "İş akışını başlatmadan önce bir sohbet açın.",
-        "conversationBusy": "Sohbet veya depo meşgul. Tamamlanmasını bekleyip yeniden tarayın.",
+        "conversationBusy": "Sohbet veya depo meşgul. Tamamlanmasını bekleyip yeniden deneyin.",
         "agentFailed": "Yapay zeka görevi başarısız oldu veya taslak geçersiz. Sohbeti kontrol edip yeniden deneyin.",
         "repairOutsideSelection": "Seçim dışındaki bir dosya veya Git durumu değişti. Commit engellendi; yerel değişiklikler korundu.",
         "repairLimit": "İki onarım denemesinden sonra tanılar sürüyor. Elle düzeltip yeniden tarayın.",
         "buildConfigRequired": "IAR veya CMake projesi bulunamadı. Derlemeyi .woody/static-scan.json içinde yapılandırın.",
         "buildAmbiguous": "Birden fazla derleme sistemi veya proje bulundu. .woody/static-scan.json içinde birini seçin.",
-        "buildFailed": "Derleme doğrulaması başarısız oldu. Çıktıyı inceleyin, sorunu giderip yeniden tarayın."
+        "buildFailed": "Derleme başarısız oldu. Çıktıyı inceleyin, sorunu düzeltin ve yeniden deneyin.",
+        "runChecks": "Kontrolleri çalıştır",
+        "continueCommit": "Commit işlemine devam et",
+        "checksFailed": "Kontroller hazırlanamadı. Aşağıdaki ayrıntılara bakın.",
+        "scanConfigRequired": "Seçilen tarayıcıyı .woody/static-scan.json içinde, çalıştırılabilir dosyasını proje veya bilgisayar ayarlarında yapılandırın.",
+        "diagnosticsRemain": "Tanılar devam ediyor. Elle düzeltin veya AI onarımını etkinleştirip yeniden çalıştırın.",
+        "checks": {
+          "title": "Commit öncesi kontroller",
+          "compile": "Derleme doğrulaması",
+          "autoRepair": "AI onarımı (en fazla iki deneme; yalnızca seçili taramalar)",
+          "configHint": "Devam ettiğinizde bu deponun .woody/static-scan.json dosyasına kaydedilir.",
+          "configFailed": "Proje kontrol ayarları okunamıyor. Yapılandırmayı düzeltip pencereyi yeniden açın.",
+          "none": "Tüm kontroller atlanıyor. Son commit onayı yine gereklidir.",
+          "clangTidy": "clang-tidy",
+          "pcLint": "PC-lint"
+        }
       },
       "branch": {
         "select": "Select branch",

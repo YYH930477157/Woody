@@ -35,7 +35,14 @@ export type StaticScanMachineConfig = {
   tools: Partial<Record<StaticScanTool, string>>;
 };
 
+export type CommitCheckOptions = {
+  scanners: StaticScanTool[];
+  compile: boolean;
+  autoRepair: boolean;
+};
+
 export type StaticScanProjectConfig = {
+  commitChecks?: CommitCheckOptions;
   build?: {
     executable?: string;
     arguments?: string[];

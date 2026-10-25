@@ -698,13 +698,12 @@
         "changes": "變更"
       },
       "commit": {
-        "snapshotChanged": "掃描後檔案內容或 Git 分支發生了變更，請重新掃描後再提交。",
+        "snapshotChanged": "檔案內容、Git HEAD 或分支已變更，請重新準備提交並確認。",
         "action": "Commit and push",
         "title": "Commit and push",
         "generate": "Generate commit message",
         "generating": "Generating commit message",
         "draftFailed": "Couldn't generate the commit message",
-        "submitForScan": "Submit and start scan",
         "start": "Start scan",
         "repository": "Repository: {{repository}}",
         "selectedFiles": "Selected files to process",
@@ -744,13 +743,28 @@
           "failed": "Workflow failed"
         },
         "conversationRequired": "請先開啟目前對話，再啟動提交流程。",
-        "conversationBusy": "目前對話或儲存庫正在處理中，請等待結束後重新掃描。",
+        "conversationBusy": "目前對話或儲存庫正在處理中，請等待結束後重試。",
         "agentFailed": "AI 任務失敗或傳回的草稿格式無效，請查看目前對話後重試。",
         "repairOutsideSelection": "偵測到允許範圍外的檔案或 Git 狀態發生變化，已阻止提交並保留本機修改。",
         "repairLimit": "兩輪自動修復後仍有診斷，請手動處理後重新掃描。",
         "buildConfigRequired": "未偵測到 IAR 或 CMake 專案，請在 .woody/static-scan.json 中設定建置。",
         "buildAmbiguous": "偵測到多個建置系統或專案，請在 .woody/static-scan.json 中明確選擇。",
-        "buildFailed": "編譯驗證失敗，請查看輸出，處理問題後重新掃描。"
+        "buildFailed": "編譯驗證失敗，請查看輸出，處理問題後重試。",
+        "runChecks": "執行檢查",
+        "continueCommit": "繼續提交",
+        "checksFailed": "無法準備檢查，請查看下方錯誤詳情。",
+        "scanConfigRequired": "請在 .woody/static-scan.json 中設定所選掃描器，並設定專案或本機的工具路徑。",
+        "diagnosticsRemain": "掃描仍有診斷，請手動處理，或開啟 AI 自動修復後重新檢查。",
+        "checks": {
+          "title": "提交前檢查",
+          "compile": "編譯驗證",
+          "autoRepair": "AI 自動修復（最多兩輪，僅作用於已選掃描）",
+          "configHint": "點擊繼續時儲存至目前儲存庫的 .woody/static-scan.json。",
+          "configFailed": "無法讀取專案檢查設定，請修正後重新開啟此視窗。",
+          "none": "已略過所有檢查，仍需最終確認提交。",
+          "clangTidy": "clang-tidy",
+          "pcLint": "PC-lint"
+        }
       },
       "branch": {
         "select": "Select branch",

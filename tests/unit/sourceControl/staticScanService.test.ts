@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -16,6 +16,59 @@ import {
 import type { StaticScanConfig } from '@/common/types/sourceControl/staticScanTypes';
 
 describe('static scan service', () => {
+  it('persists empty scanner choices per repo while preserving existing project fields', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'woody-check-options-'));
+    try {
+      const store = createStaticScanConfigStore(join(root, 'user'));
+      const repo = join(root, 'repo');
+      const otherRepo = join(root, 'other');
+      const existing = {
+        build: { system: 'cmake' as const },
+        clangTidy: { scope: 'selected' as const, arguments: ['--quiet'] },
+        custom: 42,
+      };
+      await store.saveProjectConfig(repo, existing);
+      const checks = { scanners: [], compile: false, autoRepair: false };
+      await store.saveCommitChecks(repo, checks);
+      expect(await store.getProjectConfig(repo)).toEqual({ ...existing, commitChecks: checks });
+      expect(await store.getProjectConfig(otherRepo)).toEqual({});
+      expect(await readFile(join(repo, '.woody/static-scan.json'), 'utf8')).not.toContain('executablePath');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it.each(['{broken', 'null', '[]', '{"commitChecks":{"scanners":["unknown"],"compile":false,"autoRepair":true}}'])(
+    'refuses to replace invalid project config: %s',
+    async (content) => {
+      const root = await mkdtemp(join(tmpdir(), 'woody-check-invalid-'));
+      try {
+        await mkdir(join(root, '.woody'));
+        const path = join(root, '.woody/static-scan.json');
+        await writeFile(path, content);
+        const store = createStaticScanConfigStore(root);
+        await expect(store.getProjectConfig(root)).rejects.toThrow();
+        await expect(
+          store.saveCommitChecks(root, { scanners: [], compile: false, autoRepair: false })
+        ).rejects.toThrow();
+        expect(await readFile(path, 'utf8')).toBe(content);
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    }
+  );
+
+  it('reports a project config write failure', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'woody-check-write-'));
+    try {
+      await writeFile(join(root, '.woody'), 'not a directory');
+      const store = createStaticScanConfigStore(root);
+      await expect(store.saveCommitChecks(root, { scanners: [], compile: false, autoRepair: false })).rejects.toThrow();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('builds a clang-tidy command for selected files only', () => {
     const config: StaticScanConfig = {
       tool: 'clang-tidy',

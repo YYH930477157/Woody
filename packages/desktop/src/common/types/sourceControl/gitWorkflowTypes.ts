@@ -53,6 +53,8 @@ export type GitCommitSnapshot = {
 
 export type GitWorkflowReasonCode =
   | 'scanFailed'
+  | 'scanConfigRequired'
+  | 'diagnosticsRemain'
   | 'snapshotChanged'
   | 'conversationRequired'
   | 'conversationBusy'
@@ -110,6 +112,7 @@ export type GitWorkflowSession = {
 };
 
 export type GitWorkflowPrepareRequest = {
+  checks?: import('./staticScanTypes').CommitCheckOptions;
   conversationId?: string;
   requestId?: string;
   repoPath: string;

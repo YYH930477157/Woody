@@ -706,13 +706,12 @@
         "changes": "Изменения"
       },
       "commit": {
-        "snapshotChanged": "После проверки файлы или ветка Git изменились. Повторите проверку перед коммитом.",
+        "snapshotChanged": "Файлы, Git HEAD или ветка изменились. Подготовьте коммит заново перед подтверждением.",
         "action": "Commit and push",
         "title": "Commit and push",
         "generate": "Generate commit message",
         "generating": "Generating commit message",
         "draftFailed": "Couldn't generate the commit message",
-        "submitForScan": "Submit and start scan",
         "start": "Start scan",
         "repository": "Repository: {{repository}}",
         "selectedFiles": "Selected files to process",
@@ -752,13 +751,28 @@
           "failed": "Workflow failed"
         },
         "conversationRequired": "Откройте диалог перед запуском процесса.",
-        "conversationBusy": "Диалог или репозиторий занят. Дождитесь завершения и повторите проверку.",
+        "conversationBusy": "Разговор или репозиторий занят. Дождитесь завершения и повторите попытку.",
         "agentFailed": "Задача ИИ завершилась ошибкой или вернула неверный черновик. Проверьте диалог и повторите попытку.",
         "repairOutsideSelection": "Изменён файл вне выбранного списка или состояние Git. Коммит заблокирован, локальные изменения сохранены.",
         "repairLimit": "После двух попыток исправления остались замечания. Исправьте их вручную и повторите проверку.",
         "buildConfigRequired": "Проект IAR или CMake не найден. Настройте сборку в .woody/static-scan.json.",
         "buildAmbiguous": "Найдено несколько систем сборки или проектов. Выберите один в .woody/static-scan.json.",
-        "buildFailed": "Проверка сборки не удалась. Изучите вывод, исправьте проблему и повторите проверку."
+        "buildFailed": "Ошибка компиляции. Изучите вывод, устраните проблему и повторите попытку.",
+        "runChecks": "Запустить проверки",
+        "continueCommit": "Перейти к коммиту",
+        "checksFailed": "Не удалось подготовить проверки. Подробности ниже.",
+        "scanConfigRequired": "Настройте выбранный анализатор в .woody/static-scan.json и укажите исполняемый файл в настройках проекта или компьютера.",
+        "diagnosticsRemain": "Остались замечания. Исправьте их вручную или включите исправление ИИ и повторите проверку.",
+        "checks": {
+          "title": "Проверки перед коммитом",
+          "compile": "Проверка компиляции",
+          "autoRepair": "Исправление ИИ (до двух попыток; только выбранные анализаторы)",
+          "configHint": "При продолжении настройки сохраняются в .woody/static-scan.json этого репозитория.",
+          "configFailed": "Не удалось прочитать настройки проверок. Исправьте конфигурацию и снова откройте окно.",
+          "none": "Все проверки пропущены. Итоговое подтверждение коммита по-прежнему требуется.",
+          "clangTidy": "clang-tidy",
+          "pcLint": "PC-lint"
+        }
       },
       "branch": {
         "select": "Select branch",

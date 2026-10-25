@@ -12,6 +12,7 @@ const providers = vi.hoisted(() => ({
   saveMachineConfig: vi.fn(),
   getProjectConfig: vi.fn(),
   saveProjectConfig: vi.fn(),
+  saveCommitChecks: vi.fn(),
 }));
 
 vi.mock('@/common', () => ({
@@ -23,6 +24,7 @@ vi.mock('@/common', () => ({
       saveMachineConfig: { provider: providers.saveMachineConfig },
       getProjectConfig: { provider: providers.getProjectConfig },
       saveProjectConfig: { provider: providers.saveProjectConfig },
+      saveCommitChecks: { provider: providers.saveCommitChecks },
     },
   },
 }));
@@ -45,6 +47,7 @@ describe('static scan bridge', () => {
       saveMachineConfig: vi.fn(async () => undefined),
       getProjectConfig: vi.fn(async () => ({})),
       saveProjectConfig: vi.fn(async () => undefined),
+      saveCommitChecks: vi.fn(async (_repoPath, checks) => ({ commitChecks: checks })),
     };
 
     initStaticScanBridge(service, configStore);

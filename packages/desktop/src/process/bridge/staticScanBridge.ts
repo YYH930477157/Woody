@@ -24,6 +24,9 @@ export function initStaticScanBridge(
     return true;
   });
   ipcBridge.staticScan.getProjectConfig.provider(({ repoPath }) => resolvedConfigStore.getProjectConfig(repoPath));
+  ipcBridge.staticScan.saveCommitChecks.provider(({ repoPath, checks }) =>
+    resolvedConfigStore.saveCommitChecks(repoPath, checks)
+  );
   ipcBridge.staticScan.saveProjectConfig.provider(async ({ repoPath, config }) => {
     await resolvedConfigStore.saveProjectConfig(repoPath, config);
     return true;

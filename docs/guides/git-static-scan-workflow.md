@@ -8,17 +8,73 @@ conversation and the files selected in the Changes panel.
 1. Select the files to include. When the active AI turn finishes successfully,
    the dialog can generate a five-field commit message draft automatically.
    The **Generate commit message** action also starts this step manually.
-2. Review and edit the generated message, then choose **Submit and start scan**
-   to begin the verification workflow.
-3. Scan diagnostics are sent as a repair request in the same conversation.
-   The workflow allows at most two repair attempts, rescanning after each.
+2. Review and edit the message. Select **clang-tidy**, **PC-lint**, and/or
+   **Compile verification**, then choose **Run checks**. All three may be
+   unchecked; the button then reads **Continue to commit**.
+3. **AI repair** is a separate option, effective only for selected scanners.
+   When enabled, diagnostics are sent as a repair request in the same conversation,
+   with at most two attempts and a rescan after each. When disabled, diagnostics
+   block confirmation so you can resolve them manually or change the options.
 4. Actual file contents, including preexisting dirty files, are compared during
    each AI task. Changes outside the selection, staging, and Git HEAD or branch
    changes block submission. Local modifications are preserved for inspection.
    Ignored build artifacts are excluded from the content comparison.
-5. A clean scan is followed by a build of the original project.
-6. After verification succeeds, explicitly confirm the commit and push.
-   Files, HEAD, and branch must still match the scanned snapshot.
+5. If selected, compilation builds the original project after scanning completes.
+   Compilation can also run alone. Unselected checks do not run.
+6. Explicitly confirm the commit and push. Files, HEAD, and branch must still
+   match the prepared snapshot, including when every check was skipped.
+   Skipping checks is not a successful scan or build. Review the commit message's
+   test steps to reflect what you actually verified.
+
+## Per-Repository Check Selection
+
+The commit dialog loads its choices from `<repository-root>/.woody/static-scan.json`.
+Each Git repository or worktree has its own file, including nested repositories
+inside one workspace. Choices are saved when you click **Run checks** or
+**Continue to commit**, before the Git snapshot is captured:
+
+```json
+{
+  "commitChecks": {
+    "scanners": ["clang-tidy", "pc-lint"],
+    "compile": true,
+    "autoRepair": false
+  },
+  "clangTidy": {
+    "scope": "selected",
+    "arguments": [],
+    "compileCommandsPath": "build"
+  },
+  "pcLint": {
+    "scope": "selected",
+    "arguments": ["project.lnt"]
+  }
+}
+```
+
+Use `"scanners": []` to skip both scanners. Set `"compile": false` as well to
+skip all checks. `autoRepair` is retained but has no effect without scans.
+When `commitChecks` is absent, the dialog selects scanners whose project settings
+exist and enables compilation and AI repair, preserving the earlier defaults.
+When present, all three fields are required: `scanners` is an array containing
+zero, one or both supported names without duplicates; the other fields are booleans.
+
+clang-tidy and PC-lint perform C/C++ static analysis using their configured rules
+and arguments. They do not imply a separate security scan or test suite.
+Compilation uses the IAR/CMake discovery or explicit command described below;
+the automatic build does not run unit tests.
+
+Configure scanner executables in the machine settings (`static-scan-tools.json`
+under user data), or supply a project scanner's `executablePath` override.
+Selecting an unconfigured scanner reports an error instead of silently skipping it.
+Saving choices preserves existing build commands, scanner arguments and other JSON
+fields, and does not copy machine paths into the project file. Unreadable or invalid
+project JSON and failed saves are reported; checks do not start on those errors.
+Repair the file and reopen the dialog to reload it.
+
+Changing choices after checks finish invalidates the previous confirmation. Closing
+without continuing does not save changed choices. The config file remains an ordinary
+Git change: select it explicitly if you want to commit and share these preferences.
 
 ## Commit Message Template
 

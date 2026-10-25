@@ -49,7 +49,40 @@ vi.mock('@/common', () => ({
 import { initSourceControlBridge } from '@/process/bridge/sourceControlBridge';
 
 describe('source control bridge', () => {
+  it('does not initialize AI repair or compile when all checks are disabled', async () => {
+    const git: GitCommandService = {
+      getStatus: vi.fn(),
+      getBranches: vi.fn(),
+      checkoutBranch: vi.fn(),
+      getCommitSnapshot: vi.fn(async () => ({ head: 'abc', branch: 'main', tree: 'tree' })),
+      createCommit: vi.fn(),
+      push: vi.fn(),
+    };
+    const agent = { repair: vi.fn(() => vi.fn()), generateMessage: vi.fn() };
+    const builder = { compile: vi.fn() };
+    providers.prepare.mockClear();
+    providers.scan.mockClear();
+    initSourceControlBridge(git, createCommitWorkflowService(git), agent, builder);
+    const handler = providers.prepare.mock.calls[0][0] as (
+      request: GitWorkflowPrepareRequest
+    ) => Promise<GitWorkflowSession>;
+    const result = await handler({
+      repoPath: 'D:/repo',
+      branch: 'main',
+      selectedPaths: ['a.cpp'],
+      conversationId: 'chat',
+      scannerConfigs: [],
+      checks: { scanners: [], compile: false, autoRepair: true },
+      messageFields: { reason: 'fix', scope: 'a', solution: 'update', impact: 'none', tests: 'skipped' },
+    });
+    expect(result.state).toBe('confirmation');
+    expect(agent.repair).not.toHaveBeenCalled();
+    expect(builder.compile).not.toHaveBeenCalled();
+    expect(providers.scan).not.toHaveBeenCalled();
+  });
+
   it('registers every Git operation with the main-process service', async () => {
+    for (const name of ['status', 'branches', 'checkout', 'commit', 'push'] as const) providers[name].mockClear();
     const service: GitCommandService = {
       getStatus: vi.fn(async () => ({ branch: 'main', changedPaths: [] })),
       getBranches: vi.fn(async () => ({ branches: [] })),
