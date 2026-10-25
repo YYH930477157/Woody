@@ -760,7 +760,7 @@
           "title": "Prüfungen vor dem Commit",
           "compile": "Kompilierung prüfen",
           "autoRepair": "KI-Korrektur (höchstens zwei Versuche; nur gewählte Scans)",
-          "configHint": "Wird beim Fortfahren in .woody/static-scan.json dieses Repositorys gespeichert.",
+          "configHint": "Geänderte Auswahl wird beim Fortfahren in .woody/static-scan.json dieses Repositorys gespeichert.",
           "configFailed": "Prüfeinstellungen können nicht gelesen werden. Korrigieren Sie die Konfiguration und öffnen Sie den Dialog erneut.",
           "none": "Alle Prüfungen werden übersprungen. Der Commit muss weiterhin bestätigt werden.",
           "clangTidy": "clang-tidy",

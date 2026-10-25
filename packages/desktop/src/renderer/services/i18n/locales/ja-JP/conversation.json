@@ -759,7 +759,7 @@
           "title": "コミット前のチェック",
           "compile": "コンパイル検証",
           "autoRepair": "AI 修復（最大2回、選択したスキャンのみ）",
-          "configHint": "続行時に、このリポジトリの .woody/static-scan.json に保存されます。",
+          "configHint": "変更した選択は、続行時にこのリポジトリの .woody/static-scan.json に保存されます。",
           "configFailed": "プロジェクトのチェック設定を読み込めません。設定を修正して再度開いてください。",
           "none": "すべてのチェックをスキップします。コミットの最終確認は必要です。",
           "clangTidy": "clang-tidy",

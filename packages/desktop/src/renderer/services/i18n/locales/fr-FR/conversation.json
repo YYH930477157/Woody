@@ -759,7 +759,7 @@
           "title": "Vérifications avant commit",
           "compile": "Vérification de compilation",
           "autoRepair": "Correction IA (deux tentatives maximum, analyses sélectionnées uniquement)",
-          "configHint": "Enregistré dans .woody/static-scan.json de ce dépôt lorsque vous continuez.",
+          "configHint": "Les choix modifiés sont enregistrés dans .woody/static-scan.json de ce dépôt lorsque vous continuez.",
           "configFailed": "Impossible de lire la configuration. Corrigez-la puis rouvrez cette fenêtre.",
           "none": "Toutes les vérifications sont ignorées. La confirmation finale du commit reste nécessaire.",
           "clangTidy": "clang-tidy",

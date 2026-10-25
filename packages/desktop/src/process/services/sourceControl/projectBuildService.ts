@@ -1,8 +1,9 @@
-import { readFile, readdir } from 'node:fs/promises';
+import { readdir } from 'node:fs/promises';
 import { isAbsolute, relative, resolve } from 'node:path';
 
 import type { GitWorkflowCompileResult } from '@/common/types/sourceControl/gitWorkflowTypes';
 import type { StaticScanProjectConfig } from '@/common/types/sourceControl/staticScanTypes';
+import { readProjectConfig } from './staticScanConfigStore';
 import { runStaticScanCommand, type StaticScanCommandRunner } from './staticScanService';
 
 type BuildStep = { executable: string; args: string[]; cwd: string; timeoutMs: number };
@@ -109,14 +110,7 @@ export const createProjectBuildService = (runner: StaticScanCommandRunner = runS
   async compile({ repoPath }: { repoPath: string }): Promise<GitWorkflowCompileResult> {
     const result: GitWorkflowCompileResult = { ok: false, stdout: '', stderr: '', commands: [] };
     try {
-      let projectConfig: StaticScanProjectConfig = {};
-      try {
-        projectConfig = JSON.parse(
-          await readFile(resolve(repoPath, '.woody/static-scan.json'), 'utf8')
-        ) as StaticScanProjectConfig;
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-      }
+      const projectConfig = await readProjectConfig(repoPath);
       const plan = await planBuild(repoPath, projectConfig.build ?? {});
       if (!Array.isArray(plan)) return plan;
       for (const step of plan) {

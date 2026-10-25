@@ -759,7 +759,7 @@
           "title": "커밋 전 검사",
           "compile": "컴파일 검증",
           "autoRepair": "AI 자동 수정 (최대 두 번, 선택한 검사에만 적용)",
-          "configHint": "계속하면 이 저장소의 .woody/static-scan.json 에 저장됩니다.",
+          "configHint": "변경한 선택은 계속하면 이 저장소의 .woody/static-scan.json 에 저장됩니다.",
           "configFailed": "프로젝트 검사 설정을 읽을 수 없습니다. 설정을 수정한 후 창을 다시 여세요.",
           "none": "모든 검사를 건너뜁니다. 최종 커밋 확인은 여전히 필요합니다.",
           "clangTidy": "clang-tidy",

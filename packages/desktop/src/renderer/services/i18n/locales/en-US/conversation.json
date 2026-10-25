@@ -759,7 +759,7 @@
           "title": "Checks before commit",
           "compile": "Compile verification",
           "autoRepair": "AI repair (up to two attempts; selected scans only)",
-          "configHint": "Saved to this repository’s .woody/static-scan.json when you continue.",
+          "configHint": "Changed choices are saved to this repository’s .woody/static-scan.json when you continue.",
           "configFailed": "Cannot read project check settings. Fix the configuration and reopen this dialog.",
           "none": "All checks are skipped. Final commit confirmation is still required.",
           "clangTidy": "clang-tidy",

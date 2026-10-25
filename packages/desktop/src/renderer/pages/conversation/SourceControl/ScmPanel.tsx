@@ -50,11 +50,11 @@ import type {
   GitWorkflowState,
   GitWorkflowSession,
 } from '@/common/types/sourceControl/gitWorkflowTypes';
-import type {
-  CommitCheckOptions,
-  StaticScanConfig,
-  StaticScanDiagnostic,
-  StaticScanTool,
+import {
+  defaultCommitChecks,
+  type CommitCheckOptions,
+  type StaticScanConfig,
+  type StaticScanDiagnostic,
 } from '@/common/types/sourceControl/staticScanTypes';
 import { CommitWorkflowModal } from './CommitWorkflowModal';
 import { discardAllTargets, ScmChangesView, stageAllTargets } from './ScmChangesView';
@@ -244,12 +244,9 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
       .invoke({ repoPath: selectedRepoPath })
       .then((config) => {
         if (cancelled) return;
-        const scanners: StaticScanTool[] = [];
-        if (config.clangTidy) scanners.push('clang-tidy');
-        if (config.pcLint) scanners.push('pc-lint');
         setCheckSettings({
           repoPath: selectedRepoPath,
-          checks: config.commitChecks ?? { scanners, compile: true, autoRepair: true },
+          checks: config.commitChecks ?? defaultCommitChecks(config),
         });
       })
       .catch((error: unknown) => {

@@ -56,3 +56,17 @@ export type StaticScanProjectConfig = {
   clangTidy?: Omit<StaticScanConfig, 'tool' | 'executablePath'> & { executablePath?: string };
   pcLint?: Omit<StaticScanConfig, 'tool' | 'executablePath'> & { executablePath?: string };
 };
+
+/** Checks a repository without saved choices gets: its configured scanners, compilation and AI repair. */
+export const defaultCommitChecks = (config: StaticScanProjectConfig): CommitCheckOptions => ({
+  scanners: [...(config.clangTidy ? (['clang-tidy'] as const) : []), ...(config.pcLint ? (['pc-lint'] as const) : [])],
+  compile: true,
+  autoRepair: true,
+});
+
+/** Whether two selections run the same checks; scanner order does not matter. */
+export const sameCommitChecks = (a: CommitCheckOptions, b: CommitCheckOptions): boolean =>
+  a.compile === b.compile &&
+  a.autoRepair === b.autoRepair &&
+  a.scanners.length === b.scanners.length &&
+  a.scanners.every((tool) => b.scanners.includes(tool));
