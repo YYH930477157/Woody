@@ -422,6 +422,10 @@
   "openAiApiModeResponses": "Responses",
   "openAiApiModeTip": "OpenAI 호환 프로토콜을 사용하는 모델에만 제공됩니다.",
   "modelSettingsApplyToSelected": "이 설정은 선택한 모든 모델에 적용되며 나중에 개별적으로 변경할 수 있습니다.",
+  "contextLimit": "컨텍스트 한도(토큰)",
+  "contextLimitAuto": "자동(200K)",
+  "contextLimitReported": "자동(게이트웨이 보고값 {{value}})",
+  "contextLimitTip": "Woody 대화의 컨텍스트 사용량 표시와 자동 압축에 사용됩니다. 비워 두면 게이트웨이가 보고한 값을 사용하고, 보고값이 없으면 200K로 계산합니다.",
   "platformBedrock": "AWS Bedrock",
   "bedrock": {
     "authMethod": "Authentication Method",

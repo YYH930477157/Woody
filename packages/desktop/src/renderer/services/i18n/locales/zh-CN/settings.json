@@ -422,6 +422,10 @@
   "openAiApiModeResponses": "Responses",
   "openAiApiModeTip": "仅对使用 OpenAI 兼容协议的模型显示。",
   "modelSettingsApplyToSelected": "这些设置会应用到全部已选模型，添加后仍可分别修改。",
+  "contextLimit": "上下文上限（tokens）",
+  "contextLimitAuto": "自动（200K）",
+  "contextLimitReported": "自动（网关报告 {{value}}）",
+  "contextLimitTip": "用于 Woody 对话的上下文用量显示和自动压缩。留空时使用网关报告的值；网关未报告时按 200K 计算。",
   "platformBedrock": "AWS Bedrock",
   "bedrock": {
     "authMethod": "认证方式",

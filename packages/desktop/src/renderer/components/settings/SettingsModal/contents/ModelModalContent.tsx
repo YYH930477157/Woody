@@ -22,6 +22,7 @@ import {
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatDateTime } from '@/renderer/services/i18n/format';
+import { formatTokenCount } from '@/renderer/components/agent/ContextUsageIndicator';
 import AddModelModal from '@/renderer/pages/settings/components/AddModelModal';
 import AddPlatformModal from '@/renderer/pages/settings/components/AddPlatformModal';
 import { isNewApiPlatform, NEW_API_PROTOCOL_OPTIONS } from '@/renderer/utils/model/modelPlatforms';
@@ -607,6 +608,14 @@ const ModelModalContent: React.FC = () => {
                                       : t('settings.openAiApiModeAuto')}
                                 </Tag>
                               )}
+
+                              {modelSettings?.context_limit ? (
+                                <Tooltip content={t('settings.contextLimit')}>
+                                  <Tag size='small' className='hidden shrink-0 md:inline-flex'>
+                                    {formatTokenCount(modelSettings.context_limit, i18n.language, true)}
+                                  </Tag>
+                                </Tooltip>
+                              ) : null}
 
                               {/* 模型启用开关 / Model enable switch */}
                               <Switch

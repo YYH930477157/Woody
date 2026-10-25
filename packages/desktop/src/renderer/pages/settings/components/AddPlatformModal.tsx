@@ -2,6 +2,7 @@ import type { IProvider } from '@/common/config/storage';
 import {
   type ModelImageInputChoice,
   type ModelOpenAiApiModeChoice,
+  pickContextLimits,
   supportsOpenAiApiMode,
   updateModelSettings,
 } from '@/common/utils/modelCapabilities';
@@ -385,12 +386,13 @@ const AddPlatformModal = ModalHOC<{
           provider.model_protocols = Object.fromEntries(selectedModels.filter(Boolean).map((m) => [m, modelProtocol]));
         }
 
-        const selectedModels: string[] = Array.isArray(values.model) ? values.model : [values.model];
+        const selectedModels: string[] = (Array.isArray(values.model) ? values.model : [values.model]).filter(Boolean);
         provider.model_settings = updateModelSettings(
           undefined,
-          selectedModels.filter(Boolean),
+          selectedModels,
           imageInput,
-          showOpenAiApiMode ? openAiApiMode : 'auto'
+          showOpenAiApiMode ? openAiApiMode : 'auto',
+          pickContextLimits(selectedModels, undefined, modelListState.data?.context_limits)
         );
 
         onSubmit(provider);

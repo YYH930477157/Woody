@@ -1,13 +1,17 @@
 import type { IProvider } from '@/common/config/storage';
 import {
+  MAX_MODEL_CONTEXT_LIMIT,
+  MIN_MODEL_CONTEXT_LIMIT,
   type ModelImageInputChoice,
   type ModelOpenAiApiModeChoice,
+  pickContextLimits,
   supportsOpenAiApiMode,
   updateModelSettings,
 } from '@/common/utils/modelCapabilities';
 import ModalHOC from '@/renderer/utils/ui/ModalHOC';
 import AionModal from '@/renderer/components/base/AionModal';
-import { Select } from '@arco-design/web-react';
+import { formatNumber } from '@/renderer/services/i18n/format';
+import { InputNumber, Select } from '@arco-design/web-react';
 import { PreviewOpen } from '@icon-park/react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,16 +24,20 @@ import {
 
 const AddModelModal = ModalHOC<{ data?: IProvider; model?: string; onSubmit: (model: IProvider) => void }>(
   ({ modalProps, data, model: editingModel, onSubmit, modalCtrl }) => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const [models, setModels] = useState<string[]>([]);
     const [modelProtocol, setModelProtocol] = useState<string>('openai');
     const [imageInput, setImageInput] = useState<ModelImageInputChoice>('auto');
     const [openAiApiMode, setOpenAiApiMode] = useState<ModelOpenAiApiModeChoice>('auto');
+    const [contextLimit, setContextLimit] = useState<number | undefined>();
     const isNewApi = isNewApiPlatform(data?.platform ?? '');
     const isEditing = Boolean(editingModel);
     const { data: modelList, isLoading } = useModeModeList(data?.platform, data?.base_url, data?.api_key);
     const existingModels = data?.models || [];
     const showOpenAiApiMode = supportsOpenAiApiMode(data?.platform ?? '', modelProtocol);
+    const reportedContextLimits = Array.isArray(modelList) ? undefined : modelList?.context_limits;
+    const targetModels = useMemo(() => (editingModel ? [editingModel] : models), [editingModel, models]);
+    const reportedContextLimit = targetModels.length === 1 ? reportedContextLimits?.[targetModels[0]] : undefined;
     const optionsList = useMemo(() => {
       // 处理新的数据格式，可能包含 fix_base_url
       const fetchedModels = Array.isArray(modelList) ? modelList : modelList?.models || [];
@@ -46,12 +54,12 @@ const AddModelModal = ModalHOC<{ data?: IProvider; model?: string; onSubmit: (mo
       const settings = editingModel ? data?.model_settings?.[editingModel] : undefined;
       setImageInput(settings?.image_input ?? 'auto');
       setOpenAiApiMode(settings?.openai_api_mode ?? 'auto');
+      setContextLimit(settings?.context_limit);
       setModelProtocol(editingModel ? (data?.model_protocols?.[editingModel] ?? 'openai') : 'openai');
     }, [data, editingModel, modalProps.visible]);
 
     const handleConfirm = useCallback(() => {
-      if (!data || (!editingModel && !models.length)) return;
-      const targetModels = editingModel ? [editingModel] : models;
+      if (!data || !targetModels.length) return;
       const updatedData: IProvider = {
         ...data,
         models: editingModel ? existingModels : [...existingModels, ...models],
@@ -59,7 +67,8 @@ const AddModelModal = ModalHOC<{ data?: IProvider; model?: string; onSubmit: (mo
           data.model_settings,
           targetModels,
           imageInput,
-          showOpenAiApiMode ? openAiApiMode : 'auto'
+          showOpenAiApiMode ? openAiApiMode : 'auto',
+          pickContextLimits(targetModels, contextLimit, reportedContextLimits)
         ),
       };
 
@@ -74,6 +83,7 @@ const AddModelModal = ModalHOC<{ data?: IProvider; model?: string; onSubmit: (mo
       onSubmit(updatedData);
       modalCtrl.close();
     }, [
+      contextLimit,
       data,
       editingModel,
       existingModels,
@@ -84,7 +94,9 @@ const AddModelModal = ModalHOC<{ data?: IProvider; model?: string; onSubmit: (mo
       onSubmit,
       openAiApiMode,
       modalCtrl,
+      reportedContextLimits,
       showOpenAiApiMode,
+      targetModels,
     ]);
 
     return (
@@ -170,6 +182,25 @@ const AddModelModal = ModalHOC<{ data?: IProvider; model?: string; onSubmit: (mo
               <div className='text-11px text-t-secondary leading-4'>{t('settings.openAiApiModeTip')}</div>
             </div>
           )}
+
+          <div className='space-y-8px'>
+            <div className='text-13px font-500 text-t-secondary'>{t('settings.contextLimit')}</div>
+            <InputNumber
+              className='w-full'
+              min={MIN_MODEL_CONTEXT_LIMIT}
+              max={MAX_MODEL_CONTEXT_LIMIT}
+              precision={0}
+              step={1024}
+              value={contextLimit}
+              onChange={(value) => setContextLimit(Number.isFinite(value) ? value : undefined)}
+              placeholder={
+                reportedContextLimit
+                  ? t('settings.contextLimitReported', { value: formatNumber(reportedContextLimit, i18n.language) })
+                  : t('settings.contextLimitAuto')
+              }
+            />
+            <div className='text-11px text-t-secondary leading-4'>{t('settings.contextLimitTip')}</div>
+          </div>
 
           {!isEditing && models.length > 1 && (
             <div className='text-11px text-t-secondary leading-4'>{t('settings.modelSettingsApplyToSelected')}</div>

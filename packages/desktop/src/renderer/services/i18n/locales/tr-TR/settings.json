@@ -422,6 +422,10 @@
   "openAiApiModeResponses": "Responses",
   "openAiApiModeTip": "Yalnızca OpenAI uyumlu protokol kullanan modellerde kullanılabilir.",
   "modelSettingsApplyToSelected": "Bu ayarlar seçilen tüm modellere uygulanır ve daha sonra ayrı ayrı değiştirilebilir.",
+  "contextLimit": "Bağlam penceresi (token)",
+  "contextLimitAuto": "Otomatik (200K)",
+  "contextLimitReported": "Otomatik (ağ geçidi {{value}} bildiriyor)",
+  "contextLimitTip": "Woody sohbetlerinde bağlam kullanımı göstergesini ve otomatik sıkıştırmayı belirler. Ağ geçidinin bildirdiği değeri kullanmak için boş bırakın; bildirilmezse 200K kullanılır.",
   "platformBedrock": "AWS Bedrock",
   "bedrock": {
     "authMethod": "Authentication Method",

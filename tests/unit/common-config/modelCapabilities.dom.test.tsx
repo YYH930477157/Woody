@@ -11,6 +11,7 @@ import type { IProvider } from '@/common/config/storage';
 
 const mocks = vi.hoisted(() => ({
   close: vi.fn(),
+  contextLimits: undefined as Record<string, number> | undefined,
   createProvider: vi.fn(),
   deleteProvider: vi.fn(),
   editModeOpen: vi.fn(),
@@ -34,7 +35,7 @@ function MockSelectOption({ children, value }: { children?: React.ReactNode; val
 }
 
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en-US' } }),
 }));
 
 vi.mock('@/renderer/components/base/AionModal', () => ({
@@ -107,7 +108,7 @@ vi.mock('@renderer/hooks/agent/useModeModeList', () => ({
       ? undefined
       : mocks.modelListAsArray
         ? mocks.availableModels
-        : { models: mocks.availableModels },
+        : { models: mocks.availableModels, ...(mocks.contextLimits ? { context_limits: mocks.contextLimits } : {}) },
     error: null,
     isLoading: false,
     mutate: mocks.mutate,
@@ -265,7 +266,7 @@ vi.mock('@arco-design/web-react', async (importOriginal) => {
   };
 });
 
-import { supportsOpenAiApiMode, updateModelSettings } from '@/common/utils/modelCapabilities';
+import { pickContextLimits, supportsOpenAiApiMode, updateModelSettings } from '@/common/utils/modelCapabilities';
 import AddModelModal from '@/renderer/pages/settings/components/AddModelModal';
 import AddPlatformModal from '@/renderer/pages/settings/components/AddPlatformModal';
 import ModelModalContent from '@/renderer/components/settings/SettingsModal/contents/ModelModalContent';
@@ -350,6 +351,30 @@ describe('updateModelSettings', () => {
       )
     ).toEqual({ other: { image_input: 'supported' } });
   });
+
+  it('stores a context limit on its own and beside other overrides', () => {
+    expect(updateModelSettings(undefined, ['qwen3'], 'auto', 'auto', { qwen3: 32_768 })).toEqual({
+      qwen3: { context_limit: 32_768 },
+    });
+    expect(updateModelSettings(undefined, ['gpt-4o'], 'supported', 'auto', { 'gpt-4o': 128_000 })).toEqual({
+      'gpt-4o': { image_input: 'supported', context_limit: 128_000 },
+    });
+  });
+
+  it('drops a stored context limit when none is given', () => {
+    expect(updateModelSettings({ qwen3: { context_limit: 32_768 } }, ['qwen3'], 'auto', 'auto')).toEqual({});
+  });
+});
+
+describe('pickContextLimits', () => {
+  it('applies a typed limit to every model', () => {
+    expect(pickContextLimits(['a', 'b'], 64_000, { a: 32_768 })).toEqual({ a: 64_000, b: 64_000 });
+  });
+
+  it('falls back to the limit each model reported', () => {
+    expect(pickContextLimits(['a', 'b'], undefined, { a: 32_768 })).toEqual({ a: 32_768 });
+    expect(pickContextLimits(['a'], undefined, undefined)).toEqual({});
+  });
 });
 
 describe('model capability selectors', () => {
@@ -358,6 +383,7 @@ describe('model capability selectors', () => {
     mocks.modelListAsArray = false;
     mocks.modelListUnavailable = false;
     mocks.singleModelValue = false;
+    mocks.contextLimits = undefined;
     Object.defineProperty(window, 'matchMedia', {
       configurable: true,
       value: vi.fn().mockImplementation((query: string) => ({
@@ -408,6 +434,75 @@ describe('model capability selectors', () => {
           'gpt-4o': { image_input: 'unsupported', openai_api_mode: 'chat_completions' },
         },
       })
+    );
+  });
+
+  it('edits the context limit of a configured model', async () => {
+    render(
+      <AddModelModal
+        data={provider({ model_settings: { 'gpt-4o': { context_limit: 128_000 } } })}
+        model='gpt-4o'
+        modalProps={{ visible: true }}
+        modalCtrl={{ close: mocks.close }}
+        onSubmit={mocks.onSubmit}
+      />
+    );
+
+    const input = await screen.findByPlaceholderText('settings.contextLimitAuto');
+    await waitFor(() => expect(input).toHaveValue('128000'));
+
+    fireEvent.change(input, { target: { value: '32768' } });
+    fireEvent.blur(input);
+    fireEvent.click(screen.getByRole('button', { name: 'common.confirm' }));
+
+    expect(mocks.onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ model_settings: { 'gpt-4o': { context_limit: 32_768 } } })
+    );
+  });
+
+  it('removes the context limit when the field is cleared', async () => {
+    render(
+      <AddModelModal
+        data={provider({ model_settings: { 'gpt-4o': { context_limit: 128_000 } } })}
+        model='gpt-4o'
+        modalProps={{ visible: true }}
+        modalCtrl={{ close: mocks.close }}
+        onSubmit={mocks.onSubmit}
+      />
+    );
+
+    const input = await screen.findByPlaceholderText('settings.contextLimitAuto');
+    await waitFor(() => expect(input).toHaveValue('128000'));
+
+    fireEvent.change(input, { target: { value: '' } });
+    fireEvent.blur(input);
+    fireEvent.click(screen.getByRole('button', { name: 'common.confirm' }));
+
+    expect(mocks.onSubmit).toHaveBeenCalledWith(expect.objectContaining({ model_settings: {} }));
+  });
+
+  it('fills the context limit the gateway reported for a newly added model', async () => {
+    mocks.contextLimits = { 'claude-sonnet-4': 200_000, 'gpt-5.6-sol': 400_000 };
+    render(
+      <AddModelModal
+        data={provider({ platform: 'anthropic' })}
+        modalProps={{ visible: true }}
+        modalCtrl={{ close: mocks.close }}
+        onSubmit={mocks.onSubmit}
+      />
+    );
+
+    const modelSelect = (await screen.findByTestId('model-select')) as HTMLSelectElement;
+    Array.from(modelSelect.options).forEach((option) => {
+      option.selected = option.value === 'gpt-5.6-sol';
+    });
+    fireEvent.change(modelSelect);
+
+    expect(screen.getByPlaceholderText('settings.contextLimitReported')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'common.confirm' }));
+
+    expect(mocks.onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ model_settings: { 'gpt-5.6-sol': { context_limit: 400_000 } } })
     );
   });
 
@@ -539,6 +634,31 @@ describe('model capability selectors', () => {
     });
   });
 
+  it('stores the gateway context limits of models picked in the provider form', async () => {
+    mocks.contextLimits = { 'gpt-5.6-sol': 400_000 };
+    render(
+      <AddPlatformModal
+        deepLinkData={{ api_key: 'test-key', base_url: 'https://api.example.com/v1', platform: 'OpenAI' }}
+        modalProps={{ visible: true }}
+        modalCtrl={{ close: mocks.close }}
+        onSubmit={mocks.onSubmit}
+      />
+    );
+
+    const modelSelect = (await screen.findByTestId('model-select')) as HTMLSelectElement;
+    Array.from(modelSelect.options).forEach((option) => {
+      option.selected = option.value === 'gpt-5.6-sol';
+    });
+    fireEvent.change(modelSelect);
+    fireEvent.click(screen.getByRole('button', { name: 'common.confirm' }));
+
+    await waitFor(() => {
+      expect(mocks.onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ model_settings: { 'gpt-5.6-sol': { context_limit: 400_000 } } })
+      );
+    });
+  });
+
   it('keeps API mode hidden on the Gemini provider form', async () => {
     mocks.singleModelValue = true;
     render(
@@ -589,6 +709,7 @@ describe('configured model list', () => {
     },
     model_settings: {
       'claude-direct': { image_input: 'supported' },
+      'gpt-auto': { context_limit: 128_000 },
       'gpt-chat': { image_input: 'unsupported', openai_api_mode: 'chat_completions' },
       'gpt-responses': { image_input: 'supported', openai_api_mode: 'responses' },
     },
@@ -610,6 +731,7 @@ describe('configured model list', () => {
     expect(screen.getByText('settings.openAiApiModeResponses')).toBeInTheDocument();
     expect(screen.getByText('settings.openAiApiModeChatCompletions')).toBeInTheDocument();
     expect(screen.getByText('settings.openAiApiModeAuto')).toBeInTheDocument();
+    expect(screen.getByText('128K')).toBeInTheDocument();
   });
 
   it('opens the selected model in the configuration dialog', async () => {
@@ -649,6 +771,7 @@ describe('configured model list', () => {
           },
           model_settings: {
             'claude-direct': { image_input: 'supported' },
+            'gpt-auto': { context_limit: 128_000 },
             'gpt-chat': { image_input: 'unsupported', openai_api_mode: 'chat_completions' },
           },
           models: ['gpt-chat', 'gpt-auto', 'claude-direct'],

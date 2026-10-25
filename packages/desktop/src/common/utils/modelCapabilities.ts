@@ -71,17 +71,41 @@ export const supportsOpenAiApiMode = (platform: string, modelProtocol = 'openai'
   return !['anthropic', 'bedrock', 'gemini', 'gemini-vertex-ai'].includes(platform);
 };
 
+/** Smallest context window a model setting accepts, matching the backend's gateway filter. */
+export const MIN_MODEL_CONTEXT_LIMIT = 1024;
+/** Largest context window a model setting accepts. */
+export const MAX_MODEL_CONTEXT_LIMIT = 100_000_000;
+
+/**
+ * Context window per model: the typed value applies to every model, otherwise
+ * each model keeps the window its gateway reported, if any.
+ */
+export const pickContextLimits = (
+  modelIds: string[],
+  typed: number | undefined,
+  reported: Record<string, number> | undefined
+): Record<string, number> => {
+  const limits: Record<string, number> = {};
+  for (const modelId of modelIds) {
+    const limit = typed ?? reported?.[modelId];
+    if (limit !== undefined) limits[modelId] = limit;
+  }
+  return limits;
+};
+
 /** Apply explicit settings to models while keeping automatic values absent on the wire. */
 export const updateModelSettings = (
   current: Record<string, ModelSettings> | undefined,
   modelIds: string[],
   imageInput: ModelImageInputChoice,
-  openAiApiMode: ModelOpenAiApiModeChoice
+  openAiApiMode: ModelOpenAiApiModeChoice,
+  contextLimits: Record<string, number> = {}
 ): Record<string, ModelSettings> => {
   const next = { ...current };
 
   for (const modelId of modelIds) {
-    if (imageInput === 'auto' && openAiApiMode === 'auto') {
+    const contextLimit = contextLimits[modelId];
+    if (imageInput === 'auto' && openAiApiMode === 'auto' && contextLimit === undefined) {
       delete next[modelId];
       continue;
     }
@@ -89,6 +113,7 @@ export const updateModelSettings = (
     const settings: ModelSettings = {};
     if (imageInput !== 'auto') settings.image_input = imageInput;
     if (openAiApiMode !== 'auto') settings.openai_api_mode = openAiApiMode;
+    if (contextLimit !== undefined) settings.context_limit = contextLimit;
     next[modelId] = settings;
   }
 
