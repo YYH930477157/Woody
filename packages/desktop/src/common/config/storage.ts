@@ -521,6 +521,8 @@ export type ModelImageInputCapability = 'supported' | 'unsupported';
 export type ModelSettings = {
   image_input?: ModelImageInputCapability;
   openai_api_mode?: ModelOpenAiApiMode;
+  /** Context window in tokens; overrides the provider-wide `context_limit`. */
+  context_limit?: number;
 };
 
 export interface IProvider {

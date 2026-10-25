@@ -422,6 +422,10 @@
   "openAiApiModeResponses": "Responses",
   "openAiApiModeTip": "فقط برای مدل‌هایی که از پروتکل سازگار با OpenAI استفاده می‌کنند در دسترس است.",
   "modelSettingsApplyToSelected": "این تنظیمات برای همه مدل‌های انتخاب‌شده اعمال می‌شود و بعداً می‌توان هرکدام را جداگانه تغییر داد.",
+  "contextLimit": "پنجره زمینه (توکن)",
+  "contextLimitAuto": "خودکار (200K)",
+  "contextLimitReported": "خودکار (گزارش درگاه: {{value}})",
+  "contextLimitTip": "نمایش میزان استفاده از زمینه و فشرده‌سازی خودکار گفتگوهای Woody را تعیین می‌کند. برای استفاده از مقدار گزارش‌شده توسط درگاه خالی بگذارید؛ اگر درگاه مقداری گزارش نکند، 200K در نظر گرفته می‌شود.",
   "platformBedrock": "AWS Bedrock",
   "bedrock": {
     "authMethod": "روش احراز هویت",

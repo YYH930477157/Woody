@@ -430,6 +430,10 @@
   "openAiApiModeResponses": "Responses",
   "openAiApiModeTip": "Доступно лише для моделей з OpenAI-сумісним протоколом.",
   "modelSettingsApplyToSelected": "Ці налаштування застосовуються до всіх вибраних моделей і згодом можуть змінюватися окремо.",
+  "contextLimit": "Контекстне вікно (токени)",
+  "contextLimitAuto": "Автоматично (200K)",
+  "contextLimitReported": "Автоматично (шлюз повідомляє {{value}})",
+  "contextLimitTip": "Визначає індикатор використання контексту та автоматичне стиснення в розмовах Woody. Залиште порожнім, щоб використати значення від шлюзу, або 200K, якщо шлюз його не повідомляє.",
   "platformBedrock": "AWS Bedrock",
   "bedrock": {
     "authMethod": "Метод автентифікації",

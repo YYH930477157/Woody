@@ -422,6 +422,10 @@
   "openAiApiModeResponses": "Responses",
   "openAiApiModeTip": "Disponível apenas para modelos que usam um protocolo compatível com OpenAI.",
   "modelSettingsApplyToSelected": "Estas configurações se aplicam a todos os modelos selecionados e podem ser alteradas individualmente depois.",
+  "contextLimit": "Janela de contexto (tokens)",
+  "contextLimitAuto": "Automático (200K)",
+  "contextLimitReported": "Automático (o gateway informa {{value}})",
+  "contextLimitTip": "Define o indicador de uso de contexto e a compactação automática nas conversas do Woody. Deixe vazio para usar o valor informado pelo gateway, ou 200K se ele não informar nenhum.",
   "platformBedrock": "AWS Bedrock",
   "bedrock": {
     "authMethod": "Método de Autenticação",

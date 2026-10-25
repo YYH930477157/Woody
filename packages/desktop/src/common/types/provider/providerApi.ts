@@ -67,6 +67,8 @@ export interface FetchModelsResponse {
   models: Array<string | { id: string; name: string }>;
   /** Present when backend auto-corrected the provider's base_url. */
   fixed_base_url?: string;
+  /** Context windows the remote API reported, keyed by model id. */
+  context_limits?: Record<string, number>;
 }
 
 /**
