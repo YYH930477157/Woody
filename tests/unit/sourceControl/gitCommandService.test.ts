@@ -92,6 +92,45 @@ describe('git command service', () => {
     expect((await service.getCommitSnapshot(repoPath, ['a.c'])).branch).toBe('main');
   });
 
+  it.each(['main', 'heads/topic'])('keeps the exact branch name %s when a tag has the same name', async (branch) => {
+    const repoPath = await makeRepo();
+    if (branch !== 'main') await runGit(repoPath, ['checkout', '-b', branch]);
+    await runGit(repoPath, ['config', 'core.warnAmbiguousRefs', 'true']);
+    await runGit(repoPath, ['tag', branch]);
+    const service = createGitCommandService();
+
+    expect((await service.getStatus(repoPath)).branch).toBe(branch);
+    expect((await service.getCommitSnapshot(repoPath, ['a.c'])).branch).toBe(branch);
+  });
+
+  it('confirms, commits and pushes when the current branch and a tag share a name', async () => {
+    const repoPath = await makeRepo();
+    await runGit(repoPath, ['config', 'core.warnAmbiguousRefs', 'true']);
+    await runGit(repoPath, ['tag', 'main']);
+    const remotePath = await mkdtemp(join(tmpdir(), 'woody-git-remote-'));
+    tempDirs.push(remotePath);
+    await runGit(remotePath, ['init', '--bare']);
+    await runGit(repoPath, ['remote', 'add', 'origin', remotePath]);
+    await writeFile(join(repoPath, 'a.c'), 'int value = 1;\n');
+    const workflow = createCommitWorkflowService(createGitCommandService());
+    const fields = { reason: 'update', scope: 'driver', solution: 'value', impact: 'none', tests: 'skipped' };
+    const session = await workflow.prepare({
+      repoPath,
+      branch: 'main',
+      selectedPaths: ['a.c'],
+      scannerConfigs: [],
+      checks: { scanners: [], compile: false, autoRepair: false },
+      messageFields: fields,
+      scan: vi.fn(),
+    });
+
+    expect(session.state).toBe('confirmation');
+    expect((await workflow.commitAndPush(session.id, fields)).state).toBe('completed');
+    expect(await runGit(remotePath, ['rev-parse', 'refs/heads/main'])).toBe(
+      await runGit(repoPath, ['rev-parse', 'HEAD'])
+    );
+  });
+
   it('reports an empty branch on a detached HEAD', async () => {
     const repoPath = await makeRepo();
     await runGit(repoPath, ['checkout', '--detach']);

@@ -90,7 +90,9 @@ export const createGitCommandService = (runner: GitCommandRunner = defaultRunner
 
   /** Current branch, or an empty name on a detached HEAD. `git branch --show-current` needs Git 2.22+. */
   const readBranch = async (repoPath: string): Promise<GitCommandOutput> => {
-    const result = await runner(['symbolic-ref', '--quiet', '--short', 'HEAD'], { cwd: repoPath });
+    const result = await runner(['symbolic-ref', '--quiet', 'HEAD'], { cwd: repoPath });
+    // --short adds a heads/ prefix when a tag has the same name as the branch.
+    if (result.exitCode === 0) return { ...result, stdout: result.stdout.replace(/^refs\/heads\//, '') };
     // Exit code 1 without a message is a detached HEAD, not a failure.
     return result.exitCode === 1 && !result.stderr ? { ...result, stdout: '', exitCode: 0 } : result;
   };
