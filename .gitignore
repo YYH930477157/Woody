@@ -205,6 +205,7 @@ docs/superpowers/
 resources/bundled-bun
 resources/bundled-aioncore
 resources/bundled-aioncore-previous
+resources/bundled-mcp/codebase-memory/bin/
 resources/hub
 /resources/windows/support/_sentry-dsn.generated.nsh
 

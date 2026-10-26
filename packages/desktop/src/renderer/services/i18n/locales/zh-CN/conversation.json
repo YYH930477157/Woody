@@ -878,5 +878,31 @@
     "cacheUnknown": "该模型未上报提示缓存用量",
     "elapsed": "响应耗时",
     "elapsedTip": "整回合耗时(含工具执行)"
+  },
+  "codebaseMemory": {
+    "title": "架构",
+    "enabled": "启用代码库记忆",
+    "mode": "索引模式",
+    "modes": {
+      "fast": "快速",
+      "moderate": "适中",
+      "full": "完整"
+    },
+    "start": "初始化 / 更新索引",
+    "unsaved": "请先保存配置，再运行索引。",
+    "newConversationHint": "启用后，新建项目会话会加载架构工具和技能；会尊重你明确取消的工具或技能。保存后请新建会话。",
+    "unavailable": "内置索引程序不可用。",
+    "reload": "刷新状态",
+    "output": "索引输出",
+    "desktopOnly": "仅桌面应用可用。",
+    "noFolder": "请添加项目文件夹以配置代码库记忆。",
+    "folder": "项目文件夹",
+    "phase": {
+      "idle": "本次启动尚未索引",
+      "running": "正在索引…",
+      "succeeded": "索引已更新",
+      "failed": "索引失败",
+      "cancelled": "索引已取消"
+    }
   }
 }

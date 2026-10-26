@@ -878,5 +878,31 @@
     "cacheUnknown": "Provider reports no prompt-cache usage",
     "elapsed": "Time",
     "elapsedTip": "Whole turn, tools included"
+  },
+  "codebaseMemory": {
+    "title": "架構",
+    "enabled": "啟用程式碼庫記憶",
+    "mode": "索引模式",
+    "modes": {
+      "fast": "快速",
+      "moderate": "適中",
+      "full": "完整"
+    },
+    "start": "初始化 / 更新索引",
+    "unsaved": "請先儲存設定，再執行索引。",
+    "newConversationHint": "啟用後，新建專案對話會載入架構工具和技能；會尊重你明確取消的工具或技能。儲存後請新建對話。",
+    "unavailable": "內建索引程式無法使用。",
+    "reload": "重新整理狀態",
+    "output": "索引輸出",
+    "desktopOnly": "僅桌面應用程式可用。",
+    "noFolder": "請新增專案資料夾以設定程式碼庫記憶。",
+    "folder": "專案資料夾",
+    "phase": {
+      "idle": "本次啟動尚未索引",
+      "running": "正在索引…",
+      "succeeded": "索引已更新",
+      "failed": "索引失敗",
+      "cancelled": "索引已取消"
+    }
   }
 }

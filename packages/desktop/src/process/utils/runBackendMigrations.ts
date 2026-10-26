@@ -22,6 +22,7 @@ import { BUILTIN_IMAGE_GEN_NAME, type IMcpServer, type IProvider } from '@/commo
 import { getBuiltinMcpScriptPath, type ProcessConfig as ProcessConfigType } from './initStorage';
 import { migrateAssistantsToBackend } from './migrateAssistants';
 import { TODO_SCAN_JOB_NAME } from '@process/bridge/todoBridge';
+import { CODEBASE_MEMORY_MCP_NAME } from '@/common/types/codebaseMemory/constants';
 
 type ConfigFile = typeof ProcessConfigType;
 type MigrationStepResult = boolean;
@@ -334,6 +335,26 @@ function buildDefaultMcpServers(): McpImportServer[] {
     });
   }
   const cmakeEntry = path.join(path.dirname(path.dirname(terminalEntry)), 'cmake-mcp', 'index.cjs');
+  const memoryDir = path.join(path.dirname(path.dirname(terminalEntry)), 'codebase-memory');
+  const memoryEntry = path.join(memoryDir, 'index.cjs');
+  const memoryBinary = path.join(memoryDir, 'bin', 'win32-x64', 'codebase-memory-mcp.exe');
+  if (
+    process.platform === 'win32' &&
+    process.arch === 'x64' &&
+    fs.existsSync(memoryEntry) &&
+    fs.existsSync(memoryBinary)
+  ) {
+    const config = { command: 'node', args: [memoryEntry] };
+    servers.push({
+      name: CODEBASE_MEMORY_MCP_NAME,
+      description:
+        'Local project architecture and code navigation. Enable in the project Architecture panel before opening a new conversation.',
+      enabled: true,
+      builtin: true,
+      transport: { type: 'stdio', ...config },
+      original_json: JSON.stringify({ mcpServers: { [CODEBASE_MEMORY_MCP_NAME]: config } }, null, 2),
+    });
+  }
   if (fs.existsSync(cmakeEntry)) {
     const config = { command: 'node', args: [cmakeEntry] };
     servers.push({
@@ -435,7 +456,7 @@ async function ensureBootstrapMcpServersInDb(configFile: ConfigFile): Promise<vo
   logImageGenerationEnvResolution(imageEnvResolution, 'bootstrap');
   const imageServer = buildBuiltinImageGenerationServer(imageEnvResolution, imageConfig);
   const defaultServers = buildDefaultMcpServers();
-  for (const name of ['woody-terminal', 'woody-cmake']) {
+  for (const name of ['woody-terminal', 'woody-cmake', CODEBASE_MEMORY_MCP_NAME]) {
     const desired = defaultServers.find((server) => server.name === name);
     const current = existingByName.get(name);
     if (

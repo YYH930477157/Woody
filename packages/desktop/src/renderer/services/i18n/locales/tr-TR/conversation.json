@@ -880,5 +880,31 @@
     "cacheUnknown": "Provider reports no prompt-cache usage",
     "elapsed": "Time",
     "elapsedTip": "Whole turn, tools included"
+  },
+  "codebaseMemory": {
+    "title": "Mimari",
+    "enabled": "Kod tabanı belleğini etkinleştir",
+    "mode": "İndeksleme modu",
+    "modes": {
+      "fast": "Hızlı",
+      "moderate": "Orta",
+      "full": "Tam"
+    },
+    "start": "İndeksi başlat / güncelle",
+    "unsaved": "İndekslemeden önce yapılandırmayı kaydedin.",
+    "newConversationHint": "Etkinleştirildiğinde yeni proje sohbetleri mimari araçları ve becerisini yükler. Açıkça hariç tutulan öğeler korunur. Kaydettikten sonra yeni bir sohbet açın.",
+    "unavailable": "Paketlenmiş indeksleyici kullanılamıyor.",
+    "reload": "Durumu yenile",
+    "output": "İndeksleyici çıktısı",
+    "desktopOnly": "Yalnızca masaüstü uygulamasında kullanılabilir.",
+    "noFolder": "Yapılandırmak için proje klasörü ekleyin.",
+    "folder": "Proje klasörü",
+    "phase": {
+      "idle": "Bu oturumda indekslenmedi",
+      "running": "İndeksleniyor…",
+      "succeeded": "İndeks güncellendi",
+      "failed": "İndeksleme başarısız",
+      "cancelled": "İndeksleme iptal edildi"
+    }
   }
 }

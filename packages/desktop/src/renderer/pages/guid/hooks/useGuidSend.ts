@@ -16,6 +16,8 @@ import { type TFunction } from 'i18next';
 import type { NavigateFunction } from 'react-router-dom';
 import { mutate as swrMutate } from 'swr';
 import { getConversationCreateErrorMessage } from '@/renderer/pages/conversation/utils/conversationCreateError';
+import { prepareCodebaseMemorySession } from '@/common/adapter/codebaseMemory/session';
+import { CODEBASE_MEMORY_SKILL_NAME } from '@/common/types/codebaseMemory/constants';
 
 export type GuidSendDeps = {
   // Input state
@@ -178,6 +180,28 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
     // model from the user's own config.
     const assistantOverrideModel =
       selectedAcpModel || (assistantBackend === 'aionrs' ? current_model?.use_model : undefined) || undefined;
+    const codebaseMemory = await prepareCodebaseMemorySession(
+      {
+        repoPath: typeof window !== 'undefined' && window.electronAPI ? finalWorkspace : '',
+        catalog: availableMcpServers,
+        selectedIds: selectedMcpServerIds,
+        skillSelection: guidEnabledSkills,
+        excludedSkills: excludeBuiltinSkills,
+        servers:
+          assistantBackend !== 'aionrs' && selectedMcpServerIds !== undefined
+            ? selectedSessionMcpServers
+            : selectedSessionMcpServersToSend,
+      },
+      {
+        resolve: (repoPath) => ipcBridge.codebaseMemory.session.invoke({ repoPath }),
+        ensureSkill: async (skillPath) => {
+          const skills = await ipcBridge.fs.listAvailableSkills.invoke();
+          if (skills.some((skill) => skill.name === CODEBASE_MEMORY_SKILL_NAME)) return CODEBASE_MEMORY_SKILL_NAME;
+          const imported = await ipcBridge.fs.importSkill.invoke({ skill_path: skillPath });
+          return imported.skill_name;
+        },
+      }
+    );
     const assistantOverrides = {
       model: assistantOverrideModel,
       permission: selectedMode || undefined,
@@ -206,7 +230,8 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
             workspace: finalWorkspace,
             custom_workspace: isCustomWorkspace,
             selected_mcp_server_ids: selectedUserMcpServerIdsToSend,
-            selected_session_mcp_servers: selectedSessionMcpServersToSend,
+            selected_session_mcp_servers: codebaseMemory.servers,
+            preset_enabled_skills: codebaseMemory.skills.length ? codebaseMemory.skills : undefined,
           },
         });
 
@@ -260,8 +285,8 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
           custom_workspace: isCustomWorkspace,
           default_files: files.map(chatFileRefPath),
           selected_mcp_server_ids: selectedUserMcpServerIdsToSend,
-          selected_session_mcp_servers:
-            selectedMcpServerIds !== undefined ? selectedSessionMcpServers : selectedSessionMcpServersToSend,
+          selected_session_mcp_servers: codebaseMemory.servers,
+          preset_enabled_skills: codebaseMemory.skills.length ? codebaseMemory.skills : undefined,
         },
       });
       if (!conversation || !conversation.id) {

@@ -17,6 +17,7 @@ import type { AcpSlashCommandApiItem } from '@/common/chat/slash/types';
 import { bridge } from '@/common/platform/bridge';
 export { terminal } from './terminal';
 export { cmake } from './cmake';
+export { codebaseMemory } from './codebaseMemory';
 import { buildListTasksPath } from './teamTaskPath';
 import type { OpenDialogOptions } from 'electron';
 import type {

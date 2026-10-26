@@ -879,5 +879,31 @@
     "cacheUnknown": "Provider reports no prompt-cache usage",
     "elapsed": "Time",
     "elapsedTip": "Whole turn, tools included"
+  },
+  "codebaseMemory": {
+    "title": "Architektur",
+    "enabled": "Codebasis-Speicher aktivieren",
+    "mode": "Indizierungsmodus",
+    "modes": {
+      "fast": "Schnell",
+      "moderate": "Moderat",
+      "full": "Vollständig"
+    },
+    "start": "Index initialisieren / aktualisieren",
+    "unsaved": "Speichern Sie die Konfiguration vor der Indizierung.",
+    "newConversationHint": "Wenn aktiviert, laden neue Projektchats die Architekturwerkzeuge und den Skill. Ausdrückliche Ausschlüsse werden berücksichtigt. Öffnen Sie nach dem Speichern einen neuen Chat.",
+    "unavailable": "Der mitgelieferte Indexer ist nicht verfügbar.",
+    "reload": "Status aktualisieren",
+    "output": "Indexer-Ausgabe",
+    "desktopOnly": "Nur in der Desktop-App verfügbar.",
+    "noFolder": "Fügen Sie einen Projektordner hinzu, um den Codebasis-Speicher zu konfigurieren.",
+    "folder": "Projektordner",
+    "phase": {
+      "idle": "In dieser Sitzung noch nicht indiziert",
+      "running": "Indizierung läuft…",
+      "succeeded": "Index aktualisiert",
+      "failed": "Indizierung fehlgeschlagen",
+      "cancelled": "Indizierung abgebrochen"
+    }
   }
 }

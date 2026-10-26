@@ -23,3 +23,7 @@
 *.woff binary
 *.woff2 binary
 *.ttf binary
+
+# Preserve upstream redistribution notices verbatim.
+resources/bundled-mcp/codebase-memory/LICENSE -text -whitespace
+resources/bundled-mcp/codebase-memory/THIRD_PARTY_NOTICES.md -text -whitespace

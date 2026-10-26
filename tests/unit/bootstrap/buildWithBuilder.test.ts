@@ -25,6 +25,9 @@ function prepareBuildFixture(root: string): void {
   for (const relativePath of [
     'package.json',
     'scripts/build-with-builder.js',
+    'scripts/bundled-mcp/prepareCodebaseMemory.js',
+    'scripts/bundled-mcp/downloadArchive.js',
+    'resources/bundled-mcp/codebase-memory/manifest.json',
     'packages/desktop/electron-builder.yml',
   ]) {
     const target = resolve(root, relativePath);
@@ -119,7 +122,7 @@ childProcess.execSync = function mockedExecSync(command) {
 
       const result = spawnSync(
         process.execPath,
-        ['scripts/build-with-builder.js', 'x64', '--skip-vite', '--pack-only'],
+        ['scripts/build-with-builder.js', 'x64', '--linux', '--skip-vite', '--pack-only'],
         {
           cwd: tempDir,
           encoding: 'utf8',

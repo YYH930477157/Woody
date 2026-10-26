@@ -1,4 +1,5 @@
 {
+  "ignorePatterns": ["resources/bundled-mcp/codebase-memory/THIRD_PARTY_NOTICES.md"],
   "semi": true,
   "trailingComma": "es5",
   "singleQuote": true,

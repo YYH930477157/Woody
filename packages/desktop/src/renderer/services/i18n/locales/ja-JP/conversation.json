@@ -878,5 +878,31 @@
     "cacheUnknown": "Provider reports no prompt-cache usage",
     "elapsed": "Time",
     "elapsedTip": "Whole turn, tools included"
+  },
+  "codebaseMemory": {
+    "title": "アーキテクチャ",
+    "enabled": "コードベースメモリを有効にする",
+    "mode": "インデックスモード",
+    "modes": {
+      "fast": "高速",
+      "moderate": "標準",
+      "full": "完全"
+    },
+    "start": "インデックスを初期化 / 更新",
+    "unsaved": "インデックス作成前に設定を保存してください。",
+    "newConversationHint": "有効にすると、新しいプロジェクト会話にアーキテクチャツールとスキルが読み込まれます。明示的な除外設定は維持されます。保存後に新しい会話を開いてください。",
+    "unavailable": "同梱のインデクサーを利用できません。",
+    "reload": "状態を再読み込み",
+    "output": "インデクサーの出力",
+    "desktopOnly": "デスクトップアプリでのみ利用できます。",
+    "noFolder": "設定するにはプロジェクトフォルダーを追加してください。",
+    "folder": "プロジェクトフォルダー",
+    "phase": {
+      "idle": "今回の起動では未作成",
+      "running": "インデックス作成中…",
+      "succeeded": "インデックス更新済み",
+      "failed": "インデックス作成に失敗",
+      "cancelled": "インデックス作成をキャンセル"
+    }
   }
 }
