@@ -17,6 +17,7 @@ import { initWebuiBridge } from './webuiBridge';
 import { initThemeBridge } from './themeBridge';
 import { initSourceControlBridge } from './sourceControlBridge';
 import { initStaticScanBridge } from './staticScanBridge';
+import { initCodebaseMemoryBridge } from './codebaseMemory';
 
 export type BridgeDependencies = Record<string, never>;
 
@@ -34,6 +35,7 @@ export function initAllBridges(_deps: BridgeDependencies = {}): void {
   initThemeBridge();
   initSourceControlBridge();
   initStaticScanBridge();
+  initCodebaseMemoryBridge();
 }
 
 export {

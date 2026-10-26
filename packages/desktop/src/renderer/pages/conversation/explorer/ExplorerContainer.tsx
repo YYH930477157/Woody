@@ -62,6 +62,7 @@ import { useCurrentConversation } from './currentConversationStore';
 import { SearchPanel } from './search/SearchPanel';
 import type { SearchHit } from './search/searchModel';
 import { ScmPanel } from '../SourceControl/ScmPanel';
+import CodebaseMemoryPanel from '../CodebaseMemory';
 import { rediscoverRepos, refreshAllRepos } from '../SourceControl/scmStore';
 
 export type ExplorerContainerProps = {
@@ -252,10 +253,13 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
   // unmounts the inactive one for `changes`, which is safe because the SCM
   // subscription is owned by its store per project, not by the component's mount
   // (see ScmPanel's lifecycle note) — a tab switch never drops the backend watch.
-  const [activeTab, setActiveTab] = useState<'files' | 'changes'>('files');
+  const [activeTab, setActiveTab] = useState<'files' | 'changes' | 'architecture'>('files');
+  const [architectureVisited, setArchitectureVisited] = useState(false);
+  const [architectureRefresh, setArchitectureRefresh] = useState(0);
   const [changesVisited, setChangesVisited] = useState(false);
   useEffect(() => {
     if (activeTab === 'changes') setChangesVisited(true);
+    if (activeTab === 'architecture') setArchitectureVisited(true);
   }, [activeTab]);
   // Busy flag for the top-bar refresh: spins the icon and disables re-click while a
   // refresh is in flight (so rapid clicks don't fan out redundant backend round-trips).
@@ -506,7 +510,9 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
     if (refreshing) return; // in flight — ignore re-clicks rather than pile on round-trips
     setRefreshing(true);
     try {
-      if (activeTab === 'changes') {
+      if (activeTab === 'architecture') {
+        setArchitectureRefresh((value) => value + 1);
+      } else if (activeTab === 'changes') {
         await Promise.all([rediscoverRepos(), refreshAllRepos()]);
       } else {
         await Promise.all([mutate(), ...roots.map((root) => refreshRoot(root.pe_id))]);
@@ -516,7 +522,7 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
     }
   };
 
-  const tabButton = (key: 'files' | 'changes', label: string) => (
+  const tabButton = (key: 'files' | 'changes' | 'architecture', label: string) => (
     <Button
       type='text'
       size='small'
@@ -550,6 +556,7 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
         <div className='flex items-center gap-2px overflow-x-auto flex-1 min-w-0'>
           {tabButton('files', t('conversation.explorer.tabs.files'))}
           {tabButton('changes', t('conversation.explorer.tabs.changes'))}
+          {tabButton('architecture', t('conversation.codebaseMemory.title'))}
         </div>
         <div className='flex items-center gap-2px flex-shrink-0'>
           {/* Right cluster order (VS Code parity): project-scope actions first (add
@@ -574,9 +581,11 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
           {workspacePath && <WorkspaceOpenButton workspacePath={workspacePath} isTemporary={false} />}
           <Tooltip
             content={
-              activeTab === 'changes'
-                ? t('conversation.explorer.refreshChanges')
-                : t('conversation.explorer.refreshFiles')
+              activeTab === 'architecture'
+                ? t('conversation.codebaseMemory.reload')
+                : activeTab === 'changes'
+                  ? t('conversation.explorer.refreshChanges')
+                  : t('conversation.explorer.refreshFiles')
             }
             mini
             position='br'
@@ -588,9 +597,11 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
               loading={refreshing}
               icon={<Refresh theme='outline' size='16' />}
               aria-label={
-                activeTab === 'changes'
-                  ? t('conversation.explorer.refreshChanges')
-                  : t('conversation.explorer.refreshFiles')
+                activeTab === 'architecture'
+                  ? t('conversation.codebaseMemory.reload')
+                  : activeTab === 'changes'
+                    ? t('conversation.explorer.refreshChanges')
+                    : t('conversation.explorer.refreshFiles')
               }
               onClick={() => void handleRefreshActiveTab()}
             />
@@ -652,6 +663,15 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
       {(activeTab === 'changes' || changesVisited) && (
         <div className='flex-1 min-h-0' style={activeTab === 'changes' ? undefined : { display: 'none' }}>
           <ScmPanel projectId={projectId} repoPaths={repoPaths} conversationId={activeConversationId} />
+        </div>
+      )}
+      {(activeTab === 'architecture' || architectureVisited) && (
+        <div className={`flex-1 min-h-0 ${activeTab === 'architecture' ? '' : 'hidden'}`}>
+          <CodebaseMemoryPanel
+            repoPaths={repoPaths}
+            visible={activeTab === 'architecture'}
+            refreshToken={architectureRefresh}
+          />
         </div>
       )}
       <Modal

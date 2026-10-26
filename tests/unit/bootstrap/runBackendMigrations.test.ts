@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import * as fs from 'fs';
+vi.mock('fs', async (importOriginal) => ({ ...(await importOriginal<typeof import('fs')>()) }));
 
 import { IMAGE_GEN_ENV_KEYS } from '@/common/config/imageGenerationMcpEnv';
 import { BUILTIN_IMAGE_GEN_NAME, type IMcpServer, type IProvider } from '@/common/config/storage';
@@ -160,6 +162,42 @@ describe('resolveImageGenerationMigrationConfig', () => {
 });
 
 describe('runBackendMigrations', () => {
+  it.skipIf(process.platform !== 'win32' || process.arch !== 'x64')(
+    'registers the bundled architecture MCP and preserves an explicitly disabled existing entry during path repair',
+    async () => {
+      const exists = vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+      try {
+        listServersMock.mockResolvedValue([imageServer()]);
+        await runBackendMigrations(configFile as never);
+        const registered = batchImportServersMock.mock.calls
+          .flatMap(([request]) => request.servers)
+          .find((server) => server.name === 'woody-codebase-memory');
+        expect(registered).toMatchObject({
+          enabled: true,
+          builtin: true,
+          transport: { type: 'stdio', command: 'node' },
+        });
+        batchImportServersMock.mockClear();
+        listServersMock.mockResolvedValue([
+          imageServer(),
+          {
+            ...registered,
+            id: 'cbm',
+            enabled: false,
+            transport: { type: 'stdio', command: 'node', args: ['old-location.cjs'] },
+          },
+        ]);
+        await runBackendMigrations(configFile as never);
+        const repaired = updateServerMock.mock.calls
+          .map(([request]) => request)
+          .find((request) => request.id === 'cbm');
+        expect(repaired?.data.transport.args[0]).toContain('codebase-memory');
+        expect(repaired?.data).not.toHaveProperty('enabled');
+      } finally {
+        exists.mockRestore();
+      }
+    }
+  );
   it('does not write image generation business config back to local config storage', async () => {
     listServersMock.mockResolvedValue([imageServer()]);
     configFileGetMock.mockImplementation(async (key: string) => {

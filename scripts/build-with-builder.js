@@ -704,6 +704,24 @@ let buildFailed = false;
 try {
   restorePackageVersionOverride = applyDebugAutoUpdateVersionOverride(packageJsonPath);
 
+  // Verify the required offline asset before compilation or packaging, including --pack-only.
+  const { resolveBuildTarget } = require('./bundled-mcp/prepareCodebaseMemory.js');
+  const codebaseMemoryTarget = resolveBuildTarget(args, multiArch ? archArgs : [targetArch]);
+  const codebaseMemoryPreparation = spawnSync(
+    process.execPath,
+    [
+      path.join(__dirname, 'bundled-mcp/prepareCodebaseMemory.js'),
+      codebaseMemoryTarget.platform,
+      codebaseMemoryTarget.arch,
+    ],
+    { stdio: 'inherit', env: process.env, windowsHide: true }
+  );
+  if (codebaseMemoryPreparation.error || codebaseMemoryPreparation.status !== 0) {
+    throw new Error(
+      `Codebase Memory bundle preparation failed: ${codebaseMemoryPreparation.error?.message || 'see preparation output above'}`
+    );
+  }
+
   // 1. Ensure package.json main entry is correct for electron-vite
   const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
   if (packageJson.main !== './out/main/index.js') {

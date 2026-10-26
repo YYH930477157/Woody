@@ -884,5 +884,31 @@
     "cacheUnknown": "Provider reports no prompt-cache usage",
     "elapsed": "Time",
     "elapsedTip": "Whole turn, tools included"
+  },
+  "codebaseMemory": {
+    "title": "Arquitetura",
+    "enabled": "Ativar memória da base de código",
+    "mode": "Modo de indexação",
+    "modes": {
+      "fast": "Rápido",
+      "moderate": "Moderado",
+      "full": "Completo"
+    },
+    "start": "Inicializar / atualizar índice",
+    "unsaved": "Salve a configuração antes de indexar.",
+    "newConversationHint": "Quando ativado, novas conversas do projeto carregam as ferramentas e a habilidade de arquitetura. Exclusões explícitas são respeitadas. Abra uma nova conversa após salvar.",
+    "unavailable": "O indexador incluído está indisponível.",
+    "reload": "Atualizar status",
+    "output": "Saída do indexador",
+    "desktopOnly": "Disponível apenas no aplicativo para desktop.",
+    "noFolder": "Adicione uma pasta de projeto para configurar a memória da base de código.",
+    "folder": "Pasta do projeto",
+    "phase": {
+      "idle": "Ainda não indexado nesta sessão",
+      "running": "Indexando…",
+      "succeeded": "Índice atualizado",
+      "failed": "Falha na indexação",
+      "cancelled": "Indexação cancelada"
+    }
   }
 }

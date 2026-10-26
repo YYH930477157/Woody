@@ -11,9 +11,17 @@ import { useGuidSend, type GuidSendDeps } from '@/renderer/pages/guid/hooks/useG
 
 const createConversationInvokeMock = vi.fn();
 const swrMutateMock = vi.fn();
+const cbmSessionMock = vi.fn();
+const cbmSkillsMock = vi.fn();
+const cbmImportMock = vi.fn();
 
 vi.mock('@/common', () => ({
   ipcBridge: {
+    codebaseMemory: { session: { invoke: (...args: unknown[]) => cbmSessionMock(...args) } },
+    fs: {
+      listAvailableSkills: { invoke: () => cbmSkillsMock() },
+      importSkill: { invoke: (...args: unknown[]) => cbmImportMock(...args) },
+    },
     conversation: {
       create: {
         invoke: (...args: unknown[]) => createConversationInvokeMock(...args),
@@ -80,6 +88,46 @@ describe('useGuidSend', () => {
     createConversationInvokeMock.mockResolvedValue({ id: 'conv-1' });
     swrMutateMock.mockReset();
     swrMutateMock.mockResolvedValue(undefined);
+    cbmSessionMock.mockReset();
+    cbmSkillsMock.mockReset();
+    cbmImportMock.mockReset();
+  });
+
+  it('attaches project-bound architecture tools and skill for a new desktop conversation', async () => {
+    const previous = Object.getOwnPropertyDescriptor(window, 'electronAPI');
+    Object.defineProperty(window, 'electronAPI', { configurable: true, value: {} });
+    try {
+      const deps = createDeps();
+      deps.dir = 'D:/project';
+      deps.selectedMcpServerIds = undefined;
+      deps.availableMcpServers.push({
+        id: 'cbm',
+        name: 'woody-codebase-memory',
+        enabled: true,
+        builtin: true,
+        transport: { type: 'stdio', command: 'node', args: ['generic.cjs'] },
+      } as IMcpServer);
+      cbmSessionMock.mockResolvedValue({
+        enabled: true,
+        transport: { type: 'stdio', command: 'node', args: ['bound.cjs'] },
+        skillPath: 'D:/skill/SKILL.md',
+      });
+      cbmSkillsMock.mockResolvedValue([]);
+      cbmImportMock.mockResolvedValue({ skill_name: 'woody-codebase-memory' });
+      const { result } = renderHook(() => useGuidSend(deps));
+      await act(async () => result.current.handleSend());
+      const extra = createConversationInvokeMock.mock.calls[0][0].extra;
+      expect(extra.selected_session_mcp_servers).toContainEqual({
+        id: 'cbm',
+        name: 'woody-codebase-memory',
+        transport: { type: 'stdio', command: 'node', args: ['bound.cjs'] },
+      });
+      expect(extra.preset_enabled_skills).toEqual(['woody-codebase-memory']);
+      expect(cbmImportMock).toHaveBeenCalledWith({ skill_path: 'D:/skill/SKILL.md' });
+    } finally {
+      if (previous) Object.defineProperty(window, 'electronAPI', previous);
+      else Reflect.deleteProperty(window, 'electronAPI');
+    }
   });
 
   it('passes selected mode into assistant conversation overrides when creating a preset ACP conversation', async () => {

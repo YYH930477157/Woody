@@ -1,0 +1,15 @@
+{
+  "name": "codebase-memory-mcp",
+  "version": "v0.12.1",
+  "upstream": "https://github.com/DeusData/codebase-memory-mcp",
+  "license": "MIT",
+  "supportedPlatforms": ["win32-x64"],
+  "archive": {
+    "url": "https://github.com/DeusData/codebase-memory-mcp/releases/download/v0.12.1/codebase-memory-mcp-windows-amd64.zip",
+    "sha256": "4e4e0f16b45233af5c757a1fcbe3c3b16e9056375b1fbe2ce020b6de75dedcc0"
+  },
+  "binary": {
+    "path": "bin/win32-x64/codebase-memory-mcp.exe",
+    "sha256": "39f6a789cd858d7428561ac5afaefb9a47b018dcba0ad6fa41ae71a45e0ed656"
+  }
+}

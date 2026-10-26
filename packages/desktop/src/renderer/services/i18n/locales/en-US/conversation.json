@@ -878,5 +878,31 @@
     "cacheUnknown": "Provider reports no prompt-cache usage",
     "elapsed": "Time",
     "elapsedTip": "Whole turn, tools included"
+  },
+  "codebaseMemory": {
+    "title": "Architecture",
+    "enabled": "Enable codebase memory",
+    "mode": "Indexing mode",
+    "modes": {
+      "fast": "Fast",
+      "moderate": "Moderate",
+      "full": "Full"
+    },
+    "start": "Initialize / update index",
+    "unsaved": "Save configuration before indexing.",
+    "newConversationHint": "New project conversations load the architecture tools and skill when enabled. Explicit tool or skill exclusions are respected. Open a new conversation after saving.",
+    "unavailable": "The bundled indexer is unavailable.",
+    "reload": "Reload status",
+    "output": "Indexer output",
+    "desktopOnly": "Available in the desktop app only.",
+    "noFolder": "Add a project folder to configure codebase memory.",
+    "folder": "Project folder",
+    "phase": {
+      "idle": "Not indexed in this session",
+      "running": "Indexing…",
+      "succeeded": "Index updated",
+      "failed": "Indexing failed",
+      "cancelled": "Indexing cancelled"
+    }
   }
 }

@@ -878,5 +878,31 @@
     "cacheUnknown": "Provider reports no prompt-cache usage",
     "elapsed": "Time",
     "elapsedTip": "Whole turn, tools included"
+  },
+  "codebaseMemory": {
+    "title": "아키텍처",
+    "enabled": "코드베이스 메모리 활성화",
+    "mode": "인덱싱 모드",
+    "modes": {
+      "fast": "빠르게",
+      "moderate": "보통",
+      "full": "전체"
+    },
+    "start": "인덱스 초기화 / 업데이트",
+    "unsaved": "인덱싱 전에 설정을 저장하세요.",
+    "newConversationHint": "활성화하면 새 프로젝트 대화에 아키텍처 도구와 스킬이 로드됩니다. 명시적으로 제외한 항목은 유지됩니다. 저장 후 새 대화를 여세요.",
+    "unavailable": "내장 인덱서를 사용할 수 없습니다.",
+    "reload": "상태 새로 고침",
+    "output": "인덱서 출력",
+    "desktopOnly": "데스크톱 앱에서만 사용할 수 있습니다.",
+    "noFolder": "설정하려면 프로젝트 폴더를 추가하세요.",
+    "folder": "프로젝트 폴더",
+    "phase": {
+      "idle": "이번 실행에서 아직 인덱싱하지 않음",
+      "running": "인덱싱 중…",
+      "succeeded": "인덱스 업데이트됨",
+      "failed": "인덱싱 실패",
+      "cancelled": "인덱싱 취소됨"
+    }
   }
 }
