@@ -275,7 +275,9 @@ function terminateOwnedProcess(child) {
     killer.once('error', fallback);
     killer.once('close', (code) => {
       if (settled) return;
-      if (code !== 0) {
+      // The process can exit naturally while taskkill starts. Its native daemon
+      // also shuts down when the last client disconnects.
+      if (code !== 0 && !(code === 128 && (child.exitCode !== null || child.signalCode !== null))) {
         fallback(new Error(`taskkill exited ${code}`));
         return;
       }
@@ -316,7 +318,7 @@ function createRuntime(options) {
       cwd: project.root,
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, CBM_CACHE_DIR: project.cache, CBM_NO_DAEMON: '1' },
+      env: { ...process.env, CBM_CACHE_DIR: project.cache, CBM_RUNTIME_DIR: project.cache },
     });
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
@@ -530,4 +532,4 @@ function createRuntime(options) {
   };
   return api;
 }
-module.exports = { createRuntime, canonical, readConfig, validateConfig, identity, TOOLS };
+module.exports = { createRuntime, canonical, readConfig, validateConfig, identity, terminateOwnedProcess, TOOLS };

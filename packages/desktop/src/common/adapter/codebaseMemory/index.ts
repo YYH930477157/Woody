@@ -35,4 +35,5 @@ export const codebaseMemory = {
   start: provider<CodebaseMemoryStatus, ProjectRequest>('codebase-memory.start'),
   cancel: provider<CodebaseMemoryStatus, ProjectRequest>('codebase-memory.cancel'),
   session: provider<CodebaseMemorySession, ProjectRequest>('codebase-memory.session'),
+  openLens: provider<CodebaseMemoryStatus, ProjectRequest>('codebase-memory.open-lens'),
 };

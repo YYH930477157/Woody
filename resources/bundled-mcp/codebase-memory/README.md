@@ -24,6 +24,17 @@ This file lives at `<project>/.woody/codebase-memory.json`. The generated databa
 stays in the user's local application cache, outside the source repository.
 Projects without the configuration are disabled by default.
 
+After indexing succeeds, **Open visualization** launches the bundled **CBM Lens**
+in your default browser. It uses a local `127.0.0.1` port and the selected project's
+existing index; it does not download assets or start indexing. Repeated opens
+reuse the project's service. Disabling the feature or quitting Woody closes its
+Lens client. The native interface also provides its own index-management controls.
+Use Woody's **Initialize / update index** to keep the panel's progress in sync.
+
+Both `CBM_CACHE_DIR` and `CBM_RUNTIME_DIR` are bound to each project's cache directory.
+The runtime directory isolates native daemons between projects. Version 0.12.1
+does not implement `CBM_NO_DAEMON`; setting only that variable cannot provide isolation.
+
 Create a new project conversation after enabling the feature. Woody attaches
 the project's MCP tools and architecture skill unless you explicitly deselect
 them. Existing conversation snapshots keep their original tool selection. The

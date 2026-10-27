@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CodebaseMemoryStatus } from '@/common/types/codebaseMemory/types';
 import CodebaseMemoryPanel from '@/renderer/pages/conversation/CodebaseMemory';
 
-const api = vi.hoisted(() => ({ get: vi.fn(), save: vi.fn(), start: vi.fn(), cancel: vi.fn() }));
+const api = vi.hoisted(() => ({ get: vi.fn(), save: vi.fn(), start: vi.fn(), cancel: vi.fn(), openLens: vi.fn() }));
 vi.mock('@/common', () => ({
   ipcBridge: { codebaseMemory: Object.fromEntries(Object.entries(api).map(([key, invoke]) => [key, { invoke }])) },
 }));
@@ -40,6 +40,41 @@ afterEach(() => {
 });
 
 describe('project architecture panel', () => {
+  it('opens Lens for the selected initialized folder and prevents duplicate clicks', async () => {
+    const ready = status('D:/two', { phase: 'succeeded', config: { version: 1, enabled: true, mode: 'fast' } });
+    api.get.mockResolvedValue(ready);
+    const opening = deferred<CodebaseMemoryStatus>();
+    api.openLens.mockReturnValue(opening.promise);
+    render(<CodebaseMemoryPanel repoPaths={{ two: 'D:/two' }} />);
+    const button = await screen.findByRole('button', { name: key('openLens') });
+    await waitFor(() => expect(button).not.toBeDisabled());
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(api.openLens).toHaveBeenCalledExactlyOnceWith({ repoPath: 'D:/two' });
+    await act(async () => opening.resolve(ready));
+    expect(screen.getByText(key('phase.succeeded'))).toBeInTheDocument();
+  });
+  it('shows Lens launch errors and permits retry', async () => {
+    api.get.mockResolvedValue(
+      status('D:/one', { phase: 'succeeded', config: { version: 1, enabled: true, mode: 'fast' } })
+    );
+    api.openLens.mockRejectedValue(new Error('Lens startup timed out'));
+    render(<CodebaseMemoryPanel repoPaths={{ one: 'D:/one' }} />);
+    const button = await screen.findByRole('button', { name: key('openLens') });
+    await waitFor(() => expect(button).not.toBeDisabled());
+    fireEvent.click(button);
+    expect(await screen.findByText('Lens startup timed out')).toBeInTheDocument();
+    expect(button).not.toBeDisabled();
+  });
+  it.each(['idle', 'running', 'failed', 'cancelled'] as const)(
+    'requires a completed index before opening Lens (%s)',
+    async (phase) => {
+      api.get.mockResolvedValue(status('D:/one', { phase, config: { version: 1, enabled: true, mode: 'fast' } }));
+      render(<CodebaseMemoryPanel repoPaths={{ one: 'D:/one' }} />);
+      expect(await screen.findByRole('button', { name: key('openLens') })).toBeDisabled();
+      expect(api.openLens).not.toHaveBeenCalled();
+    }
+  );
   it('does not save on mount or enable indexing until the changed config is explicitly saved', async () => {
     render(<CodebaseMemoryPanel repoPaths={{ one: 'D:/one' }} />);
     const toggle = await screen.findByRole('switch');

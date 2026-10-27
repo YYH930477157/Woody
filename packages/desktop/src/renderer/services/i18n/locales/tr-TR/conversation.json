@@ -905,6 +905,8 @@
       "succeeded": "İndeks güncellendi",
       "failed": "İndeksleme başarısız",
       "cancelled": "İndeksleme iptal edildi"
-    }
+    },
+    "openLens": "Görselleştirmeyi aç",
+    "lensHint": "İndeksleme sonrasında bu projenin CBM Lens mimari grafiğini tarayıcınızda görüntüleyin."
   }
 }

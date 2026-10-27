@@ -903,6 +903,8 @@
       "succeeded": "索引已更新",
       "failed": "索引失败",
       "cancelled": "索引已取消"
-    }
+    },
+    "openLens": "打开可视化",
+    "lensHint": "完成索引后，在浏览器中查看当前项目的 CBM Lens 架构图。"
   }
 }
