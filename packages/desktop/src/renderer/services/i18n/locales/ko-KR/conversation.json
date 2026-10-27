@@ -903,6 +903,8 @@
       "succeeded": "인덱스 업데이트됨",
       "failed": "인덱싱 실패",
       "cancelled": "인덱싱 취소됨"
-    }
+    },
+    "openLens": "시각화 열기",
+    "lensHint": "인덱싱 후 브라우저에서 이 프로젝트의 CBM Lens 아키텍처 그래프를 확인하세요."
   }
 }

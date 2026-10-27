@@ -17,6 +17,12 @@ afterEach(() => {
 });
 
 describe('codebase native bridge error delivery', () => {
+  it('delivers Lens errors to the panel', async () => {
+    dispose = codebaseMemory.openLens.provider(async () => {
+      throw new Error('Lens did not start');
+    });
+    await expect(codebaseMemory.openLens.invoke({ repoPath: 'D:/repo' })).rejects.toThrow('Lens did not start');
+  });
   it('returns configuration errors to the caller rather than leaving the promise pending', async () => {
     dispose = codebaseMemory.get.provider(() => {
       throw new Error('Invalid config');

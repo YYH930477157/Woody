@@ -30,7 +30,7 @@ beforeEach(() => {
   fs.mkdirSync(repo);
   fs.writeFileSync(
     path.join(root, 'fixture.cjs'),
-    `const fs=require('node:fs'); const path=require('node:path'); const marker=path.join(process.cwd(),'behavior'); const b=fs.existsSync(marker)?fs.readFileSync(marker,'utf8'):''; if(b==='hang')setInterval(()=>{},1000); else if(b==='invalid')console.log('oops'); else if(b==='exit'){console.error('fixture error');process.exit(3)} else if(b==='error')console.log(JSON.stringify({isError:true,content:[{type:'text',text:'native refused'}]})); else { console.error('index diagnostic');console.log(JSON.stringify({isError:false,structuredContent:{nodes:13,args:process.argv.slice(2),cache:process.env.CBM_CACHE_DIR}})); }`
+    `const fs=require('node:fs'); const path=require('node:path'); const marker=path.join(process.cwd(),'behavior'); const b=fs.existsSync(marker)?fs.readFileSync(marker,'utf8'):''; if(b==='hang')setInterval(()=>{},1000); else if(b==='invalid')console.log('oops'); else if(b==='exit'){console.error('fixture error');process.exit(3)} else if(b==='error')console.log(JSON.stringify({isError:true,content:[{type:'text',text:'native refused'}]})); else { console.error('index diagnostic');console.log(JSON.stringify({isError:false,structuredContent:{nodes:13,args:process.argv.slice(2),cache:process.env.CBM_CACHE_DIR,runtime:process.env.CBM_RUNTIME_DIR}})); }`
   );
 });
 afterEach(() => {
@@ -112,6 +112,8 @@ describe('project runtime', () => {
     const first = await service.callTool(repo, 'search_graph', { query: 'hello' });
     const second = await service.callTool(other, 'search_graph', {});
     expect(first.structuredContent.cache).not.toBe(second.structuredContent.cache);
+    expect(first.structuredContent.runtime).toBe(first.structuredContent.cache);
+    expect(second.structuredContent.runtime).toBe(second.structuredContent.cache);
     await expect(service.callTool(repo, 'search_graph', { project: 'other' })).rejects.toThrow(/project/);
     await expect(service.callTool(repo, 'get_file_outline', { file_path: '../secret' })).rejects.toThrow(/path/);
   });

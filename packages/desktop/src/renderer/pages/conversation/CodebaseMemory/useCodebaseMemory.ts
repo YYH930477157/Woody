@@ -11,7 +11,7 @@ export function useCodebaseMemory(repoPath: string, visible: boolean, refreshTok
   const [draft, setDraft] = useState(initialConfig);
   const [dirty, setDirty] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState<'save' | 'start' | 'cancel'>();
+  const [busy, setBusy] = useState<'save' | 'start' | 'cancel' | 'openLens'>();
   const [error, setError] = useState<string>();
   const [readError, setReadError] = useState<string>();
   const readFailed = readError !== undefined;
@@ -64,10 +64,11 @@ export function useCodebaseMemory(repoPath: string, visible: boolean, refreshTok
     setDirty(true);
     setDraft(config);
   };
-  const run = async (action: 'save' | 'start' | 'cancel') => {
+  const run = async (action: 'save' | 'start' | 'cancel' | 'openLens') => {
     if (actionPending.current || !status) return;
     if (action !== 'cancel' && (readFailed || status.phase === 'running')) return;
-    if (action === 'start' && (dirty || !status.config.enabled || !status.available)) return;
+    if ((action === 'start' || action === 'openLens') && (dirty || !status.config.enabled || !status.available)) return;
+    if (action === 'openLens' && status.phase !== 'succeeded') return;
     actionPending.current = true;
     const request = ++revision.current;
     setBusy(action);

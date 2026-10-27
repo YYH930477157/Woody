@@ -903,6 +903,8 @@
       "succeeded": "Index mis à jour",
       "failed": "Échec de l’indexation",
       "cancelled": "Indexation annulée"
-    }
+    },
+    "openLens": "Ouvrir la visualisation",
+    "lensHint": "Après l’indexation, consultez le graphe d’architecture CBM Lens de ce projet dans votre navigateur."
   }
 }

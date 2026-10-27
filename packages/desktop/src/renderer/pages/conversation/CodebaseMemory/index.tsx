@@ -72,7 +72,15 @@ function FolderMemory({
             {t('conversation.codebaseMemory.start')}
           </Button>
         )}
+        <Button
+          disabled={locked || dirty || !status?.config.enabled || !status?.available || status.phase !== 'succeeded'}
+          loading={busy === 'openLens'}
+          onClick={() => void run('openLens')}
+        >
+          {t('conversation.codebaseMemory.openLens')}
+        </Button>
       </div>
+      <div className='text-12px text-t-secondary'>{t('conversation.codebaseMemory.lensHint')}</div>
       {dirty && <div className='text-12px text-t-secondary'>{t('conversation.codebaseMemory.unsaved')}</div>}
       <Alert type='info' content={t('conversation.codebaseMemory.newConversationHint')} />
       {loading && <Spin />}
