@@ -49,6 +49,7 @@ export type ScmUiView = {
   repoCollapsed: string[];
   viewMode: ScmViewMode;
   monitorScope: ScmMonitorScope;
+  selectedRepoId: string | null;
 };
 
 type PersistedUi = {
@@ -58,6 +59,7 @@ type PersistedUi = {
   repoCollapsed?: string[];
   viewMode?: ScmViewMode;
   monitorScope?: ScmMonitorScope;
+  selectedRepoId?: string | null;
 };
 
 let projectId: string | null = null;
@@ -67,6 +69,7 @@ let treeExpanded: Set<string> | null = null; // null ⇒ "expand all" default, n
 let repoCollapsed: Set<string> = new Set(); // only collapsed worktree parents; empty ⇒ all expanded
 let viewMode: ScmViewMode = 'list';
 let monitorScope: ScmMonitorScope = 'project';
+let selectedRepoId: string | null = null;
 
 let snapshot: ScmUiView = {
   projectId: null,
@@ -76,6 +79,7 @@ let snapshot: ScmUiView = {
   repoCollapsed: [],
   viewMode: 'list',
   monitorScope: 'project',
+  selectedRepoId: null,
 };
 
 // ── persistence (per-project) ────────────────────────────────────────────────
@@ -126,6 +130,7 @@ const loadUi = (id: string): PersistedUi => {
         : undefined,
       viewMode: isViewMode(parsed.viewMode) ? parsed.viewMode : undefined,
       monitorScope: isMonitorScope(parsed.monitorScope) ? parsed.monitorScope : undefined,
+      selectedRepoId: typeof parsed.selectedRepoId === 'string' ? parsed.selectedRepoId : null,
     };
   } catch {
     return {};
@@ -140,6 +145,7 @@ const persistUi = (): void => {
     heights: Object.fromEntries(heights),
     viewMode,
     monitorScope,
+    selectedRepoId,
   };
   // Only persist an explicit tree expansion once the user has touched it; a null
   // set means "still on the expand-all default", which needs no stored override.
@@ -164,6 +170,7 @@ const rebuildSnapshot = (): void => {
     repoCollapsed: [...repoCollapsed],
     viewMode,
     monitorScope,
+    selectedRepoId,
   };
 };
 
@@ -180,7 +187,7 @@ const commit = (): void => {
  * like `explorerStore.openProject`), so a conversation switch that re-mounts the
  * panel does not reset the user's live view.
  */
-export const openScmUi = (id: string): void => {
+export const openScmUi = (id: string, defaultViewMode: ScmViewMode = 'list'): void => {
   if (projectId === id) return;
   projectId = id;
   const ui = loadUi(id);
@@ -188,8 +195,17 @@ export const openScmUi = (id: string): void => {
   heights = new Map(Object.entries(ui.heights ?? {}));
   treeExpanded = ui.treeExpanded ? new Set(ui.treeExpanded) : null;
   repoCollapsed = new Set(ui.repoCollapsed ?? []);
-  viewMode = ui.viewMode ?? 'list';
+  viewMode = ui.viewMode ?? defaultViewMode;
   monitorScope = ui.monitorScope ?? 'project';
+  selectedRepoId = ui.selectedRepoId ?? null;
+  commit();
+};
+
+/** Remember the repository chosen by the user within this project. */
+export const setScmSelectedRepo = (repoId: string): void => {
+  if (selectedRepoId === repoId) return;
+  selectedRepoId = repoId;
+  persistUi();
   commit();
 };
 
@@ -269,6 +285,7 @@ export const resetScmUiStoreForTest = (): void => {
   repoCollapsed = new Set();
   viewMode = 'list';
   monitorScope = 'project';
+  selectedRepoId = null;
   snapshot = {
     projectId: null,
     collapsed: {},
@@ -277,6 +294,7 @@ export const resetScmUiStoreForTest = (): void => {
     repoCollapsed: [],
     viewMode: 'list',
     monitorScope: 'project',
+    selectedRepoId: null,
   };
   listeners.clear();
 };

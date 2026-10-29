@@ -299,6 +299,8 @@ export type TreeNode = {
 export type RootRef = {
   pe_id: string;
   title: string;
+  /** Binding generation input: relocation retains pe_id but changes its directory. */
+  displayPath?: string;
   /** Role — drives pin/immutability (workspace) vs removability (attached). */
   role?: RootRole;
   /** Folder availability — projected onto the root node for status display. */

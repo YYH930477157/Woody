@@ -23,9 +23,13 @@ const hooks = vi.hoisted(() => ({
   view: { query: '', hits: [], status: 'idle', limitReached: false, total: 0, owner: 'panel' } as SearchView,
   runSearch: vi.fn(),
   cancel: vi.fn(),
+  roots: [] as { pe_id: string; relative_path: string }[],
 }));
 vi.mock('@/renderer/pages/conversation/explorer/search/useFileSearch', () => ({
-  useFileSearch: () => ({ view: hooks.view, runSearch: hooks.runSearch, cancel: hooks.cancel }),
+  useFileSearch: (_owner: string, roots: typeof hooks.roots) => {
+    hooks.roots = roots;
+    return { view: hooks.view, runSearch: hooks.runSearch, cancel: hooks.cancel };
+  },
 }));
 
 import { SearchPanel } from '@/renderer/pages/conversation/explorer/search/SearchPanel';
@@ -64,6 +68,28 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe('SearchPanel', () => {
+  it('limits searches to the selected folder and recovers when that folder becomes unavailable', () => {
+    const roots = [
+      { pe_id: 'pe1', relative_path: '' },
+      { pe_id: 'pe2', relative_path: '' },
+    ];
+    const { rerender } = render(
+      <SearchPanel roots={roots} peNames={{ pe1: 'First', pe2: 'Second' }} onRevealHit={() => {}}>
+        <div />
+      </SearchPanel>
+    );
+    type('file');
+    fireEvent.click(screen.getByText('conversation.managedWorkspace.allRoots'));
+    fireEvent.click(screen.getByText('Second'));
+    expect(hooks.roots).toEqual([roots[1]]);
+    rerender(
+      <SearchPanel roots={[roots[0]]} peNames={{ pe1: 'First' }} onRevealHit={() => {}}>
+        <div />
+      </SearchPanel>
+    );
+    expect(hooks.roots).toEqual([roots[0]]);
+    expect(hooks.runSearch).toHaveBeenLastCalledWith('file');
+  });
   it('shows the tree while the query is empty and keeps it mounted (hidden) while searching', () => {
     renderPanel();
     expect(screen.getByTestId('tree')).toBeTruthy();

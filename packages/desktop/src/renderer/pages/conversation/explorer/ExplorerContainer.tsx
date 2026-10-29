@@ -63,19 +63,29 @@ import { SearchPanel } from './search/SearchPanel';
 import type { SearchHit } from './search/searchModel';
 import { ScmPanel } from '../SourceControl/ScmPanel';
 import CodebaseMemoryPanel from '../CodebaseMemory';
+import WorkspaceManager from '@/renderer/components/workspace/WorkspaceManager';
+import {
+  buildWorkspaceUpdate,
+  pathToFileUri,
+  removeWorkspaceRoot,
+  searchableWorkspaceRoots,
+} from '@/renderer/components/workspace/WorkspaceManager/model';
+import {
+  addWorkspaceRoot,
+  closeRootEditors,
+  confirmRootEditors,
+} from '@/renderer/components/workspace/WorkspaceManager/lifecycle';
+import type { ProjectDetailDto } from '@/common/types/project';
 import { rediscoverRepos, refreshAllRepos } from '../SourceControl/scmStore';
 
 export type ExplorerContainerProps = {
   /** Owning project id — scopes the store's fact cache + localStorage UI state. */
   projectId: string;
+  supportsManagedWorkspace?: boolean;
+  onWorkspaceChange?: (detail: ProjectDetailDto) => void;
 };
 
 /** A local absolute path → `file://` URI (normalize `\`, ensure leading slash, encode). */
-const pathToFileUri = (p: string): string => {
-  const normalized = p.replace(/\\/g, '/');
-  const withLeadingSlash = normalized.startsWith('/') ? normalized : `/${normalized}`;
-  return `file://${encodeURI(withLeadingSlash)}`;
-};
 
 /**
  * The name-entry dialog's current operation. All three collect a single name in
@@ -174,9 +184,14 @@ export const buildExplorerPreviewPayload = async (
   };
 };
 
-export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId }) => {
+export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({
+  projectId,
+  supportsManagedWorkspace,
+  onWorkspaceChange,
+}) => {
   const { t } = useTranslation();
-  const { openPreview } = usePreviewContext();
+  const preview = usePreviewContext();
+  const { openPreview } = preview;
   const activeConversationId = useCurrentConversation();
   const { data, isLoading, mutate } = useSWR(projectId ? `explorer-project/${projectId}` : null, (key: string) => {
     // Derive the project id from the SWR key, not the captured `projectId`
@@ -220,6 +235,10 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
     const path = paths?.[0];
     if (!path) return; // cancelled
     try {
+      if (detail?.workspace?.managed) {
+        await mutate(await addWorkspaceRoot(detail, pathToFileUri(path)), false);
+        return;
+      }
       const entry = await ipcBridge.project.attachFolder.invoke({ project_id: projectId, uri: pathToFileUri(path) });
       await mutate();
       // Focus the attached (or, for a subdir, the existing focused) root.
@@ -229,18 +248,40 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
         Message.info(t('conversation.explorer.attachDuplicate'));
       } else if (isBackendHttpError(e) && e.code === PROJECT_ERROR_OVERLAP) {
         Message.warning(t('conversation.explorer.attachOverlap'));
+      } else if (isBackendHttpError(e) && e.code === 'project_workspace_busy') {
+        Message.warning(t('conversation.managedWorkspace.busy'));
       } else {
         Message.error(t('conversation.explorer.attachFailed'));
       }
+      void mutate();
     }
   };
 
   const handleRemoveFolder = async (peId: string): Promise<void> => {
     try {
+      if (!(await confirmRootEditors(preview, [peId]))) return;
+      if (detail?.workspace?.managed) {
+        await mutate(
+          await ipcBridge.project.updateWorkspace.invoke({
+            project_id: projectId,
+            ...removeWorkspaceRoot(buildWorkspaceUpdate(detail), peId),
+          }),
+          false
+        );
+        closeRootEditors(preview, [peId]);
+        return;
+      }
       await ipcBridge.project.removeFolder.invoke({ project_id: projectId, pe_id: peId });
+      closeRootEditors(preview, [peId]);
       await mutate();
-    } catch {
-      Message.error(t('conversation.explorer.removeFailed'));
+    } catch (error) {
+      Message.error(
+        t(
+          isBackendHttpError(error) && error.code === 'project_workspace_busy'
+            ? 'conversation.managedWorkspace.busy'
+            : 'conversation.explorer.removeFailed'
+        )
+      );
     }
   };
 
@@ -475,10 +516,12 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
   const roots = detail ? toRootRefs(detail) : [];
   // Search roots = the project's pe roots (each folder root, rel=''). fs/search
   // spans all bound folders; the front-end ranks the merged hit stream.
-  const searchRoots = roots.map((root) => ({ pe_id: root.pe_id, relative_path: '' }));
+  const searchRoots = detail ? searchableWorkspaceRoots(detail) : [];
   // pe_id → folder name for the search result's `PE · REL` secondary label.
   const searchPeNames = Object.fromEntries(roots.map((root) => [root.pe_id, root.title]));
-  const workspacePeId = detail?.explorer.workspace_pe_id;
+  const workspacePeId = detail?.workspace?.managed
+    ? detail.workspace.default_pe_id || undefined
+    : detail?.explorer.workspace_pe_id;
   const repoPaths = Object.fromEntries(
     (detail?.explorer.entries ?? []).map((entry) => [entry.pe_id, entry.display_path])
   );
@@ -535,11 +578,13 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
 
   return (
     <div className='h-full flex flex-col min-h-0'>
-      {/* Host component-switcher tab bar: 文件 = explorer, 变更 = source control.
-          Tabs are left-aligned and scroll horizontally when they overflow; the
-          attach + open-externally cluster is pinned right (flex-shrink-0) with
-          container padding, so it never scrolls with the tabs nor clips at narrow
-          widths.
+      {supportsManagedWorkspace && (
+        <div className='ps-12px pe-8px py-4px border-b border-[var(--bg-3)]'>
+          <WorkspaceManager projectId={projectId} onWorkspaceChange={onWorkspaceChange} />
+        </div>
+      )}
+      {/* Keep tabs and actions on separate rows so every tab remains reachable
+          even in a narrow sidebar. Long translated labels may wrap.
 
           左内边距 12px 是本面板的对齐基准线，三处必须一致（见下方 SearchPanel 与
           arco-override.css 的 .workspace-tree 规则）：外框一律从 12px 起，框内内容
@@ -552,13 +597,13 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
           text / search icon / tree arrow) starts at 20px. 12px is not arbitrary —
           the sider's resize handle covers the leftmost 12px and sits above this
           content, so anything placed to its left cannot be clicked. */}
-      <div className='flex items-center gap-4px ps-12px pe-8px py-4px flex-shrink-0 border-b border-[var(--bg-3)]'>
-        <div className='flex items-center gap-2px overflow-x-auto flex-1 min-w-0'>
+      <div className='flex flex-col gap-2px ps-12px pe-8px py-4px flex-shrink-0 border-b border-[var(--bg-3)]'>
+        <div data-explorer-tabs className='flex items-center flex-wrap gap-2px min-w-0'>
           {tabButton('files', t('conversation.explorer.tabs.files'))}
           {tabButton('changes', t('conversation.explorer.tabs.changes'))}
           {tabButton('architecture', t('conversation.codebaseMemory.title'))}
         </div>
-        <div className='flex items-center gap-2px flex-shrink-0'>
+        <div data-explorer-actions className='flex items-center justify-end gap-2px flex-shrink-0'>
           {/* Right cluster order (VS Code parity): project-scope actions first (add
               folder, open workspace), then view actions grouped at the far right
               (refresh, collapse-all). Refresh shows on both tabs (tab-scoped
@@ -645,6 +690,7 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
             projectId={projectId}
             roots={roots}
             workspacePeId={workspacePeId}
+            managedWorkspace={detail?.workspace?.managed}
             onRemoveRoot={handleRemoveFolder}
             onOpenFile={handleOpenFile}
             onRename={handleRename}
@@ -662,7 +708,12 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
       </div>
       {(activeTab === 'changes' || changesVisited) && (
         <div className='flex-1 min-h-0' style={activeTab === 'changes' ? undefined : { display: 'none' }}>
-          <ScmPanel projectId={projectId} repoPaths={repoPaths} conversationId={activeConversationId} />
+          <ScmPanel
+            projectId={projectId}
+            repoPaths={repoPaths}
+            conversationId={activeConversationId}
+            defaultViewMode={detail?.workspace?.managed ? 'tree' : undefined}
+          />
         </div>
       )}
       {(activeTab === 'architecture' || architectureVisited) && (

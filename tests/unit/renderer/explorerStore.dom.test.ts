@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DirRef, Entry, PeKey, TreeNode } from '@/renderer/pages/conversation/explorer/explorerModel';
 import { peKey, refToKey } from '@/renderer/pages/conversation/explorer/explorerModel';
@@ -25,6 +25,30 @@ const flush = async (): Promise<void> => {
 
 const dir = (name: string): Entry => ({ name, kind: 'dir' });
 const file = (name: string): Entry => ({ name, kind: 'file' });
+
+describe('relocated workspace roots', () => {
+  it('resubscribes a stable root identity and rejects its previous in-flight listing', async () => {
+    const pending: Array<(entries: Entry[]) => void> = [];
+    const unsubscribe = vi.fn();
+    configureExplorerStore({
+      subscribe: (refs) =>
+        new Promise((resolve) => pending.push((entries) => resolve({ snapshots: [{ target: refs[0], entries }] }))),
+      remount: async () => ({ snapshots: [] }),
+      unsubscribe,
+    });
+    openProject('p', [{ pe_id: 'same', title: 'App', displayPath: 'C:/old' }]);
+    await flush();
+    openProject('p', [{ pe_id: 'same', title: 'App', displayPath: 'D:/new' }]);
+    await flush();
+    expect(pending).toHaveLength(2);
+    pending[1]([file('new.txt')]);
+    await flush();
+    pending[0]([file('old.txt')]);
+    await flush();
+    expect(childNames(getExplorerSnapshot().treeData, peKey('same', ''))).toEqual(['new.txt']);
+    expect(unsubscribe).toHaveBeenCalledWith([{ pe_id: 'same', relative_path: '' }]);
+  });
+});
 
 type PortHarness = {
   port: MonitorPort;

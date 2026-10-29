@@ -13,6 +13,8 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
+vi.mock('@/renderer/services/i18n', () => ({ default: { t: (key: string) => key } }));
+
 // Record ipcBridge.fs calls + script their returns per test.
 const h = vi.hoisted(() => ({ readContent: vi.fn(), getContentMetadata: vi.fn() }));
 

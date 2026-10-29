@@ -18,14 +18,15 @@ import useSWR from 'swr';
 
 import { ipcBridge } from '@/common';
 
-import type { DirRef } from '../explorerModel';
 import { toRootRefs } from '../projectRoots';
 import { useCurrentProject } from '../currentProjectStore';
-import type { PeNameMap } from './searchModel';
+import type { PeNameMap, SearchRoot } from './searchModel';
+import { searchableWorkspaceRoots } from '@/renderer/components/workspace/WorkspaceManager/model';
 
 export type ProjectSearchRoots = {
   /** Search roots: one pe root per bound folder (relative_path=''). */
-  roots: DirRef[];
+  roots: SearchRoot[];
+  managed?: boolean;
   /** pe_id → folder name, for the `PE · REL` secondary label (multi-folder). */
   peNames: PeNameMap;
 };
@@ -48,7 +49,8 @@ export const useProjectSearchRoots = (): ProjectSearchRoots => {
     if (!data) return { roots: [], peNames: {} };
     const refs = toRootRefs(data);
     return {
-      roots: refs.map((root) => ({ pe_id: root.pe_id, relative_path: '' })),
+      managed: data.workspace?.managed,
+      roots: searchableWorkspaceRoots(data),
       peNames: Object.fromEntries(refs.map((root) => [root.pe_id, root.title])),
     };
   }, [data]);

@@ -12,8 +12,14 @@
  *
  * Set `E2E_PACKAGED=1` to force packaged mode, or `E2E_DEV=1` to force dev mode.
  */
-import { test as base, expect, type ElectronApplication, type Page, type TestInfo } from '@playwright/test';
-import { _electron as electron } from 'playwright';
+import {
+  test as base,
+  expect,
+  _electron as electron,
+  type ElectronApplication,
+  type Page,
+  type TestInfo,
+} from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';

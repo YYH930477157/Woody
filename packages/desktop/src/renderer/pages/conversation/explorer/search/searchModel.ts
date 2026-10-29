@@ -17,6 +17,12 @@
 
 import { projectFileRef } from '@/common/types/chatFile';
 import type { FileOrFolderItem } from '@/renderer/utils/file/fileTypes';
+import type { DirRef } from '../explorerModel';
+
+/** rootPath is local cache identity only and is omitted from protocol requests. */
+export type SearchRoot = DirRef & { rootPath?: string };
+export const searchRootsIdentity = (roots: SearchRoot[]): string =>
+  JSON.stringify(roots.map((root) => [root.pe_id, root.relative_path, root.rootPath || '']).sort());
 
 /**
  * One filename-search hit as delivered by `fs/searchMatch` (protocol.md). It is

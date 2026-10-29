@@ -24,6 +24,8 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('@/renderer/services/i18n', () => ({ default: { t: (key: string) => key } }));
+
 const getFileTypeInfo = vi.hoisted(() => vi.fn());
 const getContentMetadata = vi.hoisted(() => vi.fn(async () => ({ size: 10, lastModified: 1 })));
 

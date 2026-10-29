@@ -27,11 +27,16 @@
  */
 
 import React, { useRef } from 'react';
+import useSWR from 'swr';
+import { useCurrentConversation } from '@/renderer/pages/conversation/explorer/currentConversationStore';
+import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
+import { ipcBridge } from '@/common';
 
 import { ExplorerContainer } from '@/renderer/pages/conversation/explorer/ExplorerContainer';
 import { useCurrentProject } from '@/renderer/pages/conversation/explorer/currentProjectStore';
 
 export type ProjectPanelHostProps = {
+  onWorkspaceChange?: () => void;
   /** Rendered width in px (clamped by Layout against the chat+preview reserve). */
   widthPx: number;
   /** Collapsed → width 0, component kept mounted (no remount). */
@@ -40,8 +45,23 @@ export type ProjectPanelHostProps = {
   dragHandle?: React.ReactNode;
 };
 
-export const ProjectPanelHost: React.FC<ProjectPanelHostProps> = ({ widthPx, collapsed, dragHandle }) => {
+export const ProjectPanelHost: React.FC<ProjectPanelHostProps> = ({
+  widthPx,
+  collapsed,
+  dragHandle,
+  onWorkspaceChange,
+}) => {
   const projectId = useCurrentProject();
+  const conversationId = useCurrentConversation();
+  const { data: conversation } = useSWR(conversationId ? `conversation/${conversationId}` : null, () =>
+    getConversationOrNull(conversationId!)
+  );
+  const { data: project } = useSWR(projectId ? `explorer-project/${projectId}` : null, () =>
+    ipcBridge.project.get.invoke({ project_id: projectId! })
+  );
+  const supportsManagedWorkspace =
+    Boolean(window.electronAPI) &&
+    (conversation?.type === 'aionrs' || (!conversationId && project?.workspace?.managed === true));
   const mountIdRef = useRef<string>('');
   if (mountIdRef.current === '') mountIdRef.current = `pec-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -62,7 +82,11 @@ export const ProjectPanelHost: React.FC<ProjectPanelHostProps> = ({ widthPx, col
     >
       {!collapsed && dragHandle}
       {/* Hosted project component (this round: Explorer). Seam = projectId only. */}
-      <ExplorerContainer projectId={projectId} />
+      <ExplorerContainer
+        projectId={projectId}
+        supportsManagedWorkspace={supportsManagedWorkspace}
+        onWorkspaceChange={onWorkspaceChange}
+      />
     </div>
   );
 };

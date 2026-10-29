@@ -106,7 +106,13 @@ import type {
 } from '../update/updateTypes';
 import type { AgentMetadata } from '@/renderer/utils/model/agentTypes';
 import type { Theme } from '@/common/theme/types';
-import type { AttachFolderRequest, ProjectDetailDto, ProjectEntryDto } from '@/common/types/project';
+import type {
+  AttachFolderRequest,
+  ProjectDetailDto,
+  ProjectEntryDto,
+  WorkspaceState,
+  WorkspaceUpdate,
+} from '@/common/types/project';
 import type { ChatFileRef, ContentEncoding } from '@/common/types/chatFile';
 import type {
   GitBranchSnapshot,
@@ -566,6 +572,23 @@ export const runtime = {
 // ---------------------------------------------------------------------------
 
 export const project = {
+  createWorkspace: httpPost<ProjectDetailDto, { name: string; uri?: string }>('/api/projects/workspaces'),
+  openWorkspace: httpPost<ProjectDetailDto, { path: string }>('/api/projects/workspaces/open'),
+  getWorkspace: httpGet<WorkspaceState, { project_id: string }>(
+    (p) => `/api/projects/${encodeURIComponent(p.project_id)}/workspace`
+  ),
+  updateWorkspace: httpPut<ProjectDetailDto, { project_id: string } & WorkspaceUpdate>(
+    (p) => `/api/projects/${encodeURIComponent(p.project_id)}/workspace`,
+    ({ project_id: _id, ...body }) => body
+  ),
+  saveWorkspace: httpPost<WorkspaceState, { project_id: string; path?: string }>(
+    (p) => `/api/projects/${encodeURIComponent(p.project_id)}/workspace/save`,
+    (p) => (p.path ? { path: p.path } : {})
+  ),
+  discardWorkspace: httpPost<ProjectDetailDto, { project_id: string }>(
+    (p) => `/api/projects/${encodeURIComponent(p.project_id)}/workspace/discard`,
+    () => ({})
+  ),
   /** GET /api/projects/{id} → full project detail incl. all pe roots (entries). */
   get: httpGet<ProjectDetailDto, { project_id: string }>((p) => `/api/projects/${encodeURIComponent(p.project_id)}`),
   /**
@@ -816,6 +839,8 @@ const isElectronRenderer = (): boolean =>
   typeof window !== 'undefined' && Boolean((window as { electronAPI?: unknown }).electronAPI);
 
 export const dialog = {
+  selectWorkspaceFile: bridge.buildProvider<string | null, void>('workspace-file-open'),
+  saveWorkspaceFile: bridge.buildProvider<string | null, { defaultPath?: string }>('workspace-file-save'),
   showOpen: {
     provider: nativeShowOpen.provider,
     invoke: ((options?: ShowOpenOptions) => {
@@ -1953,6 +1978,7 @@ export interface ICreateConversationParams {
   extra: {
     workspace?: string;
     custom_workspace?: boolean;
+    workspace_project_id?: string;
     default_files?: string[];
     cli_path?: string;
     gateway?: {

@@ -32,10 +32,20 @@ const basename = (displayPath: string): string => {
  */
 export const entryToRootRef = (entry: ProjectEntryDto): RootRef => ({
   pe_id: entry.pe_id,
+  displayPath: entry.display_path,
   title: entry.display_name?.trim() || basename(entry.display_path) || entry.pe_id,
   role: entry.role,
   runtimeStatus: entry.runtime_status,
 });
 
 /** Full project detail → ordered pe roots for the projection. */
-export const toRootRefs = (detail: ProjectDetailDto): RootRef[] => detail.explorer.entries.map(entryToRootRef);
+export const toRootRefs = (detail: ProjectDetailDto): RootRef[] => {
+  const roots = detail.explorer.entries.map(entryToRootRef);
+  const counts = new Map<string, number>();
+  for (const root of roots) counts.set(root.title, (counts.get(root.title) || 0) + 1);
+  return roots.map((root, index) =>
+    (counts.get(root.title) || 0) > 1
+      ? { ...root, title: `${root.title} · ${detail.explorer.entries[index].display_path}` }
+      : root
+  );
+};

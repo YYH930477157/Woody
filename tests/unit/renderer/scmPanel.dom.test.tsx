@@ -896,7 +896,23 @@ describe('ScmPanel diff view', () => {
     // The fetched patch is opened as a `'diff'` tab in the shared preview panel,
     // titled by the file name — not rendered inline under this panel.
     await waitFor(() => expect(openPreviewMock).toHaveBeenCalledTimes(1));
-    expect(openPreviewMock).toHaveBeenCalledWith('unified patch text', 'diff', { file_name: 'a.ts', title: 'a.ts' });
+    expect(openPreviewMock).toHaveBeenCalledWith(
+      'unified patch text',
+      'diff',
+      expect.objectContaining({
+        file_name: 'a.ts',
+        title: 'a.ts',
+        fileRef: { kind: 'project', pe_id: 'pe1', relative_path: 'src/a.ts' },
+        scmDiff: {
+          request: {
+            repository: 'scm:pe1',
+            file: { pe_id: 'pe1', relative_path: 'src/a.ts' },
+            from: 'staged',
+            to: 'working',
+          },
+        },
+      })
+    );
   });
 
   it('never sends the staged anchor when opening a conflicted row (would return empty content)', async () => {
@@ -939,7 +955,7 @@ describe('ScmPanel diff view', () => {
     expect(openPreviewMock).not.toHaveBeenCalled();
   });
 
-  it('opens a binary placeholder as the diff tab body instead of a patch', async () => {
+  it('opens a binary diff with its file identity and binary notice metadata', async () => {
     installPort({
       repositories: [repo()],
       firstFrames: { 'scm:pe1': status('scm:pe1', 1, [resource('logo.png')]) },
@@ -950,10 +966,15 @@ describe('ScmPanel diff view', () => {
     fireEvent.click(screen.getByText('logo.png'));
 
     await waitFor(() => expect(openPreviewMock).toHaveBeenCalledTimes(1));
-    expect(openPreviewMock).toHaveBeenCalledWith('conversation.explorer.scm.diff.binary', 'diff', {
-      file_name: 'logo.png',
-      title: 'logo.png',
-    });
+    expect(openPreviewMock).toHaveBeenCalledWith(
+      '',
+      'diff',
+      expect.objectContaining({
+        file_name: 'logo.png',
+        title: 'logo.png',
+        scmDiff: expect.objectContaining({ binary: true }),
+      })
+    );
   });
 
   it('stops bridging (no further openPreview) once the selected row disappears from a newer frame', async () => {

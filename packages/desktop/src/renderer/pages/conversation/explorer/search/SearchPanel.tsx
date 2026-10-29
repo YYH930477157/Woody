@@ -21,20 +21,26 @@
  *     is active. Preview is a deferred feature — no action wired here yet.
  */
 
-import { Button, Input } from '@arco-design/web-react';
+import { Button, Input, Select } from '@arco-design/web-react';
 import { Plus, Search } from '@icon-park/react';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { DirRef } from '../explorerModel';
 import FileTypeIcon from '../fileIcon/FileTypeIcon';
 import { useFileSearch } from './useFileSearch';
-import { type PeNameMap, peLabeledPath, type SearchHit, searchHitKey } from './searchModel';
+import {
+  type PeNameMap,
+  peLabeledPath,
+  type SearchHit,
+  searchHitKey,
+  type SearchRoot,
+  searchRootsIdentity,
+} from './searchModel';
 import { PANEL_SEARCH_OWNER } from './searchStore';
 
 export type SearchPanelProps = {
   /** Search roots = the project's bound folders (each a pe root, rel=''). */
-  roots: DirRef[];
+  roots: SearchRoot[];
   /** pe_id → folder name for the `PE · REL` secondary label (multi-folder). */
   peNames: PeNameMap;
   /** Locate a hit in the tree (expand ancestors + select). Default click action. */
@@ -48,7 +54,15 @@ export type SearchPanelProps = {
 export const SearchPanel: React.FC<SearchPanelProps> = ({ roots, peNames, onRevealHit, onAddHit, children }) => {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
-  const { view, runSearch, cancel } = useFileSearch(PANEL_SEARCH_OWNER, roots);
+  const [scope, setScope] = useState('');
+  const validScope = roots.some((root) => root.pe_id === scope) ? scope : '';
+  const scopedRoots = validScope ? roots.filter((root) => root.pe_id === validScope) : roots;
+  const scopeKey = searchRootsIdentity(scopedRoots);
+  const { view, runSearch, cancel } = useFileSearch(PANEL_SEARCH_OWNER, scopedRoots);
+  useEffect(() => {
+    if (query.trim()) runSearch(query);
+    else cancel();
+  }, [scopeKey, query, runSearch, cancel]);
 
   const active = query.trim().length > 0;
   // Render results only while this panel owns the shared stream. If the `@`
@@ -97,6 +111,17 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({ roots, peNames, onReve
           8px and lands the icon at 20px — the same line as the tab text and the tree
           arrow (see the baseline note in ExplorerContainer.tsx). */}
       <div className='flex-shrink-0 ps-12px pe-8px pt-8px pb-4px'>
+        <Select
+          size='small'
+          className='mb-4px'
+          value={validScope}
+          onChange={setScope}
+          aria-label={t('conversation.managedWorkspace.searchScope')}
+          options={[
+            { value: '', label: t('conversation.managedWorkspace.allRoots') },
+            ...roots.map((root) => ({ value: root.pe_id, label: peNames[root.pe_id] || root.pe_id })),
+          ]}
+        />
         <Input
           value={query}
           onChange={onQueryChange}

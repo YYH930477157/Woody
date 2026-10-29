@@ -1087,6 +1087,7 @@ const PreviewPanel: React.FC = () => {
     if (content_type === 'diff') {
       return (
         <DiffPreview
+          key={activeTabId ?? undefined}
           content={content}
           metadata={metadata}
           hideToolbar

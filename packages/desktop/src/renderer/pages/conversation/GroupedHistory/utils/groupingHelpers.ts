@@ -9,7 +9,7 @@ import { getActivityTime } from '@/renderer/utils/chat/timeline';
 import { getWorkspaceDisplayName } from '@/renderer/utils/workspace/workspace';
 import { getWorkspaceUpdateTime } from '@/renderer/utils/workspace/workspaceHistory';
 
-import type { GroupedHistoryResult, TimelineItem, TimelineSection } from '../types';
+import type { GroupedHistoryResult, TimelineItem, TimelineSection, WorkspaceGroup } from '../types';
 import { getConversationSortOrder } from './sortOrderHelpers';
 
 export const isConversationPinned = (conversation: TChatConversation): boolean => {
@@ -29,18 +29,28 @@ export const groupConversationsByWorkspace = (
   conversations: TChatConversation[],
   t: (key: string) => string
 ): TimelineSection[] => {
-  const allWorkspaceGroups = new Map<string, TChatConversation[]>();
+  const allWorkspaceGroups = new Map<string, WorkspaceGroup>();
   const withoutWorkspaceConvs: TChatConversation[] = [];
 
   conversations.forEach((conv) => {
     const workspace = conv.extra?.workspace;
     const custom_workspace = conv.extra?.custom_workspace;
+    const marker = (conv.extra as { workspace_project_id?: string } | undefined)?.workspace_project_id;
+    const projectId = marker ? conv.project_id || marker : undefined;
+    const key = projectId ? `project:${projectId}` : workspace;
 
-    if (custom_workspace && workspace) {
-      if (!allWorkspaceGroups.has(workspace)) {
-        allWorkspaceGroups.set(workspace, []);
+    if (key && (projectId || (custom_workspace && workspace))) {
+      if (!allWorkspaceGroups.has(key)) {
+        allWorkspaceGroups.set(key, {
+          workspace: key,
+          project_id: projectId,
+          display_name: projectId
+            ? t('conversation.managedWorkspace.untitled')
+            : getWorkspaceDisplayName(key, false, t),
+          conversations: [],
+        });
       }
-      allWorkspaceGroups.get(workspace)!.push(conv);
+      allWorkspaceGroups.get(key)!.conversations.push(conv);
     } else {
       withoutWorkspaceConvs.push(conv);
     }
@@ -48,8 +58,8 @@ export const groupConversationsByWorkspace = (
 
   const items: TimelineItem[] = [];
 
-  allWorkspaceGroups.forEach((convList, workspace) => {
-    const sortedConvs = [...convList].toSorted((a, b) => getActivityTime(b) - getActivityTime(a));
+  allWorkspaceGroups.forEach((group, workspace) => {
+    const sortedConvs = [...group.conversations].toSorted((a, b) => getActivityTime(b) - getActivityTime(a));
     const latestConversationTime = getActivityTime(sortedConvs[0]);
     const updateTime = getWorkspaceUpdateTime(workspace);
     const time = Math.max(updateTime, latestConversationTime);
@@ -57,12 +67,7 @@ export const groupConversationsByWorkspace = (
       type: 'workspace',
       time,
       workspaceGroup: {
-        workspace,
-        // This grouping path only sees custom (user-chosen) workspaces —
-        // non-custom conversations end up in `withoutWorkspaceConvs` above
-        // and never reach this helper. Passing `false` is therefore correct
-        // without consulting `extra.is_temporary_workspace` per-row.
-        display_name: getWorkspaceDisplayName(workspace, false, t),
+        ...group,
         conversations: sortedConvs,
       },
     });

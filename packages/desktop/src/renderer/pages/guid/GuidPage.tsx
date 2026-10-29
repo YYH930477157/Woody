@@ -39,6 +39,10 @@ import { Button, ConfigProvider } from '@arco-design/web-react';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
+import WorkspaceManager from '@/renderer/components/workspace/WorkspaceManager';
+import { selectWorkspace, useSelectedWorkspace } from '@/renderer/components/workspace/workspaceSelection';
+import { workspaceConversationExtra } from '@/renderer/utils/workspace/managedWorkspace';
+import { confirmWorkspaceLeave } from '@/renderer/components/workspace/WorkspaceManager/lifecycle';
 import useSWR from 'swr';
 import styles from './index.module.css';
 
@@ -57,6 +61,7 @@ const GuidPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
+  const selectedWorkspace = useSelectedWorkspace();
   const guidContainerRef = useRef<HTMLDivElement>(null);
   const { activeBorderColor, inactiveBorderColor, activeShadow } = useInputFocusRing();
 
@@ -698,10 +703,28 @@ const GuidPage: React.FC = () => {
             onRemoveFile={guidInput.handleRemoveFile}
             actionRow={actionRowNode}
             slashCommandMenu={slashCommandMenuNode}
-            workspaceDir={guidInput.dir}
-            onSelectWorkspace={(dir) => guidInput.setDir(dir)}
-            onClearWorkspace={() => guidInput.setDir('')}
+            workspaceDir={
+              agentSelection.selectedAssistantBackend === 'aionrs' && selectedWorkspace
+                ? workspaceConversationExtra(selectedWorkspace).workspace
+                : guidInput.dir
+            }
+            onSelectWorkspace={async (dir) => {
+              if (selectedWorkspace && !(await confirmWorkspaceLeave(selectedWorkspace.project_id))) return;
+              selectWorkspace(null);
+              guidInput.setDir(dir);
+            }}
+            onClearWorkspace={async () => {
+              if (selectedWorkspace && !(await confirmWorkspaceLeave(selectedWorkspace.project_id))) return;
+              selectWorkspace(null);
+              guidInput.setDir('');
+            }}
           />
+
+          {Boolean(window.electronAPI) && agentSelection.selectedAssistantBackend === 'aionrs' && (
+            <div className='mt-8px w-full'>
+              <WorkspaceManager onWorkspaceChange={() => guidInput.setDir('')} />
+            </div>
+          )}
 
           {selectedAssistantPrompts.length > 0 ? (
             <div className='mt-18px w-full animate-fade-in ps-20px'>

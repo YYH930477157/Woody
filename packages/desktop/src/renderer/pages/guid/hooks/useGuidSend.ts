@@ -18,6 +18,8 @@ import { mutate as swrMutate } from 'swr';
 import { getConversationCreateErrorMessage } from '@/renderer/pages/conversation/utils/conversationCreateError';
 import { prepareCodebaseMemorySession } from '@/common/adapter/codebaseMemory/session';
 import { CODEBASE_MEMORY_SKILL_NAME } from '@/common/types/codebaseMemory/constants';
+import { getSelectedWorkspace } from '@/renderer/components/workspace/workspaceSelection';
+import { workspaceConversationExtra } from '@/renderer/utils/workspace/managedWorkspace';
 
 export type GuidSendDeps = {
   // Input state
@@ -106,8 +108,10 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
       return;
     }
 
-    const isCustomWorkspace = !!dir;
-    const finalWorkspace = dir || '';
+    const selectedWorkspace = selectedAssistantBackend === 'aionrs' ? getSelectedWorkspace() : null;
+    const managedExtra = selectedWorkspace ? workspaceConversationExtra(selectedWorkspace) : undefined;
+    const isCustomWorkspace = managedExtra ? managedExtra.custom_workspace : !!dir;
+    const finalWorkspace = managedExtra ? managedExtra.workspace : dir || '';
 
     const assistantConversationId = selectedAssistantId;
     const assistantBackend = selectedAssistantBackend;
@@ -228,6 +232,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
           extra: {
             default_files: files.map(chatFileRefPath),
             workspace: finalWorkspace,
+            workspace_project_id: managedExtra?.workspace_project_id,
             custom_workspace: isCustomWorkspace,
             selected_mcp_server_ids: selectedUserMcpServerIdsToSend,
             selected_session_mcp_servers: codebaseMemory.servers,

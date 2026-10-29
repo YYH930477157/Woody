@@ -671,13 +671,46 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
 
   // 关闭拦截：当启用"关闭到托盘"时，隐藏窗口而非关闭
   // Close interception: hide window instead of closing when "close to tray" is enabled
+  let workspaceCloseApproved = false;
+  let workspaceClosePending = false;
   mainWindow.on('close', (event) => {
     if (mainWindow.isDestroyed()) return;
     if (getCloseToTrayEnabled() && !getIsQuitting()) {
       event.preventDefault();
       mainWindow.hide();
+      return;
     }
+    if (workspaceCloseApproved || getIsQuitting()) return;
+    event.preventDefault();
+    if (workspaceClosePending) return;
+    workspaceClosePending = true;
+    void confirmWorkspaceWindowClose().then((confirmed) => {
+      workspaceClosePending = false;
+      if (confirmed && !mainWindow.isDestroyed()) {
+        workspaceCloseApproved = true;
+        mainWindow.close();
+      }
+    });
   });
+};
+
+/** Ask the renderer before teardown so its save dialog can still call the backend. */
+const confirmWorkspaceWindowClose = async (): Promise<boolean> => {
+  if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return true;
+  try {
+    // A tray quit can arrive while the renderer's confirmation dialog is hidden.
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    if (!mainWindow.isVisible()) mainWindow.show();
+    mainWindow.focus();
+    return Boolean(
+      await mainWindow.webContents.executeJavaScript(
+        'window.__confirmWorkspaceClose ? window.__confirmWorkspaceClose() : true'
+      )
+    );
+  } catch (error) {
+    console.error('[Workspace] Could not confirm window close', error);
+    return false;
+  }
 };
 
 const handleAppReady = async (): Promise<void> => {
@@ -1224,6 +1257,7 @@ app.on('activate', () => {
 });
 
 installQuitCleanup({
+  confirmQuit: confirmWorkspaceWindowClose,
   onBeforeQuit: (handler) => app.on('before-quit', (event) => handler(event)),
   quitApp: () => app.quit(),
   setIsQuitting,

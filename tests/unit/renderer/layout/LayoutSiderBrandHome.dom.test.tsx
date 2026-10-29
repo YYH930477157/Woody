@@ -24,6 +24,7 @@ const shortcutMocks = vi.hoisted(() => ({
 }));
 const featureMocks = vi.hoisted(() => ({
   teamModeEnabled: false,
+  switchPreviewScope: vi.fn(),
 }));
 vi.mock('react-router-dom', () => ({
   useNavigate: () => navigate,
@@ -52,6 +53,9 @@ vi.mock('@/common/config/constants', () => ({
 }));
 vi.mock('@/renderer/components/layout/PwaPullToRefresh', () => ({ default: () => null }));
 vi.mock('@/renderer/components/layout/Titlebar', () => ({ default: () => null }));
+vi.mock('@/renderer/components/layout/ProjectPanelHost', () => ({ ProjectPanelHost: () => null }));
+vi.mock('@/renderer/components/layout/MobileProjectPanelHost', () => ({ MobileProjectPanelHost: () => null }));
+vi.mock('@/renderer/services/i18n', () => ({ default: { t: (key: string) => key } }));
 vi.mock('@/renderer/components/settings/UpdateModal', () => ({ default: () => null }));
 vi.mock('@renderer/hooks/system/useDeepLink', () => ({ useDeepLink: () => {} }));
 vi.mock('@renderer/hooks/system/notification/useNotificationClick', () => ({ useNotificationClick: () => {} }));
@@ -67,10 +71,12 @@ vi.mock('@renderer/hooks/ui/useConversationShortcuts', () => ({
 }));
 vi.mock('@renderer/utils/platform', () => ({ isElectronDesktop: platformMocks.isElectronDesktopMock }));
 vi.mock('@renderer/pages/conversation/Preview/context/PreviewContext', () => ({
-  usePreviewContext: () => ({ closePreview: () => {} }),
+  usePreviewContext: () => ({ closePreview: () => {}, closePreviewIfScopeChanged: featureMocks.switchPreviewScope }),
 }));
 
 import Layout from '@renderer/components/layout/Layout';
+import { selectWorkspace } from '@/renderer/components/workspace/workspaceSelection';
+import { previewScopeKey } from '@/renderer/pages/conversation/Preview/context/previewScope';
 
 const renderLayout = () => render(<Layout sider={<div>sider</div>} />);
 
@@ -98,10 +104,21 @@ describe('Layout sider brand Home button', () => {
     featureMocks.teamModeEnabled = false;
     sessionStorage.clear();
     currentPathname = '/guid';
+    selectWorkspace(null);
   });
 
   afterEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('switches preview persistence scope when selecting another workspace on the home page', () => {
+    selectWorkspace({ project_id: 'workspace-a', name: 'A', explorer: { workspace_pe_id: '', entries: [] } });
+    renderLayout();
+    expect(featureMocks.switchPreviewScope).toHaveBeenLastCalledWith(previewScopeKey('workspace-a', null));
+    act(() =>
+      selectWorkspace({ project_id: 'workspace-b', name: 'B', explorer: { workspace_pe_id: '', entries: [] } })
+    );
+    expect(featureMocks.switchPreviewScope).toHaveBeenLastCalledWith(previewScopeKey('workspace-b', null));
   });
 
   it('navigates to the recorded last non-settings path when clicked in a settings route', () => {

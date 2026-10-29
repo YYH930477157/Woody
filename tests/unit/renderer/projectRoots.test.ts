@@ -48,6 +48,21 @@ describe('entryToRootRef title fallback', () => {
 });
 
 describe('toRootRefs', () => {
+  it('disambiguates equal aliases using the root path without changing identity', () => {
+    const detail: ProjectDetailDto = {
+      project_id: 'p',
+      name: 'p',
+      explorer: {
+        workspace_pe_id: 'a',
+        entries: [
+          entry({ pe_id: 'a', display_name: 'App', display_path: 'C:/a' }),
+          entry({ pe_id: 'b', display_name: 'App', display_path: 'D:/b' }),
+        ],
+      },
+    };
+    expect(toRootRefs(detail).map((root) => root.title)).toEqual(['App · C:/a', 'App · D:/b']);
+    expect(toRootRefs(detail).map((root) => root.pe_id)).toEqual(['a', 'b']);
+  });
   it('maps every entry and preserves the backend order', () => {
     const detail: ProjectDetailDto = {
       project_id: 'p1',

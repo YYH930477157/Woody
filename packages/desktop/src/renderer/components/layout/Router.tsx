@@ -1,5 +1,14 @@
-import React, { Suspense } from 'react';
-import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import React, { Suspense, createContext, useContext, useState } from 'react';
+import {
+  createHashRouter,
+  createRoutesFromElements,
+  Navigate,
+  Outlet,
+  Route,
+  RouterProvider,
+  useLocation,
+} from 'react-router-dom';
+import WorkspaceNavigationGuard from '@/renderer/components/workspace/WorkspaceManager/WorkspaceNavigationGuard';
 import AppLoader from '@renderer/components/layout/AppLoader';
 import DocumentTitle from '@renderer/components/layout/DocumentTitle';
 import { useCrossSessionRateLimitNotice } from '@/renderer/hooks/system/useCrossSessionRateLimitNotice';
@@ -45,7 +54,10 @@ const CapabilitiesRedirect: React.FC = () => {
   return <Navigate to={tab === 'tools' ? '/settings/tools' : '/settings/skills'} replace />;
 };
 
-const ProtectedLayout: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
+const LayoutContext = createContext<React.ReactElement | null>(null);
+
+const ProtectedLayout: React.FC = () => {
+  const layout = useContext(LayoutContext)!;
   const { status, user } = useAuth();
   // Mounted once for every authenticated route: the loop warning has to reach
   // the user even when they are looking at a THIRD conversation, which is the
@@ -63,63 +75,80 @@ const ProtectedLayout: React.FC<{ layout: React.ReactElement }> = ({ layout }) =
   return React.cloneElement(layout);
 };
 
-const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
+const RouterShell: React.FC = () => (
+  <>
+    <DocumentTitle />
+    <WorkspaceNavigationGuard />
+    <Outlet />
+  </>
+);
+const LoginRoute: React.FC = () => {
   const { status } = useAuth();
+  return status === 'authenticated' ? <Navigate to='/guid' replace /> : withRouteFallback(LoginPage);
+};
+const UnknownRoute: React.FC = () => {
+  const { status } = useAuth();
+  return <Navigate to={status === 'authenticated' ? '/guid' : '/login'} replace />;
+};
 
-  return (
-    <HashRouter>
-      <DocumentTitle />
-      <Routes>
-        <Route
-          path='/login'
-          element={status === 'authenticated' ? <Navigate to='/guid' replace /> : withRouteFallback(LoginPage)}
-        />
-        <Route element={<ProtectedLayout layout={layout} />}>
-          <Route index element={<Navigate to='/guid' replace />} />
-          <Route path='/guid' element={withRouteFallback(Guid)} />
-          <Route path='/conversation/:id' element={withRouteFallback(Conversation)} />
-          <Route
-            path='/team/:id'
-            element={TEAM_MODE_ENABLED ? withRouteFallback(TeamIndex) : <Navigate to='/guid' replace />}
-          />
-          <Route path='/settings/model' element={withRouteFallback(ModeSettings)} />
-          <Route path='/assistants' element={withRouteFallback(AssistantSettings)} />
-          {/* Assistants moved out of Settings to a top-level entry; keep a redirect
+const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
+  const [router] = useState(() =>
+    createHashRouter(
+      createRoutesFromElements(
+        <Route element={<RouterShell />}>
+          <Route path='/login' element={<LoginRoute />} />
+          <Route element={<ProtectedLayout />}>
+            <Route index element={<Navigate to='/guid' replace />} />
+            <Route path='/guid' element={withRouteFallback(Guid)} />
+            <Route path='/conversation/:id' element={withRouteFallback(Conversation)} />
+            <Route
+              path='/team/:id'
+              element={TEAM_MODE_ENABLED ? withRouteFallback(TeamIndex) : <Navigate to='/guid' replace />}
+            />
+            <Route path='/settings/model' element={withRouteFallback(ModeSettings)} />
+            <Route path='/assistants' element={withRouteFallback(AssistantSettings)} />
+            {/* Assistants moved out of Settings to a top-level entry; keep a redirect
               so old deep links / back-nav still land on the new page. */}
-          <Route path='/settings/assistants' element={<Navigate to='/assistants' replace />} />
-          <Route path='/settings/agent' element={withRouteFallback(AgentSettings)} />
-          <Route path='/settings/agent/:id/repair' element={withRouteFallback(AgentRepairPage)} />
-          {/* Skills and Tools are top-level settings entries. */}
-          <Route path='/settings/skills' element={withRouteFallback(SkillsSettings)} />
-          <Route path='/settings/skills/import-history' element={withRouteFallback(SkillsSettings)} />
-          <Route path='/settings/skills/detail/:skillName' element={withRouteFallback(SkillDetailPage)} />
-          <Route path='/settings/tools' element={withRouteFallback(ToolsSettings)} />
-          {/* Legacy routes — the previous combined "Capabilities" page is now two pages. */}
-          <Route path='/settings/capabilities' element={<CapabilitiesRedirect />} />
-          <Route
-            path='/settings/capabilities/skills/import-history'
-            element={<Navigate to='/settings/skills/import-history' replace />}
-          />
-          <Route path='/settings/skills-hub' element={<Navigate to='/settings/skills' replace />} />
-          <Route path='/settings/appearance' element={withRouteFallback(AppearanceSettings)} />
-          <Route path='/settings/display' element={<Navigate to='/settings/appearance' replace />} />
-          <Route path='/settings/webui' element={withRouteFallback(WebuiSettings)} />
-          <Route path='/settings/pet' element={withRouteFallback(PetSettings)} />
-          <Route path='/settings/archived' element={withRouteFallback(ArchivedSettings)} />
-          <Route path='/settings/system' element={withRouteFallback(SystemSettings)} />
-          <Route path='/settings/about' element={withRouteFallback(SystemSettings)} />
-          <Route path='/settings/ext/:tabId' element={withRouteFallback(ExtensionSettingsPage)} />
-          <Route path='/settings' element={<Navigate to='/settings/agent' replace />} />
-          <Route path='/test/components' element={withRouteFallback(ComponentsShowcase)} />
-          <Route path='/scheduled' element={withRouteFallback(ScheduledTasksPage)} />
-          <Route path='/scheduled/:job_id' element={withRouteFallback(TaskDetailPage)} />
-          <Route path='/todo' element={withRouteFallback(TodoPage)} />
-          <Route path='/email-scan' element={withRouteFallback(EmailScanPage)} />
-          <Route path='/terminal' element={withRouteFallback(TerminalPage)} />
+            <Route path='/settings/assistants' element={<Navigate to='/assistants' replace />} />
+            <Route path='/settings/agent' element={withRouteFallback(AgentSettings)} />
+            <Route path='/settings/agent/:id/repair' element={withRouteFallback(AgentRepairPage)} />
+            {/* Skills and Tools are top-level settings entries. */}
+            <Route path='/settings/skills' element={withRouteFallback(SkillsSettings)} />
+            <Route path='/settings/skills/import-history' element={withRouteFallback(SkillsSettings)} />
+            <Route path='/settings/skills/detail/:skillName' element={withRouteFallback(SkillDetailPage)} />
+            <Route path='/settings/tools' element={withRouteFallback(ToolsSettings)} />
+            {/* Legacy routes — the previous combined "Capabilities" page is now two pages. */}
+            <Route path='/settings/capabilities' element={<CapabilitiesRedirect />} />
+            <Route
+              path='/settings/capabilities/skills/import-history'
+              element={<Navigate to='/settings/skills/import-history' replace />}
+            />
+            <Route path='/settings/skills-hub' element={<Navigate to='/settings/skills' replace />} />
+            <Route path='/settings/appearance' element={withRouteFallback(AppearanceSettings)} />
+            <Route path='/settings/display' element={<Navigate to='/settings/appearance' replace />} />
+            <Route path='/settings/webui' element={withRouteFallback(WebuiSettings)} />
+            <Route path='/settings/pet' element={withRouteFallback(PetSettings)} />
+            <Route path='/settings/archived' element={withRouteFallback(ArchivedSettings)} />
+            <Route path='/settings/system' element={withRouteFallback(SystemSettings)} />
+            <Route path='/settings/about' element={withRouteFallback(SystemSettings)} />
+            <Route path='/settings/ext/:tabId' element={withRouteFallback(ExtensionSettingsPage)} />
+            <Route path='/settings' element={<Navigate to='/settings/agent' replace />} />
+            <Route path='/test/components' element={withRouteFallback(ComponentsShowcase)} />
+            <Route path='/scheduled' element={withRouteFallback(ScheduledTasksPage)} />
+            <Route path='/scheduled/:job_id' element={withRouteFallback(TaskDetailPage)} />
+            <Route path='/todo' element={withRouteFallback(TodoPage)} />
+            <Route path='/email-scan' element={withRouteFallback(EmailScanPage)} />
+            <Route path='/terminal' element={withRouteFallback(TerminalPage)} />
+          </Route>
+          <Route path='*' element={<UnknownRoute />} />
         </Route>
-        <Route path='*' element={<Navigate to={status === 'authenticated' ? '/guid' : '/login'} replace />} />
-      </Routes>
-    </HashRouter>
+      )
+    )
+  );
+  return (
+    <LayoutContext.Provider value={layout}>
+      <RouterProvider router={router} />
+    </LayoutContext.Provider>
   );
 };
 
