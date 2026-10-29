@@ -44,6 +44,7 @@ import { useTranslation } from 'react-i18next';
 
 import { usePreviewContext } from '../Preview';
 import { ipcBridge } from '@/common';
+import { projectFileRef } from '@/common/types/chatFile';
 import type {
   CommitMessageFields,
   GitBranch,
@@ -75,6 +76,7 @@ import { initScmRuntime } from './scmTransport';
 import {
   clearSectionHeight,
   openScmUi,
+  setScmSelectedRepo,
   setRepoWorktreesCollapsed,
   setScmMonitorScope,
   setScmViewMode,
@@ -119,9 +121,10 @@ export type ScmPanelProps = {
   /** Absolute paths keyed by project-explorer id, used by the local Git bridge. */
   repoPaths?: Record<string, string>;
   conversationId?: string | null;
+  defaultViewMode?: ScmViewMode;
 };
 
-export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, conversationId }) => {
+export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, conversationId, defaultViewMode }) => {
   const { t } = useTranslation();
   const view = useScm();
   const ui = useScmUi();
@@ -219,15 +222,18 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
   useEffect(() => {
     initScmRuntime();
     void openScmProject(projectId);
-    openScmUi(projectId);
-  }, [projectId]);
+    openScmUi(projectId, defaultViewMode);
+  }, [projectId, defaultViewMode]);
 
   // The repo whose changes the body shows. A stale or absent `selectedRepoId`
   // (default on open, or after the selected repo was removed) resolves to the first
   // repo — so the body never renders nothing while a repo exists.
   const selectedRepo = useMemo(
-    () => view.repositories.find((r) => r.repo_id === view.selectedRepoId) ?? view.repositories[0],
-    [view.repositories, view.selectedRepoId]
+    () =>
+      view.repositories.find(
+        (r) => r.repo_id === (view.selectedRepoId ?? (ui.projectId === projectId ? ui.selectedRepoId : null))
+      ) ?? view.repositories[0],
+    [view.repositories, view.selectedRepoId, ui.projectId, ui.selectedRepoId, projectId]
   );
 
   const selectedRepoStatus = selectedRepo ? view.statuses[selectedRepo.repo_id] : undefined;
@@ -682,7 +688,10 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
         selectedRepo={selectedRepo}
         selectedStatus={selectedStatus}
         multiRepo={multiRepo}
-        onRepoSelect={setSelectedRepo}
+        onRepoSelect={(repoId) => {
+          setScmSelectedRepo(repoId);
+          setSelectedRepo(repoId);
+        }}
         onAction={actions.run}
         busy={actions.busy || workflowBusy.current}
         failedRowKeys={actions.report?.failedRowKeys ?? []}
@@ -1096,8 +1105,8 @@ const ViewModeToggle: React.FC<{ mode: ScmViewMode; onChange: (mode: ScmViewMode
  *
  * A per-effect `cancelled` flag guards the async fetch: rapid row switches must not
  * let a slow earlier response open a stale tab over the newer one. Binary/empty
- * diffs carry no patch to render, so they open a short notice as plain text instead
- * of a blank diff view — the panel still "唤起" a preview for every click. Fetch
+ * diffs carry metadata so the viewer can show a notice. File identity lets Source
+ * read the current working file, while the anchors preserve the comparison. Fetch
  * failures are swallowed here (the row stays selected, no tab opens); surfacing them
  * belongs to the action-report path, not this passive bridge.
  */
@@ -1106,7 +1115,6 @@ const ScmDiffPreviewBridge: React.FC<{
   staging: boolean;
   resource: ScmResource;
 }> = ({ repoId, staging, resource }) => {
-  const { t } = useTranslation();
   const { openPreview } = usePreviewContext();
   const name = resourceName(resource);
   const { pe_id: peId, relative_path: relativePath } = resource.file;
@@ -1123,13 +1131,17 @@ const ScmDiffPreviewBridge: React.FC<{
           to,
         });
         if (cancelled) return;
-        const body =
-          result.binary === true
-            ? t('conversation.explorer.scm.diff.binary')
-            : result.patch && result.patch.length > 0
-              ? result.patch
-              : t('conversation.explorer.scm.diff.empty');
-        openPreview(body, 'diff', { file_name: name, title: name });
+        openPreview(result.patch ?? '', 'diff', {
+          file_name: name,
+          title: name,
+          fileRef: projectFileRef(peId, relativePath),
+          editable: false,
+          scmDiff: {
+            request: { repository: repoId, file: { pe_id: peId, relative_path: relativePath }, from, to },
+            binary: result.binary,
+            truncated: result.truncated,
+          },
+        });
       } catch {
         // Passive bridge: a failed diff fetch leaves the selection intact and opens
         // nothing. Error surfacing is the action-report path's job, not this effect's.
@@ -1138,7 +1150,7 @@ const ScmDiffPreviewBridge: React.FC<{
     return () => {
       cancelled = true;
     };
-  }, [repoId, peId, relativePath, from, to, name, openPreview, t]);
+  }, [repoId, peId, relativePath, from, to, name, openPreview]);
 
   return null;
 };

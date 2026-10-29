@@ -9,6 +9,7 @@ type BeforeQuitEvent = {
 };
 
 type QuitCleanupDeps = {
+  confirmQuit?: () => Promise<boolean>;
   onBeforeQuit: (handler: (event: BeforeQuitEvent) => void) => void;
   quitApp: () => void;
   setIsQuitting: (value: boolean) => void;
@@ -82,9 +83,27 @@ export function installQuitCleanup(deps: QuitCleanupDeps): void {
     }
 
     cleanupStarted = true;
-    void runQuitCleanup(deps).finally(() => {
-      cleanupCompleted = true;
-      deps.quitApp();
-    });
+    const finish = (): void => {
+      void runQuitCleanup(deps).finally(() => {
+        cleanupCompleted = true;
+        deps.quitApp();
+      });
+    };
+    if (deps.confirmQuit) {
+      void deps
+        .confirmQuit()
+        .then((confirmed) => {
+          if (confirmed) finish();
+          else {
+            cleanupStarted = false;
+            deps.setIsQuitting(false);
+          }
+        })
+        .catch((error) => {
+          cleanupStarted = false;
+          deps.setIsQuitting(false);
+          deps.logError('[Workspace] Quit confirmation failed', error);
+        });
+    } else finish();
   });
 }

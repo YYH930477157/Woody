@@ -19,6 +19,7 @@ import {
   openScmUi,
   resetScmUiStoreForTest,
   setScmMonitorScope,
+  setScmSelectedRepo,
   setScmTreeExpanded,
   setScmViewMode,
   setSectionCollapsed,
@@ -38,6 +39,14 @@ beforeEach(() => {
 afterEach(() => localStorage.clear());
 
 describe('scmUiStore defaults', () => {
+  it('uses a tree for a new managed workspace while preserving an explicit saved list preference', () => {
+    openScmUi('managed', 'tree');
+    expect(getScmUiSnapshot().viewMode).toBe('tree');
+    setScmViewMode('list');
+    resetScmUiStoreForTest();
+    openScmUi('managed', 'tree');
+    expect(getScmUiSnapshot().viewMode).toBe('list');
+  });
   it('opens a fresh project expanded, list mode, no heights', () => {
     openScmUi('p1');
     const s = getScmUiSnapshot();
@@ -58,6 +67,19 @@ describe('scmUiStore defaults', () => {
 });
 
 describe('scmUiStore persistence (per project)', () => {
+  it('restores the selected repository without carrying it into another project', () => {
+    openScmUi('p1');
+    setScmSelectedRepo('repo-library');
+    resetScmUiStoreForTest();
+    openScmUi('p1');
+    expect(getScmUiSnapshot().selectedRepoId).toBe('repo-library');
+    openScmUi('p2');
+    expect(getScmUiSnapshot().selectedRepoId).toBeNull();
+    localStorage.setItem(lsKey('bad'), JSON.stringify({ selectedRepoId: 42 }));
+    openScmUi('bad');
+    expect(getScmUiSnapshot().selectedRepoId).toBeNull();
+  });
+
   it('persists and restores collapse state per section id', () => {
     openScmUi('p1');
     setSectionCollapsed('repositories', true);

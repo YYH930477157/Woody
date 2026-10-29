@@ -16,7 +16,7 @@
 /** Whether a root's underlying folder is currently reachable (root-row status). */
 export type ProjectRuntimeStatus = 'available' | 'missing' | 'permission_denied' | 'disconnected';
 
-/** A pe entry's role in the project: the immutable workspace vs an attached folder. */
+/** Legacy primary/attached role. Managed workspaces have a separate mutable default root. */
 export type ProjectEntryRole = 'workspace' | 'attached';
 
 /**
@@ -39,11 +39,25 @@ export type ProjectEntryDto = {
 export type ProjectDetailDto = {
   project_id: string;
   name: string;
+  workspace?: WorkspaceState;
   explorer: {
-    /** pe_id of the workspace root (pinned + non-removable in the tree). */
+    /** Legacy primary root (empty for a managed workspace without roots). */
     workspace_pe_id: string;
     entries: ProjectEntryDto[];
   };
+};
+
+export type WorkspaceState = {
+  managed: boolean;
+  config_path: string | null;
+  dirty: boolean;
+  default_pe_id: string | null;
+};
+
+export type WorkspaceUpdate = {
+  name: string;
+  roots: { pe_id?: string; uri: string; display_name?: string }[];
+  default_pe_id: string | null;
 };
 
 /** `POST /api/projects/{id}/folders` request body. `uri` is a `file://…` URI. */

@@ -5,6 +5,8 @@
  */
 
 import type { PreviewMetadata } from '../../context/PreviewContext';
+import { resolvePreviewPayload } from '@/renderer/utils/file/previewPayload';
+import { getFileTypeInfo } from '@/renderer/utils/file/fileType';
 import { useTextSelection } from '@/renderer/hooks/ui/useTextSelection';
 import { Checkbox } from '@arco-design/web-react';
 import classNames from 'classnames';
@@ -31,6 +33,7 @@ interface DiffPreviewProps {
  */
 const DiffPreview: React.FC<DiffPreviewProps> = ({
   content,
+  metadata,
   hideToolbar = false,
   viewMode: externalViewMode,
   onViewModeChange,
@@ -45,6 +48,54 @@ const DiffPreview: React.FC<DiffPreviewProps> = ({
   const [sideBySide, setSideBySide] = useState(false);
 
   const viewMode = externalViewMode !== undefined ? externalViewMode : internalViewMode;
+  const [source, setSource] = useState<{ content?: string; notice?: 'loading' | 'failed' | 'oversized' | 'binary' }>({
+    notice: 'loading',
+  });
+  const isScmDiff = Boolean(metadata?.scmDiff && metadata.fileRef);
+
+  useEffect(() => {
+    if (!isScmDiff || viewMode !== 'source' || !metadata?.fileRef) return;
+    const fileRef = metadata.fileRef;
+    let generation = 0;
+    const load = async () => {
+      const request = ++generation;
+      setSource({ notice: 'loading' });
+      if (metadata.scmDiff?.binary) {
+        setSource({ notice: 'binary' });
+        return;
+      }
+      try {
+        const payload = await resolvePreviewPayload(fileRef, 'code');
+        if (request !== generation) return;
+        setSource(
+          payload.oversized
+            ? { notice: 'oversized' }
+            : payload.content.includes('\0')
+              ? { notice: 'binary' }
+              : { content: payload.content }
+        );
+      } catch {
+        if (request === generation) setSource({ notice: 'failed' });
+      }
+    };
+    void load();
+    window.addEventListener('focus', load);
+    return () => {
+      generation++;
+      window.removeEventListener('focus', load);
+    };
+  }, [isScmDiff, viewMode, metadata, content]);
+
+  const sourceNotice =
+    source.notice === 'loading'
+      ? t('preview.loading')
+      : source.notice === 'failed'
+        ? t('preview.refresh.failed')
+        : source.notice === 'oversized'
+          ? t('preview.oversized.title')
+          : source.notice === 'binary'
+            ? t('conversation.explorer.scm.diff.binary')
+            : null;
 
   useEffect(() => {
     const updateTheme = () => {
@@ -119,7 +170,7 @@ const DiffPreview: React.FC<DiffPreviewProps> = ({
   };
 
   return (
-    <div className='flex flex-col w-full h-full overflow-hidden'>
+    <div data-diff-view={viewMode} className='flex flex-col w-full h-full overflow-hidden'>
       {!hideToolbar && (
         <div className='flex items-center justify-between h-40px px-12px bg-bg-2 flex-shrink-0'>
           <div className='flex items-center gap-4px'>
@@ -173,21 +224,35 @@ const DiffPreview: React.FC<DiffPreviewProps> = ({
 
       <div ref={containerRef} className='flex-1 overflow-auto p-16px'>
         {viewMode === 'source' ? (
-          <SyntaxHighlighter
-            style={currentTheme === 'dark' ? vs2015 : vs}
-            language='diff'
-            PreTag='div'
-            showLineNumbers
-            wrapLongLines
-            customStyle={{
-              fontSize: '13px',
-              fontFamily: 'var(--font-mono)',
-              fontWeight: 'var(--font-mono-weight)',
-              lineHeight: 1.5,
-            }}
-          >
-            {content}
-          </SyntaxHighlighter>
+          isScmDiff && sourceNotice ? (
+            <div role='status' className='text-t-secondary'>
+              {sourceNotice}
+            </div>
+          ) : (
+            <SyntaxHighlighter
+              style={currentTheme === 'dark' ? vs2015 : vs}
+              language={isScmDiff ? getFileTypeInfo(metadata?.file_name ?? '').language : 'diff'}
+              PreTag='div'
+              showLineNumbers
+              wrapLongLines
+              customStyle={{
+                fontSize: '13px',
+                fontFamily: 'var(--font-mono)',
+                fontWeight: 'var(--font-mono-weight)',
+                lineHeight: 1.5,
+              }}
+            >
+              {isScmDiff ? (source.content ?? '') : content}
+            </SyntaxHighlighter>
+          )
+        ) : metadata?.scmDiff && (metadata.scmDiff.binary || metadata.scmDiff.truncated || !content) ? (
+          <div role='status' className='text-t-secondary'>
+            {metadata.scmDiff.binary
+              ? t('conversation.explorer.scm.diff.binary')
+              : metadata.scmDiff.truncated
+                ? t('preview.oversized.title')
+                : t('conversation.explorer.scm.diff.empty')}
+          </div>
         ) : (
           <div
             ref={diffContainerRef}

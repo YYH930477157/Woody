@@ -20,9 +20,13 @@ import type { DirRef } from '@/renderer/pages/conversation/explorer/explorerMode
 import type { SearchHit } from '@/renderer/pages/conversation/explorer/search/searchModel';
 import type { SearchView } from '@/renderer/pages/conversation/explorer/search/searchStore';
 
-const roots = vi.hoisted(() => ({ value: [] as DirRef[], peNames: {} as Record<string, string> }));
+const roots = vi.hoisted(() => ({
+  value: [] as (DirRef & { rootPath?: string })[],
+  peNames: {} as Record<string, string>,
+  managed: false,
+}));
 vi.mock('@/renderer/pages/conversation/explorer/search/useProjectSearchRoots', () => ({
-  useProjectSearchRoots: () => ({ roots: roots.value, peNames: roots.peNames }),
+  useProjectSearchRoots: () => ({ roots: roots.value, peNames: roots.peNames, managed: roots.managed }),
 }));
 
 const fs = vi.hoisted(() => ({
@@ -45,6 +49,7 @@ const setView = (v: Partial<SearchView>): void => {
 beforeEach(() => {
   roots.value = PROJECT_ROOTS;
   roots.peNames = {};
+  roots.managed = false;
   setView({});
   fs.runSearch.mockClear();
   fs.cancel.mockClear();
@@ -55,6 +60,23 @@ const render = (props: { query: string; isOpen: boolean; limit?: number }) =>
   renderHook((p) => useProjectMentionSearch({ limit: 8, ...p }), { initialProps: props });
 
 describe('useProjectMentionSearch gating', () => {
+  it('keeps an empty managed workspace out of the legacy folder fallback', () => {
+    roots.value = [];
+    roots.managed = true;
+    setView({ hits: [hit('old.txt')], status: 'done' });
+    const { result } = render({ query: 'old', isOpen: true });
+    expect(result.current.active).toBe(true);
+    expect(result.current.items).toEqual([]);
+    expect(fs.runSearch).not.toHaveBeenCalled();
+  });
+  it('restarts an unchanged query when a root is relocated without changing pe identity', () => {
+    roots.value = [{ pe_id: 'pe1', relative_path: '', rootPath: 'C:/old' }];
+    const { rerender } = render({ query: 'file', isOpen: true });
+    fs.runSearch.mockClear();
+    roots.value = [{ pe_id: 'pe1', relative_path: '', rootPath: 'D:/new' }];
+    rerender({ query: 'file', isOpen: true });
+    expect(fs.runSearch).toHaveBeenCalledWith('file');
+  });
   it('opening the menu with resolved roots issues an fs/search for the query', () => {
     render({ query: 'btn', isOpen: true });
     expect(fs.runSearch).toHaveBeenCalledWith('btn');

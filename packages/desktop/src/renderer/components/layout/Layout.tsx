@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { setGlobalNavigate } from '@/renderer/utils/navigation';
 import { usePreviewContext } from '@renderer/pages/conversation/Preview';
+import { previewScopeKey } from '@renderer/pages/conversation/Preview/context/previewScope';
 import { ProjectPanelHost } from '@renderer/components/layout/ProjectPanelHost';
 import { ProjectPanelMobileOverlay } from '@renderer/components/layout/ProjectPanelMobileOverlay';
 import { setCurrentProject, useCurrentProject } from '@renderer/pages/conversation/explorer/currentProjectStore';
@@ -37,6 +38,7 @@ import { useDesktopTurnNotification } from '@renderer/hooks/system/notification/
 import { cleanupSiderTooltips } from '@renderer/utils/ui/siderTooltip';
 import { useConversationShortcuts } from '@renderer/hooks/ui/useConversationShortcuts';
 import { isElectronDesktop } from '@renderer/utils/platform';
+import { useSelectedWorkspace } from '@/renderer/components/workspace/workspaceSelection';
 import { IS_DISCONTINUED_BUILD } from '@/renderer/utils/discontinuedBuild';
 import UpdateMigrationDialog from '@/renderer/components/settings/UpdateMigrationDialog';
 import '@renderer/styles/layout.css';
@@ -132,8 +134,11 @@ const Layout: React.FC<{
   useDesktopTurnNotification();
   const navigate = useNavigate();
   const location = useLocation();
+  const selectedWorkspace = useSelectedWorkspace();
   const workspaceAvailable =
-    location.pathname.startsWith('/conversation/') || (TEAM_MODE_ENABLED && location.pathname.startsWith('/team/'));
+    location.pathname.startsWith('/conversation/') ||
+    (TEAM_MODE_ENABLED && location.pathname.startsWith('/team/')) ||
+    (location.pathname === '/guid' && Boolean(selectedWorkspace));
   const toggleSider = useCallback(() => {
     setCollapsed((previous) => !previous);
   }, []);
@@ -176,7 +181,16 @@ const Layout: React.FC<{
     closePreview: closePreviewOnRouteChange,
     isOpen: isPreviewOpen,
     isMaximized: isPreviewMaximized,
+    closePreviewIfScopeChanged,
   } = usePreviewContext();
+  useEffect(() => {
+    if (location.pathname === '/guid') {
+      const projectId = selectedWorkspace?.project_id ?? null;
+      closePreviewIfScopeChanged(previewScopeKey(projectId, null));
+      setCurrentProject(projectId);
+      setCurrentConversation(null);
+    }
+  }, [location.pathname, selectedWorkspace?.project_id, closePreviewIfScopeChanged]);
   // Layout-level explorer column width engine (stage3 FULL / P2): measure the
   // [content | explorer] row, clamp the explorer width so chat (+ preview) keep
   // their reserve. Active only when a project is bound and on desktop.
@@ -536,6 +550,7 @@ const Layout: React.FC<{
               )}
               {!isMobile && (
                 <ProjectPanelHost
+                  onWorkspaceChange={() => navigate('/guid')}
                   widthPx={explorerWidthPx}
                   collapsed={explorerCollapsed}
                   dragHandle={createExplorerDragHandle({

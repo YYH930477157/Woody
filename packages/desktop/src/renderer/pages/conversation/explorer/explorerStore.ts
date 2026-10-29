@@ -73,6 +73,7 @@ let cache: FactCache = new Map();
 let expanded = new Set<PeKey>();
 let selected: PeKey | null = null;
 let current = new Set<PeKey>();
+let generation = 0;
 
 let snapshot: ExplorerView = { projectId: null, treeData: [], selected: null, expanded: [] };
 let reconcileScheduled = false;
@@ -221,9 +222,11 @@ const runReconcile = (): void => {
     port.unsubscribe(toRemove.map(keyToRef));
   }
   if (toAdd.length > 0) {
+    const requestGeneration = generation;
     port
       .subscribe(toAdd.map(keyToRef))
       .then((result) => {
+        if (requestGeneration !== generation) return;
         // Apply each returned snapshot, guarding against keys no longer wanted
         // (the tree may have collapsed while the request was in flight).
         const stillWant = deriveWant(expanded);
@@ -237,6 +240,7 @@ const runReconcile = (): void => {
         if (changed) commit();
       })
       .catch(() => {
+        if (requestGeneration !== generation) return;
         // Subscribe failed (offline, or the socket not yet ready right after a
         // reconnect). Roll the just-declared keys back out of `current`: leaving
         // them there would strand them as permanently-but-falsely declared, so
@@ -340,7 +344,7 @@ export const applyMonitorNotification = (method: string, params: unknown): void 
  */
 const rootsIdentity = (rs: RootRef[]): string =>
   rs
-    .map((r) => r.pe_id)
+    .map((r) => JSON.stringify([r.pe_id, r.displayPath || '', r.runtimeStatus || '']))
     .toSorted()
     .join('\0');
 
@@ -366,6 +370,8 @@ export const openProject = (id: string, projectRoots: RootRef[]): void => {
   // from a switch race, so it is the only caller that guards against clobbering a
   // populated record with a transiently-empty expanded set (see persistUi).
   if (projectId) persistUi({ guardEmptyOverwrite: true });
+  generation += 1;
+  if (current.size) port?.unsubscribe([...current].map(keyToRef));
   projectId = id;
   roots = projectRoots;
   cache = new Map();
@@ -437,6 +443,7 @@ export const select = (key: PeKey | null): void => {
 
 /** Reconnect: drop the reported set and re-declare the full want set. */
 export const onReconnect = (): void => {
+  generation += 1;
   current = new Set();
   scheduleReconcile();
 };
@@ -470,9 +477,11 @@ export const refreshRoot = (peId: string): Promise<void> => {
   if (!port) return Promise.resolve();
   const refs = [...current].filter((key) => keyToRef(key).pe_id === peId).map(keyToRef);
   if (refs.length === 0) return Promise.resolve(); // collapsed / nothing watched → no backend mount to refresh
+  const requestGeneration = generation;
   return port
     .remount(refs)
     .then((result) => {
+      if (requestGeneration !== generation) return;
       // Apply each fresh snapshot, guarding against keys no longer wanted (the
       // tree may have collapsed while the request was in flight). Mirrors the
       // subscribe-reply application in runReconcile.
@@ -516,6 +525,7 @@ export const getExplorerInternalsForTest = (): { cacheKeys: PeKey[]; expanded: P
 
 /** Test hook: reset all module state. */
 export const resetExplorerStoreForTest = (): void => {
+  generation += 1;
   port = null;
   projectId = null;
   roots = [];

@@ -5,6 +5,8 @@ import { MemoryRouter } from 'react-router-dom';
 import type { TChatConversation } from '@/common/config/storage';
 import type { TTeam } from '@/common/types/team/teamTypes';
 
+vi.mock('@/renderer/services/i18n', () => ({ default: { t: (key: string) => key } }));
+
 const { getConversationOrNullMock, cronJobManagerMock, ensureSessionMock, teamEventHandlers, makeTeamEventChannel } =
   vi.hoisted(() => {
     const handlers: Record<string, Array<(event: unknown) => void>> = {};

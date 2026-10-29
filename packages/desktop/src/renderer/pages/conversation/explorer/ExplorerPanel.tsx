@@ -44,8 +44,9 @@ import { useExplorerView } from './useExplorerView';
 export type ExplorerPanelProps = {
   projectId: string;
   roots: RootRef[];
-  /** pe_id of the workspace root — its remove action is disabled (immutable). */
+  /** Default root for implicit drops; immutable only in legacy projects. */
   workspacePeId?: string;
+  managedWorkspace?: boolean;
   /** Remove an attached root from the project. Omit to disable the action. */
   onRemoveRoot?: (peId: string) => void;
   /** Open a file (leaf) in the preview panel. Called when a file node is selected. */
@@ -92,6 +93,7 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
   projectId,
   roots,
   workspacePeId,
+  managedWorkspace,
   onRemoveRoot,
   onOpenFile,
   onRename,
@@ -300,7 +302,8 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
           {degraded && <Caution theme='outline' size='14' className='flex-shrink-0' />}
         </span>
       );
-      const removable = isRoot && data?.role ? canRemoveRoot(data.role, peId, workspacePeId) : false;
+      const removable =
+        isRoot && data?.role ? managedWorkspace || canRemoveRoot(data.role, peId, workspacePeId) : false;
 
       // The menu is grouped into three ordered sections drawn with a divider line
       // between them (see explorerContextMenuSections): (1) add-to-chat,
@@ -445,6 +448,7 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
       onTransfer,
       dragOverKey,
       workspacePeId,
+      managedWorkspace,
       t,
       view.expanded,
     ]

@@ -21,6 +21,39 @@ const conversation = (id: string, extra: TChatConversation['extra'], modified_at
   }) as TChatConversation;
 
 describe('buildGroupedHistory', () => {
+  const managedConversation = (id: string, projectId: string, path: string, marker = projectId): TChatConversation =>
+    ({
+      ...conversation(id, { workspace: path, custom_workspace: Boolean(path) }, 100),
+      type: 'aionrs',
+      project_id: projectId,
+      extra: { workspace: path, custom_workspace: Boolean(path), workspace_project_id: marker },
+    }) as TChatConversation;
+
+  it('keeps independent managed workspaces separate when their physical root is identical', () => {
+    const result = buildGroupedHistory(
+      [managedConversation('a', 'p1', '/shared'), managedConversation('b', 'p2', '/shared')],
+      t
+    );
+    expect(result.timelineSections[0].items.map((item) => item.workspaceGroup?.project_id)).toEqual(['p1', 'p2']);
+  });
+
+  it('keeps one managed workspace together after its default folder changes', () => {
+    const result = buildGroupedHistory(
+      [managedConversation('a', 'p', '/old'), managedConversation('b', 'p', '/new')],
+      t
+    );
+    expect(result.timelineSections[0].items).toHaveLength(1);
+    expect(result.timelineSections[0].items[0].workspaceGroup?.conversations).toHaveLength(2);
+  });
+
+  it('groups an empty managed workspace using the authoritative project identity', () => {
+    const result = buildGroupedHistory([managedConversation('a', 'actual', '', 'stale')], t);
+    expect(result.timelineSections[0].items[0]).toMatchObject({
+      type: 'workspace',
+      workspaceGroup: { project_id: 'actual' },
+    });
+  });
+
   it('keeps scheduled-task conversations in the regular conversation timeline', () => {
     const result = buildGroupedHistory(
       [conversation('cron-conversation', { backend: 'aioncore', cron_job_id: 'job-1' }, 100)],

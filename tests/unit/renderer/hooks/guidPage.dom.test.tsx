@@ -9,6 +9,8 @@ import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LayoutContext } from '@/renderer/hooks/context/LayoutContext';
 
+vi.mock('@/renderer/services/i18n', () => ({ default: { t: (key: string) => key } }));
+
 const {
   modelSelectionMock,
   agentSelectionMock,

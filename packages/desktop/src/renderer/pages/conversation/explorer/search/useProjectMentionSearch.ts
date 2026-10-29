@@ -26,7 +26,7 @@ import { useEffect, useMemo } from 'react';
 
 import type { FileOrFolderItem } from '@/renderer/utils/file/fileTypes';
 
-import { type PeNameMap, searchHitToMentionItem } from './searchModel';
+import { type PeNameMap, searchHitToMentionItem, searchRootsIdentity } from './searchModel';
 import { MENTION_SEARCH_OWNER } from './searchStore';
 import { useFileSearch } from './useFileSearch';
 import { useProjectSearchRoots } from './useProjectSearchRoots';
@@ -53,8 +53,9 @@ export const useProjectMentionSearch = ({
   isOpen: boolean;
   limit: number;
 }): ProjectMentionSearch => {
-  const { roots, peNames } = useProjectSearchRoots();
-  const active = roots.length > 0;
+  const { roots, peNames, managed } = useProjectSearchRoots();
+  const active = roots.length > 0 || Boolean(managed);
+  const rootsKey = searchRootsIdentity(roots);
   const { view, runSearch, cancel } = useFileSearch(MENTION_SEARCH_OWNER, roots);
   // Render results only while this skin owns the shared stream — if the search
   // panel took over, our view is showing its results, so suppress them here.
@@ -65,17 +66,21 @@ export const useProjectMentionSearch = ({
   // flips true), this re-fires and issues the first search.
   useEffect(() => {
     if (!active) return;
+    if (!roots.length) {
+      cancel();
+      return;
+    }
     if (isOpen) {
       runSearch(query);
     } else {
       cancel();
     }
-  }, [active, isOpen, query, runSearch, cancel]);
+  }, [active, isOpen, query, runSearch, cancel, rootsKey]);
 
   const items = useMemo<FileOrFolderItem[]>(
-    () => (active && owned ? view.hits.slice(0, limit).map(searchHitToMentionItem) : []),
-    [active, owned, limit, view.hits]
+    () => (active && owned && roots.length > 0 ? view.hits.slice(0, limit).map(searchHitToMentionItem) : []),
+    [active, owned, limit, view.hits, roots.length]
   );
 
-  return { active, items, loading: active && owned && view.status === 'searching', peNames };
+  return { active, items, loading: active && roots.length > 0 && owned && view.status === 'searching', peNames };
 };

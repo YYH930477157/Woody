@@ -43,6 +43,8 @@ vi.mock('@/renderer/hooks/context/ThemeContext', () => ({
 //
 // `vi.hoisted` because the factory below is lifted above ordinary declarations.
 const { readContent } = vi.hoisted(() => ({ readContent: vi.fn(async () => 'disk contents') }));
+const { fetchDiff } = vi.hoisted(() => ({ fetchDiff: vi.fn() }));
+vi.mock('@/renderer/pages/conversation/SourceControl/scmStore', () => ({ fetchScmDiff: fetchDiff }));
 
 vi.mock('@/common', () => ({
   ipcBridge: {
@@ -126,6 +128,47 @@ afterEach(() => {
 });
 
 describe('refreshing a tab with unsaved changes', () => {
+  it('refreshes a Git comparison without replacing the patch with source text', async () => {
+    render(<Harness showPanel={false} />);
+    const request = {
+      repository: 'repo',
+      file: { pe_id: 'peA', relative_path: 'a.ts' },
+      from: 'committed' as const,
+      to: 'staged' as const,
+    };
+    act(() =>
+      ctx.openPreview('old patch', 'diff', { fileRef: { kind: 'project', ...request.file }, scmDiff: { request } })
+    );
+    const previousMetadata = ctx.activeTab?.metadata;
+    fetchDiff.mockResolvedValue({ patch: 'new patch' });
+    await act(async () => {
+      expect(await ctx.reloadTabContent(ctx.activeTabId!)).toBe(true);
+    });
+    expect(fetchDiff).toHaveBeenCalledWith(request);
+    expect(readContent).not.toHaveBeenCalled();
+    expect(ctx.activeTab?.content).toBe('new patch');
+    expect(ctx.activeTab?.metadata).not.toBe(previousMetadata);
+  });
+
+  it('keeps staged and unstaged comparisons of the same file separate', () => {
+    render(<Harness showPanel={false} />);
+    const fileRef = { kind: 'project' as const, pe_id: 'peA', relative_path: 'a.ts' };
+    const request = {
+      repository: 'repo',
+      file: { pe_id: 'peA', relative_path: 'a.ts' },
+      from: 'committed' as const,
+      to: 'staged' as const,
+    };
+    act(() => ctx.openPreview('staged patch', 'diff', { fileRef, scmDiff: { request } }));
+    act(() =>
+      ctx.openPreview('working patch', 'diff', {
+        fileRef,
+        scmDiff: { request: { ...request, from: 'staged', to: 'working' } },
+      })
+    );
+    expect(ctx.tabs.map((tab) => tab.content)).toEqual(['staged patch', 'working patch']);
+  });
+
   it(
     'asks before discarding the edit, and reads nothing until answered',
     async () => {

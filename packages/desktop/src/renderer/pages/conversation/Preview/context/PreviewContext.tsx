@@ -17,6 +17,7 @@ import { listPersistedPreviewScopeKeys, previewScopeStorageKey, type PreviewScop
 import { peKey } from '@/renderer/pages/conversation/explorer/explorerModel';
 import { reflessTabKey } from './reflessTabKey';
 import { onPreviewWatchChange, reconcilePreviewWatch, resetPreviewWatch } from './previewWatchStore';
+import { fetchScmDiff } from '../../SourceControl/scmStore';
 
 /** DOM 片段数据结构 / DOM snippet data structure */
 export interface DomSnippet {
@@ -39,6 +40,8 @@ export interface PreviewMetadata {
   // file_path/workspace, which are retained only for viewers not yet migrated
   // (pdf file://, office, shell.openFile, download).
   fileRef?: ChatFileRef;
+  // Git comparisons retain their anchors; the Source view reads fileRef from disk.
+  scmDiff?: { request: Parameters<typeof fetchScmDiff>[0]; binary?: boolean; truncated?: boolean };
   file_path?: string; // 工作空间文件的绝对路径 / Absolute file path in workspace
   workspace?: string; // 工作空间根目录 / Workspace root directory
   editable?: boolean; // 是否可编辑 / Whether editable
@@ -706,6 +709,16 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
           // Type is a precondition, not a tiebreaker: the same path rendered as
           // source and as a diff are legitimately two different tabs.
           if (tab.content_type !== type) return false;
+          if (type === 'diff') {
+            const current = tab.metadata?.scmDiff?.request;
+            const incoming = meta?.scmDiff?.request;
+            if (
+              current?.repository !== incoming?.repository ||
+              current?.from !== incoming?.from ||
+              current?.to !== incoming?.to
+            )
+              return false;
+          }
 
           const tabRefKey = tab.metadata?.fileRef ? chatFileRefKey(tab.metadata.fileRef) : '';
 
@@ -1071,6 +1084,29 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const encoding: ContentEncoding = tab.content_type === 'image' ? 'dataurl' : 'utf8';
     try {
+      // Re-read the comparison, never replace a Git patch with working-tree text.
+      const scmDiff = tab.content_type === 'diff' ? tab.metadata?.scmDiff : undefined;
+      if (scmDiff) {
+        const result = await fetchScmDiff(scmDiff.request);
+        const content = result.patch ?? '';
+        setTabs((prev) =>
+          prev.map((t) =>
+            t.id === tabId && t.metadata === tab.metadata
+              ? {
+                  ...t,
+                  content,
+                  originalContent: content,
+                  isDirty: false,
+                  metadata: {
+                    ...t.metadata,
+                    scmDiff: { ...scmDiff, binary: result.binary, truncated: result.truncated },
+                  },
+                }
+              : t
+          )
+        );
+        return true;
+      }
       const content = await ipcBridge.fs.readContent.invoke({ file: fileRef, encoding });
       if (content == null) return false;
 

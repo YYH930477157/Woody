@@ -11,6 +11,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ProjectDetailDto, ProjectEntryDto } from '@/common/types/project';
 
+vi.mock('@/renderer/services/i18n', () => ({ default: { t: (key: string) => key } }));
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
 }));

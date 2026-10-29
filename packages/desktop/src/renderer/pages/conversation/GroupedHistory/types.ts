@@ -8,7 +8,9 @@ import type { TChatConversation } from '@/common/config/storage';
 import type { ReactNode } from 'react';
 
 export type WorkspaceGroup = {
+  /** Managed groups use a stable project key; legacy groups retain their directory path. */
   workspace: string;
+  project_id?: string;
   display_name: string;
   conversations: TChatConversation[];
 };

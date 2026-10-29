@@ -18,6 +18,33 @@ const flushMicrotasks = async () => {
 };
 
 describe('installQuitCleanup', () => {
+  it('keeps the backend and window alive when workspace save confirmation is cancelled', async () => {
+    let handler: ((event: BeforeQuitEvent) => void) | undefined;
+    const stopBackend = vi.fn(async () => {});
+    const quitApp = vi.fn();
+    const setIsQuitting = vi.fn();
+    installQuitCleanup({
+      onBeforeQuit: (value) => {
+        handler = value;
+      },
+      confirmQuit: async () => false,
+      stopBackend,
+      quitApp,
+      setIsQuitting,
+      markExplicitQuit: vi.fn(),
+      destroyTray: vi.fn(),
+      disposeCronResumeListener: vi.fn(),
+      destroyPetWindow: vi.fn(),
+      logInfo: vi.fn(),
+      logWarn: vi.fn(),
+      logError: vi.fn(),
+    });
+    handler?.({ preventDefault: vi.fn() });
+    await flushMicrotasks();
+    expect(stopBackend).not.toHaveBeenCalled();
+    expect(quitApp).not.toHaveBeenCalled();
+    expect(setIsQuitting).toHaveBeenCalledWith(false);
+  });
   it('prevents the first quit until cleanup finishes, then requests quit again', async () => {
     const calls: string[] = [];
     let beforeQuitHandler: ((event: BeforeQuitEvent) => void) | undefined;

@@ -16,11 +16,11 @@
  * same time, so they share it (one focused search surface at a time).
  */
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 
 import { useLatestRef } from '@renderer/hooks/ui/useLatestRef';
 
-import type { DirRef } from '../explorerModel';
+import { type SearchRoot, searchRootsIdentity } from './searchModel';
 import { initExplorerRuntime } from '../monitorTransport';
 import { cancelSearch, type SearchView, startSearch, useSearch } from './searchStore';
 
@@ -35,10 +35,13 @@ export type FileSearch = {
   cancel: () => void;
 };
 
-export const useFileSearch = (owner: string, roots: DirRef[]): FileSearch => {
+export const useFileSearch = (owner: string, roots: SearchRoot[]): FileSearch => {
   const view = useSearch();
   const rootsRef = useLatestRef(roots);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rootsKey = searchRootsIdentity(roots);
+  const previousRootsKey = useRef(rootsKey);
+  const rootsChanged = previousRootsKey.current !== rootsKey;
 
   // Wire the monitor runtime once (idempotent) so the search port is configured.
   useEffect(() => {
@@ -57,7 +60,11 @@ export const useFileSearch = (owner: string, roots: DirRef[]): FileSearch => {
       clearTimer();
       timerRef.current = setTimeout(() => {
         timerRef.current = null;
-        startSearch(owner, rootsRef.current, query);
+        startSearch(
+          owner,
+          rootsRef.current.map(({ pe_id, relative_path }) => ({ pe_id, relative_path })),
+          query
+        );
       }, FILE_SEARCH_DEBOUNCE_MS);
     },
     [clearTimer, owner, rootsRef]
@@ -68,9 +75,15 @@ export const useFileSearch = (owner: string, roots: DirRef[]): FileSearch => {
     cancelSearch(owner); // owner-guarded: only releases if this skin owns the stream
   }, [clearTimer, owner]);
 
+  useLayoutEffect(() => {
+    if (previousRootsKey.current === rootsKey) return;
+    previousRootsKey.current = rootsKey;
+    cancel();
+  }, [rootsKey, cancel]);
+
   // Drop any pending debounce on unmount (do not cancel the shared stream here —
   // another mount of the same surface may own it).
   useEffect(() => clearTimer, [clearTimer]);
 
-  return { view, runSearch, cancel };
+  return { view: rootsChanged ? { ...view, hits: [], owner: null } : view, runSearch, cancel };
 };
