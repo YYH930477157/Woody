@@ -1,3 +1,4 @@
+import { Changelists, useChangelists } from './Workbench/Storage/Changelists';
 /**
  * @license
  * Copyright 2025 AionUi (aionui.com)
@@ -45,11 +46,13 @@ import { useTranslation } from 'react-i18next';
 import { usePreviewContext } from '../Preview';
 import { ipcBridge } from '@/common';
 import { projectFileRef } from '@/common/types/chatFile';
+import type { GitWorkbenchScope } from '@/common/types/sourceControl/workbenchTypes';
 import type {
   CommitMessageFields,
   GitBranch,
   GitWorkflowState,
   GitWorkflowSession,
+  GitWorkflowPrepareRequest,
 } from '@/common/types/sourceControl/gitWorkflowTypes';
 import {
   defaultCommitChecks,
@@ -71,10 +74,11 @@ import {
   type ScmStatus,
 } from './scmModel';
 import { groupRepositories, type ScmRepoGroup } from './scmRepoTree';
-import { fetchScmDiff, openScmProject, refreshAllRepos, setSelectedRepo, useScm } from './scmStore';
+import { openScmProject, refreshAllRepos, setSelectedRepo, useScm } from './scmStore';
 import { initScmRuntime } from './scmTransport';
 import {
   clearSectionHeight,
+  migrateLegacyScmRepository,
   openScmUi,
   setScmSelectedRepo,
   setRepoWorktreesCollapsed,
@@ -87,6 +91,7 @@ import {
   type ScmMonitorScope,
 } from './scmUiStore';
 import { type ScmActionReport, useScmActions } from './useScmActions';
+import { readPreviewDiff, type PreviewDiffRequest } from './Workbench/Diff/previewDiff';
 import {
   clearUnavailableSelections,
   getSelectedResources,
@@ -116,6 +121,7 @@ const emptyMessageFields = (): CommitMessageFields => ({
 });
 
 export type ScmPanelProps = {
+  changelists?: boolean;
   /** Owning project id — scopes the store's repositories + statuses. */
   projectId: string;
   /** Absolute paths keyed by project-explorer id, used by the local Git bridge. */
@@ -124,7 +130,13 @@ export type ScmPanelProps = {
   defaultViewMode?: ScmViewMode;
 };
 
-export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, conversationId, defaultViewMode }) => {
+export const ScmPanel: React.FC<ScmPanelProps> = ({
+  projectId,
+  repoPaths = {},
+  conversationId,
+  defaultViewMode,
+  changelists = false,
+}) => {
   const { t } = useTranslation();
   const view = useScm();
   const ui = useScmUi();
@@ -138,6 +150,15 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
   const [workflowSessionId, setWorkflowSessionId] = useState<string>();
   const [workflowDiagnostics, setWorkflowDiagnostics] = useState<StaticScanDiagnostic[]>([]);
   const [workflowOutput, setWorkflowOutput] = useState('');
+  const [commitMode, setCommitMode] = useState<GitWorkflowPrepareRequest['mode']>();
+  const [amendLoading, setAmendLoading] = useState(false);
+  const amendRequest = useRef(0);
+  useEffect(
+    () => () => {
+      ++amendRequest.current;
+    },
+    []
+  );
   const [draftReady, setDraftReady] = useState(false);
   const [checkSettings, setCheckSettings] = useState<{ repoPath: string; checks: CommitCheckOptions }>();
   const [checkConfigError, setCheckConfigError] = useState<string>();
@@ -225,6 +246,14 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
     openScmUi(projectId, defaultViewMode);
   }, [projectId, defaultViewMode]);
 
+  useEffect(() => {
+    if (view.projectId !== projectId || view.loadState !== 'ready') return;
+    migrateLegacyScmRepository(
+      projectId,
+      view.repositories.map((repository) => repository.repo_id)
+    );
+  }, [projectId, view.loadState, view.projectId, view.repositories]);
+
   // The repo whose changes the body shows. A stale or absent `selectedRepoId`
   // (default on open, or after the selected repo was removed) resolves to the first
   // repo — so the body never renders nothing while a repo exists.
@@ -306,13 +335,24 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
         : null;
   const effectiveMonitorScope =
     ui.monitorScope === 'software' && softwareDirectoryExists !== false ? 'software' : 'project';
+  const lists = useChangelists(
+    changelists && selectedRepo?.provider_id === 'git'
+      ? { projectId, peId: selectedRepo.root.pe_id, relativePath: selectedRepo.root.relative_path }
+      : undefined,
+    (selectedRepoStatus?.resources ?? []).map((resource) => ({
+      key: resourceKey(resource),
+      path: resource.repo_relative_path,
+    }))
+  );
   const selectedStatus = useMemo<ScmStatus | undefined>(() => {
     if (!selectedRepoStatus) return undefined;
     return {
       ...selectedRepoStatus,
-      resources: filterScmResources(selectedRepoStatus.resources, effectiveMonitorScope),
+      resources: filterScmResources(selectedRepoStatus.resources, effectiveMonitorScope).filter(
+        (resource) => !changelists || lists.includes(resourceKey(resource))
+      ),
     };
-  }, [selectedRepoStatus, effectiveMonitorScope]);
+  }, [selectedRepoStatus, effectiveMonitorScope, changelists, lists.filter, lists.data]);
   const selectedResources = selectedRepo
     ? getSelectedResources(selectedStatus?.resources ?? [], commitSelections[selectedRepo.repo_id] ?? new Set())
     : [];
@@ -336,6 +376,9 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
     // A commit removes its files from status before pushing finishes. Keep the
     // committed workflow available for retry even when its selection disappears.
     if (!ownerChanged && ['commit', 'push', 'completed'].includes(workflowStateRef.current)) return;
+    ++amendRequest.current;
+    setAmendLoading(false);
+    setCommitMode(undefined);
     activeRequest.current = undefined;
     workflowTarget.current = undefined;
     setMessageFields(emptyMessageFields());
@@ -468,6 +511,9 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
       return;
     }
     workflowTarget.current = { repo: selectedRepo, resources: [...selectedResources] };
+    ++amendRequest.current;
+    setCommitMode(undefined);
+    setAmendLoading(false);
     setWorkflowState('idle');
     setWorkflowMessage(undefined);
     setWorkflowSessionId(undefined);
@@ -479,8 +525,48 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
     setWorkflowVisible(true);
   };
 
+  const changeAmend = (enabled: boolean): void => {
+    if (workflowBusy.current) return;
+    const request = ++amendRequest.current;
+    setCommitMode(undefined);
+    setWorkflowSessionId(undefined);
+    setWorkflowState(draftReady ? 'draft_ready' : 'idle');
+    setWorkflowMessage(undefined);
+    setAmendLoading(enabled);
+    if (!enabled) return;
+    void ipcBridge.gitWorkbench.operate
+      .invoke({
+        scope: { projectId, peId: selectedRepo.root.pe_id, relativePath: selectedRepo.root.relative_path },
+        request: { kind: 'inspect' },
+      })
+      .then((result) => {
+        if (request !== amendRequest.current) return;
+        const head = result.data?.head;
+        if (
+          result.state !== 'complete' ||
+          !head ||
+          !result.data?.branch ||
+          result.data.operation ||
+          result.data.branch !== selectedRepo.head?.name ||
+          !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(head)
+        ) {
+          throw new Error(t('conversation.explorer.scm.commit.amendUnavailable'));
+        }
+        setCommitMode({ kind: 'amend', expectedHead: head });
+      })
+      .catch((error: unknown) => {
+        if (request === amendRequest.current) {
+          setWorkflowState('blocked');
+          setWorkflowMessage(error instanceof Error ? error.message : String(error));
+        }
+      })
+      .finally(() => {
+        if (request === amendRequest.current) setAmendLoading(false);
+      });
+  };
+
   const generateCommitDraft = (): void => {
-    if (workflowBusy.current || selectedResources.length === 0) return;
+    if (workflowBusy.current || amendLoading || selectedResources.length === 0) return;
     if (workflowVisible && workflowTarget.current && workflowTarget.current.repo.repo_id !== selectedRepo.repo_id) {
       setWorkflowState('blocked');
       setWorkflowMessage(t('conversation.explorer.scm.commit.snapshotChanged'));
@@ -492,7 +578,10 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
       return;
     }
     // A new automatic draft must reload disk settings, unlike reopening a running workflow.
-    if (!workflowVisible) setCheckSettings(undefined);
+    if (!workflowVisible) {
+      setCheckSettings(undefined);
+      setCommitMode(undefined);
+    }
     workflowBusy.current = true;
     const requestId = crypto.randomUUID();
     activeRequest.current = requestId;
@@ -535,7 +624,7 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
   };
 
   const startStaticScanWorkflow = (): void => {
-    if (workflowBusy.current || selectedResources.length === 0 || !checks) return;
+    if (workflowBusy.current || amendLoading || selectedResources.length === 0 || !checks) return;
     if (workflowVisible && workflowTarget.current && workflowTarget.current.repo.repo_id !== selectedRepo.repo_id) {
       setWorkflowState('blocked');
       setWorkflowMessage(t('conversation.explorer.scm.commit.snapshotChanged'));
@@ -572,6 +661,7 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
           scannerConfigs.push({ ...config, tool, executablePath });
         }
         return ipcBridge.sourceControl.workflowPrepare.invoke({
+          ...(commitMode ? { mode: commitMode } : {}),
           repoPath: selectedRepoPath,
           branch: selectedRepo.head?.name ?? '',
           selectedPaths,
@@ -600,13 +690,13 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
   };
   startWorkflowRef.current = generateCommitDraft;
 
-  const commitWorkflow = (): void => {
-    if (!workflowSessionId || !ipcBridge.sourceControl.workflowCommit) return;
+  const commitWorkflow = (push = true): void => {
+    if (workflowBusy.current || !workflowSessionId || !ipcBridge.sourceControl.workflowCommit) return;
     const requestId = activeRequest.current;
     setWorkflowState('commit');
     workflowBusy.current = true;
     void ipcBridge.sourceControl.workflowCommit
-      .invoke({ sessionId: workflowSessionId, messageFields })
+      .invoke({ sessionId: workflowSessionId, messageFields, push })
       .then((session) => {
         if (activeRequest.current !== requestId) return;
         applyWorkflowSession(session);
@@ -682,6 +772,13 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
         </div>
       )}
       {actions.report && <ActionReportExtras report={actions.report} busy={actions.busy} onRetry={actions.retry} />}
+      {changelists && (
+        <Changelists
+          controller={lists}
+          selectedKeys={selectedResources.map(resourceKey)}
+          disabled={actions.busy || workflowBusy.current || branchBusy}
+        />
+      )}
       <ScmSectionStack
         view={view}
         ui={ui}
@@ -723,6 +820,9 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
         onCommit={commitWorkflow}
         onRetryPush={retryWorkflowPush}
         onMessageFieldsChange={updateMessageFields}
+        mode={commitMode}
+        amendLoading={amendLoading}
+        onAmendChange={ipcBridge.gitWorkbench?.operate && selectedRepo.provider_id === 'git' ? changeAmend : undefined}
       />
       {/* Selecting a change opens its diff in the shared preview panel (a `'diff'`
           tab, reusing the same `openPreview` mechanism the file tree uses) rather
@@ -734,6 +834,11 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({ projectId, repoPaths = {}, c
           repoId={selected.repo.repo_id}
           staging={selected.repo.capabilities.staging}
           resource={selected.resource}
+          scope={
+            selected.repo.provider_id === 'git'
+              ? { projectId, peId: selected.repo.root.pe_id, relativePath: selected.repo.root.relative_path }
+              : undefined
+          }
         />
       )}
     </div>
@@ -1114,22 +1219,43 @@ const ScmDiffPreviewBridge: React.FC<{
   repoId: string;
   staging: boolean;
   resource: ScmResource;
-}> = ({ repoId, staging, resource }) => {
+  scope?: GitWorkbenchScope;
+}> = ({ repoId, staging, resource, scope }) => {
   const { openPreview } = usePreviewContext();
   const name = resourceName(resource);
   const { pe_id: peId, relative_path: relativePath } = resource.file;
   const { from, to } = diffAnchors(resource, staging);
+  const request = useMemo<PreviewDiffRequest | undefined>(
+    () =>
+      scope
+        ? {
+            kind: 'workbench',
+            scope,
+            file: resource.repo_relative_path,
+            from:
+              from === 'committed' ? { kind: 'head' } : from === 'staged' ? { kind: 'index' } : { kind: 'worktree' },
+            to: to === 'committed' ? { kind: 'head' } : to === 'staged' ? { kind: 'index' } : { kind: 'worktree' },
+          }
+        : { repository: repoId, file: { pe_id: peId, relative_path: relativePath }, from, to },
+    [
+      scope?.projectId,
+      scope?.peId,
+      scope?.relativePath,
+      resource.repo_relative_path,
+      repoId,
+      peId,
+      relativePath,
+      from,
+      to,
+    ]
+  );
 
   useEffect(() => {
+    if (!request) return;
     let cancelled = false;
     void (async () => {
       try {
-        const result = await fetchScmDiff({
-          repository: repoId,
-          file: { pe_id: peId, relative_path: relativePath },
-          from,
-          to,
-        });
+        const result = await readPreviewDiff(request);
         if (cancelled) return;
         openPreview(result.patch ?? '', 'diff', {
           file_name: name,
@@ -1137,7 +1263,7 @@ const ScmDiffPreviewBridge: React.FC<{
           fileRef: projectFileRef(peId, relativePath),
           editable: false,
           scmDiff: {
-            request: { repository: repoId, file: { pe_id: peId, relative_path: relativePath }, from, to },
+            request,
             binary: result.binary,
             truncated: result.truncated,
           },
@@ -1150,7 +1276,7 @@ const ScmDiffPreviewBridge: React.FC<{
     return () => {
       cancelled = true;
     };
-  }, [repoId, peId, relativePath, from, to, name, openPreview]);
+  }, [request, name, openPreview]);
 
   return null;
 };

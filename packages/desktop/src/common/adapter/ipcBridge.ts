@@ -15,6 +15,30 @@
 import type { IConfirmation } from '@/common/chat/chatLib';
 import type { AcpSlashCommandApiItem } from '@/common/chat/slash/types';
 import { bridge } from '@/common/platform/bridge';
+import type * as GitStorage from '@/common/types/sourceControl/storageTypes';
+import { replyProvider } from '@/common/platform/replyProvider';
+import type { GitOperationRequest, GitOperationOutcome } from '@/common/types/sourceControl/operationTypes';
+import type {
+  GitMergeDocument,
+  GitMergeList,
+  GitMergeSaveRequest,
+  GitMergeFinishRequest,
+  GitMergeOutcome,
+} from '@/common/types/sourceControl/mergeTypes';
+import type {
+  GitWorkbenchScope,
+  GitHistoryQuery,
+  GitHistoryPage,
+  GitWorkbenchRef,
+  GitCommitDetails,
+  GitCommitDiff,
+  GitDiffAnchor,
+  GitDiffRequest,
+  GitFileHistoryQuery,
+  GitRevisionContent,
+  GitBlameLine,
+  GitRuntimeStatus,
+} from '@/common/types/sourceControl/workbenchTypes';
 export { terminal } from './terminal';
 export { cmake } from './cmake';
 export { codebaseMemory } from './codebaseMemory';
@@ -1592,6 +1616,8 @@ export const systemSettings = {
   setPetConfirmEnabled: bridge.buildProvider<void, { enabled: boolean }>('system-settings:set-pet-confirm-enabled'),
   getScmSystemGit: bridge.buildProvider<boolean, void>('system-settings:get-scm-system-git'),
   setScmSystemGit: bridge.buildProvider<void, { enabled: boolean }>('system-settings:set-scm-system-git'),
+  getScmGitPath: bridge.buildProvider<string, void>('system-settings:get-scm-git-path'),
+  setScmGitPath: bridge.buildProvider<void, { path: string }>('system-settings:set-scm-git-path'),
   ensureNodeRuntime: httpPost<{ ready: boolean }, { scope: IRuntimeStatusScope }>('/api/system/ensure-node-runtime'),
   ensureManagedAcpTool: httpPost<{ ready: boolean }, { scope: IRuntimeStatusScope; tool_id: string }>(
     '/api/system/ensure-managed-acp-tool'
@@ -1767,6 +1793,98 @@ export const todo = {
   ),
 };
 
+export const gitStorage = {
+  shelfList: replyProvider<GitStorage.ShelfItem[], { scope: GitWorkbenchScope }>('git-storage.shelfList'),
+  shelfRead: replyProvider<{ item: GitStorage.ShelfItem; patch: string }, { scope: GitWorkbenchScope; id: string }>(
+    'git-storage.shelfRead'
+  ),
+  shelfCreate: replyProvider<GitStorage.ShelfItem, { scope: GitWorkbenchScope; request: GitStorage.ShelfCreateInput }>(
+    'git-storage.shelfCreate'
+  ),
+  shelfRename: replyProvider<void, { scope: GitWorkbenchScope; id: string; name: string }>('git-storage.shelfRename'),
+  shelfDelete: replyProvider<void, { scope: GitWorkbenchScope; id: string; permanently?: boolean }>(
+    'git-storage.shelfDelete'
+  ),
+  shelfRestore: replyProvider<void, { scope: GitWorkbenchScope; id: string }>('git-storage.shelfRestore'),
+  shelfApply: replyProvider<
+    GitStorage.ShelfApplyResult,
+    { scope: GitWorkbenchScope; request: GitStorage.ShelfApplyInput }
+  >('git-storage.shelfApply'),
+  shelfImport: replyProvider<
+    GitStorage.ShelfItem,
+    { scope: GitWorkbenchScope; request: { name: string; patch: string } }
+  >('git-storage.shelfImport'),
+  shelfExport: replyProvider<string, { scope: GitWorkbenchScope; request: GitStorage.ShelfPatchInput }>(
+    'git-storage.shelfExport'
+  ),
+  changelistRead: replyProvider<GitStorage.ChangelistState, { scope: GitWorkbenchScope }>('git-storage.changelistRead'),
+  changelistSync: replyProvider<
+    GitStorage.ChangelistState,
+    { scope: GitWorkbenchScope; changes: GitStorage.ChangelistChange[] }
+  >('git-storage.changelistSync'),
+  changelistMutate: replyProvider<
+    GitStorage.ChangelistState,
+    { scope: GitWorkbenchScope; request: GitStorage.ChangelistMutation }
+  >('git-storage.changelistMutate'),
+  historyList: replyProvider<GitStorage.HistoryEvent[], { scope: GitWorkbenchScope; query?: GitStorage.HistoryQuery }>(
+    'git-storage.historyList'
+  ),
+  historyCapture: replyProvider<
+    GitStorage.HistoryEvent[],
+    { scope: GitWorkbenchScope; request?: GitStorage.HistoryCaptureInput }
+  >('git-storage.historyCapture'),
+  historyLabel: replyProvider<GitStorage.HistoryEvent, { scope: GitWorkbenchScope; label: string }>(
+    'git-storage.historyLabel'
+  ),
+  historyRead: replyProvider<
+    GitStorage.HistoryContent,
+    { scope: GitWorkbenchScope; request: GitStorage.HistoryReadInput }
+  >('git-storage.historyRead'),
+  historyCompare: replyProvider<
+    GitStorage.HistoryComparison,
+    { scope: GitWorkbenchScope; request: GitStorage.HistoryReadInput }
+  >('git-storage.historyCompare'),
+  historyRestore: replyProvider<
+    GitStorage.HistoryRestoreResult,
+    { scope: GitWorkbenchScope; request: GitStorage.HistoryRestoreInput }
+  >('git-storage.historyRestore'),
+  historyStatus: replyProvider<GitStorage.HistoryRecorderStatus, { scope: GitWorkbenchScope }>(
+    'git-storage.historyStatus'
+  ),
+  historyTrack: replyProvider<void, { projectId: string | null }>('git-storage.historyTrack'),
+};
+
+export const gitWorkbench = {
+  runtime: replyProvider<GitRuntimeStatus, void>('git-workbench.runtime'),
+  mergeList: replyProvider<GitMergeList, { scope: GitWorkbenchScope }>('git-workbench.merge-list'),
+  mergeRead: replyProvider<GitMergeDocument, { scope: GitWorkbenchScope; file: string }>('git-workbench.merge-read'),
+  mergeSave: replyProvider<GitMergeDocument, { scope: GitWorkbenchScope; request: GitMergeSaveRequest }>(
+    'git-workbench.merge-save'
+  ),
+  mergeFinish: replyProvider<GitMergeOutcome, { scope: GitWorkbenchScope; request: GitMergeFinishRequest }>(
+    'git-workbench.merge-finish'
+  ),
+  operate: replyProvider<
+    GitOperationOutcome,
+    { scope: GitWorkbenchScope; request: GitOperationRequest; operationId?: string }
+  >('git-workbench.operate'),
+  cancel: replyProvider<{ cancelled: boolean }, { scope: GitWorkbenchScope; operationId: string }>(
+    'git-workbench.cancel'
+  ),
+  history: replyProvider<GitHistoryPage, { scope: GitWorkbenchScope; query: GitHistoryQuery }>('git-workbench.history'),
+  refs: replyProvider<GitWorkbenchRef[], { scope: GitWorkbenchScope }>('git-workbench.refs'),
+  details: replyProvider<GitCommitDetails, { scope: GitWorkbenchScope; hash: string }>('git-workbench.details'),
+  diff: replyProvider<GitCommitDiff, { scope: GitWorkbenchScope; hash: string; file: string }>('git-workbench.diff'),
+  compare: replyProvider<GitCommitDiff, { scope: GitWorkbenchScope; request: GitDiffRequest }>('git-workbench.compare'),
+  fileHistory: replyProvider<GitHistoryPage, { scope: GitWorkbenchScope; query: GitFileHistoryQuery }>(
+    'git-workbench.file-history'
+  ),
+  readRevision: replyProvider<GitRevisionContent, { scope: GitWorkbenchScope; anchor: GitDiffAnchor; file: string }>(
+    'git-workbench.read-revision'
+  ),
+  blame: replyProvider<GitBlameLine[], { scope: GitWorkbenchScope; file: string }>('git-workbench.blame'),
+};
+
 export const sourceControl = {
   status: bridge.buildProvider<GitStatusSnapshot, { repoPath: string }>('source-control.status'),
   branches: bridge.buildProvider<GitBranchSnapshot, { repoPath: string }>('source-control.branches'),
@@ -1781,7 +1899,7 @@ export const sourceControl = {
   ),
   workflowCommit: bridge.buildProvider<
     GitWorkflowSession,
-    { sessionId: string; messageFields: GitWorkflowPrepareRequest['messageFields'] }
+    { sessionId: string; messageFields: GitWorkflowPrepareRequest['messageFields']; push?: boolean }
   >('source-control.workflow.commit'),
   workflowRetryPush: bridge.buildProvider<GitWorkflowSession, { sessionId: string }>(
     'source-control.workflow.retry-push'

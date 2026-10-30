@@ -60,6 +60,8 @@ export interface IConfigStorageRefer {
   // Read repositories for the Changes panel through the system git executable instead of the backend's built-in
   // engine, for machines whose file encryption decrypts files only for trusted programs. Applied at backend start.
   'scm.systemGit'?: boolean;
+  /** Absolute configured Git executable. Takes precedence over system/bundled detection. */
+  'scm.gitPath'?: string;
   // Automatically preview newly created Office files in the current workspace
   // Skills Market: whether the external skills market source is enabled
   'skillsMarket.enabled'?: boolean;

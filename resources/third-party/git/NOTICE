@@ -1,0 +1,10 @@
+Woody includes Git for Windows MinGit.
+
+Git is Copyright (C) Linus Torvalds and others.
+Git for Windows is distributed by the Git for Windows project.
+
+Source and release information:
+https://github.com/git-for-windows/git/releases/tag/v2.56.0.windows.4
+
+License terms and notices for the complete MinGit distribution are in LICENSE.txt.
+See PROVENANCE.md for the fixed source revision, checksum, and local verification.

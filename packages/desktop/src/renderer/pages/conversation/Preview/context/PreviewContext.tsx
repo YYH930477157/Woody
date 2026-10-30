@@ -17,7 +17,13 @@ import { listPersistedPreviewScopeKeys, previewScopeStorageKey, type PreviewScop
 import { peKey } from '@/renderer/pages/conversation/explorer/explorerModel';
 import { reflessTabKey } from './reflessTabKey';
 import { onPreviewWatchChange, reconcilePreviewWatch, resetPreviewWatch } from './previewWatchStore';
-import { fetchScmDiff } from '../../SourceControl/scmStore';
+import {
+  previewDiffKey,
+  readPreviewDiff,
+  type PreviewDiffRequest,
+} from '../../SourceControl/Workbench/Diff/previewDiff';
+import { recordProjectSave } from '../../SourceControl/Workbench/Storage/useProjectHistory';
+import { getCurrentProject } from '../../explorer/currentProjectStore';
 
 /** DOM 片段数据结构 / DOM snippet data structure */
 export interface DomSnippet {
@@ -41,7 +47,7 @@ export interface PreviewMetadata {
   // (pdf file://, office, shell.openFile, download).
   fileRef?: ChatFileRef;
   // Git comparisons retain their anchors; the Source view reads fileRef from disk.
-  scmDiff?: { request: Parameters<typeof fetchScmDiff>[0]; binary?: boolean; truncated?: boolean };
+  scmDiff?: { request: PreviewDiffRequest; binary?: boolean; truncated?: boolean };
   file_path?: string; // 工作空间文件的绝对路径 / Absolute file path in workspace
   workspace?: string; // 工作空间根目录 / Workspace root directory
   editable?: boolean; // 是否可编辑 / Whether editable
@@ -712,12 +718,9 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
           if (type === 'diff') {
             const current = tab.metadata?.scmDiff?.request;
             const incoming = meta?.scmDiff?.request;
-            if (
-              current?.repository !== incoming?.repository ||
-              current?.from !== incoming?.from ||
-              current?.to !== incoming?.to
-            )
-              return false;
+            if (current || incoming) {
+              if (!current || !incoming || previewDiffKey(current) !== previewDiffKey(incoming)) return false;
+            }
           }
 
           const tabRefKey = tab.metadata?.fileRef ? chatFileRefKey(tab.metadata.fileRef) : '';
@@ -1087,7 +1090,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
       // Re-read the comparison, never replace a Git patch with working-tree text.
       const scmDiff = tab.content_type === 'diff' ? tab.metadata?.scmDiff : undefined;
       if (scmDiff) {
-        const result = await fetchScmDiff(scmDiff.request);
+        const result = await readPreviewDiff(scmDiff.request);
         const content = result.patch ?? '';
         setTabs((prev) =>
           prev.map((t) =>
@@ -1141,6 +1144,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const fileRef = tab.metadata?.fileRef;
       if (fileRef) {
         const saveKey = chatFileRefKey(fileRef);
+        const savedProjectId = getCurrentProject();
         try {
           // 标记正在保存（避免触发轮询/流式回调）/ Mark as saving (avoid triggering poll/stream callbacks)
           savingFilesRef.current.add(saveKey);
@@ -1151,6 +1155,9 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
           const success = await ipcBridge.fs.writeContent.invoke({ file: fileRef, data: tab.content, ifMatch });
 
           if (success) {
+            void recordProjectSave(savedProjectId, fileRef).catch((error: unknown) =>
+              console.error('[GitHistory] save capture failed', error)
+            );
             setTabs((prevTabs) =>
               prevTabs.map((t) => {
                 if (t.id === targetTabId) {

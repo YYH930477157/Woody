@@ -1,0 +1,56 @@
+.editor {
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.panes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.pane {
+  min-width: 0;
+  height: 360px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border-base);
+  border-radius: 6px;
+  background: var(--bg-1);
+}
+.pane h4 {
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 12px;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border-base);
+}
+.pane > :global(.cm-theme) {
+  flex: 1;
+  min-height: 0;
+}
+.pane :global(.cm-scroller) {
+  overflow: auto;
+}
+.changes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.output {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 160px;
+  overflow: auto;
+}
+@media (max-width: 900px) {
+  .panes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pane {
+    height: 240px;
+  }
+}

@@ -87,7 +87,7 @@ test.describe('Everyday multi-root Git workflows', () => {
     write(appRoot, 'src/old-name.ts', 'export const renamed = "RENAME_CONTENT";\n');
     write(appRoot, '中文 目录/配置 文件.ts', '\uFEFFexport const text = "原始值";\r\n');
     write(appRoot, 'assets/icon.bin', Buffer.from([0, 1, 2, 3]));
-    write(appRoot, 'src/large.ts', 'export const header = "OLD";\n' + '// unchanged filler line\n'.repeat(50000));
+    write(appRoot, 'src/large.ts', 'export const header = "OLD";\n' + '// old filler line\n'.repeat(65000));
     write(appRoot, 'src/external.ts', 'export const externallySaved = "BASE";\n');
     write(appRoot, 'src/remove-later.ts', 'export const removed = "BASE";\n');
     write(appRoot, '.gitignore', 'ignored/\n');
@@ -105,7 +105,7 @@ test.describe('Everyday multi-root Git workflows', () => {
     write(appRoot, '中文 目录/配置 文件.ts', '\uFEFFexport const text = "中文最新值 @用户 #配置";\r\n');
     write(appRoot, 'assets/icon.bin', Buffer.from([0, 4, 5, 6]));
     write(appRoot, 'empty.ts', '');
-    write(appRoot, 'src/large.ts', 'export const header = "NEW";\n' + '// unchanged filler line\n'.repeat(50000));
+    write(appRoot, 'src/large.ts', 'export const header = "NEW";\n' + '// new filler line\n'.repeat(65000));
     write(appRoot, 'src/external.ts', 'export const externallySaved = "FIRST_EDIT";\n');
     write(appRoot, 'src/remove-later.ts', 'export const removed = "EDITED";\n');
     write(appRoot, 'ignored/cache.ts', 'SHOULD_NOT_APPEAR\n');
@@ -400,6 +400,82 @@ test.describe('Everyday multi-root Git workflows', () => {
     expect(
       (await httpGet<ProjectDetailDto>(page, `/api/projects/${workspace.project_id}`)).explorer.entries
     ).toHaveLength(4);
+  });
+
+  test('packaged Git Workbench exposes every integrated tool at desktop and narrow widths', async ({
+    page,
+    electronApp,
+  }, info) => {
+    test.setTimeout(120_000);
+    await chooseRepo(page);
+    await panel(page)
+      .getByRole('button', { name: /^(Git history|Git 历史)$/ })
+      .click();
+
+    const modal = page.locator('.arco-modal:visible');
+    await expect(modal).toBeVisible();
+    await expect(modal.getByPlaceholder(/搜索提交说明|Search commit messages/)).toBeVisible();
+
+    const tabs = modal.getByRole('tab');
+    await expect(tabs).toHaveCount(5);
+    for (const name of [
+      /^(Git history|Git 历史)$/,
+      /^(Repository operations|仓库操作)$/,
+      /^(Resolve conflicts|解决冲突)$/,
+      /^(Shelves and patches|Shelf 与补丁)$/,
+      /^(Local history|本地历史)$/,
+    ]) {
+      const tab = modal.getByRole('tab', { name });
+      await tab.click();
+      await expect(tab).toHaveAttribute('aria-selected', 'true');
+    }
+
+    const artifactDirectory = process.env.WOODY_E2E_ARTIFACTS_DIR;
+    const screenshotPath = (name: string) =>
+      artifactDirectory ? path.join(artifactDirectory, name) : info.outputPath(name);
+    if (artifactDirectory) fs.mkdirSync(artifactDirectory, { recursive: true });
+
+    await page.evaluate(() => {
+      document.documentElement.setAttribute('data-theme', 'light');
+      document.body.setAttribute('arco-theme', 'light');
+    });
+    await page.screenshot({ path: screenshotPath('git-workbench-light.png') });
+
+    await electronApp.evaluate(({ BrowserWindow }) => {
+      const window = BrowserWindow.getAllWindows()[0];
+      window?.unmaximize();
+      window?.setSize(1000, 760);
+    });
+    await page.waitForFunction(() => window.innerWidth <= 1100);
+    await page.evaluate(() => {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      document.body.setAttribute('arco-theme', 'dark');
+    });
+    await page.screenshot({ path: screenshotPath('git-workbench-dark-narrow.png') });
+
+    await page.evaluate(() => {
+      document.documentElement.setAttribute('data-theme', 'light');
+      document.body.setAttribute('arco-theme', 'light');
+    });
+    await modal.locator('.arco-modal-close-icon').click();
+    await expect(modal).toHaveCount(0);
+    await electronApp.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.maximize());
+  });
+
+  test('packaged settings report the active verified Git runtime', async ({ page }) => {
+    await page.evaluate(() => {
+      location.hash = '/settings/system';
+    });
+    await expect(page.getByText(/^(Git executable|Git 可执行文件)$/).first()).toBeVisible();
+
+    const status = page.getByRole('status').filter({ hasText: /Git/ }).last();
+    await expect(status).toContainText(/(system Git|系统 Git|bundled Git|随包 Git)/);
+    await expect(status).toContainText(/\d+\.\d+\.\d+/);
+
+    await page.evaluate(() => {
+      location.hash = '/guid';
+    });
+    await panel(page).waitFor();
   });
 
   test('full desktop restart restores saved roots and reads current disk content', async ({

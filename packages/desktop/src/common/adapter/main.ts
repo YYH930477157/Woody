@@ -6,6 +6,8 @@
 
 import type { BrowserWindow } from 'electron';
 import { ipcMain } from 'electron';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import type { WebContents } from 'electron';
 
 import { bridge } from '@/common/platform/bridge';
 import { ADAPTER_BRIDGE_EVENT_KEY } from './constant';
@@ -21,6 +23,10 @@ interface BridgeEventData {
 }
 
 const adapterWindowList: Array<BrowserWindow> = [];
+const nativeSender = new AsyncLocalStorage<WebContents>();
+
+/** Native lifecycle ownership is derived from Electron, never from renderer input. */
+export const getNativeBridgeSender = (): WebContents | undefined => nativeSender.getStore();
 
 export { registerWebSocketBroadcaster, getBridgeEmitter };
 
@@ -90,9 +96,9 @@ bridge.adapter({
     // 保存 emitter 引用供 WebSocket 处理使用 / Save emitter reference for WebSocket handling
     setBridgeEmitter(emitter);
 
-    ipcMain.handle(ADAPTER_BRIDGE_EVENT_KEY, (_event, info) => {
+    ipcMain.handle(ADAPTER_BRIDGE_EVENT_KEY, (event, info) => {
       const { name, data } = JSON.parse(info) as BridgeEventData;
-      return Promise.resolve(emitter.emit(name, data));
+      return nativeSender.run(event.sender, () => Promise.resolve(emitter.emit(name, data)));
     });
   },
 });

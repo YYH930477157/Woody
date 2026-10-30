@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+vi.mock('electron', () => ({ app: { getPath: vi.fn(() => 'D:/test-user-data') } }));
 
 import type { GitCommandService } from '@/process/services/sourceControl/gitCommandService';
 import type {
@@ -10,6 +11,7 @@ import { createCommitWorkflowService } from '@/process/services/sourceControl/co
 import type { CommitWorkflowScan } from '@/process/services/sourceControl/commitWorkflowService';
 
 const providers = vi.hoisted(() => ({
+  coordinate: vi.fn(async <T>(_root: string, operation: () => Promise<T>): Promise<T> => operation()),
   status: vi.fn(),
   branches: vi.fn(),
   checkout: vi.fn(),
@@ -17,6 +19,7 @@ const providers = vi.hoisted(() => ({
   push: vi.fn(),
   draft: vi.fn(),
   prepare: vi.fn(),
+  workflowCommit: vi.fn(),
   progress: vi.fn(),
   scan: vi.fn<CommitWorkflowScan>(async () => ({
     tool: 'clang-tidy',
@@ -25,6 +28,10 @@ const providers = vi.hoisted(() => ({
     stdout: '',
     stderr: '',
   })),
+}));
+
+vi.mock('@/process/services/sourceControl/workbench/coordinator', () => ({
+  repositoryCoordinator: { run: providers.coordinate },
 }));
 
 vi.mock('@/process/services/sourceControl/staticScanService', () => ({
@@ -41,6 +48,7 @@ vi.mock('@/common', () => ({
       push: { provider: providers.push },
       workflowDraft: { provider: providers.draft },
       workflowPrepare: { provider: providers.prepare },
+      workflowCommit: { provider: providers.workflowCommit },
       workflowProgress: { emit: providers.progress },
     },
   },
@@ -49,6 +57,182 @@ vi.mock('@/common', () => ({
 import { initSourceControlBridge } from '@/process/bridge/sourceControlBridge';
 
 describe('source control bridge', () => {
+  it.each(['checkout', 'commit', 'push'] as const)(
+    'returns the existing failure union when %s cannot acquire a repository',
+    async (channel) => {
+      providers[channel].mockClear();
+      const git = { checkoutBranch: vi.fn(), createCommit: vi.fn(), push: vi.fn() } as unknown as GitCommandService;
+      initSourceControlBridge(git, undefined, undefined, undefined, async () => {
+        throw new Error('Repository missing');
+      });
+      const result = await providers[channel].mock.calls[0][0]({
+        repoPath: 'D:/missing',
+        branch: 'main',
+        paths: ['a.cpp'],
+        message: 'change',
+      });
+      expect(result).toMatchObject(
+        channel === 'push'
+          ? { ok: false, retryable: true, stdout: '', stderr: 'Repository missing' }
+          : { ok: false, kind: 'command-failed', stderr: 'Repository missing' }
+      );
+      expect(git.createCommit).not.toHaveBeenCalled();
+      expect(git.push).not.toHaveBeenCalled();
+      expect(git.checkoutBranch).not.toHaveBeenCalled();
+    }
+  );
+  it('coordinates each legacy mutation once while read-only queries remain independent', async () => {
+    providers.checkout.mockClear();
+    providers.commit.mockClear();
+    providers.push.mockClear();
+    providers.coordinate.mockClear();
+    const git = {
+      checkoutBranch: vi.fn(async () => ({ ok: true })),
+      createCommit: vi.fn(async () => ({ ok: true })),
+      push: vi.fn(async () => ({ ok: true })),
+    } as unknown as GitCommandService;
+    initSourceControlBridge(git);
+    await providers.checkout.mock.calls[0][0]({ repoPath: 'D:/repo', branch: 'main' });
+    await providers.commit.mock.calls[0][0]({ repoPath: 'D:/repo', paths: ['a.cpp'], message: 'change' });
+    await providers.push.mock.calls[0][0]({ repoPath: 'D:/repo', branch: 'main' });
+    expect(providers.coordinate.mock.calls.map((call) => call[0])).toEqual(['D:/repo', 'D:/repo', 'D:/repo']);
+    expect(git.createCommit).toHaveBeenCalledOnce();
+  });
+  const manualFields = { reason: 'fix', scope: 'a', solution: 'update', impact: 'none', tests: 'reviewed' };
+  const manualRequest: GitWorkflowPrepareRequest = {
+    repoPath: 'D:/repo',
+    branch: 'main',
+    selectedPaths: ['a.cpp'],
+    scannerConfigs: [{ tool: 'clang-tidy', executablePath: 'clang-tidy', arguments: [], scope: 'selected' }],
+    checks: { scanners: ['clang-tidy'], compile: false, autoRepair: false },
+    messageFields: manualFields,
+  };
+
+  it('runs manual static scanning without a conversation', async () => {
+    const git = {
+      getCommitSnapshot: vi.fn(async () => ({ head: 'abc', branch: 'main', tree: 'tree' })),
+    } as unknown as GitCommandService;
+    const agent = { repair: vi.fn(() => vi.fn()), generateMessage: vi.fn() };
+    providers.prepare.mockClear();
+    providers.scan.mockClear();
+    initSourceControlBridge(git, createCommitWorkflowService(git), agent);
+    const handler = providers.prepare.mock.calls[0][0] as (
+      request: GitWorkflowPrepareRequest
+    ) => Promise<GitWorkflowSession>;
+    expect(await handler(manualRequest)).toMatchObject({ state: 'confirmation' });
+    expect(providers.scan).toHaveBeenCalledOnce();
+    expect(agent.repair).not.toHaveBeenCalled();
+  });
+
+  it('requires conversation context when automatic repair is requested', async () => {
+    providers.prepare.mockClear();
+    initSourceControlBridge({} as GitCommandService);
+    const handler = providers.prepare.mock.calls[0][0] as (
+      request: GitWorkflowPrepareRequest
+    ) => Promise<GitWorkflowSession>;
+    expect(
+      await handler({ ...manualRequest, checks: { scanners: ['clang-tidy'], compile: false, autoRepair: true } })
+    ).toMatchObject({ state: 'blocked', reasonCode: 'conversationRequired' });
+  });
+
+  it('requires conversation context for AI drafting', async () => {
+    providers.draft.mockClear();
+    initSourceControlBridge({} as GitCommandService);
+    const handler = providers.draft.mock.calls[0][0] as (
+      request: GitWorkflowDraftRequest
+    ) => Promise<GitWorkflowSession>;
+    expect(await handler(manualRequest)).toMatchObject({ state: 'blocked', reasonCode: 'conversationRequired' });
+  });
+
+  it.each([false, true, undefined])(
+    'routes checked commit with push=%s and preserves the legacy default',
+    async (push) => {
+      providers.workflowCommit.mockClear();
+      const result = {
+        id: 'session',
+        state: 'completed' as const,
+        repoPath: 'D:/repo',
+        branch: 'main',
+        selectedPaths: ['a.cpp'],
+        diagnostics: [],
+      };
+      const workflow = {
+        prepare: vi.fn(),
+        commit: vi.fn(async () => result),
+        commitAndPush: vi.fn(async () => result),
+        retryPush: vi.fn(),
+      };
+      initSourceControlBridge({} as GitCommandService, workflow);
+      const handler = providers.workflowCommit.mock.calls[0][0] as (request: {
+        sessionId: string;
+        messageFields: typeof manualFields;
+        push?: boolean;
+      }) => Promise<GitWorkflowSession>;
+      expect(await handler({ sessionId: 'session', messageFields: manualFields, push })).toBe(result);
+      expect(workflow.commit).toHaveBeenCalledTimes(push === false ? 1 : 0);
+      expect(workflow.commitAndPush).toHaveBeenCalledTimes(push === false ? 0 : 1);
+    }
+  );
+
+  it('allows independent manual repositories but rejects another operation on the same repository', async () => {
+    providers.prepare.mockClear();
+    let finish!: (session: GitWorkflowSession) => void;
+    const pending = new Promise<GitWorkflowSession>((resolve) => {
+      finish = resolve;
+    });
+    const workflow = { prepare: vi.fn(() => pending), commit: vi.fn(), commitAndPush: vi.fn(), retryPush: vi.fn() };
+    initSourceControlBridge({} as GitCommandService, workflow);
+    const handler = providers.prepare.mock.calls[0][0] as (
+      request: GitWorkflowPrepareRequest
+    ) => Promise<GitWorkflowSession>;
+    const first = handler(manualRequest);
+    const independent = handler({ ...manualRequest, repoPath: 'D:/other' });
+    expect(await handler({ ...manualRequest, repoPath: 'D:\\repo\\' })).toMatchObject({
+      reasonCode: 'conversationBusy',
+    });
+    expect(workflow.prepare).toHaveBeenCalledTimes(2);
+    finish({
+      id: 'session',
+      state: 'confirmation',
+      repoPath: 'D:/repo',
+      branch: 'main',
+      selectedPaths: ['a.cpp'],
+      diagnostics: [],
+    });
+    await Promise.all([first, independent]);
+    expect(await handler(manualRequest)).toMatchObject({ state: 'confirmation' });
+  });
+
+  it('tracks a supplied conversation independently of its repository', async () => {
+    providers.prepare.mockClear();
+    let finish!: (session: GitWorkflowSession) => void;
+    const pending = new Promise<GitWorkflowSession>((resolve) => {
+      finish = resolve;
+    });
+    const workflow = { prepare: vi.fn(() => pending), commit: vi.fn(), commitAndPush: vi.fn(), retryPush: vi.fn() };
+    initSourceControlBridge({} as GitCommandService, workflow);
+    const handler = providers.prepare.mock.calls[0][0] as (
+      request: GitWorkflowPrepareRequest
+    ) => Promise<GitWorkflowSession>;
+    const first = handler({ ...manualRequest, conversationId: 'chat' });
+    expect(await handler({ ...manualRequest, repoPath: 'D:/other', conversationId: 'chat' })).toMatchObject({
+      reasonCode: 'conversationBusy',
+    });
+    expect(workflow.prepare).toHaveBeenCalledOnce();
+    finish({
+      id: 'session',
+      state: 'confirmation',
+      repoPath: 'D:/repo',
+      branch: 'main',
+      selectedPaths: ['a.cpp'],
+      diagnostics: [],
+    });
+    await first;
+    expect(await handler({ ...manualRequest, repoPath: 'D:/other', conversationId: 'chat' })).toMatchObject({
+      state: 'confirmation',
+    });
+  });
+
   it('does not initialize AI repair or compile when all checks are disabled', async () => {
     const git: GitCommandService = {
       getStatus: vi.fn(),
@@ -204,7 +388,7 @@ describe('source control bridge', () => {
     const pending = new Promise<GitWorkflowSession>((resolve) => {
       finish = resolve;
     });
-    const workflow = { prepare: vi.fn(() => pending), commitAndPush: vi.fn(), retryPush: vi.fn() };
+    const workflow = { prepare: vi.fn(() => pending), commit: vi.fn(), commitAndPush: vi.fn(), retryPush: vi.fn() };
     initSourceControlBridge({} as GitCommandService, workflow);
     const handler = providers.prepare.mock.calls[0][0] as (
       request: GitWorkflowPrepareRequest

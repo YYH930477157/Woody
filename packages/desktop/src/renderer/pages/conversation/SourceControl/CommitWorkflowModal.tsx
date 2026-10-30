@@ -2,7 +2,11 @@ import { Button, Checkbox, Input, Modal, Spin } from '@arco-design/web-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { CommitMessageFields, GitWorkflowState } from '@/common/types/sourceControl/gitWorkflowTypes';
+import type {
+  CommitMessageFields,
+  GitWorkflowState,
+  GitWorkflowPrepareRequest,
+} from '@/common/types/sourceControl/gitWorkflowTypes';
 import type { CommitCheckOptions, StaticScanDiagnostic } from '@/common/types/sourceControl/staticScanTypes';
 
 import { resourceName, type ScmRepository, type ScmResource } from './scmModel';
@@ -24,9 +28,12 @@ export type CommitWorkflowModalProps = {
   onCancel: () => void;
   onDraft: () => void;
   onStart: () => void;
-  onCommit: () => void;
+  onCommit: (push?: boolean) => void;
   onRetryPush: () => void;
   onMessageFieldsChange: (fields: CommitMessageFields) => void;
+  mode?: GitWorkflowPrepareRequest['mode'];
+  amendLoading?: boolean;
+  onAmendChange?: (enabled: boolean) => void;
 };
 
 const isBusyState = (state: GitWorkflowState): boolean =>
@@ -57,11 +64,17 @@ export const CommitWorkflowModal: React.FC<CommitWorkflowModalProps> = ({
   onCommit,
   onRetryPush,
   onMessageFieldsChange,
+  mode,
+  amendLoading = false,
+  onAmendChange,
 }) => {
   const { t } = useTranslation();
   const busy = isBusyState(state);
   const checksDisabled = busy || !checks || state === 'completed';
   const hasChecks = Boolean(checks?.scanners.length || checks?.compile);
+  const hasManualMessage = (['reason', 'scope', 'solution', 'impact', 'tests'] as const).every(
+    (field) => messageFields[field].trim().length > 0
+  );
   const templateLabel = (field: keyof CommitMessageFields): string =>
     `【${t(`conversation.explorer.scm.commit.message.${field}`)}】`;
   const displayedFieldValue = (field: keyof CommitMessageFields): string =>
@@ -87,11 +100,18 @@ export const CommitWorkflowModal: React.FC<CommitWorkflowModalProps> = ({
               {t('conversation.explorer.scm.commit.retryPush')}
             </Button>
           ) : state === 'confirmation' ? (
-            <Button type='primary' onClick={onCommit}>
-              {t('conversation.explorer.scm.commit.confirm')}
-            </Button>
-          ) : draftReady ? (
-            <Button type='primary' disabled={resources.length === 0 || checksDisabled} onClick={onStart}>
+            <>
+              <Button onClick={() => onCommit(true)}>{t('conversation.explorer.scm.commit.commitAndPush')}</Button>
+              <Button type='primary' onClick={() => onCommit(false)}>
+                {t('conversation.explorer.scm.commit.commitOnly')}
+              </Button>
+            </>
+          ) : draftReady || hasManualMessage ? (
+            <Button
+              type='primary'
+              disabled={resources.length === 0 || checksDisabled || amendLoading}
+              onClick={onStart}
+            >
               {t(
                 hasChecks
                   ? 'conversation.explorer.scm.commit.runChecks'
@@ -99,7 +119,7 @@ export const CommitWorkflowModal: React.FC<CommitWorkflowModalProps> = ({
               )}
             </Button>
           ) : (
-            <Button type='primary' disabled={resources.length === 0 || busy} onClick={onDraft}>
+            <Button type='primary' disabled={resources.length === 0 || busy || amendLoading} onClick={onDraft}>
               {t('conversation.explorer.scm.commit.generate')}
             </Button>
           )}
@@ -109,6 +129,23 @@ export const CommitWorkflowModal: React.FC<CommitWorkflowModalProps> = ({
       focusLock
     >
       <div className='flex flex-col gap-10px'>
+        {onAmendChange && (
+          <div className='flex flex-col gap-6px'>
+            <Checkbox
+              checked={mode?.kind === 'amend'}
+              disabled={busy || amendLoading || state === 'completed'}
+              onChange={(enabled) => onAmendChange(enabled)}
+            >
+              {t('conversation.explorer.scm.commit.amend')}
+            </Checkbox>
+            {amendLoading && <Spin size={14} />}
+            {mode?.kind === 'amend' && (
+              <div className='text-12px text-warning'>
+                {t('conversation.explorer.scm.commit.amendWarning')} <code>{mode.expectedHead.slice(0, 12)}</code>
+              </div>
+            )}
+          </div>
+        )}
         <div className='text-13px text-t-secondary'>
           {t('conversation.explorer.scm.commit.repository', { repository: repo.pe_name || repo.label })}
           {branch ? ` · ${branch}` : ''}
