@@ -1,8 +1,6 @@
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-
 import type {
   GitBranch,
+  GitCommitMode,
   GitBranchSnapshot,
   GitCommitResult,
   GitCommitSnapshot,
@@ -13,31 +11,37 @@ import type {
 
 import { createTemporaryGitIndex } from './gitIndexWorkspace';
 import { isSameCommitSnapshot } from './gitWorkflowModel';
+import { publishCheckedCommit } from './workbench/commit';
+import { createGitExecutor } from './workbench/executor';
+import {
+  inspectCommitRepository,
+  type GitRunnerOptions,
+  type GitCommandOutput,
+  type GitCommandRunner,
+} from './workbench/commit/workspace';
 
-const execFileAsync = promisify(execFile);
+const DEFAULT_GIT_RUNNER_TIMEOUT_MS = 5 * 60 * 1000;
 
-type GitRunnerOptions = { cwd: string; env?: NodeJS.ProcessEnv };
-type GitCommandOutput = { stdout: string; stderr: string; exitCode: number };
-type GitCommandRunner = (args: string[], options: GitRunnerOptions) => Promise<GitCommandOutput>;
-
-const defaultRunner: GitCommandRunner = async (args, options) => {
-  try {
-    const result = await execFileAsync('git', ['--literal-pathspecs', ...args], {
-      cwd: options.cwd,
-      env: options.env,
-      encoding: 'utf8',
-      maxBuffer: 8 * 1024 * 1024,
-    });
-    return { stdout: result.stdout, stderr: result.stderr, exitCode: 0 };
-  } catch (error) {
-    const failure = error as NodeJS.ErrnoException & { stdout?: string; stderr?: string; code?: number | string };
-    return {
-      stdout: failure.stdout ?? '',
-      stderr: failure.stderr ?? failure.message ?? String(error),
-      exitCode: typeof failure.code === 'number' ? failure.code : 1,
-    };
-  }
+export const createGitCommandRunner = (executable = 'git'): GitCommandRunner => {
+  const execute = createGitExecutor(executable);
+  return async (args, options) => {
+    try {
+      const result = await execute(options.cwd, args, true, {
+        env: options.env,
+        maxBuffer: 8 * 1024 * 1024,
+        timeoutMs: options.timeoutMs ?? DEFAULT_GIT_RUNNER_TIMEOUT_MS,
+      });
+      return { stdout: result.stdout, stderr: result.stderr, exitCode: result.code };
+    } catch (error) {
+      return {
+        stdout: '',
+        stderr: error instanceof Error ? error.message : String(error),
+        exitCode: 1,
+      };
+    }
+  };
 };
+const defaultRunner = createGitCommandRunner();
 
 const parsePorcelainPaths = (output: string): string[] => {
   const paths = new Set<string>();
@@ -76,7 +80,8 @@ export type GitCommandService = {
     repoPath: string,
     paths: string[],
     message: string,
-    expectedSnapshot?: GitCommitSnapshot
+    expectedSnapshot?: GitCommitSnapshot,
+    mode?: GitCommitMode
   ) => Promise<GitCommitResult>;
   push: (repoPath: string, branch: string) => Promise<GitPushResult>;
 };
@@ -189,8 +194,9 @@ export const createGitCommandService = (runner: GitCommandRunner = defaultRunner
       }
     },
 
-    async createCommit(repoPath, paths, message, expectedSnapshot) {
+    async createCommit(repoPath, paths, message, expectedSnapshot, mode) {
       if (paths.length === 0) return { ok: false, kind: 'command-failed', stdout: '', stderr: 'No files selected' };
+      const repository = await inspectCommitRepository(runner, repoPath);
       const staged = await runner(['diff', '--cached', '--name-only', '--', ...paths], { cwd: repoPath });
       if (staged.exitCode !== 0) {
         return { ok: false, kind: 'command-failed', stdout: staged.stdout, stderr: staged.stderr };
@@ -210,7 +216,11 @@ export const createGitCommandService = (runner: GitCommandRunner = defaultRunner
         const currentHead = await readHead(repoPath);
         if (
           !isSameCommitSnapshot(actualSnapshot, { ...actualSnapshot, ...currentHead }) ||
-          (expectedSnapshot && !isSameCommitSnapshot(expectedSnapshot, actualSnapshot))
+          (expectedSnapshot && !isSameCommitSnapshot(expectedSnapshot, actualSnapshot)) ||
+          (mode &&
+            (mode.kind !== 'amend' ||
+              !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(mode.expectedHead) ||
+              actualSnapshot.head !== mode.expectedHead))
         ) {
           return {
             ok: false,
@@ -219,19 +229,16 @@ export const createGitCommandService = (runner: GitCommandRunner = defaultRunner
             stderr: 'Files or Git HEAD changed after preparing the commit',
           };
         }
-        const commit = await runner(['commit', '-m', message], { cwd: repoPath, env: index.env });
-        if (commit.exitCode !== 0) {
-          return { ok: false, kind: 'command-failed', stdout: commit.stdout, stderr: commit.stderr };
-        }
-        const revision = await runner(['rev-parse', 'HEAD'], { cwd: repoPath, env: index.env });
-        if (revision.exitCode !== 0) {
-          return { ok: false, kind: 'command-failed', stdout: revision.stdout, stderr: revision.stderr };
-        }
-        const refresh = await runner(['reset', 'HEAD', '--', ...paths], { cwd: repoPath });
-        if (refresh.exitCode !== 0) {
-          return { ok: false, kind: 'command-failed', stdout: refresh.stdout, stderr: refresh.stderr };
-        }
-        return { ok: true, commit: revision.stdout.trim() };
+        return await publishCheckedCommit(
+          runner,
+          repoPath,
+          paths,
+          message,
+          actualSnapshot,
+          index.path,
+          repository,
+          mode
+        );
       } catch (error) {
         return {
           ok: false,
@@ -240,7 +247,8 @@ export const createGitCommandService = (runner: GitCommandRunner = defaultRunner
           stderr: error instanceof Error ? error.message : String(error),
         };
       } finally {
-        await index.cleanup();
+        // A successfully published commit must remain successful even if temporary-file cleanup fails.
+        await index.cleanup().catch((): undefined => undefined);
       }
     },
 

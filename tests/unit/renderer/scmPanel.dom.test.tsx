@@ -15,6 +15,8 @@ import type { CommitCheckOptions, StaticScanProjectConfig } from '@/common/types
 import type { IConversationTurnCompletedEvent } from '@/common/adapter/ipcBridge';
 
 const gitBridge = vi.hoisted(() => ({
+  inspect: vi.fn(),
+  compare: vi.fn(),
   projectConfig: vi.fn<(...args: unknown[]) => Promise<StaticScanProjectConfig>>(),
   saveChecks: vi.fn<(request: { repoPath: string; checks: CommitCheckOptions }) => Promise<StaticScanProjectConfig>>(),
   branches: vi.fn(async () => ({ branches: [] })),
@@ -46,6 +48,10 @@ const gitBridge = vi.hoisted(() => ({
 
 vi.mock('@/common', () => ({
   ipcBridge: {
+    gitWorkbench: {
+      operate: { invoke: gitBridge.inspect },
+      compare: { invoke: gitBridge.compare },
+    },
     sourceControl: {
       branches: { invoke: gitBridge.branches },
       workflowDraft: { invoke: gitBridge.draft },
@@ -79,6 +85,12 @@ vi.mock('@/common', () => ({
     fs: {
       getFileMetadata: { invoke: gitBridge.softwareDirectory },
     },
+  },
+}));
+
+vi.mock('@/common/adapter/ipcBridge', () => ({
+  gitWorkbench: {
+    compare: { invoke: gitBridge.compare },
   },
 }));
 
@@ -148,7 +160,7 @@ type PortSetup = {
   diff?: () => Promise<{ patch?: string; binary?: boolean; truncated?: boolean }>;
 };
 
-const diffCalls: unknown[] = [];
+const compareCalls: unknown[] = [];
 
 const installPort = (setup: PortSetup): void => {
   const port: ScmPort = {
@@ -158,15 +170,25 @@ const installPort = (setup: PortSetup): void => {
     }),
     unsubscribe: () => {},
     status: async (id) => setup.firstFrames?.[id] ?? status(id, 1, []),
-    diff: async (params) => {
-      diffCalls.push(params);
+    diff: async () => {
       return setup.diff ? setup.diff() : { patch: 'unified patch text' };
     },
   };
   configureScmStore(port);
+  gitBridge.compare.mockReset();
+  gitBridge.compare.mockImplementation(async (request: unknown) => {
+    compareCalls.push(request);
+    return setup.diff ? setup.diff() : { patch: 'unified patch text' };
+  });
 };
 
 beforeEach(() => {
+  gitBridge.inspect.mockReset();
+  gitBridge.inspect.mockResolvedValue({
+    state: 'complete',
+    output: '',
+    data: { head: 'a'.repeat(40), branch: 'main' },
+  });
   gitBridge.projectConfig.mockReset();
   gitBridge.projectConfig.mockResolvedValue({ clangTidy: { scope: 'selected', arguments: [] } });
   gitBridge.saveChecks.mockReset();
@@ -177,7 +199,7 @@ beforeEach(() => {
   resetScmStoreForTest();
   resetScmUiStoreForTest();
   localStorage.clear();
-  diffCalls.length = 0;
+  compareCalls.length = 0;
   openPreviewMock.mockClear();
   gitBridge.branches.mockClear();
   gitBridge.draft.mockClear();
@@ -292,6 +314,53 @@ describe('ScmPanel nested repository workflow', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.generate' }));
   };
 
+  it('pins Amend to the inspected HEAD and invalidates confirmation when unchecked', async () => {
+    gitBridge.projectConfig.mockResolvedValue({ commitChecks: { scanners: [], compile: false, autoRepair: false } });
+    await openDraft();
+    const amend = await screen.findByRole('checkbox', { name: 'conversation.explorer.scm.commit.amend' });
+    await waitFor(() => expect(amend).toBeEnabled());
+    fireEvent.click(amend);
+    await waitFor(() => expect(amend).toBeChecked());
+    const compile = screen.getByRole('checkbox', { name: 'conversation.explorer.scm.commit.checks.compile' });
+    fireEvent.click(compile);
+    expect(amend).toBeChecked();
+    fireEvent.click(compile);
+    expect(gitBridge.inspect).toHaveBeenCalledWith({
+      scope: { projectId: 'p1', peId: 'pe1', relativePath: '' },
+      request: { kind: 'inspect' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'conversation.explorer.scm.commit.continueCommit' }));
+    await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.commitOnly' });
+    expect(gitBridge.prepare).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: { kind: 'amend', expectedHead: 'a'.repeat(40) } })
+    );
+    fireEvent.click(amend);
+    expect(screen.queryByRole('button', { name: 'conversation.explorer.scm.commit.commitOnly' })).toBeNull();
+  });
+
+  it('ignores an Amend target captured for a previous conversation', async () => {
+    let resolve!: (value: unknown) => void;
+    gitBridge.inspect.mockImplementation(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        })
+    );
+    installPort({ repositories: [repo()], firstFrames: { 'scm:pe1': status('scm:pe1', 1, [resource('a.c')]) } });
+    const paths = { pe1: 'C:/workspace' };
+    const { rerender } = render(<ScmPanel projectId='p1' repoPaths={paths} conversationId='chat' />);
+    await screen.findByText('a.c');
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'conversation.explorer.scm.commit.action' }));
+    const amend = await screen.findByRole('checkbox', { name: 'conversation.explorer.scm.commit.amend' });
+    fireEvent.click(amend);
+    await waitFor(() => expect(gitBridge.inspect).toHaveBeenCalled());
+    rerender(<ScmPanel projectId='p1' repoPaths={paths} conversationId='other-chat' />);
+    await act(async () => resolve({ state: 'complete', output: '', data: { head: 'a'.repeat(40), branch: 'main' } }));
+    expect(amend).not.toBeChecked();
+    expect(amend).toBeEnabled();
+  });
+
   it('saves all-disabled choices and continues to explicit confirmation without checks', async () => {
     await openDraft();
     const clang = await screen.findByRole('checkbox', { name: 'conversation.explorer.scm.commit.checks.clangTidy' });
@@ -301,7 +370,7 @@ describe('ScmPanel nested repository workflow', () => {
     const next = screen.getByRole('button', { name: 'conversation.explorer.scm.commit.continueCommit' });
     await waitFor(() => expect(next).toBeEnabled());
     fireEvent.click(next);
-    await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.confirm' });
+    await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.commitAndPush' });
     expect(gitBridge.saveChecks).toHaveBeenCalledWith({
       repoPath: 'C:/workspace',
       checks: { scanners: [], compile: false, autoRepair: true },
@@ -318,9 +387,9 @@ describe('ScmPanel nested repository workflow', () => {
     const next = await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.continueCommit' });
     await waitFor(() => expect(next).toBeEnabled());
     fireEvent.click(next);
-    await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.confirm' });
+    await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.commitAndPush' });
     fireEvent.click(screen.getByRole('checkbox', { name: 'conversation.explorer.scm.commit.checks.compile' }));
-    expect(screen.queryByRole('button', { name: 'conversation.explorer.scm.commit.confirm' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'conversation.explorer.scm.commit.commitAndPush' })).toBeNull();
     expect(screen.getByRole('button', { name: 'conversation.explorer.scm.commit.runChecks' })).toBeEnabled();
   });
 
@@ -360,7 +429,7 @@ describe('ScmPanel nested repository workflow', () => {
     const run = await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.runChecks' });
     await waitFor(() => expect(run).toBeEnabled());
     fireEvent.click(run);
-    await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.confirm' });
+    await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.commitAndPush' });
     expect(gitBridge.prepare).toHaveBeenCalledWith(
       expect.objectContaining({
         checks: { scanners: ['pc-lint'], compile: false, autoRepair: false },
@@ -383,7 +452,7 @@ describe('ScmPanel nested repository workflow', () => {
     await waitFor(() => expect(compile).toBeEnabled());
     fireEvent.click(compile);
     fireEvent.click(await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.runChecks' }));
-    await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.confirm' });
+    await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.commitAndPush' });
     fireEvent.click(screen.getByRole('button', { name: 'common.close' }));
     fireEvent.click(screen.getByRole('button', { name: 'conversation.explorer.scm.commit.action' }));
     await waitFor(() =>
@@ -648,7 +717,7 @@ describe('ScmPanel automatic workflow', () => {
     const scan = await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.runChecks' });
     await waitFor(() => expect(scan).toBeEnabled());
     fireEvent.click(scan);
-    fireEvent.click(await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.confirm' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.commitAndPush' }));
     await waitFor(() => expect(gitBridge.commit).toHaveBeenCalledOnce());
     rerender(<ScmPanel projectId='p1' repoPaths={{ pe1: 'C:/workspace' }} conversationId='next-chat' />);
 
@@ -671,7 +740,7 @@ describe('ScmPanel automatic workflow', () => {
     const scan = await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.runChecks' });
     await waitFor(() => expect(scan).toBeEnabled());
     fireEvent.click(scan);
-    fireEvent.click(await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.confirm' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.commitAndPush' }));
     await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.retryPush' });
 
     act(() => applyScmNotification('scm/statusChanged', status('scm:pe1', 2, [])));
@@ -698,7 +767,7 @@ describe('ScmPanel automatic workflow', () => {
     const scan = await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.runChecks' });
     await waitFor(() => expect(scan).toBeEnabled());
     fireEvent.click(scan);
-    fireEvent.click(await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.confirm' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.commitAndPush' }));
     fireEvent.click(await screen.findByRole('button', { name: 'conversation.explorer.scm.commit.retryPush' }));
     await waitFor(() => expect(gitBridge.retryPush).toHaveBeenCalledOnce());
     rerender(<ScmPanel projectId='p1' repoPaths={{ pe1: 'C:/workspace' }} conversationId='next-chat' />);
@@ -732,7 +801,7 @@ describe('ScmPanel automatic workflow', () => {
     expect(await screen.findByText('conversation.explorer.scm.commit.buildFailed')).toBeInTheDocument();
     expect(document.querySelector('[data-scm-workflow-output]')?.textContent).toContain('compiler failed at a.c:5');
     expect(screen.getByRole('button', { name: 'conversation.explorer.scm.commit.runChecks' })).toBeEnabled();
-    expect(screen.queryByRole('button', { name: 'conversation.explorer.scm.commit.confirm' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'conversation.explorer.scm.commit.commitAndPush' })).toBeNull();
   });
 });
 
@@ -882,16 +951,18 @@ describe('ScmPanel diff view', () => {
     await screen.findByText('a.ts');
   };
 
-  it('requests the diff with the ContentRef pair derived from the row', async () => {
+  it('requests the typed workbench comparison derived from the row', async () => {
     await setup();
     fireEvent.click(screen.getByText('a.ts'));
 
-    await waitFor(() => expect(diffCalls).toHaveLength(1));
-    expect(diffCalls[0]).toEqual({
-      repository: 'scm:pe1',
-      file: { pe_id: 'pe1', relative_path: 'src/a.ts' },
-      from: 'staged',
-      to: 'working',
+    await waitFor(() => expect(compareCalls).toHaveLength(1));
+    expect(compareCalls[0]).toEqual({
+      scope: { projectId: 'p1', peId: 'pe1', relativePath: '' },
+      request: {
+        file: 'src/a.ts',
+        from: { kind: 'index' },
+        to: { kind: 'worktree' },
+      },
     });
     // The fetched patch is opened as a `'diff'` tab in the shared preview panel,
     // titled by the file name — not rendered inline under this panel.
@@ -905,10 +976,11 @@ describe('ScmPanel diff view', () => {
         fileRef: { kind: 'project', pe_id: 'pe1', relative_path: 'src/a.ts' },
         scmDiff: {
           request: {
-            repository: 'scm:pe1',
-            file: { pe_id: 'pe1', relative_path: 'src/a.ts' },
-            from: 'staged',
-            to: 'working',
+            kind: 'workbench',
+            scope: { projectId: 'p1', peId: 'pe1', relativePath: '' },
+            file: 'src/a.ts',
+            from: { kind: 'index' },
+            to: { kind: 'worktree' },
           },
         },
       })
@@ -930,12 +1002,14 @@ describe('ScmPanel diff view', () => {
     await screen.findByText('conflict.ts');
 
     fireEvent.click(screen.getByText('conflict.ts'));
-    await waitFor(() => expect(diffCalls).toHaveLength(1));
-    expect(diffCalls[0]).toEqual({
-      repository: 'scm:pe1',
-      file: { pe_id: 'pe1', relative_path: 'src/conflict.ts' },
-      from: 'committed',
-      to: 'working',
+    await waitFor(() => expect(compareCalls).toHaveLength(1));
+    expect(compareCalls[0]).toEqual({
+      scope: { projectId: 'p1', peId: 'pe1', relativePath: '' },
+      request: {
+        file: 'src/conflict.ts',
+        from: { kind: 'head' },
+        to: { kind: 'worktree' },
+      },
     });
   });
 
@@ -951,7 +1025,7 @@ describe('ScmPanel diff view', () => {
 
     // The fetch is attempted, but a failure leaves the selection intact and opens no
     // tab — error surfacing belongs to the action-report path, not this bridge.
-    await waitFor(() => expect(diffCalls).toHaveLength(1));
+    await waitFor(() => expect(compareCalls).toHaveLength(1));
     expect(openPreviewMock).not.toHaveBeenCalled();
   });
 
@@ -1281,7 +1355,7 @@ describe('ScmPanel view-as-tree / view-as-list toggle', () => {
     expect(screen.getByText('main.ts')).toBeInTheDocument();
     expect(screen.getByText('util.ts')).toBeInTheDocument();
     // Preference persisted for this project.
-    expect(localStorage.getItem('scm-ui:p1')).toContain('tree');
+    expect(localStorage.getItem('scm-ui-v2:p1')).toContain('tree');
   });
 
   it('preserves click → openPreview diff in tree view', async () => {
@@ -1296,7 +1370,7 @@ describe('ScmPanel view-as-tree / view-as-list toggle', () => {
     fireEvent.click(screen.getByText('main.ts'));
 
     await waitFor(() => expect(openPreviewMock).toHaveBeenCalled());
-    expect(diffCalls.length).toBeGreaterThan(0);
+    expect(compareCalls.length).toBeGreaterThan(0);
   });
 });
 
@@ -1445,7 +1519,7 @@ describe('ScmPanel worktree aggregation in the Repositories section', () => {
     // Primary row itself stays.
     expect(document.querySelector('[data-scm-repo-item="scm:pe1"]')).not.toBeNull();
     // Collapse persisted for this project.
-    expect(localStorage.getItem('scm-ui:p1')).toContain('scm:pe1');
+    expect(localStorage.getItem('scm-ui-v2:p1')).toContain('scm:pe1');
 
     fireEvent.click(toggle);
     await waitFor(() => expect(document.querySelector('[data-scm-repo-item="scm:pe1/feature"]')).not.toBeNull());
@@ -1666,6 +1740,6 @@ describe('ScmPanel bottom-anchored section stack', () => {
     // Stored override gone; height falls back to the panel-fraction default (240 fallback
     // when the panel is unmeasured in jsdom) → 24 + 240 = 264px.
     await waitFor(() => expect(changesSlot().style.height).toBe('264px'));
-    expect(localStorage.getItem('scm-ui:p1') ?? '').not.toContain('"changes":150');
+    expect(localStorage.getItem('scm-ui-v2:p1') ?? '').not.toContain('"changes":150');
   });
 });

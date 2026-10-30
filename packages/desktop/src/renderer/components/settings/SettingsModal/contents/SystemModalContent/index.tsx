@@ -7,6 +7,7 @@
 import { ipcBridge } from '@/common';
 import type { IGpuStatus, IStartOnBootStatus } from '@/common/adapter/ipcBridge';
 import { configService } from '@/common/config/configService';
+import type { GitRuntimeStatus } from '@/common/types/sourceControl/workbenchTypes';
 import AionScrollArea from '@/renderer/components/base/AionScrollArea';
 import FeedbackButton from '@/renderer/components/base/FeedbackButton';
 import LanguageSwitcher from '@/renderer/components/settings/LanguageSwitcher';
@@ -20,7 +21,7 @@ import {
 } from '@/renderer/utils/file/previewPayload';
 import { notifyManualRestartRequired } from '@/renderer/utils/appRestart';
 import { isElectronDesktop } from '@/renderer/utils/platform';
-import { Alert, Collapse, Form, InputNumber, Message, Modal, Switch } from '@arco-design/web-react';
+import { Alert, Button, Collapse, Form, Input, InputNumber, Message, Modal, Switch } from '@arco-design/web-react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
@@ -56,6 +57,10 @@ const SystemModalContent: React.FC = () => {
   });
   const [closeToTray, setCloseToTray] = useState(false);
   const [scmSystemGit, setScmSystemGit] = useState(false);
+  const [scmGitPath, setScmGitPath] = useState('');
+  const [scmGitPathDraft, setScmGitPathDraft] = useState('');
+  const [scmGitRuntime, setScmGitRuntime] = useState<GitRuntimeStatus | null>(null);
+  const [savingScmGitPath, setSavingScmGitPath] = useState(false);
   const [gpuStatus, setGpuStatus] = useState<IGpuStatus | null>(null);
   const [notificationEnabled, setNotificationEnabled] = useState(true);
   const [cronNotificationEnabled, setCronNotificationEnabled] = useState(false);
@@ -104,6 +109,17 @@ const SystemModalContent: React.FC = () => {
       .invoke()
       .then(setScmSystemGit)
       .catch(() => {});
+    ipcBridge.systemSettings.getScmGitPath
+      .invoke()
+      .then((path) => {
+        setScmGitPath(path);
+        setScmGitPathDraft(path);
+      })
+      .catch(() => {});
+    ipcBridge.gitWorkbench.runtime
+      .invoke()
+      .then(setScmGitRuntime)
+      .catch(() => setScmGitRuntime({ available: false }));
   }, [isDesktop]);
 
   useEffect(() => {
@@ -249,6 +265,30 @@ const SystemModalContent: React.FC = () => {
     },
     [modal, scmSystemGit, t]
   );
+
+  const handleSaveScmGitPath = useCallback(() => {
+    const nextPath = scmGitPathDraft.trim();
+    modal.confirm({
+      title: t('settings.updateConfirm'),
+      content: t('settings.scmGitRestartConfirm'),
+      onOk: async () => {
+        setSavingScmGitPath(true);
+        try {
+          await ipcBridge.systemSettings.setScmGitPath.invoke({ path: nextPath });
+          setScmGitPath(nextPath);
+          const restartResult = await ipcBridge.application.restart.invoke();
+          notifyManualRestartRequired(restartResult, t);
+        } catch (failure) {
+          Message.error(
+            failure instanceof Error && failure.message ? failure.message : t('settings.scmGitPathUpdateFailed')
+          );
+          setScmGitPathDraft(scmGitPath);
+        } finally {
+          setSavingScmGitPath(false);
+        }
+      },
+    });
+  }, [modal, scmGitPath, scmGitPathDraft, t]);
 
   const handleStartOnBootChange = useCallback(
     (checked: boolean) => {
@@ -478,6 +518,61 @@ const SystemModalContent: React.FC = () => {
             label: t('settings.scmSystemGit'),
             description: t('settings.scmSystemGitDesc'),
             component: <Switch checked={scmSystemGit} onChange={handleScmSystemGitChange} />,
+          },
+          {
+            key: 'scmGitPath',
+            label: t('settings.scmGitPath'),
+            description: t('settings.scmGitPathDesc'),
+            component: (
+              <div className='flex flex-col gap-8px max-w-520px'>
+                <div className='flex items-center gap-8px'>
+                  <Input
+                    value={scmGitPathDraft}
+                    onChange={setScmGitPathDraft}
+                    onPressEnter={handleSaveScmGitPath}
+                    placeholder={t('settings.scmGitPathPlaceholder')}
+                    aria-label={t('settings.scmGitPath')}
+                    allowClear
+                  />
+                  <Button
+                    type='primary'
+                    loading={savingScmGitPath}
+                    onClick={handleSaveScmGitPath}
+                    disabled={scmGitPathDraft.trim() === scmGitPath}
+                  >
+                    {t('settings.scmGitSave')}
+                  </Button>
+                </div>
+                {scmGitRuntime && (
+                  <div
+                    role='status'
+                    className={
+                      scmGitRuntime.available
+                        ? 'text-12px text-3 break-all'
+                        : 'text-12px text-[rgb(var(--danger-6))] break-all'
+                    }
+                  >
+                    {scmGitRuntime.available
+                      ? t('settings.scmGitRuntimeStatus', {
+                          source:
+                            scmGitRuntime.source === 'configured'
+                              ? t('settings.scmGitSourceConfigured')
+                              : scmGitRuntime.source === 'bundled'
+                                ? t('settings.scmGitSourceBundled')
+                                : t('settings.scmGitSourceSystem'),
+                          version: scmGitRuntime.version,
+                          path: scmGitRuntime.executable,
+                        })
+                      : t('settings.scmGitRuntimeUnavailableWithReason', {
+                          reason: scmGitRuntime.error ?? t('settings.scmGitRuntimeUnavailable'),
+                        })}
+                  </div>
+                )}
+                {scmGitRuntime && scmGitPath !== (scmGitRuntime.configuredPath ?? '') && (
+                  <div className='text-12px text-3'>{t('settings.scmGitRestartPending')}</div>
+                )}
+              </div>
+            ),
           },
         ]
       : []),

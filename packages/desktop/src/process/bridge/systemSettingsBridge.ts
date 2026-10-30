@@ -18,6 +18,7 @@ import { changeLanguage } from '@process/services/i18n';
 import type { PetSize } from '@process/pet/petTypes';
 import { createOrUpdateTray, destroyTray, setCloseToTrayEnabled } from '@process/utils/tray';
 import { readCloseToTraySetting, writeCloseToTraySetting } from '@process/utils/closeToTraySetting';
+import { validateConfiguredGitPath } from './sourceControlBridge/runtime';
 
 type LanguageChangeListener = () => void;
 let _languageChangeListener: LanguageChangeListener | null = null;
@@ -132,5 +133,13 @@ export function initSystemSettingsBridge(): void {
 
   ipcBridge.systemSettings.setScmSystemGit.provider(async ({ enabled }) => {
     await ProcessConfig.set('scm.systemGit', enabled);
+  });
+
+  ipcBridge.systemSettings.getScmGitPath.provider(async () => (await ProcessConfig.get('scm.gitPath')) ?? '');
+
+  ipcBridge.systemSettings.setScmGitPath.provider(async ({ path: candidate }) => {
+    const configuredPath = candidate.trim();
+    if (configuredPath) await validateConfiguredGitPath(configuredPath);
+    await ProcessConfig.set('scm.gitPath', configuredPath);
   });
 }

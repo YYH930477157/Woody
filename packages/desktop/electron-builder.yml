@@ -107,6 +107,8 @@ files:
     to: static
 
 extraResources:
+  - from: resources/third-party
+    to: third-party
   - from: public
     to: .
   - from: resources/app.png

@@ -1,4 +1,5 @@
 /** Shared contracts for the local Git submission workflow. */
+export type GitCommitMode = { kind: 'amend'; expectedHead: string };
 
 export type GitWorkflowState =
   | 'idle'
@@ -78,7 +79,7 @@ export type GitOperationResult =
   | { ok: false; kind: 'dirty-worktree' | 'command-failed'; stdout?: string; stderr?: string };
 
 export type GitCommitResult =
-  | { ok: true; commit: string }
+  | { ok: true; commit: string; warning?: string }
   | { ok: false; kind: 'command-failed' | 'staged-selection' | 'snapshot-changed'; stdout: string; stderr: string };
 
 export type GitPushResult =
@@ -86,6 +87,7 @@ export type GitPushResult =
   | { ok: false; retryable: true; stdout: string; stderr: string };
 
 export type GitWorkflowSession = {
+  mode?: GitCommitMode;
   id: string;
   state: GitWorkflowState;
   repoPath: string;
@@ -112,6 +114,7 @@ export type GitWorkflowSession = {
 };
 
 export type GitWorkflowPrepareRequest = {
+  mode?: GitCommitMode;
   checks?: import('./staticScanTypes').CommitCheckOptions;
   conversationId?: string;
   requestId?: string;

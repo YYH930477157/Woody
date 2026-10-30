@@ -52,7 +52,7 @@ export type ScmUiView = {
   selectedRepoId: string | null;
 };
 
-type PersistedUi = {
+type UiPreferences = {
   collapsed?: Record<string, boolean>;
   heights?: Record<string, number>;
   treeExpanded?: string[];
@@ -60,6 +60,11 @@ type PersistedUi = {
   viewMode?: ScmViewMode;
   monitorScope?: ScmMonitorScope;
   selectedRepoId?: string | null;
+};
+
+type PersistedUi = {
+  version: 2;
+  preferences: UiPreferences;
 };
 
 let projectId: string | null = null;
@@ -70,6 +75,8 @@ let repoCollapsed: Set<string> = new Set(); // only collapsed worktree parents; 
 let viewMode: ScmViewMode = 'list';
 let monitorScope: ScmMonitorScope = 'project';
 let selectedRepoId: string | null = null;
+/** A legacy id stays pending until the current repository list can verify it. */
+let pendingLegacyRepoId: string | null = null;
 
 let snapshot: ScmUiView = {
   projectId: null,
@@ -84,7 +91,8 @@ let snapshot: ScmUiView = {
 
 // ── persistence (per-project) ────────────────────────────────────────────────
 
-const uiStorageKey = (id: string): string => `scm-ui:${id}`;
+const uiStorageKey = (id: string): string => `scm-ui-v2:${id}`;
+const legacyUiStorageKey = (id: string): string => `scm-ui:${id}`;
 
 const getLocalStorage = (): Storage | null => {
   try {
@@ -112,35 +120,51 @@ const isBoolean = (v: unknown): v is boolean => typeof v === 'boolean';
 // a string) is dropped so a corrupt record can never wedge a section shut.
 const isPositiveNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0;
 
-const loadUi = (id: string): PersistedUi => {
+const sanitizePreferences = (parsed: UiPreferences): UiPreferences => ({
+  collapsed: sanitizeRecord(parsed.collapsed, isBoolean),
+  heights: sanitizeRecord(parsed.heights, isPositiveNumber),
+  treeExpanded: Array.isArray(parsed.treeExpanded)
+    ? parsed.treeExpanded.filter((k): k is string => typeof k === 'string')
+    : undefined,
+  repoCollapsed: Array.isArray(parsed.repoCollapsed)
+    ? parsed.repoCollapsed.filter((k): k is string => typeof k === 'string')
+    : undefined,
+  viewMode: isViewMode(parsed.viewMode) ? parsed.viewMode : undefined,
+  monitorScope: isMonitorScope(parsed.monitorScope) ? parsed.monitorScope : undefined,
+  selectedRepoId: typeof parsed.selectedRepoId === 'string' ? parsed.selectedRepoId : null,
+});
+
+const loadNewUi = (id: string): UiPreferences | null => {
   const ls = getLocalStorage();
-  if (!ls) return {};
+  if (!ls) return null;
   try {
     const raw = ls.getItem(uiStorageKey(id));
-    if (!raw) return {};
+    if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<PersistedUi>;
-    return {
-      collapsed: sanitizeRecord(parsed.collapsed, isBoolean),
-      heights: sanitizeRecord(parsed.heights, isPositiveNumber),
-      treeExpanded: Array.isArray(parsed.treeExpanded)
-        ? parsed.treeExpanded.filter((k): k is string => typeof k === 'string')
-        : undefined,
-      repoCollapsed: Array.isArray(parsed.repoCollapsed)
-        ? parsed.repoCollapsed.filter((k): k is string => typeof k === 'string')
-        : undefined,
-      viewMode: isViewMode(parsed.viewMode) ? parsed.viewMode : undefined,
-      monitorScope: isMonitorScope(parsed.monitorScope) ? parsed.monitorScope : undefined,
-      selectedRepoId: typeof parsed.selectedRepoId === 'string' ? parsed.selectedRepoId : null,
-    };
+    if (parsed.version !== 2 || !parsed.preferences || typeof parsed.preferences !== 'object')
+      throw new Error('Unsupported SCM UI preference record');
+    return sanitizePreferences(parsed.preferences);
   } catch {
-    return {};
+    return null;
+  }
+};
+
+const loadLegacyUi = (id: string): UiPreferences | null => {
+  const ls = getLocalStorage();
+  if (!ls) return null;
+  try {
+    const raw = ls.getItem(legacyUiStorageKey(id));
+    if (!raw) return null;
+    return sanitizePreferences(JSON.parse(raw) as UiPreferences);
+  } catch {
+    return null;
   }
 };
 
 const persistUi = (): void => {
   const ls = getLocalStorage();
   if (!ls || !projectId) return;
-  const data: PersistedUi = {
+  const preferences: UiPreferences = {
     collapsed: Object.fromEntries(collapsed),
     heights: Object.fromEntries(heights),
     viewMode,
@@ -149,11 +173,11 @@ const persistUi = (): void => {
   };
   // Only persist an explicit tree expansion once the user has touched it; a null
   // set means "still on the expand-all default", which needs no stored override.
-  if (treeExpanded) data.treeExpanded = [...treeExpanded];
+  if (treeExpanded) preferences.treeExpanded = [...treeExpanded];
   // Empty ⇒ every worktree parent expanded (the default); skip the key entirely.
-  if (repoCollapsed.size > 0) data.repoCollapsed = [...repoCollapsed];
+  if (repoCollapsed.size > 0) preferences.repoCollapsed = [...repoCollapsed];
   try {
-    ls.setItem(uiStorageKey(projectId), JSON.stringify(data));
+    ls.setItem(uiStorageKey(projectId), JSON.stringify({ version: 2, preferences } satisfies PersistedUi));
   } catch {
     /* storage full / unavailable — non-fatal */
   }
@@ -190,7 +214,12 @@ const commit = (): void => {
 export const openScmUi = (id: string, defaultViewMode: ScmViewMode = 'list'): void => {
   if (projectId === id) return;
   projectId = id;
-  const ui = loadUi(id);
+  const current = loadNewUi(id);
+  // A present but corrupt v2 record is authoritative: do not resurrect an
+  // older legacy record that predates the versioned preference format.
+  const hasVersionedRecord = getLocalStorage()?.getItem(uiStorageKey(id)) !== null;
+  const legacy = current || hasVersionedRecord ? null : loadLegacyUi(id);
+  const ui = current ?? legacy ?? {};
   collapsed = new Map(Object.entries(ui.collapsed ?? {}));
   heights = new Map(Object.entries(ui.heights ?? {}));
   treeExpanded = ui.treeExpanded ? new Set(ui.treeExpanded) : null;
@@ -198,6 +227,27 @@ export const openScmUi = (id: string, defaultViewMode: ScmViewMode = 'list'): vo
   viewMode = ui.viewMode ?? defaultViewMode;
   monitorScope = ui.monitorScope ?? 'project';
   selectedRepoId = ui.selectedRepoId ?? null;
+  pendingLegacyRepoId = legacy?.selectedRepoId ?? null;
+  if (legacy) persistUi();
+  commit();
+};
+
+/**
+ * Verify one migrated repository id against repositories currently surfaced from
+ * the project. The old record and the new record both remain if the id vanished;
+ * only the active selection is cleared.
+ */
+export const migrateLegacyScmRepository = (id: string, availableRepoIds: readonly string[]): void => {
+  if (projectId !== id || !pendingLegacyRepoId) return;
+  const migrated = availableRepoIds.includes(pendingLegacyRepoId) ? pendingLegacyRepoId : null;
+  pendingLegacyRepoId = null;
+  if (selectedRepoId === migrated) {
+    persistUi();
+    commit();
+    return;
+  }
+  selectedRepoId = migrated;
+  persistUi();
   commit();
 };
 
@@ -286,6 +336,7 @@ export const resetScmUiStoreForTest = (): void => {
   viewMode = 'list';
   monitorScope = 'project';
   selectedRepoId = null;
+  pendingLegacyRepoId = null;
   snapshot = {
     projectId: null,
     collapsed: {},

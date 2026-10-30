@@ -1,3 +1,4 @@
+import { useProjectHistory } from '@/renderer/pages/conversation/SourceControl/Workbench/Storage/useProjectHistory';
 /**
  * @license
  * Copyright 2025 AionUi (aionui.com)
@@ -195,6 +196,7 @@ const Layout: React.FC<{
   // [content | explorer] row, clamp the explorer width so chat (+ preview) keep
   // their reserve. Active only when a project is bound and on desktop.
   const currentProject = useCurrentProject();
+  useProjectHistory(currentProject);
   const { containerRef: mainRowRef, containerWidth: mainRowWidth } = useContainerWidth();
   const explorerActive = Boolean(currentProject) && !isMobile;
   const { widthPx: explorerWidthPx, createDragHandle: createExplorerDragHandle } = useProjectExplorerColumnWidth(

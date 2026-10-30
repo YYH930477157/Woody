@@ -47,6 +47,146 @@ const snapshot = { head: 'head-1', branch: 'main', tree: 'tree-1' };
 const getCommitSnapshot = () => vi.fn().mockResolvedValue(snapshot);
 
 describe('commit workflow service', () => {
+  const prepareChecked = (service: ReturnType<typeof createCommitWorkflowService>) =>
+    service.prepare({
+      repoPath: 'D:/repo',
+      branch: 'main',
+      selectedPaths: ['src/a.cpp'],
+      scannerConfigs: [config],
+      checks: { scanners: ['clang-tidy'], compile: false, autoRepair: false },
+      messageFields: fields,
+      scan: async () => clean(),
+    });
+
+  it('coordinates preparation, confirmation and explicit push retry exactly once at the repository boundary', async () => {
+    const paths: string[] = [];
+    let locked = false;
+    const run = async <T>(root: string, operation: () => Promise<T>): Promise<T> => {
+      expect(locked).toBe(false);
+      locked = true;
+      paths.push(root);
+      try {
+        return await operation();
+      } finally {
+        locked = false;
+      }
+    };
+    const createCommit = vi.fn(async () => {
+      expect(locked).toBe(true);
+      return { ok: true as const, commit: 'abc123', stdout: '', stderr: '' };
+    });
+    const push = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, kind: 'failed', stdout: '', stderr: 'offline' })
+      .mockResolvedValue({ ok: true });
+    const service = createCommitWorkflowService(
+      { getCommitSnapshot: getCommitSnapshot(), createCommit, push },
+      { run }
+    );
+    const session = await prepareChecked(service);
+    await service.commitAndPush(session.id, fields);
+    await service.retryPush(session.id);
+    expect(paths).toEqual(['D:/repo', 'D:/repo', 'D:/repo']);
+    expect(createCommit).toHaveBeenCalledOnce();
+  });
+
+  it('does not repeat a commit after a thrown commit error', async () => {
+    const createCommit = vi.fn().mockRejectedValue(new Error('process lost'));
+    const service = createCommitWorkflowService({
+      getCommitSnapshot: getCommitSnapshot(),
+      createCommit,
+      push: vi.fn(),
+    });
+    const session = await prepareChecked(service);
+    await expect(service.commit(session.id, fields)).resolves.toMatchObject({
+      state: 'failed',
+      reason: 'process lost',
+    });
+    await service.commit(session.id, fields);
+    expect(createCommit).toHaveBeenCalledOnce();
+  });
+
+  it('returns a failed preparation when repository coordination cannot acquire the root', async () => {
+    const service = createCommitWorkflowService(
+      { getCommitSnapshot: getCommitSnapshot(), createCommit: vi.fn(), push: vi.fn() },
+      {
+        run: async () => {
+          throw new Error('Repository no longer exists');
+        },
+      }
+    );
+    expect(await prepareChecked(service)).toMatchObject({ state: 'failed', reason: 'Repository no longer exists' });
+  });
+
+  it('completes a checked local commit without attempting a push', async () => {
+    const createCommit = vi.fn().mockResolvedValue({ ok: true, commit: 'abc123' });
+    const push = vi.fn();
+    const service = createCommitWorkflowService({ getCommitSnapshot: getCommitSnapshot(), createCommit, push });
+    const session = await prepareChecked(service);
+    expect(await service.commit(session.id, fields)).toMatchObject({ state: 'completed', commit: 'abc123' });
+    expect(createCommit).toHaveBeenCalledWith('D:/repo', ['src/a.cpp'], expect.any(String), snapshot);
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('rejects incomplete fields before a checked local commit', async () => {
+    const createCommit = vi.fn();
+    const service = createCommitWorkflowService({
+      getCommitSnapshot: getCommitSnapshot(),
+      createCommit,
+      push: vi.fn(),
+    });
+    const session = await prepareChecked(service);
+    expect(await service.commit(session.id, { ...fields, tests: '' })).toMatchObject({ state: 'blocked' });
+    expect(createCommit).not.toHaveBeenCalled();
+  });
+
+  it('rejects changed snapshots at checked local commit time', async () => {
+    const createCommit = vi
+      .fn()
+      .mockResolvedValue({ ok: false, kind: 'snapshot-changed', stdout: '', stderr: 'changed' });
+    const push = vi.fn();
+    const service = createCommitWorkflowService({ getCommitSnapshot: getCommitSnapshot(), createCommit, push });
+    const session = await prepareChecked(service);
+    expect(await service.commit(session.id, fields)).toMatchObject({ state: 'blocked', reasonCode: 'snapshotChanged' });
+    expect(createCommit).toHaveBeenCalledWith('D:/repo', ['src/a.cpp'], expect.any(String), snapshot);
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it.each(['commit', 'commitAndPush'] as const)(
+    'coalesces concurrent and repeated %s confirmations',
+    async (method) => {
+      let finish!: (result: { ok: true; commit: string }) => void;
+      const pending = new Promise<{ ok: true; commit: string }>((resolve) => {
+        finish = resolve;
+      });
+      const createCommit = vi.fn(() => pending);
+      const push = vi.fn().mockResolvedValue({ ok: true, stdout: '', stderr: '' });
+      const service = createCommitWorkflowService({ getCommitSnapshot: getCommitSnapshot(), createCommit, push });
+      const session = await prepareChecked(service);
+      const first = service[method](session.id, fields);
+      const duplicate = service[method](session.id, fields);
+      expect(session.state).toBe('commit');
+      finish({ ok: true, commit: 'abc123' });
+      await Promise.all([first, duplicate]);
+      expect(await service[method](session.id, fields)).toMatchObject({ state: 'completed', commit: 'abc123' });
+      expect(createCommit).toHaveBeenCalledOnce();
+    }
+  );
+
+  it('preserves push retry after a repeated confirmation without creating another commit', async () => {
+    const createCommit = vi.fn().mockResolvedValue({ ok: true, commit: 'abc123' });
+    const push = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, retryable: true, stdout: '', stderr: 'offline' })
+      .mockResolvedValue({ ok: true, stdout: '', stderr: '' });
+    const service = createCommitWorkflowService({ getCommitSnapshot: getCommitSnapshot(), createCommit, push });
+    const session = await prepareChecked(service);
+    await service.commitAndPush(session.id, fields);
+    expect(await service.commitAndPush(session.id, fields)).toMatchObject({ state: 'push', commit: 'abc123' });
+    expect(await service.retryPush(session.id)).toMatchObject({ state: 'completed', commit: 'abc123' });
+    expect(createCommit).toHaveBeenCalledOnce();
+  });
+
   it.each([false, true])('allows no scanners with compile=%s without running repair', async (compileEnabled) => {
     const scan = vi.fn();
     const repair = vi.fn();

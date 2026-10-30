@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   clearSectionHeight,
   getScmUiSnapshot,
+  migrateLegacyScmRepository,
   openScmUi,
   resetScmUiStoreForTest,
   setScmMonitorScope,
@@ -26,10 +27,10 @@ import {
   setSectionHeight,
 } from '@/renderer/pages/conversation/SourceControl/scmUiStore';
 
-const lsKey = (id: string): string => `scm-ui:${id}`;
+const lsKey = (id: string): string => `scm-ui-v2:${id}`;
 const readRaw = (id: string): Record<string, unknown> => {
   const raw = localStorage.getItem(lsKey(id));
-  return raw ? JSON.parse(raw) : {};
+  return raw ? (JSON.parse(raw) as { preferences: Record<string, unknown> }).preferences : {};
 };
 
 beforeEach(() => {
@@ -110,6 +111,42 @@ describe('scmUiStore persistence (per project)', () => {
     resetScmUiStoreForTest();
     openScmUi('p1');
     expect(getScmUiSnapshot().viewMode).toBe('tree');
+  });
+
+  it('migrates legacy preferences into a versioned record without deleting the legacy key', () => {
+    const legacy = {
+      collapsed: { repositories: true },
+      treeExpanded: ['src'],
+      viewMode: 'tree',
+      monitorScope: 'software',
+      selectedRepoId: 'legacy-repo',
+    };
+    localStorage.setItem('scm-ui:p1', JSON.stringify(legacy));
+
+    openScmUi('p1');
+    expect(JSON.parse(localStorage.getItem(lsKey('p1'))!)).toMatchObject({
+      version: 2,
+      preferences: legacy,
+    });
+    expect(JSON.parse(localStorage.getItem('scm-ui:p1')!)).toEqual(legacy);
+    migrateLegacyScmRepository('p1', ['legacy-repo', 'new-repo']);
+    expect(getScmUiSnapshot().selectedRepoId).toBe('legacy-repo');
+  });
+
+  it('drops a migrated repository selection that no longer exists in this project', () => {
+    localStorage.setItem('scm-ui:p1', JSON.stringify({ selectedRepoId: 'gone' }));
+    openScmUi('p1');
+    migrateLegacyScmRepository('p1', ['repo-a']);
+    expect(getScmUiSnapshot().selectedRepoId).toBeNull();
+    expect(readRaw('p1').selectedRepoId).toBeNull();
+    expect(localStorage.getItem('scm-ui:p1')).not.toBeNull();
+  });
+
+  it('does not resurrect legacy preferences after the versioned record is corrupt', () => {
+    localStorage.setItem('scm-ui:p1', JSON.stringify({ viewMode: 'tree' }));
+    localStorage.setItem(lsKey('p1'), '{broken');
+    openScmUi('p1');
+    expect(getScmUiSnapshot().viewMode).toBe('list');
   });
 
   it('persists and restores the monitor scope per project', () => {

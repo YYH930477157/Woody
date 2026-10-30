@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createGitCommandService } from '@/process/services/sourceControl/gitCommandService';
+import { createGitCommandRunner, createGitCommandService } from '@/process/services/sourceControl/gitCommandService';
 import { createCommitWorkflowService } from '@/process/services/sourceControl/commitWorkflowService';
 import { createStaticScanService } from '@/process/services/sourceControl/staticScanService';
 
@@ -36,6 +36,19 @@ afterEach(async () => {
 });
 
 describe('git command service', () => {
+  it('runs checked-commit Git commands in non-interactive mode with a bounded process lifetime', async () => {
+    const repoPath = await makeRepo();
+    const runner = createGitCommandRunner();
+    const environment = await runner(['commit', '--allow-empty', '-m', 'runner safety'], { cwd: repoPath });
+    expect(environment.exitCode).toBe(0);
+
+    const startedAt = Date.now();
+    const timeout = await runner(['hash-object', '--stdin'], { cwd: repoPath, timeoutMs: 100 });
+    expect(timeout.exitCode).not.toBe(0);
+    expect(timeout.stderr).toMatch(/timed out/i);
+    expect(Date.now() - startedAt).toBeLessThan(5000);
+  });
+
   it('blocks changed files at final confirmation even when every check was skipped', async () => {
     const repoPath = await makeRepo();
     const originalHead = await runGit(repoPath, ['rev-parse', 'HEAD']);

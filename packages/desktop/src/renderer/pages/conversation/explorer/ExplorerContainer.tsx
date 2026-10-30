@@ -61,7 +61,7 @@ import { collapseAll, refreshRoot, reveal, select } from './explorerStore';
 import { useCurrentConversation } from './currentConversationStore';
 import { SearchPanel } from './search/SearchPanel';
 import type { SearchHit } from './search/searchModel';
-import { ScmPanel } from '../SourceControl/ScmPanel';
+import { Workbench } from '../SourceControl/Workbench';
 import CodebaseMemoryPanel from '../CodebaseMemory';
 import WorkspaceManager from '@/renderer/components/workspace/WorkspaceManager';
 import {
@@ -708,7 +708,7 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({
       </div>
       {(activeTab === 'changes' || changesVisited) && (
         <div className='flex-1 min-h-0' style={activeTab === 'changes' ? undefined : { display: 'none' }}>
-          <ScmPanel
+          <Workbench
             projectId={projectId}
             repoPaths={repoPaths}
             conversationId={activeConversationId}

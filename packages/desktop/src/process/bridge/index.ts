@@ -15,7 +15,7 @@ import { initWindowControlsBridge } from './windowControlsBridge';
 import { initNotificationBridge } from './notificationBridge';
 import { initWebuiBridge } from './webuiBridge';
 import { initThemeBridge } from './themeBridge';
-import { initSourceControlBridge } from './sourceControlBridge';
+import { initSourceControlBridge, initGitWorkbenchBridge } from './sourceControlBridge';
 import { initStaticScanBridge } from './staticScanBridge';
 import { initCodebaseMemoryBridge } from './codebaseMemory';
 
@@ -34,6 +34,7 @@ export function initAllBridges(_deps: BridgeDependencies = {}): void {
   initWebuiBridge();
   initThemeBridge();
   initSourceControlBridge();
+  initGitWorkbenchBridge();
   initStaticScanBridge();
   initCodebaseMemoryBridge();
 }

@@ -29,6 +29,11 @@ const scmSystemGitMocks = vi.hoisted(() => ({
   set: vi.fn(() => Promise.resolve()),
   messageError: vi.fn(),
 }));
+const scmGitPathMocks = vi.hoisted(() => ({
+  get: vi.fn(() => Promise.resolve('')),
+  set: vi.fn(() => Promise.resolve()),
+  runtime: vi.fn(),
+}));
 const clientBusinessSettingsMocks = vi.hoisted(() => ({
   getClientBusinessSetting: vi.fn(),
   setClientBusinessSetting: vi.fn(() => Promise.resolve()),
@@ -82,12 +87,17 @@ vi.mock('@/common', () => ({
       setCloseToTray: { invoke: vi.fn(() => Promise.resolve()) },
       getScmSystemGit: { invoke: scmSystemGitMocks.get },
       setScmSystemGit: { invoke: scmSystemGitMocks.set },
+      getScmGitPath: { invoke: scmGitPathMocks.get },
+      setScmGitPath: { invoke: scmGitPathMocks.set },
     },
     dialog: {
       showOpen: { invoke: showOpenMock },
     },
     shell: {
       openFolderWith: { invoke: vi.fn(() => Promise.resolve()) },
+    },
+    gitWorkbench: {
+      runtime: { invoke: scmGitPathMocks.runtime },
     },
   },
 }));
@@ -163,6 +173,15 @@ describe('SystemModalContent directory settings', () => {
     updateSystemInfoMock.mockResolvedValue(undefined);
     restartMock.mockResolvedValue({ restarted: true, manualRestartRequired: false });
     showOpenMock.mockResolvedValue(['/new-logs']);
+    scmGitPathMocks.get.mockResolvedValue('');
+    scmGitPathMocks.set.mockResolvedValue(undefined);
+    scmGitPathMocks.runtime.mockResolvedValue({
+      available: true,
+      source: 'system',
+      executable: '/usr/bin/git',
+      version: '2.54.0',
+      capabilities: { updateRefs: true, memoryHistoryEdit: true },
+    });
   });
 
   it('persists a selected log directory and restarts with the updated directory config', async () => {
@@ -214,6 +233,51 @@ describe('SystemModalContent directory settings', () => {
     );
     expect(toggle).toHaveAttribute('aria-checked', 'false');
     expect(restartMock).not.toHaveBeenCalled();
+  });
+
+  it('shows the active Git runtime through which every workbench action will run', async () => {
+    renderContent();
+    const status = await screen.findByRole('status');
+    expect(status).toHaveTextContent('settings.scmGitRuntimeStatus');
+    expect(scmGitPathMocks.runtime).toHaveBeenCalled();
+  });
+
+  it('shows the resolver failure when no Git runtime is available', async () => {
+    scmGitPathMocks.runtime.mockResolvedValueOnce({
+      available: false,
+      error: 'Configured Git is unavailable: ENOENT',
+    });
+    renderContent();
+    const status = await screen.findByRole('status');
+    expect(status).toHaveTextContent('settings.scmGitRuntimeUnavailableWithReason');
+  });
+
+  it('validates and saves an explicit Git path before restarting', async () => {
+    const user = userEvent.setup();
+    scmGitPathMocks.get.mockResolvedValue('/trusted/git.exe');
+    renderContent();
+    const input = await screen.findByRole('textbox', { name: 'settings.scmGitPath' });
+    await user.clear(input);
+    await user.type(input, '/new/git.exe');
+    await user.click(screen.getByRole('button', { name: 'settings.scmGitSave' }));
+
+    await waitFor(() => expect(scmGitPathMocks.set).toHaveBeenCalledWith({ path: '/new/git.exe' }));
+    expect(restartMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects an invalid Git path without restarting', async () => {
+    const user = userEvent.setup();
+    scmGitPathMocks.get.mockResolvedValue('/trusted/git.exe');
+    scmGitPathMocks.set.mockRejectedValueOnce(new Error('Configured Git is unavailable'));
+    renderContent();
+    const input = await screen.findByRole('textbox', { name: 'settings.scmGitPath' });
+    await user.clear(input);
+    await user.type(input, '/missing/git.exe');
+    await user.click(screen.getByRole('button', { name: 'settings.scmGitSave' }));
+
+    await waitFor(() => expect(scmSystemGitMocks.messageError).toHaveBeenCalledWith('Configured Git is unavailable'));
+    expect(restartMock).not.toHaveBeenCalled();
+    expect(input).toHaveValue('/trusted/git.exe');
   });
 
   it('shows the update failure reason when changing a directory fails', async () => {
