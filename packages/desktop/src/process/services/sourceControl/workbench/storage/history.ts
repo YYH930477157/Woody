@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { opendir, readdir, rm } from 'node:fs/promises';
+import { lstat, opendir, readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
 import type {
@@ -128,13 +128,33 @@ export async function enumerateFiles(context: StorageContext, status: CaptureSta
   return files;
 }
 
+/** What a recorder remembers between polls, so an untouched file is not read and hashed again. */
+export type KnownFiles = Map<string, { stamp: string; digest: string }>;
+
+/** A write this recent could be followed by another with the same stamp, so it is not trusted yet. */
+const SETTLED_WRITE_MS = 2000;
+
+const settledStamp = async (
+  context: StorageContext,
+  relative: string
+): Promise<{ id: string; size: number } | undefined> => {
+  try {
+    const info = await lstat(path.join(context.root, relative));
+    if (!info.isFile() || context.now() - info.mtimeMs < SETTLED_WRITE_MS) return undefined;
+    return { id: `${info.mtimeMs}:${info.size}`, size: info.size };
+  } catch {
+    return undefined;
+  }
+};
+
 /** Capture readable files; only ENOENT creates a deleted state. No error is silently mapped to empty bytes. */
 export async function captureHistory(
   context: StorageContext,
   input: HistoryCaptureInput = {},
   status = emptyStatus(),
   force = false,
-  kind?: HistoryEvent['kind']
+  kind?: HistoryEvent['kind'],
+  known?: KnownFiles
 ): Promise<HistoryEvent[]> {
   const parsed = z
     .object({
@@ -150,19 +170,29 @@ export async function captureHistory(
   const enumerated = parsed.paths ?? (await enumerateFiles(context, status));
   const selected = parsed.paths ?? [...new Set([...enumerated, ...latest.keys()])].slice(0, MAX_FILES);
   const files: HistoryEvent['files'] = [];
+  const snapshot = force || parsed.kind === 'label';
   let total = 0;
+  const withinLimit = (size: number): boolean => {
+    total += size;
+    if (total <= MAX_CAPTURE) return true;
+    status.limited = true;
+    report(context, status, 'Local history capture reached its byte limit');
+    return false;
+  };
   for (const relative of selected) {
     try {
-      const bytes = await currentFile(context, relative);
-      total += bytes?.length ?? 0;
-      if (total > MAX_CAPTURE) {
-        status.limited = true;
-        report(context, status, 'Local history capture reached its byte limit');
-        break;
+      const stamp = known && !snapshot ? await settledStamp(context, relative) : undefined;
+      const remembered = known?.get(relative);
+      if (stamp && remembered?.stamp === stamp.id && remembered.digest === latest.get(relative)) {
+        if (!withinLimit(stamp.size)) break;
+        status.fileCount++;
+        continue;
       }
+      const bytes = await currentFile(context, relative);
+      if (!withinLimit(bytes?.length ?? 0)) break;
       status.fileCount++;
       const after = bytes === null ? null : digest(bytes);
-      const snapshot = force || parsed.kind === 'label';
+      if (stamp && after !== null) known?.set(relative, { stamp: stamp.id, digest: after });
       if (!snapshot && latest.get(relative) === after) continue;
       if (!snapshot && after === null && !latest.has(relative)) continue;
       await putBlob(context, bytes);
@@ -172,10 +202,7 @@ export async function captureHistory(
       report(context, status, `Unable to record ${relative}: ${String(error)}`);
     }
   }
-  if (!files.length && !parsed.label) {
-    await saveEvents(context, events);
-    return [];
-  }
+  if (!files.length && !parsed.label) return [];
   if (force && files.length !== selected.length)
     throw new Error('Cannot capture complete recovery within storage limits');
   const event: HistoryEvent = {
