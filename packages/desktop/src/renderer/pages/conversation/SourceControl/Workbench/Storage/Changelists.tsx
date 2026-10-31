@@ -4,22 +4,35 @@ import { useTranslation } from 'react-i18next';
 import { ipcBridge } from '@/common';
 import type { GitWorkbenchScope } from '@/common/types/sourceControl/workbenchTypes';
 import type { ChangelistChange, ChangelistMutation } from '@/common/types/sourceControl/storageTypes';
+import { fileKey, type ScmResource } from '../../scmModel';
 import { useRequest } from '../useRequest';
 import { useStorageMutation } from './useStorageMutation';
 
-/** Assignment is independent from the checked-file selection used by Woody commits. */
-export function useChangelists(scope: GitWorkbenchScope | undefined, changes: ChangelistChange[]) {
-  const signature = JSON.stringify(changes);
+/** One entry per file: a partly staged file has two rows but belongs to a single list. */
+export const changelistChanges = (resources: ScmResource[]): ChangelistChange[] => [
+  ...new Map(
+    resources.map((resource) => [fileKey(resource), { key: fileKey(resource), path: resource.repo_relative_path }])
+  ).values(),
+];
+
+/**
+ * Assignment is independent from the checked-file selection used by Woody commits. `changes` is undefined until the
+ * repository status has loaded, which is different from a repository with nothing changed.
+ */
+export function useChangelists(scope: GitWorkbenchScope | undefined, changes: ChangelistChange[] | undefined) {
+  const signature = changes && JSON.stringify(changes);
   const scopeKey = JSON.stringify(scope);
   const stableScope = useMemo(() => scope, [scopeKey]);
   const read = useCallback(async () => {
     if (!stableScope || !ipcBridge.gitStorage?.changelistSync) return undefined;
+    // Syncing before the status arrives would read as "no changes" and delete every saved assignment.
+    if (signature === undefined) return ipcBridge.gitStorage.changelistRead.invoke({ scope: stableScope });
     return ipcBridge.gitStorage.changelistSync.invoke({
       scope: stableScope,
       changes: JSON.parse(signature) as ChangelistChange[],
     });
   }, [stableScope, signature]);
-  const request = useRequest(read);
+  const request = useRequest(read, scopeKey);
   const [filter, setFilter] = useState('all');
   useEffect(() => setFilter('all'), [scopeKey]);
   const mutation = useStorageMutation(request.retry);

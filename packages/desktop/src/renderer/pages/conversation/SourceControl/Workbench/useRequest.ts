@@ -1,14 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export type ReadState<T> = { loading: boolean; data?: T; error?: string };
 
-/** A cancelled read cannot publish data or an error into the next selection. */
-export function useRequest<T>(read: () => Promise<T>) {
+/**
+ * A cancelled read cannot publish data or an error into the next selection. Data is cleared while reading unless the
+ * caller names what it describes with `retainFor`: reloads of the same subject then keep showing the last result.
+ */
+export function useRequest<T>(read: () => Promise<T>, retainFor?: string) {
   const [revision, setRevision] = useState(0);
   const [state, setState] = useState<ReadState<T>>({ loading: true });
+  const subject = useRef<string | undefined>(undefined);
   useEffect(() => {
     let active = true;
-    setState({ loading: true });
+    const sameSubject = retainFor !== undefined && subject.current === retainFor;
+    subject.current = retainFor;
+    setState((current) => (sameSubject ? { loading: true, data: current.data } : { loading: true }));
     void read().then(
       (data) => {
         if (active) setState({ loading: false, data });
