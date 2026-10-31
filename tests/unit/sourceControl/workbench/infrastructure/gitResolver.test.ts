@@ -83,7 +83,7 @@ describe('Git runtime resolution', () => {
 
     expect(runtime.source).toBe('bundled');
     expect(runtime.executable).toBe(bundled);
-    expect(runtime.capabilities).toEqual({ updateRefs: true, memoryHistoryEdit: true });
+    expect(runtime.capabilities).toMatchObject({ updateRefs: true, memoryHistoryEdit: true, worktreeListNul: true });
   });
 
   it('reports all attempted paths when no supported runtime exists', async () => {

@@ -6,6 +6,10 @@ export const operationIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
 const name = revisionSchema.refine((value) => !/[~^:?*[\\\s]|\.\.|@\{|\/$|^\//.test(value), 'Invalid ref name');
 const remote = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/);
 const stash = z.string().regex(/^stash@\{(?:0|[1-9][0-9]{0,5})\}$/);
+/** Azure DevOps addresses repositories as `https://org@dev.azure.com/org/...`: there the user name is not a secret. */
+const namesFirstPathSegment = (url: URL): boolean =>
+  url.username.toLowerCase() === url.pathname.split('/')[1]?.toLowerCase();
+
 /** Only native transports and filesystem URLs; never remote helpers or URL credentials. */
 export const remoteUrlSchema = z
   .string()
@@ -20,7 +24,7 @@ export const remoteUrlSchema = z
         return (
           ['https:', 'http:', 'ssh:', 'git:', 'file:'].includes(url.protocol) &&
           !url.password &&
-          (!url.username || url.protocol === 'ssh:') &&
+          (!url.username || url.protocol === 'ssh:' || namesFirstPathSegment(url)) &&
           !url.search &&
           !url.hash
         );
@@ -28,8 +32,16 @@ export const remoteUrlSchema = z
         return false;
       }
     }
-    return !/^[a-z][a-z0-9+.-]*:/i.test(value) || /^[A-Za-z]:[\\/]/.test(value) || /^[^@\s]+@[^:\s]+:.+/.test(value);
+    return (
+      !/^[a-z][a-z0-9+.-]*:/i.test(value) ||
+      /^[A-Za-z]:[\\/]/.test(value) ||
+      /^[^@\s]+@[^:\s]+:.+/.test(value) ||
+      // An SSH config alias, `github-work:org/repo.git`. One letter would be a Windows drive.
+      (/^[a-z0-9][a-z0-9._-]+:[^/\\]/i.test(value) && !/^(?:https?|ssh|git|file|ext|fd):/i.test(value))
+    );
   }, 'Unsupported or credential-bearing remote URL');
+/** Only compared with what Git reports, so it may be the redacted form shown for a URL holding credentials. */
+const expectedUrl = z.string().min(1).max(8192);
 const expectedHead = { expectedHead: hashSchema };
 const expectedRef = { expectedRef: hashSchema };
 const confirmed = { confirmed: z.literal(true) };
@@ -123,11 +135,11 @@ export const operationSchema = z.discriminatedUnion('kind', [
       kind: z.literal('remote.setUrl'),
       name: remote,
       url: remoteUrlSchema,
-      expectedUrl: remoteUrlSchema,
+      expectedUrl,
       ...confirmed,
     })
     .strict(),
-  z.object({ kind: z.literal('remote.remove'), name: remote, expectedUrl: remoteUrlSchema, ...confirmed }).strict(),
+  z.object({ kind: z.literal('remote.remove'), name: remote, expectedUrl, ...confirmed }).strict(),
   z.object({ kind: z.literal('worktree.list') }).strict(),
   z.object({ kind: z.literal('stash.list') }).strict(),
   z

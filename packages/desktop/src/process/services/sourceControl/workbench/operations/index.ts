@@ -1,6 +1,7 @@
 import type { GitWorkbenchScope } from '@/common/types/sourceControl/workbenchTypes';
 import type { GitOperationRequest, GitOperationOutcome, GitRemote } from '@/common/types/sourceControl/operationTypes';
 import { createGitExecutor, forUserOperation, type GitExecutor } from '../executor';
+import type { GitRuntime } from '../executor/runtime';
 import { createWorkbenchRootResolver, type GitWorkbenchOptions } from '../service';
 import { repositoryCoordinator } from '../coordinator';
 import { scopeSchema } from '../validation';
@@ -23,7 +24,7 @@ export function createGitOperationService(
     git?: GitExecutor;
     storeDir?: string;
     /** Git 2.38 added the explicit `--no-update-refs` spelling. Older Git defaults to the same behavior. */
-    capabilities?: { updateRefs: boolean; memoryHistoryEdit?: boolean };
+    capabilities?: Partial<GitRuntime['capabilities']>;
   }
 ) {
   // Operations pass no user pathspecs. The global literal flag breaks stash's internal :/ cleanup.
@@ -45,6 +46,7 @@ export function createGitOperationService(
     if ((await git(root, ['check-ref-format', tag ? `refs/tags/${name}` : `refs/heads/${name}`], true)).code !== 0)
       throw new OperationBlocked('Invalid reference name');
   };
+  const noAutostash = options.capabilities?.mergeNoAutostash === false ? [] : ['--no-autostash'];
   const remoteUrls = async (root: string, name: string, push = false): Promise<string[]> =>
     (await git(root, ['remote', 'get-url', ...(push ? ['--push'] : []), '--all', name])).stdout.trim().split(/\r?\n/);
   const verifyRemote = async (root: string, name: string, push = false) => {
@@ -140,10 +142,11 @@ export function createGitOperationService(
             }
             return complete({ remotes });
           }
-          if (req.kind === 'worktree.list')
-            return complete({
-              worktrees: parseWorktrees((await git(root, ['worktree', 'list', '--porcelain', '-z'])).stdout),
-            });
+          if (req.kind === 'worktree.list') {
+            const nul = options.capabilities?.worktreeListNul !== false;
+            const { stdout } = await git(root, ['worktree', 'list', '--porcelain', ...(nul ? ['-z'] : [])]);
+            return complete({ worktrees: parseWorktrees(nul ? stdout : stdout.replace(/\r?\n/g, '\0')) });
+          }
           if (req.kind === 'stash.list') {
             const output = (await git(root, ['stash', 'list', '--format=%gd%x00%H%x00%ct%x00%s%x00'])).stdout;
             const fields = output.split('\0');
@@ -161,7 +164,15 @@ export function createGitOperationService(
             await matches(root, req.ref, req.expectedRef);
             const preview = await git(
               root,
-              ['stash', 'show', '--patch', '--include-untracked', '--no-ext-diff', '--no-textconv', req.expectedRef],
+              [
+                'stash',
+                'show',
+                '--patch',
+                ...(options.capabilities?.stashShowUntracked === false ? [] : ['--include-untracked']),
+                '--no-ext-diff',
+                '--no-textconv',
+                req.expectedRef,
+              ],
               false,
               { maxBuffer: 256 * 1024, truncate: true }
             );
@@ -215,7 +226,7 @@ export function createGitOperationService(
               await matches(root, req.target, req.target);
               await checkHistoryIdentity(req.expectedHead, req.expectedBranch);
               // Operate only on the reviewed immutable commit, with interactive editors disabled by the executor.
-              if (req.kind === 'merge') return execute(['merge', '--no-edit', '--no-autostash', req.target]);
+              if (req.kind === 'merge') return execute(['merge', '--no-edit', ...noAutostash, req.target]);
               if (req.kind === 'rebase')
                 return execute([
                   'rebase',
@@ -272,7 +283,7 @@ export function createGitOperationService(
               // Fetch may be slow; revalidate immediately before mutating the working tree.
               await checkBranch();
               await matches(root, 'HEAD', req.expectedHead);
-              return execute(['merge', '--ff-only', '--no-edit', '--no-autostash', await resolve(root, 'FETCH_HEAD')]);
+              return execute(['merge', '--ff-only', '--no-edit', ...noAutostash, await resolve(root, 'FETCH_HEAD')]);
             }
             case 'push':
               await validateName(root, req.branch);
@@ -293,7 +304,8 @@ export function createGitOperationService(
             case 'remote.setUrl':
             case 'remote.remove': {
               const urls = await remoteUrls(root, req.name);
-              if (urls.length !== 1 || urls[0] !== req.expectedUrl)
+              // The list shows credentials redacted, so that form must still identify the remote to repair it.
+              if (urls.length !== 1 || (urls[0] !== req.expectedUrl && safeOutput(urls[0]) !== req.expectedUrl))
                 throw new OperationBlocked('Remote URL changed or is ambiguous; refresh before retrying');
               return execute(
                 req.kind === 'remote.remove' ? ['remote', 'remove', req.name] : ['remote', 'set-url', req.name, req.url]
