@@ -159,7 +159,8 @@ export function createHistoryRewrite(git: GitExecutor, storeDir?: string, gitPat
         if ((await git(root, ['merge-base', '--is-ancestor', hash, oldest], true)).code === 0) oldest = hash;
       }
       const parent = await git(root, ['rev-parse', '--verify', `${oldest}^`], true);
-      if (parent.code !== 0) throw new OperationBlocked('Rewriting root commits is not supported');
+      if (parent.code !== 0)
+        throw new OperationBlocked('Rewriting root commits is not supported', 'rewriteUnsupported');
       const base = parent.stdout.trim();
       const rows = (
         await git(root, [
@@ -178,16 +179,19 @@ export function createHistoryRewrite(git: GitExecutor, storeDir?: string, gitPat
       let previous = base;
       for (const [hash, ...parents] of rows) {
         if (parents.length !== 1 || parents[0] !== previous)
-          throw new OperationBlocked('Rewriting merge commits or non-linear history is not supported');
+          throw new OperationBlocked(
+            'Rewriting merge commits or non-linear history is not supported',
+            'rewriteUnsupported'
+          );
         previous = hash;
       }
       const hashes = rows.map((row) => row[0]);
       if (selected.some((hash) => !hashes.includes(hash)))
-        throw new OperationBlocked('Selected commits are outside the linear rewrite range');
+        throw new OperationBlocked('Selected commits are outside the linear rewrite range', 'rewriteUnsupported');
       const selectedSet = new Set(selected);
       const combine = request.kind === 'history.squash' || request.kind === 'history.fixup';
       if (combine && hashes.slice(0, selected.length).some((hash) => !selectedSet.has(hash)))
-        throw new OperationBlocked('Squash and fixup require a contiguous linear selection');
+        throw new OperationBlocked('Squash and fixup require a contiguous linear selection', 'rewriteUnsupported');
       // All message bytes are data files. Todo shell lines contain only internally quoted paths.
       let message: string | undefined;
       if (request.kind === 'history.reword') message = request.message;

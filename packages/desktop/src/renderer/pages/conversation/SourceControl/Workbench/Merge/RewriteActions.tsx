@@ -5,6 +5,7 @@ import { gitWorkbench } from '@/common/adapter/ipcBridge';
 import type { GitOperationOutcome, GitOperationRequest } from '@/common/types/sourceControl/operationTypes';
 import type { GitWorkbenchScope } from '@/common/types/sourceControl/workbenchTypes';
 import { refreshRepo } from '../../scmStore';
+import { explainOutcome } from '../operationOutcome';
 
 type Kind = 'reword' | 'squash' | 'fixup' | 'drop';
 type Pending = { kind: Kind; hashes: string[]; head: string; branch: string; message: string };
@@ -54,7 +55,9 @@ export function RewriteActions({
       const result = await gitWorkbench.operate.invoke({ scope, request: { kind: 'inspect' } });
       if (version !== generation.current) return;
       if (result.state !== 'complete' || !result.data?.head || !result.data.branch || result.data.operation)
-        throw new Error(result.output || t('conversation.gitWorkbench.rewrite.unavailable'));
+        throw new Error(
+          explainOutcome(result, t).summary ?? (result.output || t('conversation.gitWorkbench.rewrite.unavailable'))
+        );
       let message = '';
       if (kind === 'reword' || kind === 'squash') {
         const details = await Promise.all(target.map((hash) => gitWorkbench.details.invoke({ scope, hash })));

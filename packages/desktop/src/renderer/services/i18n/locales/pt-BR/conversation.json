@@ -753,8 +753,8 @@
         "agentFailed": "A tarefa de IA falhou ou o rascunho é inválido. Verifique a conversa e tente novamente.",
         "repairOutsideSelection": "Um arquivo fora da seleção ou o estado do Git mudou. O commit foi bloqueado e as alterações locais foram preservadas.",
         "repairLimit": "Ainda há diagnósticos após duas tentativas de reparo. Corrija manualmente e analise novamente.",
-        "buildConfigRequired": "Nenhum projeto IAR ou CMake detectado. Configure a compilação em .woody/static-scan.json.",
-        "buildAmbiguous": "Vários sistemas de compilação ou projetos encontrados. Selecione um em .woody/static-scan.json.",
+        "buildConfigRequired": "Nenhum projeto IAR ou CMake foi detectado. Configure o build em .woody/static-scan.json ou desmarque \"Verificar compilação\" para pular.",
+        "buildAmbiguous": "Foram encontrados vários sistemas de build ou projetos. Selecione um em .woody/static-scan.json ou desmarque \"Verificar compilação\" para pular.",
         "buildFailed": "A compilação falhou. Confira a saída, corrija o problema e tente novamente.",
         "runChecks": "Executar verificações",
         "continueCommit": "Continuar para o commit",
@@ -1036,6 +1036,24 @@
       "history": {
         "continue": "Continue operation",
         "abort": "Abort operation"
+      },
+      "running": "{{operation}} em andamento…",
+      "runningRemote": "{{operation}} em andamento. Você pode cancelar a qualquer momento.",
+      "reasons": {
+        "refChanged": "Este branch ou tag mudou. Atualize e tente novamente.",
+        "branchChanged": "O branch atual mudou. Atualize e tente novamente.",
+        "invalidName": "Este nome não pode ser usado em um branch ou tag do Git.",
+        "remoteUnsupported": "O endereço deste remoto não é compatível ou contém uma senha ou token. Altere o endereço e tente novamente.",
+        "remoteChanged": "O endereço deste remoto mudou. Atualize e tente novamente.",
+        "operationInProgress": "Um merge, rebase ou operação semelhante ainda está em andamento. Conclua ou cancele primeiro.",
+        "operationEnded": "Essa operação já terminou. Atualize para ver o estado atual.",
+        "unresolvedConflicts": "Alguns arquivos ainda têm conflitos. Resolva-os e continue.",
+        "dirtyWorktree": "Isso exige uma árvore de trabalho limpa. Faça commit, stash ou descarte suas alterações primeiro.",
+        "gitLocked": "Outro processo do Git está usando este repositório. Tente novamente quando ele terminar.",
+        "localChanges": "Suas alterações sem commit nos arquivos abaixo seriam sobrescritas. Faça commit ou stash primeiro.",
+        "rewriteUnsupported": "Estes commits não podem ser reescritos. Commits raiz, commits de merge e squash de commits não adjacentes não são compatíveis.",
+        "gitTooOld": "Editar o histórico exige Git 2.40 ou mais recente. Configure um Git mais novo.",
+        "cancelled": "Cancelado. Parte do trabalho pode já ter sido feita, então atualize antes de tentar novamente."
       }
     },
     "merge": {

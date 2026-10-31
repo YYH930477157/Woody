@@ -747,8 +747,8 @@
         "agentFailed": "AI 任務失敗或傳回的草稿格式無效，請查看目前對話後重試。",
         "repairOutsideSelection": "偵測到允許範圍外的檔案或 Git 狀態發生變化，已阻止提交並保留本機修改。",
         "repairLimit": "兩輪自動修復後仍有診斷，請手動處理後重新掃描。",
-        "buildConfigRequired": "未偵測到 IAR 或 CMake 專案，請在 .woody/static-scan.json 中設定建置。",
-        "buildAmbiguous": "偵測到多個建置系統或專案，請在 .woody/static-scan.json 中明確選擇。",
+        "buildConfigRequired": "未偵測到 IAR 或 CMake 專案。請在 .woody/static-scan.json 中設定建置，或取消勾選「編譯驗證」以略過。",
+        "buildAmbiguous": "偵測到多個建置系統或專案。請在 .woody/static-scan.json 中明確選擇，或取消勾選「編譯驗證」以略過。",
         "buildFailed": "編譯驗證失敗，請查看輸出，處理問題後重試。",
         "runChecks": "執行檢查",
         "continueCommit": "繼續提交",
@@ -1030,6 +1030,24 @@
       "history": {
         "continue": "Continue operation",
         "abort": "Abort operation"
+      },
+      "running": "正在執行：{{operation}}…",
+      "runningRemote": "正在執行：{{operation}}，可隨時取消。",
+      "reasons": {
+        "refChanged": "這個分支或標籤已經變更，請重新整理後重試。",
+        "branchChanged": "目前分支已經變更，請重新整理後重試。",
+        "invalidName": "這個名稱不能用作 Git 分支或標籤。",
+        "remoteUnsupported": "這個遠端位址不受支援，或其中包含密碼或權杖。請修改位址後重試。",
+        "remoteChanged": "這個遠端位址已經變更，請重新整理後重試。",
+        "operationInProgress": "還有合併、重定基底或類似操作正在進行，請先完成或中止它。",
+        "operationEnded": "該操作已經結束，請重新整理查看目前狀態。",
+        "unresolvedConflicts": "還有檔案存在衝突，請解決後再繼續。",
+        "dirtyWorktree": "此操作要求工作區乾淨，請先提交、暫存或捨棄目前的變更。",
+        "gitLocked": "另一個 Git 處理程序正在使用這個儲存庫，請等它結束後重試。",
+        "localChanges": "下列檔案中未提交的變更會被覆寫，請先提交或暫存。",
+        "rewriteUnsupported": "無法重寫所選提交：不支援根提交、合併提交，也不支援壓縮不相鄰的提交。",
+        "gitTooOld": "編輯歷史需要 Git 2.40 或更新版本，請設定較新的 Git。",
+        "cancelled": "已取消。部分操作可能已經完成，請先重新整理再重試。"
       }
     },
     "merge": {

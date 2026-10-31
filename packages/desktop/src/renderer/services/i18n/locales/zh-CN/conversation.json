@@ -747,8 +747,8 @@
         "agentFailed": "AI 任务失败或返回的草稿格式无效，请查看当前对话后重试。",
         "repairOutsideSelection": "检测到允许范围外的文件或 Git 状态发生变化，已阻止提交并保留本地修改。",
         "repairLimit": "两轮自动修复后仍有诊断，请手工处理后重新扫描。",
-        "buildConfigRequired": "未检测到 IAR 或 CMake 工程，请在 .woody/static-scan.json 中配置构建。",
-        "buildAmbiguous": "检测到多个构建系统或工程，请在 .woody/static-scan.json 中明确选择。",
+        "buildConfigRequired": "未检测到 IAR 或 CMake 工程。请在 .woody/static-scan.json 中配置构建，或取消勾选“编译验证”以跳过。",
+        "buildAmbiguous": "检测到多个构建系统或工程。请在 .woody/static-scan.json 中明确选择，或取消勾选“编译验证”以跳过。",
         "buildFailed": "编译验证失败，请查看输出，处理问题后重试。",
         "runChecks": "运行检查",
         "continueCommit": "继续提交",
@@ -1030,6 +1030,24 @@
       "history": {
         "continue": "继续操作",
         "abort": "中止操作"
+      },
+      "running": "正在执行：{{operation}}…",
+      "runningRemote": "正在执行：{{operation}}，可随时取消。",
+      "reasons": {
+        "refChanged": "这个分支或标签已经变化，请刷新后重试。",
+        "branchChanged": "当前分支已经变化，请刷新后重试。",
+        "invalidName": "这个名称不能用作 Git 分支或标签。",
+        "remoteUnsupported": "这个远程地址不受支持，或其中包含密码或令牌。请修改地址后重试。",
+        "remoteChanged": "这个远程地址已经变化，请刷新后重试。",
+        "operationInProgress": "还有合并、变基或类似操作正在进行，请先完成或中止它。",
+        "operationEnded": "该操作已经结束，请刷新查看当前状态。",
+        "unresolvedConflicts": "还有文件存在冲突，请解决后再继续。",
+        "dirtyWorktree": "此操作要求工作区干净，请先提交、贮藏或丢弃当前更改。",
+        "gitLocked": "另一个 Git 进程正在使用这个仓库，请等它结束后重试。",
+        "localChanges": "下列文件中未提交的更改会被覆盖，请先提交或贮藏。",
+        "rewriteUnsupported": "无法重写所选提交：不支持根提交、合并提交，也不支持压缩不相邻的提交。",
+        "gitTooOld": "编辑历史需要 Git 2.40 或更高版本，请配置较新的 Git。",
+        "cancelled": "已取消。部分操作可能已经完成，请先刷新再重试。"
       }
     },
     "merge": {

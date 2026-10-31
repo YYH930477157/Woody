@@ -748,8 +748,8 @@
         "agentFailed": "Die KI-Aufgabe ist fehlgeschlagen oder der Entwurf ist ungültig. Prüfen Sie den Chat und versuchen Sie es erneut.",
         "repairOutsideSelection": "Eine Datei außerhalb der Auswahl oder der Git-Zustand wurde geändert. Der Commit ist blockiert; lokale Änderungen bleiben erhalten.",
         "repairLimit": "Nach zwei Reparaturversuchen bestehen weiterhin Diagnosen. Beheben Sie diese manuell und scannen Sie erneut.",
-        "buildConfigRequired": "Kein IAR- oder CMake-Projekt gefunden. Konfigurieren Sie den Build in .woody/static-scan.json.",
-        "buildAmbiguous": "Mehrere Build-Systeme oder Projekte gefunden. Wählen Sie eines in .woody/static-scan.json.",
+        "buildConfigRequired": "Kein IAR- oder CMake-Projekt erkannt. Konfigurieren Sie den Build in .woody/static-scan.json oder deaktivieren Sie „Kompilierung prüfen“, um ihn zu überspringen.",
+        "buildAmbiguous": "Mehrere Build-Systeme oder Projekte gefunden. Wählen Sie eines in .woody/static-scan.json aus oder deaktivieren Sie „Kompilierung prüfen“, um den Schritt zu überspringen.",
         "buildFailed": "Kompilierung fehlgeschlagen. Prüfen Sie die Ausgabe, beheben Sie das Problem und versuchen Sie es erneut.",
         "runChecks": "Prüfungen ausführen",
         "continueCommit": "Weiter zum Commit",
@@ -1031,6 +1031,24 @@
       "history": {
         "continue": "Continue operation",
         "abort": "Abort operation"
+      },
+      "running": "{{operation}} läuft…",
+      "runningRemote": "{{operation}} läuft. Sie können jederzeit abbrechen.",
+      "reasons": {
+        "refChanged": "Dieser Branch oder Tag wurde geändert. Aktualisieren Sie und versuchen Sie es erneut.",
+        "branchChanged": "Der aktuelle Branch wurde geändert. Aktualisieren Sie und versuchen Sie es erneut.",
+        "invalidName": "Dieser Name kann nicht für einen Git-Branch oder -Tag verwendet werden.",
+        "remoteUnsupported": "Die Adresse dieses Remotes wird nicht unterstützt oder enthält ein Passwort oder Token. Ändern Sie die Adresse und versuchen Sie es erneut.",
+        "remoteChanged": "Die Adresse dieses Remotes wurde geändert. Aktualisieren Sie und versuchen Sie es erneut.",
+        "operationInProgress": "Ein Merge, Rebase oder ein ähnlicher Vorgang läuft noch. Schließen Sie ihn zuerst ab oder brechen Sie ihn ab.",
+        "operationEnded": "Dieser Vorgang ist bereits beendet. Aktualisieren Sie, um den aktuellen Stand zu sehen.",
+        "unresolvedConflicts": "Einige Dateien haben noch Konflikte. Lösen Sie diese und fahren Sie dann fort.",
+        "dirtyWorktree": "Dafür ist ein sauberes Arbeitsverzeichnis nötig. Committen, stashen oder verwerfen Sie zuerst Ihre Änderungen.",
+        "gitLocked": "Ein anderer Git-Prozess verwendet dieses Repository. Versuchen Sie es erneut, wenn er beendet ist.",
+        "localChanges": "Ihre nicht committeten Änderungen an den folgenden Dateien würden überschrieben. Committen oder stashen Sie sie zuerst.",
+        "rewriteUnsupported": "Diese Commits können nicht umgeschrieben werden. Root-Commits, Merge-Commits und das Zusammenfassen nicht benachbarter Commits werden nicht unterstützt.",
+        "gitTooOld": "Zum Bearbeiten des Verlaufs ist Git 2.40 oder neuer erforderlich. Konfigurieren Sie eine neuere Git-Version.",
+        "cancelled": "Abgebrochen. Ein Teil der Arbeit ist möglicherweise bereits erledigt, aktualisieren Sie daher vor einem neuen Versuch."
       }
     },
     "merge": {

@@ -16,7 +16,15 @@ export const safeOutput = (text: string): string =>
     )
     .replace(/([?&](?:token|access_token|password|secret|key)=)[^\s&#]+/gi, '$1[redacted]');
 
-export class OperationBlocked extends Error {}
+/** `reason` names a case the UI can explain in the user's language; the message stays for logs and unknown cases. */
+export class OperationBlocked extends Error {
+  constructor(
+    message: string,
+    readonly reason?: string
+  ) {
+    super(message);
+  }
+}
 
 /** Read operation markers in the current worktree, not the common directory. */
 export async function inspectOperation(root: string, git: GitExecutor) {
