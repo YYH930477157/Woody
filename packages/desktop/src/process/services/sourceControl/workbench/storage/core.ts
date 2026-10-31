@@ -179,11 +179,15 @@ export function createStorageContext(options: StorageOptions) {
     mutation = false
   ): Promise<T> => {
     const context = await resolve(scope);
-    if (mutation) {
-      const probe = await git(context.root, ['rev-parse', '--show-toplevel'], true);
-      if (probe.code === 0) return sharedCoordinator(context.root, () => action(context));
-    }
-    return localCoordinator.run(context.root, () => action(context));
+    // Every action reads or rewrites the same store files, so all of them queue here. Otherwise background capture
+    // can write back stale events over a restore and collect the recovery snapshot it just returned.
+    return localCoordinator.run(context.root, async () => {
+      if (mutation) {
+        const probe = await git(context.root, ['rev-parse', '--show-toplevel'], true);
+        if (probe.code === 0) return sharedCoordinator(context.root, () => action(context));
+      }
+      return action(context);
+    });
   };
   return { resolve, run };
 }
