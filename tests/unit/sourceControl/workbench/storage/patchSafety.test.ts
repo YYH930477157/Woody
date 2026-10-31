@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { parsePatch } from '@process/services/sourceControl/workbench/storage/patch';
 import { fixture, git, scope } from './fixtures';
 
+const TAB = String.fromCharCode(9);
 const cleanup: (() => Promise<void>)[] = [];
 afterEach(async () => {
   for (const fn of cleanup.splice(0)) await fn();
@@ -18,6 +19,21 @@ describe('shelf patch path safety', () => {
     for (const name of ['../outside', '.git/config', 'folder/../../outside', '.GIT/config', 'git~1/config'])
       expect(() => parsePatch(patch(name))).toThrow();
     expect(() => parsePatch(patch('x').replaceAll('b/x', '"b/evil\\nfile"'))).toThrow();
+  });
+
+  it('shelves a modified text file whose name contains a space', async () => {
+    const f = await fixture();
+    cleanup.push(f.cleanup);
+    await writeFile(path.join(f.root, 'a b.txt'), 'base\n');
+    await git(f.root, ['add', '.']);
+    await git(f.root, ['commit', '-m', 'spaced']);
+    await writeFile(path.join(f.root, 'a b.txt'), 'changed\n');
+    const { stdout } = await git(f.root, ['diff']);
+    expect(stdout).toContain('--- a/a b.txt' + TAB);
+
+    const item = await f.service.shelfCreate(scope, { name: 'spaced', paths: ['a b.txt'] });
+
+    expect(item.files.map((file) => file.path)).toEqual(['a b.txt']);
   });
 
   it('keeps rename origins and rejects symlink, submodule, and inconsistent headers', () => {

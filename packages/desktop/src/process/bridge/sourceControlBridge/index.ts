@@ -45,6 +45,7 @@ export function initGitWorkbenchBridge(runtimePromise: Promise<GitBridgeRuntime>
     const service = createGitWorkbenchService(options);
     const operations = createGitOperationService({
       ...options,
+      git: runtime.operationsGit,
       run: runtime.coordinator.run,
       capabilities: runtime.runtime.capabilities,
       storeDir: path.join(app.getPath('userData'), 'git-history-recovery'),

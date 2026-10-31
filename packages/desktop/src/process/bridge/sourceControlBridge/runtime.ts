@@ -13,7 +13,10 @@ import { createRepositoryCoordinator } from '@process/services/sourceControl/wor
 export type GitBridgeRuntime = {
   runtime: GitRuntime;
   configuredPath: string;
+  /** Treats paths literally, so `app/[id]/page.tsx` never matches as a glob. */
   git: GitExecutor;
+  /** Operations pass no user paths, and the literal flag breaks stash's internal `:/` cleanup. */
+  operationsGit: GitExecutor;
   coordinator: ReturnType<typeof createRepositoryCoordinator>;
 };
 
@@ -37,11 +40,12 @@ export function getGitBridgeRuntime(): Promise<GitBridgeRuntime> {
   pending = (async () => {
     configuredAtStartup = ((await ProcessConfig.get('scm.gitPath')) ?? '').trim();
     const runtime = await createHostRuntimeResolver(configuredAtStartup).get();
-    const git = createGitExecutor(runtime.executable, false);
+    const git = createGitExecutor(runtime.executable);
     return {
       runtime,
       configuredPath: configuredAtStartup,
       git,
+      operationsGit: createGitExecutor(runtime.executable, false),
       coordinator: createRepositoryCoordinator(undefined, git),
     };
   })();

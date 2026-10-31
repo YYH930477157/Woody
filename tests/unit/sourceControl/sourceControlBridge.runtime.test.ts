@@ -116,6 +116,7 @@ import { initGitWorkbenchBridge, initSourceControlBridge } from '@/process/bridg
 describe('source control bridge runtime sharing', () => {
   it('uses one configured executable and coordinator for checked commits, workbench, operations, merge and storage', async () => {
     const git = vi.fn();
+    const operationsGit = vi.fn();
     const run = vi.fn();
     const runtimePromise = Promise.resolve({
       runtime: {
@@ -127,6 +128,7 @@ describe('source control bridge runtime sharing', () => {
       },
       configuredPath: '',
       git,
+      operationsGit,
       coordinator: { run },
     });
     dependencies.getGitBridgeRuntime.mockReturnValue(runtimePromise);
@@ -147,7 +149,7 @@ describe('source control bridge runtime sharing', () => {
     expect(dependencies.createGitWorkbenchService).toHaveBeenCalledWith(expect.objectContaining({ git }));
     expect(dependencies.createGitOperationService).toHaveBeenCalledWith(
       expect.objectContaining({
-        git,
+        git: operationsGit,
         run,
         capabilities: { updateRefs: true, memoryHistoryEdit: true },
       })
