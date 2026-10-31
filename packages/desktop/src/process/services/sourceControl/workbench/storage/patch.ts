@@ -69,7 +69,10 @@ export function parsePatch(patch: string): PatchSection[] {
     const single = (prefix: string) => {
       const matches = metadata.filter((line) => line.startsWith(prefix));
       if (matches.length > 1) throw new Error('Duplicate patch path header');
-      return matches[0] === undefined ? undefined : decode(matches[0].slice(prefix.length));
+      if (matches[0] === undefined) return undefined;
+      const value = matches[0].slice(prefix.length);
+      // Git ends these two headers with a tab when an unquoted path contains a space.
+      return decode(prefix === '--- ' || prefix === '+++ ' ? value.replace(/\t$/, '') : value);
     };
     const from = single('rename from ');
     const to = single('rename to ');
