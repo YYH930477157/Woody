@@ -41,7 +41,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('file history and blame', () => {
-  it('opens a selected historical revision in Woody preview with a read-only file reference', async () => {
+  it('opens a selected historical revision in its own read-only tab', async () => {
     render(<FileHistory scope={scope} file='src/a.ts' onClose={vi.fn()} />);
 
     fireEvent.click(await screen.findByRole('button', { name: /Change file/ }));
@@ -54,7 +54,12 @@ describe('file history and blame', () => {
     expect(openPreview).toHaveBeenCalledWith(
       'historical source',
       'code',
-      expect.objectContaining({ editable: false, file_name: 'a.ts' })
+      expect.objectContaining({
+        editable: false,
+        file_name: `a.ts @ ${'a'.repeat(8)}`,
+        language: 'ts',
+        revision: `${'a'.repeat(40)}:src/a.ts`,
+      })
     );
     expect(await screen.findByText('+historical source')).toBeVisible();
   });

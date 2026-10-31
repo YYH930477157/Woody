@@ -48,6 +48,9 @@ export interface PreviewMetadata {
   fileRef?: ChatFileRef;
   // Git comparisons retain their anchors; the Source view reads fileRef from disk.
   scmDiff?: { request: PreviewDiffRequest; binary?: boolean; truncated?: boolean };
+  // A historical version, as `<commit>:<path>`. Such a tab has no fileRef: it must never merge into the live file's
+  // editor or reload from disk.
+  revision?: string;
   file_path?: string; // 工作空间文件的绝对路径 / Absolute file path in workspace
   workspace?: string; // 工作空间根目录 / Workspace root directory
   editable?: boolean; // 是否可编辑 / Whether editable
