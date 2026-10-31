@@ -126,12 +126,9 @@ describe('Git runtime resolution', () => {
       raw: '2.25.2.windows.1',
     });
     expect(systemGitCandidates({ PATH: `${path.resolve('a')};${path.resolve('b')}` }, 'win32')).toEqual([
+      // `.cmd`/`.bat` shims are not spawnable without a shell, so they are not candidates.
       path.join(path.resolve('a'), 'git.exe'),
-      path.join(path.resolve('a'), 'git.cmd'),
-      path.join(path.resolve('a'), 'git.bat'),
       path.join(path.resolve('b'), 'git.exe'),
-      path.join(path.resolve('b'), 'git.cmd'),
-      path.join(path.resolve('b'), 'git.bat'),
     ]);
   });
 });

@@ -20,8 +20,11 @@ export async function withIsolatedHistory<T>(
   const gitDir = path.resolve(root, (await git(root, ['rev-parse', '--git-dir'])).stdout.trim());
   const index = path.resolve(root, (await git(root, ['rev-parse', '--git-path', 'index'])).stdout.trim());
   const release = await acquireHistoryLocks(gitDir, index).catch((error: NodeJS.ErrnoException) => {
+    // The path is the actionable part: it tells the user which lock to close or remove.
     if (error.code === 'EEXIST')
-      throw new OperationBlocked('Git HEAD or index is locked by another operation; retry after it finishes');
+      throw new OperationBlocked(
+        `Git HEAD or index is locked by another operation; retry after it finishes. ${error.message}`
+      );
     throw error;
   });
   try {
