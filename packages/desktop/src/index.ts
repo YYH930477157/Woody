@@ -694,6 +694,9 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
   });
 };
 
+/** A crashed or busy renderer must never make the window impossible to close. */
+const WORKSPACE_CLOSE_CONFIRM_TIMEOUT_MS = 5000;
+
 /** Ask the renderer before teardown so its save dialog can still call the backend. */
 const confirmWorkspaceWindowClose = async (): Promise<boolean> => {
   if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return true;
@@ -702,14 +705,33 @@ const confirmWorkspaceWindowClose = async (): Promise<boolean> => {
     if (mainWindow.isMinimized()) mainWindow.restore();
     if (!mainWindow.isVisible()) mainWindow.show();
     mainWindow.focus();
-    return Boolean(
-      await mainWindow.webContents.executeJavaScript(
+    const confirmation = Promise.resolve(
+      mainWindow.webContents.executeJavaScript(
         'window.__confirmWorkspaceClose ? window.__confirmWorkspaceClose() : true'
       )
     );
+    // Fail open on a timeout or a dead renderer: there is no answer to wait for, and a hung window cannot be
+    // closed at all. The renderer only has to save its own drafts, which a dead renderer cannot do anyway.
+    return await new Promise<boolean>((resolve) => {
+      const timer = setTimeout(() => {
+        console.warn('[Workspace] Close confirmation timed out; closing without a decision');
+        resolve(true);
+      }, WORKSPACE_CLOSE_CONFIRM_TIMEOUT_MS);
+      void confirmation.then(
+        (value) => {
+          clearTimeout(timer);
+          resolve(Boolean(value));
+        },
+        (error: unknown) => {
+          clearTimeout(timer);
+          console.error('[Workspace] Close confirmation failed; closing without a decision', error);
+          resolve(true);
+        }
+      );
+    });
   } catch (error) {
-    console.error('[Workspace] Could not confirm window close', error);
-    return false;
+    console.error('[Workspace] Could not ask the renderer to confirm close', error);
+    return true;
   }
 };
 
