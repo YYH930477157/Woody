@@ -22,6 +22,12 @@ export type GitRuntime = {
     updateRefs: boolean;
     /** In-memory history editing used only where the host supports it. */
     memoryHistoryEdit: boolean;
+    /** `worktree list -z`, which keeps unusual paths intact. */
+    worktreeListNul: boolean;
+    /** `merge --no-autostash`; older Git never autostashes a merge, so the flag is simply omitted. */
+    mergeNoAutostash: boolean;
+    /** `stash show --include-untracked`. */
+    stashShowUntracked: boolean;
   };
 };
 
@@ -133,6 +139,9 @@ const inspectRuntime = async (
     capabilities: {
       updateRefs: atLeast(version, [2, 38, 0]),
       memoryHistoryEdit: atLeast(version, [2, 40, 0]),
+      worktreeListNul: atLeast(version, [2, 36, 0]),
+      mergeNoAutostash: atLeast(version, [2, 27, 0]),
+      stashShowUntracked: atLeast(version, [2, 32, 0]),
     },
   };
 };
