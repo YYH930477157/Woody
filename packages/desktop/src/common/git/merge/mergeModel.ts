@@ -53,12 +53,13 @@ export interface ChangeState {
 // ---------------------------------------------------------------- text
 
 /**
- * Splits text into lines like an IntelliJ document: a trailing newline gives a last empty line,
- * CR LF separators are normalized (and restored on write with `joinText`).
+ * Splits text into lines like an IntelliJ document: a trailing newline gives a last empty line.
+ * A file using only CR LF is normalized, and `joinText` restores it. Any other mix keeps its CRs inside the lines, so
+ * writing the result back changes nothing outside the lines the user resolved.
  */
 export function splitText(text: string): { lines: string[]; crlf: boolean } {
-  const crlf = /\r\n/.test(text);
-  return { lines: text.replace(/\r\n?/g, '\n').split('\n'), crlf };
+  const crlf = /\r\n/.test(text) && !/\r(?!\n)|(?<!\r)\n/.test(text);
+  return { lines: (crlf ? text.replaceAll('\r\n', '\n') : text).split('\n'), crlf };
 }
 
 export function joinText(lines: string[], crlf: boolean): string {
