@@ -72,6 +72,7 @@ import {
 } from '@/renderer/components/workspace/WorkspaceManager/model';
 import {
   addWorkspaceRoot,
+  publishWorkspaceDetail,
   closeRootEditors,
   confirmRootEditors,
 } from '@/renderer/components/workspace/WorkspaceManager/lifecycle';
@@ -236,7 +237,7 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({
     if (!path) return; // cancelled
     try {
       if (detail?.workspace?.managed) {
-        await mutate(await addWorkspaceRoot(detail, pathToFileUri(path)), false);
+        await publishWorkspaceDetail(await addWorkspaceRoot(detail, pathToFileUri(path)));
         return;
       }
       const entry = await ipcBridge.project.attachFolder.invoke({ project_id: projectId, uri: pathToFileUri(path) });
@@ -261,12 +262,11 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({
     try {
       if (!(await confirmRootEditors(preview, [peId]))) return;
       if (detail?.workspace?.managed) {
-        await mutate(
+        await publishWorkspaceDetail(
           await ipcBridge.project.updateWorkspace.invoke({
             project_id: projectId,
             ...removeWorkspaceRoot(buildWorkspaceUpdate(detail), peId),
-          }),
-          false
+          })
         );
         closeRootEditors(preview, [peId]);
         return;

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { BackendHttpError } from '@/common/adapter/httpBridge';
 import {
   hydrateSelectedWorkspace,
   selectWorkspace,
@@ -42,5 +43,18 @@ describe('workspace selection persistence', () => {
       })
     ).rejects.toThrow('offline');
     expect(localStorage.getItem('woody.selectedWorkspace')).toBe('p');
+  });
+  it('forgets a saved workspace the backend no longer has', async () => {
+    localStorage.setItem('woody.selectedWorkspace', 'gone');
+    await hydrateSelectedWorkspace(async () => {
+      throw new BackendHttpError({
+        method: 'GET',
+        path: '/api/projects/gone',
+        status: 404,
+        body: { code: 'project_not_found' },
+      });
+    });
+    expect(localStorage.getItem('woody.selectedWorkspace')).toBeNull();
+    expect(getSelectedWorkspace()).toBeNull();
   });
 });
