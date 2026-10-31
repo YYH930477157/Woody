@@ -6,13 +6,14 @@ import type {
   HistoryRecorderStatus,
 } from '@/common/types/sourceControl/storageTypes';
 import type { createStorageContext, StorageOptions } from './core';
-import { captureHistory, emptyStatus, type CaptureStatus } from './history';
+import { captureHistory, emptyStatus, type CaptureStatus, type KnownFiles } from './history';
 
 type Recording = {
   watcher?: FSWatcher;
   timer?: ReturnType<typeof setInterval>;
   debounce?: ReturnType<typeof setTimeout>;
   pending?: Promise<void>;
+  known: KnownFiles;
   stopped: boolean;
 };
 
@@ -23,10 +24,16 @@ export function createHistoryRecorder(contexts: ReturnType<typeof createStorageC
   const starts = new Map<string, Promise<void>>();
   let disposed = false;
   const keyOf = (scope: GitWorkbenchScope) => JSON.stringify([scope.projectId, scope.peId, scope.relativePath]);
-  const capture = async (scope: GitWorkbenchScope, input: HistoryCaptureInput = {}): Promise<HistoryEvent[]> => {
+  const capture = async (
+    scope: GitWorkbenchScope,
+    input: HistoryCaptureInput = {},
+    known?: KnownFiles
+  ): Promise<HistoryEvent[]> => {
     if (disposed) throw new Error('Local history recorder is disposed');
     const status = emptyStatus();
-    const result = await contexts.run(scope, (context) => captureHistory(context, input, status));
+    const result = await contexts.run(scope, (context) =>
+      captureHistory(context, input, status, false, undefined, known)
+    );
     statuses.set(keyOf(scope), status);
     return result;
   };
@@ -39,11 +46,11 @@ export function createHistoryRecorder(contexts: ReturnType<typeof createStorageC
       const context = await contexts.resolve(scope);
       if (disposed) return;
       if (entries.size >= 32) throw new Error('Local history recorder scope limit exceeded');
-      const entry: Recording = { stopped: false };
+      const entry: Recording = { known: new Map(), stopped: false };
       entries.set(key, entry);
       const record = (): Promise<void> => {
         if (entry.stopped || entry.pending) return entry.pending ?? Promise.resolve();
-        entry.pending = capture(scope, { kind: 'external' })
+        entry.pending = capture(scope, { kind: 'external' }, entry.known)
           .then((): void => undefined)
           .catch((error: unknown): void => {
             const status = statuses.get(key) ?? emptyStatus();
