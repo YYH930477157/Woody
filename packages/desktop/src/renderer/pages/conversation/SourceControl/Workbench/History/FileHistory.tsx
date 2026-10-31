@@ -2,15 +2,12 @@ import React, { useCallback, useState } from 'react';
 import { Alert, Button, Empty, Tabs, Tag } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import { gitWorkbench } from '@/common/adapter/ipcBridge';
-import { projectFileRef } from '@/common/types/chatFile';
 import type { GitCommitDiff, GitHistoryCommit, GitWorkbenchScope } from '@/common/types/sourceControl/workbenchTypes';
+import { getFileTypeInfo } from '@/renderer/utils/file/fileType';
 import { usePreviewContext } from '../../../Preview';
 import { Loading, RequestError } from '../RequestState';
 import { useRequest } from '../useRequest';
 import styles from '../Workbench.module.css';
-
-const fileReference = (scope: GitWorkbenchScope, file: string) =>
-  projectFileRef(scope.peId, [scope.relativePath, file].filter(Boolean).join('/'));
 
 /** File-local history, blame and historical source routed into Woody's shared preview. */
 export function FileHistory({ scope, file, onClose }: { scope: GitWorkbenchScope; file: string; onClose: () => void }) {
@@ -50,10 +47,13 @@ export function FileHistory({ scope, file, onClose }: { scope: GitWorkbenchScope
         setError(t('conversation.gitWorkbench.binary'));
         return;
       }
+      const name = file.split('/').pop() || file;
+      const label = `${name} @ ${commit.hash.slice(0, 8)}`;
       openPreview(content.content ?? '', 'code', {
-        title: `${file} @ ${commit.hash.slice(0, 8)}`,
-        file_name: file.split('/').pop() || file,
-        fileRef: fileReference(scope, file),
+        title: label,
+        file_name: label,
+        language: getFileTypeInfo(name).language,
+        revision: `${commit.hash}:${file}`,
         editable: false,
       });
     } catch (failure) {

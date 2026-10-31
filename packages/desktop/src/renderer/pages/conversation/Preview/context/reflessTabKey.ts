@@ -67,5 +67,8 @@ export const reflessTabKey = (type: PreviewContentType, content?: string, meta?:
     return `diff${SEP}${fileName}${SEP}${hashText(content)}`;
   }
 
+  // A commit's version of a file never changes, so reopening it returns to the same tab.
+  if (meta?.revision) return `revision${SEP}${meta.revision}`;
+
   return null;
 };
