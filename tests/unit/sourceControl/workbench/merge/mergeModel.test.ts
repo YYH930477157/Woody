@@ -1,4 +1,4 @@
-import { test } from 'vitest';
+import { describe, expect, it, test } from 'vitest';
 import assert from 'node:assert/strict';
 import {
   buildMergeChanges,
@@ -142,4 +142,30 @@ test('IntelliJ status texts', () => {
     iterativeUnprocessedMessage(0, 1),
     '1 unprocessed change still remains. The file will be saved exactly as shown in the Result pane.'
   );
+});
+
+describe('line endings', () => {
+  const roundTrip = (text: string) => {
+    const { lines, crlf } = splitText(text);
+    return joinText(lines, crlf);
+  };
+
+  it.each([
+    ['only LF', 'a\nb\n'],
+    ['only CRLF', 'a\r\nb\r\n'],
+    ['mostly LF with one CRLF line', 'a\nb\r\nc\n'],
+    ['mostly CRLF with one LF line', 'a\r\nb\nc\r\n'],
+    ['a stray CR inside a line', 'a\rb\nc\n'],
+    ['no newline at all', 'abc'],
+  ])('writes back %s unchanged', (_name, text) => {
+    expect(roundTrip(text)).toBe(text);
+  });
+
+  it('normalizes a uniformly CRLF file for comparison', () => {
+    expect(splitText('a\r\nb').lines).toEqual(['a', 'b']);
+  });
+
+  it('does not turn a stray CR into a line break', () => {
+    expect(splitText('a\rb').lines).toEqual(['a\rb']);
+  });
 });
