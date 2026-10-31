@@ -6,6 +6,7 @@ const api = vi.hoisted(() => ({ confirm: vi.fn(), conversation: vi.fn() }));
 vi.mock('@/common', () => ({ ipcBridge: { conversation: { get: { invoke: api.conversation } } } }));
 vi.mock('@/renderer/components/workspace/WorkspaceManager/lifecycle', () => ({
   confirmWorkspaceLeave: api.confirm,
+  isWorkspaceDecisionOpen: () => true,
   registerWorkspaceDiscardGuard: () => () => {},
 }));
 vi.mock('@/renderer/pages/conversation/Preview/context/PreviewContext', () => ({
@@ -69,5 +70,12 @@ describe('workspace router guard', () => {
     mount();
     const guard = (window as Window & { __confirmWorkspaceClose: () => Promise<boolean> }).__confirmWorkspaceClose;
     expect(await guard()).toBe(false);
+  });
+  it('tells the host whether a decision is on screen, then stops when unmounted', () => {
+    mount();
+    const host = window as Window & { __workspaceDecisionOpen?: () => boolean };
+    expect(host.__workspaceDecisionOpen?.()).toBe(true);
+    cleanup();
+    expect(host.__workspaceDecisionOpen).toBeUndefined();
   });
 });

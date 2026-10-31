@@ -6,6 +6,7 @@ import { httpRequest } from '@/common/adapter/httpBridge';
 import type { ProjectDetailDto } from '@/common/types/project';
 import { createProjectRootResolver } from '@process/services/sourceControl/workbench/workspace';
 import { createGitStorageService } from '@process/services/sourceControl/workbench/storage';
+import { onConfirmedQuit } from '@process/startup/quitCleanup';
 import { createRecorderLifecycle } from './lifecycle';
 import { getGitBridgeRuntime, type GitBridgeRuntime } from './runtime';
 
@@ -87,14 +88,9 @@ export function initGitStorageBridge(runtimePromise: Promise<GitBridgeRuntime> =
         .map((entry) => ({ projectId: project!.project_id, peId: entry.pe_id, relativePath: '' })) ?? []
     );
   });
-  let quitting = false;
-  app.on('before-quit', (event) => {
-    if (quitting) return;
-    quitting = true;
-    event.preventDefault();
-    void servicePromise
+  onConfirmedQuit(() =>
+    servicePromise
       .then((service) => service.dispose())
       .catch((error: unknown) => console.error('[GitHistory] flush failed', error))
-      .finally(() => app.quit());
-  });
+  );
 }

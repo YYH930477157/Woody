@@ -5,14 +5,14 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
-import { installQuitCleanup } from '@/process/startup/quitCleanup';
+import { installQuitCleanup, onConfirmedQuit } from '@/process/startup/quitCleanup';
 
 type BeforeQuitEvent = {
   preventDefault: () => void;
 };
 
 const flushMicrotasks = async () => {
-  for (let i = 0; i < 6; i += 1) {
+  for (let i = 0; i < 12; i += 1) {
     await Promise.resolve();
   }
 };
@@ -104,38 +104,45 @@ describe('installQuitCleanup', () => {
     ]);
   });
 
-  it('continues the quit when the workspace confirmation never answers', async () => {
+  const installForTask = (confirmQuit: () => Promise<boolean>) => {
     let beforeQuitHandler: ((event: BeforeQuitEvent) => void) | undefined;
-    const stopBackend = vi.fn(async () => {});
-    const quitApp = vi.fn();
-    const logWarn = vi.fn();
-
     installQuitCleanup({
       onBeforeQuit: (handler) => {
         beforeQuitHandler = handler;
       },
-      // A stuck renderer never settles its confirmation; without the timeout every later quit is swallowed.
-      confirmQuit: () => new Promise<boolean>(() => {}),
-      confirmTimeoutMs: 5,
-      quitApp,
+      confirmQuit,
+      quitApp: vi.fn(),
       setIsQuitting: vi.fn(),
       markExplicitQuit: vi.fn(),
       destroyTray: vi.fn(),
       disposeCronResumeListener: vi.fn(),
-      stopBackend,
+      stopBackend: vi.fn(async () => {}),
       destroyPetWindow: vi.fn(),
       logInfo: vi.fn(),
-      logWarn,
+      logWarn: vi.fn(),
       logError: vi.fn(),
     });
+    return () => beforeQuitHandler?.({ preventDefault: vi.fn() });
+  };
 
-    beforeQuitHandler?.({ preventDefault: vi.fn() });
-    await new Promise((resolve) => setTimeout(resolve, 25));
+  it('leaves services running when the user cancels the quit', async () => {
+    const task = vi.fn(async () => {});
+    onConfirmedQuit(task);
+
+    installForTask(async () => false)();
     await flushMicrotasks();
 
-    expect(logWarn).toHaveBeenCalledWith(expect.stringContaining('timed out'));
-    expect(stopBackend).toHaveBeenCalled();
-    expect(quitApp).toHaveBeenCalled();
+    expect(task).not.toHaveBeenCalled();
+  });
+
+  it('stops services once the quit is confirmed', async () => {
+    const task = vi.fn(async () => {});
+    onConfirmedQuit(task);
+
+    installForTask(async () => true)();
+    await flushMicrotasks();
+
+    expect(task).toHaveBeenCalledOnce();
   });
 
   it('allows the second before-quit after cleanup has completed', async () => {

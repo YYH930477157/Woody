@@ -6,7 +6,6 @@ import type { PreviewContextValue } from '@/renderer/pages/conversation/Preview/
 import { getSelectedWorkspace, selectWorkspace } from '../workspaceSelection';
 import { buildWorkspaceUpdate, dirtyRootTabs } from './model';
 import type { ProjectDetailDto } from '@/common/types/project';
-import { isBackendHttpError } from '@/common/adapter/httpBridge';
 import { mutate } from 'swr';
 
 let beforeDiscard: ((projectId: string) => Promise<boolean>) | null = null;
@@ -50,35 +49,52 @@ export const addWorkspaceRoot = async (detail: ProjectDetailDto, uri: string): P
   return next;
 };
 
+let openDecisions = 0;
+/** True while the app is waiting on the user rather than on itself, so closing the window can wait too. */
+export const isWorkspaceDecisionOpen = (): boolean => openDecisions > 0;
+
+const whileUserDecides = async <T>(prompt: Promise<T>): Promise<T> => {
+  openDecisions += 1;
+  try {
+    return await prompt;
+  } finally {
+    openDecisions -= 1;
+  }
+};
+
 /** A shared three-way prompt for draft configuration and unsaved editors. */
 export const askWorkspaceDecision = (message: string): Promise<'save' | 'discard' | 'cancel'> =>
-  new Promise((resolve) => {
-    const finish = (decision: 'save' | 'discard' | 'cancel'): void => {
-      modal.close();
-      resolve(decision);
-    };
-    const modal = Modal.confirm({
-      title: i18n.t('conversation.managedWorkspace.unsavedTitle'),
-      content: message,
-      onCancel: () => resolve('cancel'),
-      footer: React.createElement(
-        'div',
-        { className: 'flex justify-end gap-8px' },
-        React.createElement(Button, { onClick: () => finish('cancel') }, i18n.t('common.cancel')),
-        React.createElement(
-          Button,
-          { onClick: () => finish('discard') },
-          i18n.t('conversation.managedWorkspace.discard')
+  whileUserDecides(
+    new Promise((resolve) => {
+      const finish = (decision: 'save' | 'discard' | 'cancel'): void => {
+        modal.close();
+        resolve(decision);
+      };
+      const modal = Modal.confirm({
+        title: i18n.t('conversation.managedWorkspace.unsavedTitle'),
+        content: message,
+        onCancel: () => resolve('cancel'),
+        footer: React.createElement(
+          'div',
+          { className: 'flex justify-end gap-8px' },
+          React.createElement(Button, { onClick: () => finish('cancel') }, i18n.t('common.cancel')),
+          React.createElement(
+            Button,
+            { onClick: () => finish('discard') },
+            i18n.t('conversation.managedWorkspace.discard')
+          ),
+          React.createElement(Button, { type: 'primary', onClick: () => finish('save') }, i18n.t('common.save'))
         ),
-        React.createElement(Button, { type: 'primary', onClick: () => finish('save') }, i18n.t('common.save'))
-      ),
-    });
-  });
+      });
+    })
+  );
 
 export const saveWorkspaceConfiguration = async (projectId: string, saveAs = false): Promise<boolean> => {
   const state = await ipcBridge.project.getWorkspace.invoke({ project_id: projectId });
   let path = state.config_path;
-  if (saveAs || !path) path = await ipcBridge.dialog.saveWorkspaceFile.invoke({ defaultPath: path || undefined });
+  if (saveAs || !path) {
+    path = await whileUserDecides(ipcBridge.dialog.saveWorkspaceFile.invoke({ defaultPath: path || undefined }));
+  }
   if (!path) return false;
   const workspace = await ipcBridge.project.saveWorkspace.invoke({ project_id: projectId, path });
   await mutate(
@@ -93,9 +109,18 @@ export const saveWorkspaceConfiguration = async (projectId: string, saveAs = fal
 
 /** Returns false on cancellation or failed persistence, so callers must keep the current workspace. */
 const confirmWorkspaceLeaveOnce = async (projectId: string): Promise<boolean> => {
+  let dirty: boolean;
   try {
     const state = await ipcBridge.project.getWorkspace.invoke({ project_id: projectId });
-    if (!state.managed || !state.dirty) return true;
+    dirty = state.managed && state.dirty;
+  } catch (error) {
+    // Draft roots are already persisted by the backend, so leaving loses nothing. Refusing would trap the user behind
+    // an unreachable backend: no window close, no quit, and no route to Settings to fix it.
+    console.warn('[Workspace] Leaving without a draft check', error);
+    return true;
+  }
+  if (!dirty) return true;
+  try {
     const decision = await askWorkspaceDecision(i18n.t('conversation.managedWorkspace.unsavedConfiguration'));
     if (decision === 'cancel') return false;
     if (decision === 'save') return await saveWorkspaceConfiguration(projectId);
@@ -104,15 +129,7 @@ const confirmWorkspaceLeaveOnce = async (projectId: string): Promise<boolean> =>
     afterDiscard?.(projectId);
     await publishWorkspaceDetail(restored);
     return true;
-  } catch (error) {
-    if (isBackendHttpError(error) && error.status === 404) {
-      try {
-        const detail = await ipcBridge.project.get.invoke({ project_id: projectId });
-        if (!detail.workspace?.managed) return true;
-      } catch {
-        /* An unavailable or deleted project is not proof that its draft is safe to discard. */
-      }
-    }
+  } catch {
     Message.error(i18n.t('conversation.managedWorkspace.failed'));
     return false;
   }
