@@ -186,4 +186,15 @@ export const createGitExecutor =
       if (options.signal?.aborted) abort();
     });
   };
+/**
+ * Commands the user started run for as long as their transfers and hooks need. This only bounds a process that will
+ * never finish; the default limit stays for the quick reads the app makes on its own.
+ */
+const USER_OPERATION_TIMEOUT_MS = 30 * 60 * 1000;
+
+export const forUserOperation =
+  (git: GitExecutor): GitExecutor =>
+  (root, args, allowFailure, options) =>
+    git(root, args, allowFailure, { timeoutMs: USER_OPERATION_TIMEOUT_MS, ...options });
+
 export type GitExecutor = ReturnType<typeof createGitExecutor>;
