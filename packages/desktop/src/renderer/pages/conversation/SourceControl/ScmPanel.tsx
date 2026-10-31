@@ -1,4 +1,4 @@
-import { Changelists, useChangelists } from './Workbench/Storage/Changelists';
+import { changelistChanges, Changelists, useChangelists } from './Workbench/Storage/Changelists';
 /**
  * @license
  * Copyright 2025 AionUi (aionui.com)
@@ -66,6 +66,7 @@ import { ScmSection, ScmSectionDivider } from './ScmSection';
 import {
   diffAnchors,
   filterScmResources,
+  fileKey,
   resourceKey,
   resourceName,
   type ScmActionKind,
@@ -339,20 +340,26 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({
     changelists && selectedRepo?.provider_id === 'git'
       ? { projectId, peId: selectedRepo.root.pe_id, relativePath: selectedRepo.root.relative_path }
       : undefined,
-    (selectedRepoStatus?.resources ?? []).map((resource) => ({
-      key: resourceKey(resource),
-      path: resource.repo_relative_path,
-    }))
+    selectedRepoStatus && changelistChanges(selectedRepoStatus.resources)
   );
   const selectedStatus = useMemo<ScmStatus | undefined>(() => {
     if (!selectedRepoStatus) return undefined;
     return {
       ...selectedRepoStatus,
-      resources: filterScmResources(selectedRepoStatus.resources, effectiveMonitorScope).filter(
-        (resource) => !changelists || lists.includes(resourceKey(resource))
-      ),
+      resources: filterScmResources(selectedRepoStatus.resources, effectiveMonitorScope),
     };
-  }, [selectedRepoStatus, effectiveMonitorScope, changelists, lists.filter, lists.data]);
+  }, [selectedRepoStatus, effectiveMonitorScope]);
+  // The list filter only hides rows: checked files stay checked, and a reload of the lists never clears them.
+  const listedStatus = useMemo<ScmStatus | undefined>(
+    () =>
+      selectedStatus && changelists
+        ? {
+            ...selectedStatus,
+            resources: selectedStatus.resources.filter((resource) => lists.includes(fileKey(resource))),
+          }
+        : selectedStatus,
+    [selectedStatus, changelists, lists.filter, lists.data]
+  );
   const selectedResources = selectedRepo
     ? getSelectedResources(selectedStatus?.resources ?? [], commitSelections[selectedRepo.repo_id] ?? new Set())
     : [];
@@ -775,7 +782,7 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({
       {changelists && (
         <Changelists
           controller={lists}
-          selectedKeys={selectedResources.map(resourceKey)}
+          selectedKeys={[...new Set(selectedResources.map(fileKey))]}
           disabled={actions.busy || workflowBusy.current || branchBusy}
         />
       )}
@@ -783,7 +790,7 @@ export const ScmPanel: React.FC<ScmPanelProps> = ({
         view={view}
         ui={ui}
         selectedRepo={selectedRepo}
-        selectedStatus={selectedStatus}
+        selectedStatus={listedStatus}
         multiRepo={multiRepo}
         onRepoSelect={(repoId) => {
           setScmSelectedRepo(repoId);

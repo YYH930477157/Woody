@@ -200,6 +200,9 @@ export const isActionable = (resource: ScmResource): boolean => {
 
 // ── identity ────────────────────────────────────────────────────────────────
 
+/** A file's identity. Unlike `resourceKey`, it is the same for the staged and unstaged sides of one file. */
+export const fileKey = (resource: ScmResource): string => `${resource.file.pe_id}\0${resource.file.relative_path}`;
+
 /**
  * Stable-enough row identity for React keys. The `staged` flag is part of the key
  * on purpose: git can report the same file twice in one frame (one staged entry
