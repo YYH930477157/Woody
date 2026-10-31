@@ -923,6 +923,7 @@
     "unsavedConfiguration": "¿Guardar la configuración antes de salir?",
     "unsavedEditors": "Hay {{count}} archivos abiertos con cambios sin guardar. ¿Guardarlos antes de cambiar sus carpetas?",
     "failed": "La operación falló. Inténtalo de nuevo.",
+    "unsupported": "Esta versión de AionCore todavía no admite espacios de trabajo con varias raíces. Actualiza AionCore y vuelve a intentarlo; los proyectos existentes no se ven afectados.",
     "busy": "Hay tareas en ejecución. Espera a que terminen antes de cambiar las carpetas.",
     "untitled": "Espacio de trabajo sin título",
     "name": "Nombre del espacio de trabajo",

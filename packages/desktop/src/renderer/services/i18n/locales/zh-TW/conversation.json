@@ -922,6 +922,7 @@
     "unsavedConfiguration": "離開前儲存工作區設定嗎？",
     "unsavedEditors": "{{count}} 個已開啟檔案有未儲存的編輯。變更其目錄前儲存嗎？",
     "failed": "工作區操作失敗，請重試。",
+    "unsupported": "目前 AionCore 版本還不支援多根工作區。請升級 AionCore 後重試；現有專案不受影響。",
     "busy": "此工作區有正在執行的工作，請等待工作結束後再變更目錄。",
     "untitled": "未命名工作區",
     "name": "工作區名稱",

@@ -1059,6 +1059,7 @@ export type I18nKey =
   | 'conversation.managedWorkspace.unsavedEditors'
   | 'conversation.managedWorkspace.unsavedFile'
   | 'conversation.managedWorkspace.unsavedTitle'
+  | 'conversation.managedWorkspace.unsupported'
   | 'conversation.managedWorkspace.untitled'
   | 'conversation.managedWorkspace.useForNewChat'
   | 'conversation.mcp.loaded'

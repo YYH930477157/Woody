@@ -50,16 +50,20 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({ projectId, onWorksp
     try {
       await action();
     } catch (error) {
+      // Older AionCore builds do not mount the workspace routes at all; say so instead of a generic failure.
+      const unsupported = isBackendHttpError(error) && (error.status === 404 || error.status === 405);
       const code = isBackendHttpError(error) ? error.code : undefined;
       Message.error(
         t(
-          code === 'project_workspace_busy'
-            ? 'conversation.managedWorkspace.busy'
-            : code === 'project_explorer_duplicate'
-              ? 'conversation.explorer.attachDuplicate'
-              : code === 'project_explorer_overlap'
-                ? 'conversation.explorer.attachOverlap'
-                : 'conversation.managedWorkspace.failed'
+          unsupported
+            ? 'conversation.managedWorkspace.unsupported'
+            : code === 'project_workspace_busy'
+              ? 'conversation.managedWorkspace.busy'
+              : code === 'project_explorer_duplicate'
+                ? 'conversation.explorer.attachDuplicate'
+                : code === 'project_explorer_overlap'
+                  ? 'conversation.explorer.attachOverlap'
+                  : 'conversation.managedWorkspace.failed'
         )
       );
       void mutate();

@@ -922,6 +922,7 @@
     "unsavedConfiguration": "Save workspace configuration before leaving?",
     "unsavedEditors": "{{count}} open file(s) have unsaved edits. Save before changing their folders?",
     "failed": "Workspace operation failed. Please try again.",
+    "unsupported": "This AionCore build does not support multi-root workspaces yet. Update AionCore and try again; existing projects are unaffected.",
     "busy": "This workspace has running tasks. Wait for them to finish before changing folders.",
     "untitled": "Untitled workspace",
     "name": "Workspace name",

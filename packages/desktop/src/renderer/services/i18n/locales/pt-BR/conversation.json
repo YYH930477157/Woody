@@ -928,6 +928,7 @@
     "unsavedConfiguration": "Salvar a configuração antes de sair?",
     "unsavedEditors": "{{count}} arquivos abertos têm edições não salvas. Salvar antes de alterar suas pastas?",
     "failed": "A operação falhou. Tente novamente.",
+    "unsupported": "Esta versão do AionCore ainda não oferece suporte a espaços de trabalho com várias raízes. Atualize o AionCore e tente novamente; os projetos existentes não são afetados.",
     "busy": "Há tarefas em execução neste espaço. Aguarde a conclusão antes de alterar as pastas.",
     "untitled": "Espaço de trabalho sem título",
     "name": "Nome do espaço de trabalho",

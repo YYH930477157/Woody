@@ -922,6 +922,7 @@
     "unsavedConfiguration": "Enregistrer la configuration avant de quitter ?",
     "unsavedEditors": "{{count}} fichiers ouverts contiennent des modifications non enregistrées. Les enregistrer avant de modifier leurs dossiers ?",
     "failed": "Échec de l’opération. Veuillez réessayer.",
+    "unsupported": "Cette version d’AionCore ne prend pas encore en charge les espaces de travail multi-racines. Mettez à jour AionCore et réessayez ; les projets existants ne sont pas concernés.",
     "busy": "Des tâches sont en cours dans cet espace. Attendez leur fin avant de modifier les dossiers.",
     "untitled": "Espace de travail sans titre",
     "name": "Nom de l’espace de travail",
