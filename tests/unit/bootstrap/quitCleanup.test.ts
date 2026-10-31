@@ -104,6 +104,40 @@ describe('installQuitCleanup', () => {
     ]);
   });
 
+  it('continues the quit when the workspace confirmation never answers', async () => {
+    let beforeQuitHandler: ((event: BeforeQuitEvent) => void) | undefined;
+    const stopBackend = vi.fn(async () => {});
+    const quitApp = vi.fn();
+    const logWarn = vi.fn();
+
+    installQuitCleanup({
+      onBeforeQuit: (handler) => {
+        beforeQuitHandler = handler;
+      },
+      // A stuck renderer never settles its confirmation; without the timeout every later quit is swallowed.
+      confirmQuit: () => new Promise<boolean>(() => {}),
+      confirmTimeoutMs: 5,
+      quitApp,
+      setIsQuitting: vi.fn(),
+      markExplicitQuit: vi.fn(),
+      destroyTray: vi.fn(),
+      disposeCronResumeListener: vi.fn(),
+      stopBackend,
+      destroyPetWindow: vi.fn(),
+      logInfo: vi.fn(),
+      logWarn,
+      logError: vi.fn(),
+    });
+
+    beforeQuitHandler?.({ preventDefault: vi.fn() });
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    await flushMicrotasks();
+
+    expect(logWarn).toHaveBeenCalledWith(expect.stringContaining('timed out'));
+    expect(stopBackend).toHaveBeenCalled();
+    expect(quitApp).toHaveBeenCalled();
+  });
+
   it('allows the second before-quit after cleanup has completed', async () => {
     let beforeQuitHandler: ((event: BeforeQuitEvent) => void) | undefined;
 

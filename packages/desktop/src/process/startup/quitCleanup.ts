@@ -22,9 +22,32 @@ type QuitCleanupDeps = {
   logWarn: (message: string) => void;
   logError: (message: string, error: unknown) => void;
   timeoutMs?: number;
+  confirmTimeoutMs?: number;
 };
 
 const DEFAULT_QUIT_CLEANUP_TIMEOUT_MS = 10_000;
+const DEFAULT_CONFIRM_QUIT_TIMEOUT_MS = 10_000;
+
+/**
+ * A renderer that never answers leaves `cleanupStarted` set, and every later before-quit would be swallowed —
+ * the app could never exit. Treat silence as consent after the timeout; the renderer's own close hook already
+ * fails open, so this only covers a genuinely stuck case.
+ */
+function confirmWithTimeout(
+  confirm: () => Promise<boolean>,
+  timeoutMs: number,
+  logWarn: (message: string) => void
+): Promise<boolean> {
+  const timeout = new Promise<boolean>((resolve) => {
+    const timer = setTimeout(() => {
+      logWarn('[Workspace] Quit confirmation timed out; continuing the quit');
+      resolve(true);
+    }, timeoutMs);
+    // The pending timer alone must not keep the process alive.
+    timer.unref?.();
+  });
+  return Promise.race([confirm(), timeout]);
+}
 
 async function runWithTimeout(
   work: Promise<void>,
@@ -90,8 +113,7 @@ export function installQuitCleanup(deps: QuitCleanupDeps): void {
       });
     };
     if (deps.confirmQuit) {
-      void deps
-        .confirmQuit()
+      void confirmWithTimeout(deps.confirmQuit, deps.confirmTimeoutMs ?? DEFAULT_CONFIRM_QUIT_TIMEOUT_MS, deps.logWarn)
         .then((confirmed) => {
           if (confirmed) finish();
           else {
@@ -100,6 +122,7 @@ export function installQuitCleanup(deps: QuitCleanupDeps): void {
           }
         })
         .catch((error) => {
+          // A rejection cancels the quit on purpose: an unanswered teardown must not discard unsaved work.
           cleanupStarted = false;
           deps.setIsQuitting(false);
           deps.logError('[Workspace] Quit confirmation failed', error);
