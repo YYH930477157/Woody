@@ -107,8 +107,10 @@ files:
     to: static
 
 extraResources:
-  - from: resources/third-party
-    to: third-party
+  # Only the provenance/licence notes are platform-neutral; the bundled Git binary itself is a Windows
+  # build and is added under `win.extraResources` so macOS/Linux packages do not carry ~90 MB of dead weight.
+  - from: resources/third-party/ideagittool
+    to: third-party/ideagittool
   - from: public
     to: .
   - from: resources/app.png
@@ -132,6 +134,10 @@ win:
     #    - msi
   icon: resources/app.ico # Use the checked-in Windows icon resource for executable metadata/icon patching
   artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+  # Bundled MinGit fallback; `bundledGitExecutable()` resolves it at resources/third-party/git/cmd/git.exe.
+  extraResources:
+    - from: resources/third-party/git
+      to: third-party/git
 
 nsis:
   oneClick: false

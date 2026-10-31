@@ -31,6 +31,16 @@ describe('release packaging configuration', () => {
     expect(yamlBlock(config, 'asarUnpack')).toContain('**/node_modules/file-uri-to-path/**/*');
   });
 
+  it('ships the bundled Windows Git only in Windows packages', () => {
+    const config = readProjectFile('packages/desktop/electron-builder.yml');
+
+    // ~90 MB of MinGit; electron-builder concatenates the base list with the platform list, so keeping it out of
+    // the base list is what stops macOS/Linux packages from carrying a Windows-only binary.
+    expect(yamlBlock(config, 'extraResources')).not.toContain('resources/third-party/git');
+    expect(yamlBlock(config, 'extraResources')).toContain('resources/third-party/ideagittool');
+    expect(yamlBlock(config, 'win')).toContain('resources/third-party/git');
+  });
+
   it('keeps mac zip artifacts enabled', () => {
     const config = readProjectFile('packages/desktop/electron-builder.yml');
     const macBlock = yamlBlock(config, 'mac');
