@@ -10,12 +10,16 @@ import {
   closeRootEditors,
   confirmRootEditors,
   confirmWorkspaceLeave,
+  isWorkspaceDecisionOpen,
   registerWorkspaceDiscardGuard,
 } from './lifecycle';
 import { useOptionalPreviewContext } from '@/renderer/pages/conversation/Preview/context/PreviewContext';
 import { canLeaveWorkspaceForRoute } from './navigation';
 
-type GuardWindow = Window & { __confirmWorkspaceClose?: () => Promise<boolean> };
+type GuardWindow = Window & {
+  __confirmWorkspaceClose?: () => Promise<boolean>;
+  __workspaceDecisionOpen?: () => boolean;
+};
 
 /** Guard router transitions (including browser back) and native close while the backend is alive. */
 const WorkspaceNavigationGuard = (): null => {
@@ -85,8 +89,10 @@ const WorkspaceNavigationGuard = (): null => {
       return !selected || selected === current || (await confirmWorkspaceLeave(selected));
     };
     target.__confirmWorkspaceClose = confirm;
+    target.__workspaceDecisionOpen = isWorkspaceDecisionOpen;
     return () => {
       if (target.__confirmWorkspaceClose === confirm) delete target.__confirmWorkspaceClose;
+      delete target.__workspaceDecisionOpen;
     };
   }, []);
   return null;

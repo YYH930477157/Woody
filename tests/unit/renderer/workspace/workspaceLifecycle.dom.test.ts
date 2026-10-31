@@ -30,6 +30,7 @@ import {
   addWorkspaceRoot,
   confirmWorkspaceLeave,
   confirmRootEditors,
+  isWorkspaceDecisionOpen,
   registerWorkspaceDiscardGuard,
   saveWorkspaceConfiguration,
   publishWorkspaceDetail,
@@ -84,9 +85,33 @@ describe('workspace configuration lifecycle', () => {
     expect(await confirmWorkspaceLeave('p')).toBe(false);
     expect(api.discardWorkspace).not.toHaveBeenCalled();
   });
-  it('blocks leaving when workspace state cannot be read', async () => {
+  it('lets the user leave when workspace state cannot be read, because the backend keeps the draft', async () => {
     api.getWorkspace.mockRejectedValue(new Error('offline'));
+    expect(await confirmWorkspaceLeave('p')).toBe(true);
+    expect(api.discardWorkspace).not.toHaveBeenCalled();
+  });
+  it('keeps the user in place when saving their chosen decision fails', async () => {
+    api.getWorkspace.mockResolvedValue({ managed: true, dirty: true, config_path: 'C:/w.woody-workspace' });
+    api.saveWorkspace.mockRejectedValue(new Error('disk full'));
+    api.confirm.mockImplementation((options) => {
+      const close = vi.fn();
+      queueMicrotask(() => options.footer.props.children[2].props.onClick());
+      return { close };
+    });
     expect(await confirmWorkspaceLeave('p')).toBe(false);
+  });
+  it('reports a decision as open only while the user holds it', async () => {
+    api.getWorkspace.mockResolvedValue({ managed: true, dirty: true });
+    let cancel: () => void = () => {};
+    api.confirm.mockImplementation((options) => {
+      cancel = options.onCancel;
+      return { close: vi.fn() };
+    });
+    const leaving = confirmWorkspaceLeave('p');
+    await vi.waitFor(() => expect(isWorkspaceDecisionOpen()).toBe(true));
+    cancel();
+    await leaving;
+    expect(isWorkspaceDecisionOpen()).toBe(false);
   });
   it('allows legacy projects when the backend has no workspace endpoint', async () => {
     api.getWorkspace.mockRejectedValue(

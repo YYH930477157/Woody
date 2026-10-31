@@ -3,6 +3,7 @@ import path from 'node:path';
 import { codebaseMemory } from '@/common/adapter/codebaseMemory';
 import { createCodebaseMemoryService } from '@process/services/codebaseMemory/service';
 import { resolveCodebaseMemoryResources } from '@process/services/codebaseMemory/resources';
+import { onConfirmedQuit } from '@process/startup/quitCleanup';
 
 export function initCodebaseMemoryBridge(): void {
   const service = createCodebaseMemoryService({
@@ -19,19 +20,9 @@ export function initCodebaseMemoryBridge(): void {
   codebaseMemory.cancel.provider(({ repoPath }) => service.cancel(repoPath));
   codebaseMemory.session.provider(({ repoPath }) => service.session(repoPath));
   codebaseMemory.openLens.provider(({ repoPath }) => service.openLens(repoPath));
-  let stopped = false;
-  let stopping: Promise<void> | undefined;
-  app.on('before-quit', (event) => {
-    if (stopped) return;
-    event.preventDefault();
-    stopping ??= service
-      .dispose()
-      .catch((error: unknown) => {
-        console.error('[CodebaseMemory] Lens shutdown failed', error);
-      })
-      .finally(() => {
-        stopped = true;
-        app.quit();
-      });
-  });
+  onConfirmedQuit(() =>
+    service.dispose().catch((error: unknown) => {
+      console.error('[CodebaseMemory] Lens shutdown failed', error);
+    })
+  );
 }
