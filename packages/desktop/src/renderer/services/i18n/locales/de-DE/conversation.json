@@ -923,6 +923,7 @@
     "unsavedConfiguration": "Arbeitsbereich vor dem Verlassen speichern?",
     "unsavedEditors": "{{count}} offene Dateien enthalten ungespeicherte Änderungen. Vor dem Ändern ihrer Ordner speichern?",
     "failed": "Arbeitsbereich konnte nicht geändert werden. Bitte erneut versuchen.",
+    "unsupported": "Diese AionCore-Version unterstützt noch keine Arbeitsbereiche mit mehreren Wurzeln. Aktualisieren Sie AionCore und versuchen Sie es erneut; bestehende Projekte bleiben unverändert.",
     "busy": "In diesem Arbeitsbereich laufen Aufgaben. Warten Sie vor Ordneränderungen auf deren Abschluss.",
     "untitled": "Unbenannter Arbeitsbereich",
     "name": "Name des Arbeitsbereichs",

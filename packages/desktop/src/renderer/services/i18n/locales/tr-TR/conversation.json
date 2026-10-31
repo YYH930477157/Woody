@@ -924,6 +924,7 @@
     "unsavedConfiguration": "Ayrılmadan önce çalışma alanı yapılandırması kaydedilsin mi?",
     "unsavedEditors": "{{count}} açık dosyada kaydedilmemiş düzenlemeler var. Klasörlerini değiştirmeden önce kaydedilsin mi?",
     "failed": "Çalışma alanı işlemi başarısız oldu. Yeniden deneyin.",
+    "unsupported": "Bu AionCore sürümü çok köklü çalışma alanlarını henüz desteklemiyor. AionCore’u güncelleyip yeniden deneyin; mevcut projeler etkilenmez.",
     "busy": "Bu çalışma alanında görevler çalışıyor. Klasörleri değiştirmeden önce bitmelerini bekleyin.",
     "untitled": "Adsız çalışma alanı",
     "name": "Çalışma alanı adı",
