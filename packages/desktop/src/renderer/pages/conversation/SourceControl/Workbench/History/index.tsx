@@ -9,6 +9,7 @@ import { HistoryList } from './HistoryList';
 import { Loading, RequestError } from '../RequestState';
 import { useRequest } from '../useRequest';
 import { useHistoryFilters } from './useHistoryFilters';
+import { outcomeText } from '../operationOutcome';
 import styles from '../Workbench.module.css';
 
 export function HistoryView({
@@ -63,9 +64,7 @@ export function HistoryView({
           type={outcome.state === 'complete' ? 'success' : 'warning'}
           content={
             <div>
-              <pre className='whitespace-pre-wrap break-all max-h-140px overflow-auto'>
-                {outcome.output || t(`conversation.gitWorkbench.operations.outcomes.${outcome.state}`)}
-              </pre>
+              <pre className='whitespace-pre-wrap break-all max-h-140px overflow-auto'>{outcomeText(outcome, t)}</pre>
               {outcome.state === 'conflict' && (
                 <Button onClick={onResolve}>{t('conversation.gitWorkbench.merge.title')}</Button>
               )}

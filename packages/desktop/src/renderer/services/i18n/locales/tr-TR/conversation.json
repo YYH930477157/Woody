@@ -749,8 +749,8 @@
         "agentFailed": "Yapay zeka görevi başarısız oldu veya taslak geçersiz. Sohbeti kontrol edip yeniden deneyin.",
         "repairOutsideSelection": "Seçim dışındaki bir dosya veya Git durumu değişti. Commit engellendi; yerel değişiklikler korundu.",
         "repairLimit": "İki onarım denemesinden sonra tanılar sürüyor. Elle düzeltip yeniden tarayın.",
-        "buildConfigRequired": "IAR veya CMake projesi bulunamadı. Derlemeyi .woody/static-scan.json içinde yapılandırın.",
-        "buildAmbiguous": "Birden fazla derleme sistemi veya proje bulundu. .woody/static-scan.json içinde birini seçin.",
+        "buildConfigRequired": "IAR veya CMake projesi algılanmadı. Derlemeyi .woody/static-scan.json içinde yapılandırın ya da atlamak için \"Derleme doğrulaması\" seçeneğini kaldırın.",
+        "buildAmbiguous": "Birden fazla derleme sistemi veya proje bulundu. .woody/static-scan.json içinde birini seçin ya da atlamak için \"Derleme doğrulaması\" seçeneğini kaldırın.",
         "buildFailed": "Derleme başarısız oldu. Çıktıyı inceleyin, sorunu düzeltin ve yeniden deneyin.",
         "runChecks": "Kontrolleri çalıştır",
         "continueCommit": "Commit işlemine devam et",
@@ -1032,6 +1032,24 @@
       "history": {
         "continue": "Continue operation",
         "abort": "Abort operation"
+      },
+      "running": "{{operation}} sürüyor…",
+      "runningRemote": "{{operation}} sürüyor. İstediğiniz zaman iptal edebilirsiniz.",
+      "reasons": {
+        "refChanged": "Bu dal veya etiket değişti. Yenileyip yeniden deneyin.",
+        "branchChanged": "Geçerli dal değişti. Yenileyip yeniden deneyin.",
+        "invalidName": "Bu ad bir Git dalı veya etiketi için kullanılamaz.",
+        "remoteUnsupported": "Bu uzak depo adresi desteklenmiyor ya da parola veya belirteç içeriyor. Adresi değiştirip yeniden deneyin.",
+        "remoteChanged": "Bu uzak depo adresi değişti. Yenileyip yeniden deneyin.",
+        "operationInProgress": "Bir birleştirme, yeniden temellendirme veya benzeri işlem hâlâ sürüyor. Önce tamamlayın veya iptal edin.",
+        "operationEnded": "Bu işlem zaten sona erdi. Geçerli durumu görmek için yenileyin.",
+        "unresolvedConflicts": "Bazı dosyalarda hâlâ çakışma var. Çözdükten sonra devam edin.",
+        "dirtyWorktree": "Bu işlem temiz bir çalışma ağacı gerektirir. Önce değişikliklerinizi işleyin, saklayın veya atın.",
+        "gitLocked": "Başka bir Git işlemi bu depoyu kullanıyor. Bitince yeniden deneyin.",
+        "localChanges": "Aşağıdaki dosyalardaki işlenmemiş değişikliklerinizin üzerine yazılır. Önce işleyin veya saklayın.",
+        "rewriteUnsupported": "Bu commit'ler yeniden yazılamaz. Kök commit'ler, birleştirme commit'leri ve bitişik olmayan commit'lerin birleştirilmesi desteklenmez.",
+        "gitTooOld": "Geçmişi düzenlemek için Git 2.40 veya üzeri gerekir. Daha yeni bir Git yapılandırın.",
+        "cancelled": "İptal edildi. İşin bir bölümü tamamlanmış olabilir, yeniden denemeden önce yenileyin."
       }
     },
     "merge": {

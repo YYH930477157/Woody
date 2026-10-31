@@ -747,8 +747,8 @@
         "agentFailed": "AI 작업이 실패했거나 초안 형식이 잘못되었습니다. 대화를 확인하고 다시 시도하세요.",
         "repairOutsideSelection": "허용 범위 밖의 파일 또는 Git 상태가 변경되었습니다. 커밋을 차단하고 로컬 변경을 유지했습니다.",
         "repairLimit": "두 번의 자동 수정 후에도 진단이 남아 있습니다. 직접 수정한 후 다시 검사하세요.",
-        "buildConfigRequired": "IAR 또는 CMake 프로젝트를 찾지 못했습니다. .woody/static-scan.json에서 빌드를 설정하세요.",
-        "buildAmbiguous": "여러 빌드 시스템 또는 프로젝트를 찾았습니다. .woody/static-scan.json에서 선택하세요.",
+        "buildConfigRequired": "IAR 또는 CMake 프로젝트를 찾지 못했습니다. .woody/static-scan.json에서 빌드를 설정하거나, 건너뛰려면 \"컴파일 검증\" 선택을 해제하세요.",
+        "buildAmbiguous": "여러 빌드 시스템 또는 프로젝트가 발견되었습니다. .woody/static-scan.json에서 하나를 선택하거나, 건너뛰려면 \"컴파일 검증\" 선택을 해제하세요.",
         "buildFailed": "컴파일에 실패했습니다. 출력을 확인하고 문제를 수정한 후 다시 시도하세요.",
         "runChecks": "검사 실행",
         "continueCommit": "커밋 계속",
@@ -1030,6 +1030,24 @@
       "history": {
         "continue": "Continue operation",
         "abort": "Abort operation"
+      },
+      "running": "{{operation}} 진행 중…",
+      "runningRemote": "{{operation}} 진행 중입니다. 언제든지 취소할 수 있습니다.",
+      "reasons": {
+        "refChanged": "이 브랜치 또는 태그가 변경되었습니다. 새로 고친 후 다시 시도하세요.",
+        "branchChanged": "현재 브랜치가 변경되었습니다. 새로 고친 후 다시 시도하세요.",
+        "invalidName": "이 이름은 Git 브랜치나 태그에 사용할 수 없습니다.",
+        "remoteUnsupported": "이 원격 주소는 지원되지 않거나 비밀번호 또는 토큰을 포함하고 있습니다. 주소를 변경한 후 다시 시도하세요.",
+        "remoteChanged": "이 원격 주소가 변경되었습니다. 새로 고친 후 다시 시도하세요.",
+        "operationInProgress": "병합, 리베이스 등의 작업이 아직 진행 중입니다. 먼저 완료하거나 중단하세요.",
+        "operationEnded": "해당 작업은 이미 끝났습니다. 새로 고쳐 현재 상태를 확인하세요.",
+        "unresolvedConflicts": "아직 충돌이 남아 있는 파일이 있습니다. 해결한 후 계속하세요.",
+        "dirtyWorktree": "이 작업에는 깨끗한 작업 트리가 필요합니다. 먼저 변경 사항을 커밋, 스태시 또는 삭제하세요.",
+        "gitLocked": "다른 Git 프로세스가 이 저장소를 사용 중입니다. 끝난 후 다시 시도하세요.",
+        "localChanges": "아래 파일의 커밋되지 않은 변경 사항이 덮어쓰기됩니다. 먼저 커밋하거나 스태시하세요.",
+        "rewriteUnsupported": "선택한 커밋은 다시 작성할 수 없습니다. 루트 커밋, 병합 커밋, 인접하지 않은 커밋의 스쿼시는 지원되지 않습니다.",
+        "gitTooOld": "기록을 편집하려면 Git 2.40 이상이 필요합니다. 최신 Git을 설정하세요.",
+        "cancelled": "취소되었습니다. 일부 작업은 이미 완료되었을 수 있으니 새로 고친 후 다시 시도하세요."
       }
     },
     "merge": {

@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Button, Checkbox, Empty, Input, Modal, Select, Space, Tabs, Tag } from '@arco-design/web-react';
+import { Alert, Button, Checkbox, Empty, Input, Modal, Select, Space, Spin, Tabs, Tag } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import type { GitOperationRequest } from '@/common/types/sourceControl/operationTypes';
 import type { GitWorkbenchScope } from '@/common/types/sourceControl/workbenchTypes';
+import { explainOutcome } from '../operationOutcome';
 import { Loading, RequestError } from '../RequestState';
 import { useOperations } from './useOperations';
 
@@ -38,6 +39,7 @@ export function Operations({
     else void state.run(request);
   };
   const { data } = state;
+  const outcome = state.outcome && explainOutcome(state.outcome, t);
   const head = data?.head;
   const selected = data?.refs.find((ref) => ref.fullName === refName) ?? data?.refs[0];
   const remote = data?.remotes.find((item) => item.name === remoteName) ?? data?.remotes[0];
@@ -67,6 +69,14 @@ export function Operations({
           </Tag>
         )}
       </Space>
+      {state.runningKind && (
+        <div role='status' className='flex items-center gap-8px text-t-secondary'>
+          <Spin size={14} />
+          {t(`conversation.gitWorkbench.operations.${state.canCancel ? 'runningRemote' : 'running'}`, {
+            operation: label(state.runningKind),
+          })}
+        </div>
+      )}
       {state.loading && !data && <Loading />}
       {state.error && <RequestError message={state.error} retry={state.refresh} />}
       {state.outcome && (
@@ -77,11 +87,14 @@ export function Operations({
           content={
             <div>
               <strong>{t(`conversation.gitWorkbench.operations.outcomes.${state.outcome.state}`)}</strong>
+              {outcome?.summary && <p>{outcome.summary}</p>}
               {state.outcome.data?.truncated && <p>{t('conversation.gitWorkbench.truncatedDiff')}</p>}
-              <pre className='whitespace-pre-wrap break-all max-h-200px overflow-auto'>
-                {state.outcome.output}
-                {state.outcome.data?.patch}
-              </pre>
+              {(outcome?.details || state.outcome.data?.patch) && (
+                <pre className='whitespace-pre-wrap break-all max-h-200px overflow-auto'>
+                  {outcome?.details}
+                  {state.outcome.data?.patch}
+                </pre>
+              )}
               {state.outcome.files?.map((file) => (
                 <div key={file}>{file}</div>
               ))}

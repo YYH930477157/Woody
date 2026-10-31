@@ -748,8 +748,8 @@
         "agentFailed": "La tarea de IA falló o el borrador no es válido. Revise la conversación y reintente.",
         "repairOutsideSelection": "Cambió un archivo fuera de la selección o el estado de Git. Se bloqueó el commit y se conservaron los cambios locales.",
         "repairLimit": "Persisten diagnósticos tras dos intentos de reparación. Corríjalos manualmente y repita el análisis.",
-        "buildConfigRequired": "No se detectó un proyecto IAR o CMake. Configure la compilación en .woody/static-scan.json.",
-        "buildAmbiguous": "Se encontraron varios sistemas de compilación o proyectos. Seleccione uno en .woody/static-scan.json.",
+        "buildConfigRequired": "No se detectó ningún proyecto IAR o CMake. Configura la compilación en .woody/static-scan.json o desmarca «Verificar compilación» para omitirla.",
+        "buildAmbiguous": "Se encontraron varios sistemas de compilación o proyectos. Selecciona uno en .woody/static-scan.json o desmarca «Verificar compilación» para omitirla.",
         "buildFailed": "La compilación falló. Revise la salida, corrija el problema e inténtelo de nuevo.",
         "runChecks": "Ejecutar comprobaciones",
         "continueCommit": "Continuar al commit",
@@ -1031,6 +1031,24 @@
       "history": {
         "continue": "Continue operation",
         "abort": "Abort operation"
+      },
+      "running": "{{operation}} en curso…",
+      "runningRemote": "{{operation}} en curso. Puedes cancelar en cualquier momento.",
+      "reasons": {
+        "refChanged": "Esta rama o etiqueta ha cambiado. Actualiza e inténtalo de nuevo.",
+        "branchChanged": "La rama actual ha cambiado. Actualiza e inténtalo de nuevo.",
+        "invalidName": "Este nombre no se puede usar para una rama o etiqueta de Git.",
+        "remoteUnsupported": "La dirección de este remoto no es compatible o contiene una contraseña o un token. Cambia la dirección e inténtalo de nuevo.",
+        "remoteChanged": "La dirección de este remoto ha cambiado. Actualiza e inténtalo de nuevo.",
+        "operationInProgress": "Aún hay una fusión, un rebase o una operación similar en curso. Termínala o cancélala primero.",
+        "operationEnded": "Esa operación ya ha terminado. Actualiza para ver el estado actual.",
+        "unresolvedConflicts": "Algunos archivos todavía tienen conflictos. Resuélvelos y continúa.",
+        "dirtyWorktree": "Esto requiere un árbol de trabajo limpio. Primero confirma, guarda en stash o descarta tus cambios.",
+        "gitLocked": "Otro proceso de Git está usando este repositorio. Inténtalo de nuevo cuando termine.",
+        "localChanges": "Se sobrescribirían tus cambios sin confirmar en los archivos siguientes. Primero confírmalos o guárdalos en stash.",
+        "rewriteUnsupported": "Estas confirmaciones no se pueden reescribir. No se admiten confirmaciones raíz, de fusión ni combinar confirmaciones no adyacentes.",
+        "gitTooOld": "Editar el historial requiere Git 2.40 o posterior. Configura un Git más reciente.",
+        "cancelled": "Cancelado. Puede que parte del trabajo ya esté hecho, así que actualiza antes de volver a intentarlo."
       }
     },
     "merge": {

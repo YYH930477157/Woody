@@ -25,6 +25,7 @@ export function useOperations(scope: GitWorkbenchScope, repoId: string) {
   const [data, setData] = useState<RepositoryData>();
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [runningKind, setRunningKind] = useState<GitOperationRequest['kind']>();
   const [error, setError] = useState<string>();
   const [outcome, setOutcome] = useState<GitOperationOutcome>();
   const generation = useRef(0);
@@ -68,6 +69,7 @@ export function useOperations(scope: GitWorkbenchScope, repoId: string) {
     const request = ++generation.current;
     running.current = false;
     setBusy(false);
+    setRunningKind(undefined);
     setData(undefined);
     setOutcome(undefined);
     void read(request);
@@ -87,6 +89,7 @@ export function useOperations(scope: GitWorkbenchScope, repoId: string) {
       if (running.current || loading) return;
       running.current = true;
       setBusy(true);
+      setRunningKind(request.kind);
       setOutcome(undefined);
       const epoch = generation.current;
       const operationId = ['fetch', 'pull', 'push'].includes(request.kind) ? crypto.randomUUID() : undefined;
@@ -106,6 +109,7 @@ export function useOperations(scope: GitWorkbenchScope, repoId: string) {
             await read(epoch);
             running.current = false;
             setBusy(false);
+            setRunningKind(undefined);
           }
         }
       }
@@ -121,5 +125,16 @@ export function useOperations(scope: GitWorkbenchScope, repoId: string) {
       setError(failure instanceof Error ? failure.message : String(failure));
     }
   }, []);
-  return { data, loading, busy, error, outcome, refresh, run, cancel, canCancel: busy && !!activeRemote.current };
+  return {
+    data,
+    loading,
+    busy,
+    runningKind,
+    error,
+    outcome,
+    refresh,
+    run,
+    cancel,
+    canCancel: busy && !!activeRemote.current,
+  };
 }

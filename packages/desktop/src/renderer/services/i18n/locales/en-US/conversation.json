@@ -747,8 +747,8 @@
         "agentFailed": "The AI task failed or returned an invalid draft. Check the conversation and try again.",
         "repairOutsideSelection": "A file outside the allowed selection, or Git state, changed. Commit is blocked; local changes are preserved.",
         "repairLimit": "Diagnostics remain after two repair attempts. Fix them manually and scan again.",
-        "buildConfigRequired": "Configure the project build in .woody/static-scan.json; no IAR or CMake project was detected.",
-        "buildAmbiguous": "Multiple build systems or projects were found. Select one in .woody/static-scan.json.",
+        "buildConfigRequired": "No IAR or CMake project was detected. Configure the build in .woody/static-scan.json, or uncheck \"Compile verification\" to skip it.",
+        "buildAmbiguous": "Multiple build systems or projects were found. Select one in .woody/static-scan.json, or uncheck \"Compile verification\" to skip it.",
         "buildFailed": "Compilation failed. Review the output, fix the issue and retry.",
         "runChecks": "Run checks",
         "continueCommit": "Continue to commit",
@@ -1030,6 +1030,24 @@
       "history": {
         "continue": "Continue operation",
         "abort": "Abort operation"
+      },
+      "running": "{{operation}} in progress…",
+      "runningRemote": "{{operation}} in progress. You can cancel at any time.",
+      "reasons": {
+        "refChanged": "This branch or tag has changed. Refresh and try again.",
+        "branchChanged": "The current branch has changed. Refresh and try again.",
+        "invalidName": "This name cannot be used for a Git branch or tag.",
+        "remoteUnsupported": "This remote's address is not supported, or it contains a password or token. Change the address, then try again.",
+        "remoteChanged": "This remote's address has changed. Refresh and try again.",
+        "operationInProgress": "A merge, rebase or similar operation is still in progress. Finish or abort it first.",
+        "operationEnded": "That operation has already ended. Refresh to see the current state.",
+        "unresolvedConflicts": "Some files still have conflicts. Resolve them, then continue.",
+        "dirtyWorktree": "This needs a clean working tree. Commit, stash or discard your changes first.",
+        "gitLocked": "Another Git process is using this repository. Try again when it finishes.",
+        "localChanges": "Your uncommitted changes to the files below would be overwritten. Commit or stash them first.",
+        "rewriteUnsupported": "These commits cannot be rewritten. Root commits, merge commits and squashing non-adjacent commits are not supported.",
+        "gitTooOld": "Editing history needs Git 2.40 or newer. Configure a newer Git.",
+        "cancelled": "Cancelled. Part of the work may already be done, so refresh before trying again."
       }
     },
     "merge": {

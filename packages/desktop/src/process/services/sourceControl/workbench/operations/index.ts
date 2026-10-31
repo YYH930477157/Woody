@@ -40,11 +40,11 @@ export function createGitOperationService(
     ).stdout.trim();
   const matches = async (root: string, ref: string, expected: string, commit = true) => {
     if ((await resolve(root, ref, commit)) !== expected)
-      throw new OperationBlocked('Reference changed; refresh before retrying');
+      throw new OperationBlocked('Reference changed; refresh before retrying', 'refChanged');
   };
   const validateName = async (root: string, name: string, tag = false) => {
     if ((await git(root, ['check-ref-format', tag ? `refs/tags/${name}` : `refs/heads/${name}`], true)).code !== 0)
-      throw new OperationBlocked('Invalid reference name');
+      throw new OperationBlocked('Invalid reference name', 'invalidName');
   };
   const noAutostash = options.capabilities?.mergeNoAutostash === false ? [] : ['--no-autostash'];
   const remoteUrls = async (root: string, name: string, push = false): Promise<string[]> =>
@@ -52,7 +52,7 @@ export function createGitOperationService(
   const verifyRemote = async (root: string, name: string, push = false) => {
     for (const url of await remoteUrls(root, name, push)) {
       if (!remoteUrlSchema.safeParse(url).success)
-        throw new OperationBlocked('Remote uses unsupported transport or embedded credentials');
+        throw new OperationBlocked('Remote uses unsupported transport or embedded credentials', 'remoteUnsupported');
     }
   };
   return {
@@ -89,6 +89,7 @@ export function createGitOperationService(
       )
         return {
           state: 'blocked',
+          reason: 'gitTooOld',
           output: 'History editing requires Git 2.40 or newer; configure a supported Git executable.',
         };
       const cancellable = operationId !== undefined && ['fetch', 'pull', 'push'].includes(req.kind);
@@ -183,14 +184,14 @@ export function createGitOperationService(
             const currentBranch = await git(root, ['symbolic-ref', '--quiet', 'HEAD'], true);
             const branch = currentBranch.code === 0 ? currentBranch.stdout.trim().replace(/^refs\/heads\//, '') : null;
             if (![0, 1].includes(currentBranch.code) || branch !== expectedBranch)
-              throw new OperationBlocked('Current branch changed; refresh before retrying');
+              throw new OperationBlocked('Current branch changed; refresh before retrying', 'branchChanged');
           };
           if ('expectedBranch' in req) await checkHistoryIdentity(req.expectedHead, req.expectedBranch);
           if (req.kind === 'history.continue' || req.kind === 'history.abort') {
             if ((await inspectOperation(root, git)) !== req.operation)
-              throw new OperationBlocked('The selected operation is no longer in progress');
+              throw new OperationBlocked('The selected operation is no longer in progress', 'operationEnded');
             if (req.kind === 'history.continue' && (await conflictedFiles(root, git)).length)
-              throw new OperationBlocked('Resolve all conflicts before continuing');
+              throw new OperationBlocked('Resolve all conflicts before continuing', 'unresolvedConflicts');
             await checkHistoryIdentity(req.expectedHead, req.expectedBranch);
             if (req.operation === 'rebase')
               return rewrite.resume(root, req.kind === 'history.continue' ? 'continue' : 'abort', () =>
@@ -199,7 +200,10 @@ export function createGitOperationService(
             return execute([req.operation, req.kind === 'history.continue' ? '--continue' : '--abort']);
           }
           if ((await inspectOperation(root, git)) || (await conflictedFiles(root, git)).length)
-            throw new OperationBlocked('An operation or unresolved conflict is already in progress');
+            throw new OperationBlocked(
+              'An operation or unresolved conflict is already in progress',
+              'operationInProgress'
+            );
           if ('expectedHead' in req) await matches(root, 'HEAD', req.expectedHead);
           await rewrite.cleanupInactive(root);
           switch (req.kind) {
@@ -209,9 +213,15 @@ export function createGitOperationService(
             case 'history.drop': {
               const preflight = async () => {
                 if ((await inspectOperation(root, git)) || (await conflictedFiles(root, git)).length)
-                  throw new OperationBlocked('An operation or unresolved conflict is already in progress');
+                  throw new OperationBlocked(
+                    'An operation or unresolved conflict is already in progress',
+                    'operationInProgress'
+                  );
                 if ((await git(root, ['status', '--porcelain=v1', '--untracked-files=all'])).stdout)
-                  throw new OperationBlocked('A clean working tree and index are required before rewriting history');
+                  throw new OperationBlocked(
+                    'A clean working tree and index are required before rewriting history',
+                    'dirtyWorktree'
+                  );
                 await checkHistoryIdentity(req.expectedHead, req.expectedBranch);
               };
               await preflight();
@@ -222,7 +232,10 @@ export function createGitOperationService(
             case 'revert':
             case 'rebase': {
               if ((await git(root, ['status', '--porcelain=v1', '--untracked-files=all'])).stdout)
-                throw new OperationBlocked('A clean working tree and index are required before history operations');
+                throw new OperationBlocked(
+                  'A clean working tree and index are required before history operations',
+                  'dirtyWorktree'
+                );
               await matches(root, req.target, req.target);
               await checkHistoryIdentity(req.expectedHead, req.expectedBranch);
               // Operate only on the reviewed immutable commit, with interactive editors disabled by the executor.
@@ -268,7 +281,7 @@ export function createGitOperationService(
                   (await git(root, ['symbolic-ref', '--quiet', 'HEAD'], true)).stdout.trim() !==
                   `refs/heads/${req.branch}`
                 )
-                  throw new OperationBlocked('Current branch changed; refresh before pulling');
+                  throw new OperationBlocked('Current branch changed; refresh before pulling', 'branchChanged');
               };
               await checkBranch();
               await validateName(root, req.branch);
@@ -306,7 +319,10 @@ export function createGitOperationService(
               const urls = await remoteUrls(root, req.name);
               // The list shows credentials redacted, so that form must still identify the remote to repair it.
               if (urls.length !== 1 || (urls[0] !== req.expectedUrl && safeOutput(urls[0]) !== req.expectedUrl))
-                throw new OperationBlocked('Remote URL changed or is ambiguous; refresh before retrying');
+                throw new OperationBlocked(
+                  'Remote URL changed or is ambiguous; refresh before retrying',
+                  'remoteChanged'
+                );
               return execute(
                 req.kind === 'remote.remove' ? ['remote', 'remove', req.name] : ['remote', 'set-url', req.name, req.url]
               );
@@ -340,11 +356,13 @@ export function createGitOperationService(
         if (controller.signal.aborted)
           return {
             state: 'cancelled',
+            reason: 'cancelled',
             output:
               'Git command cancelled. Refresh repository and remote state before retrying; completed changes are not undone.',
           };
         return {
           state: error instanceof OperationBlocked ? 'blocked' : 'error',
+          ...(error instanceof OperationBlocked && error.reason ? { reason: error.reason } : {}),
           output: safeOutput(error instanceof Error ? error.message : 'Git operation failed'),
         };
       } finally {

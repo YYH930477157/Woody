@@ -747,8 +747,8 @@
         "agentFailed": "AI タスクが失敗したか、下書きの形式が無効です。会話を確認して再試行してください。",
         "repairOutsideSelection": "許可範囲外のファイルまたは Git の状態が変更されました。コミットを停止し、ローカルの変更を保持しました。",
         "repairLimit": "2 回の自動修正後も診断が残っています。手動で修正し、再スキャンしてください。",
-        "buildConfigRequired": "IAR または CMake のプロジェクトが見つかりません。.woody/static-scan.json でビルドを設定してください。",
-        "buildAmbiguous": "複数のビルドシステムまたはプロジェクトが見つかりました。.woody/static-scan.json で選択してください。",
+        "buildConfigRequired": "IAR または CMake プロジェクトが検出されませんでした。.woody/static-scan.json でビルドを設定するか、「コンパイル検証」のチェックを外してスキップしてください。",
+        "buildAmbiguous": "複数のビルドシステムまたはプロジェクトが見つかりました。.woody/static-scan.json で選択するか、「コンパイル検証」のチェックを外してスキップしてください。",
         "buildFailed": "コンパイルに失敗しました。出力を確認し、問題を修正して再試行してください。",
         "runChecks": "チェックを実行",
         "continueCommit": "コミットへ進む",
@@ -1030,6 +1030,24 @@
       "history": {
         "continue": "Continue operation",
         "abort": "Abort operation"
+      },
+      "running": "{{operation}} を実行中…",
+      "runningRemote": "{{operation}} を実行中です。いつでもキャンセルできます。",
+      "reasons": {
+        "refChanged": "このブランチまたはタグは変更されています。更新してからやり直してください。",
+        "branchChanged": "現在のブランチが変更されています。更新してからやり直してください。",
+        "invalidName": "この名前は Git のブランチやタグには使用できません。",
+        "remoteUnsupported": "このリモートのアドレスはサポートされていないか、パスワードまたはトークンを含んでいます。アドレスを変更してからやり直してください。",
+        "remoteChanged": "このリモートのアドレスは変更されています。更新してからやり直してください。",
+        "operationInProgress": "マージ、リベースなどの操作がまだ進行中です。先に完了するか中止してください。",
+        "operationEnded": "その操作はすでに終了しています。更新して現在の状態を確認してください。",
+        "unresolvedConflicts": "まだ競合が残っているファイルがあります。解決してから続行してください。",
+        "dirtyWorktree": "この操作にはクリーンな作業ツリーが必要です。先に変更をコミット、スタッシュ、または破棄してください。",
+        "gitLocked": "別の Git プロセスがこのリポジトリを使用しています。終了してからやり直してください。",
+        "localChanges": "以下のファイルの未コミットの変更が上書きされます。先にコミットまたはスタッシュしてください。",
+        "rewriteUnsupported": "選択したコミットは書き換えできません。ルートコミット、マージコミット、隣接しないコミットのスカッシュには対応していません。",
+        "gitTooOld": "履歴の編集には Git 2.40 以降が必要です。新しい Git を設定してください。",
+        "cancelled": "キャンセルしました。一部の処理は完了している可能性があるため、更新してからやり直してください。"
       }
     },
     "merge": {

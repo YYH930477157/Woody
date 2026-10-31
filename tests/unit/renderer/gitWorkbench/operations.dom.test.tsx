@@ -47,6 +47,27 @@ describe('native repository actions', () => {
     });
     expect(result.current.busy).toBe(false);
   });
+  it('reports which operation is running until it settles', async () => {
+    const { result } = renderHook(() => useOperations(scope, 'repo'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    let finish!: (value: unknown) => void;
+    api.operate.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+    );
+    let request!: Promise<void>;
+    act(() => {
+      request = result.current.run({ kind: 'fetch', remote: 'origin' });
+    });
+    expect(result.current.runningKind).toBe('fetch');
+    await act(async () => {
+      finish({ state: 'complete', output: '' });
+      await request;
+    });
+    expect(result.current.runningKind).toBeUndefined();
+  });
   it('asks for confirmation before deleting a branch', async () => {
     api.refs.mockResolvedValue([
       { name: 'feature', fullName: 'refs/heads/feature', type: 'local', hash: 'b'.repeat(40) },

@@ -747,8 +747,8 @@
         "agentFailed": "La tâche IA a échoué ou le brouillon est invalide. Vérifiez la conversation et réessayez.",
         "repairOutsideSelection": "Un fichier hors sélection ou l’état Git a changé. Le commit est bloqué et les modifications locales sont conservées.",
         "repairLimit": "Des diagnostics subsistent après deux tentatives. Corrigez-les manuellement et relancez l’analyse.",
-        "buildConfigRequired": "Aucun projet IAR ou CMake détecté. Configurez la compilation dans .woody/static-scan.json.",
-        "buildAmbiguous": "Plusieurs systèmes de compilation ou projets détectés. Choisissez-en un dans .woody/static-scan.json.",
+        "buildConfigRequired": "Aucun projet IAR ou CMake détecté. Configurez la compilation dans .woody/static-scan.json ou décochez « Vérification de compilation » pour l'ignorer.",
+        "buildAmbiguous": "Plusieurs systèmes de compilation ou projets ont été trouvés. Sélectionnez-en un dans .woody/static-scan.json ou décochez « Vérification de compilation » pour l'ignorer.",
         "buildFailed": "La compilation a échoué. Consultez la sortie, corrigez le problème et réessayez.",
         "runChecks": "Lancer les vérifications",
         "continueCommit": "Continuer vers le commit",
@@ -1030,6 +1030,24 @@
       "history": {
         "continue": "Continue operation",
         "abort": "Abort operation"
+      },
+      "running": "{{operation}} en cours…",
+      "runningRemote": "{{operation}} en cours. Vous pouvez annuler à tout moment.",
+      "reasons": {
+        "refChanged": "Cette branche ou ce tag a changé. Actualisez puis réessayez.",
+        "branchChanged": "La branche actuelle a changé. Actualisez puis réessayez.",
+        "invalidName": "Ce nom ne peut pas être utilisé pour une branche ou un tag Git.",
+        "remoteUnsupported": "L'adresse de ce dépôt distant n'est pas prise en charge ou contient un mot de passe ou un jeton. Modifiez l'adresse puis réessayez.",
+        "remoteChanged": "L'adresse de ce dépôt distant a changé. Actualisez puis réessayez.",
+        "operationInProgress": "Une fusion, un rebase ou une opération similaire est toujours en cours. Terminez-la ou annulez-la d'abord.",
+        "operationEnded": "Cette opération est déjà terminée. Actualisez pour voir l'état actuel.",
+        "unresolvedConflicts": "Certains fichiers ont encore des conflits. Résolvez-les puis continuez.",
+        "dirtyWorktree": "Cette action nécessite un arbre de travail propre. Commitez, remisez ou abandonnez d'abord vos modifications.",
+        "gitLocked": "Un autre processus Git utilise ce dépôt. Réessayez lorsqu'il sera terminé.",
+        "localChanges": "Vos modifications non commitées dans les fichiers ci-dessous seraient écrasées. Commitez-les ou remisez-les d'abord.",
+        "rewriteUnsupported": "Ces commits ne peuvent pas être réécrits. Les commits racines, les commits de fusion et le squash de commits non adjacents ne sont pas pris en charge.",
+        "gitTooOld": "La modification de l'historique nécessite Git 2.40 ou une version ultérieure. Configurez un Git plus récent.",
+        "cancelled": "Annulé. Une partie du travail est peut-être déjà effectuée, actualisez donc avant de réessayer."
       }
     },
     "merge": {

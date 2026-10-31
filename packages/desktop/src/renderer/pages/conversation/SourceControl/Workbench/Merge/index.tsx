@@ -8,6 +8,7 @@ import { useRequest } from '../useRequest';
 import { Loading, RequestError } from '../RequestState';
 import { useOperations } from '../Operations/useOperations';
 import { ConflictEditor } from './ConflictEditor';
+import { outcomeText } from '../operationOutcome';
 import styles from './Merge.module.css';
 
 export function Merge({
@@ -77,12 +78,7 @@ export function Merge({
       {operations.outcome && (
         <Alert
           type={operations.outcome.state === 'complete' ? 'success' : 'warning'}
-          content={
-            <pre className={styles.output}>
-              {operations.outcome.output ||
-                t(`conversation.gitWorkbench.operations.outcomes.${operations.outcome.state}`)}
-            </pre>
-          }
+          content={<pre className={styles.output}>{outcomeText(operations.outcome, t)}</pre>}
         />
       )}
       {list.loading && <Loading />}

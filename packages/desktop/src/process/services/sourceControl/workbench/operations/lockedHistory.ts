@@ -24,7 +24,8 @@ export async function withIsolatedHistory<T>(
     // The path is the actionable part: it tells the user which lock to close or remove.
     if (error.code === 'EEXIST')
       throw new OperationBlocked(
-        `Git HEAD or index is locked by another operation; retry after it finishes. ${error.message}`
+        `Git HEAD or index is locked by another operation; retry after it finishes. ${error.message}`,
+        'gitLocked'
       );
     throw error;
   });
