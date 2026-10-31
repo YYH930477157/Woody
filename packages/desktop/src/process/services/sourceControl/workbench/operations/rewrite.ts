@@ -7,7 +7,7 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import type { GitOperationRequest, GitOperationOutcome } from '@/common/types/sourceControl/operationTypes';
-import type { GitExecutor } from '../executor';
+import { forUserOperation, type GitExecutor } from '../executor';
 import { inspectOperation, OperationBlocked, runConflictAware } from './engine';
 import { withIsolatedHistory } from './lockedHistory';
 
@@ -139,7 +139,7 @@ export function createHistoryRewrite(git: GitExecutor, storeDir?: string, gitPat
         },
         async (lockedGit) => {
           try {
-            return await runConflictAware(root, lockedGit, ['rebase', `--${action}`]);
+            return await runConflictAware(root, forUserOperation(lockedGit), ['rebase', `--${action}`]);
           } finally {
             await settleOperation(root, directory, lockedGit);
           }
@@ -258,8 +258,9 @@ fs.writeFileSync(path.join(directory, 'woody-rewrite-token'), ${JSON.stringify(t
           try {
             return await runConflictAware(
               root,
-              (cwd, args, allowed, options) =>
-                lockedGit(cwd, args, allowed, { ...options, sequenceEditorFile: editor }),
+              forUserOperation((cwd, args, allowed, options) =>
+                lockedGit(cwd, args, allowed, { ...options, sequenceEditorFile: editor })
+              ),
               [
                 'rebase',
                 '--interactive',

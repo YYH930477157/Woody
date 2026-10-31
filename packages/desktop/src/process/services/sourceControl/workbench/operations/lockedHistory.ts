@@ -8,6 +8,7 @@ import {
   preparePublication,
   publishHistory,
   resolveHistoryRef,
+  rollBackHistory,
 } from './historyWorkspace';
 
 /** Git advances private HEAD/index/state while the worktree's real HEAD and index stay locked. */
@@ -34,6 +35,7 @@ export async function withIsolatedHistory<T>(
     try {
       result = await run(isolated);
     } catch (error) {
+      if (await rollBackHistory(root, journal, isolated)) throw error;
       throw pendingHistoryError(journal, error instanceof Error ? error.message : String(error));
     }
     const resolveRef = resolveHistoryRef(root, isolated);

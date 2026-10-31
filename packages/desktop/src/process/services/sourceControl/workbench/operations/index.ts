@@ -1,6 +1,6 @@
 import type { GitWorkbenchScope } from '@/common/types/sourceControl/workbenchTypes';
 import type { GitOperationRequest, GitOperationOutcome, GitRemote } from '@/common/types/sourceControl/operationTypes';
-import { createGitExecutor, type GitExecutor } from '../executor';
+import { createGitExecutor, forUserOperation, type GitExecutor } from '../executor';
 import { createWorkbenchRootResolver, type GitWorkbenchOptions } from '../service';
 import { repositoryCoordinator } from '../coordinator';
 import { scopeSchema } from '../validation';
@@ -110,8 +110,9 @@ export function createGitOperationService(
             checkCancelled();
             return runConflictAware(
               root,
-              (cwd, command, allowFailure, commandOptions) =>
-                git(cwd, command, allowFailure, { ...commandOptions, signal: controller.signal }),
+              forUserOperation((cwd, command, allowFailure, commandOptions) =>
+                git(cwd, command, allowFailure, { ...commandOptions, signal: controller.signal })
+              ),
               args
             );
           };

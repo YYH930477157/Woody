@@ -2,7 +2,7 @@
 import { chmod, copyFile, lstat, mkdir, open, readFile, readdir, rename, rm, rmdir, writeFile } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
-import type { GitExecutor } from '../executor';
+import { forUserOperation, type GitExecutor } from '../executor';
 import { flattenConfig, quoteConfig, readOptional } from '../commit/workspace';
 
 const manifestName = 'woody-history-pending.json';
@@ -292,6 +292,36 @@ export async function publishHistory(journal: HistoryJournal, resolveRef: Resolv
     await rm(journal.workspace, { recursive: true, force: true }).catch((): undefined => undefined);
   } catch (error) {
     throw pendingHistoryError(journal, error instanceof Error ? error.message : String(error));
+  }
+}
+
+const inProgress = (name: string) => /^(?:rebase-merge|rebase-apply|sequencer)\//.test(name);
+
+/**
+ * Undo a rewrite that failed before publishing, so it cannot leave the repository blocked. The real HEAD, index and
+ * branch have not moved, but Git was changing the shared working tree, so its own abort restores the files. Returns
+ * false, keeping the retained state for recovery, when the repository was already mid-operation: aborting then would
+ * rewind the files past the paused state the real HEAD still records.
+ */
+export async function rollBackHistory(root: string, journal: HistoryJournal, isolated: GitExecutor): Promise<boolean> {
+  if (Object.keys(journal.before).some(inProgress)) return false;
+  try {
+    const privateDir = privateGitDir(journal);
+    // The killed process cannot release this private lock, and nothing else can hold it.
+    await rm(path.join(privateDir, 'index.lock'), { force: true });
+    if (Object.keys(await metadataFiles(privateDir)).some(inProgress)) {
+      const abort = await forUserOperation(isolated)(root, ['rebase', '--abort'], true);
+      if (abort.code !== 0) return false;
+    }
+    const resolveRef = resolveHistoryRef(root, isolated);
+    for (const [name, expected] of Object.entries(journal.beforeRefs)) {
+      if ((await resolveRef(name)) !== expected) return false;
+    }
+    await rm(path.join(journal.gitDir, manifestName));
+    await rm(journal.workspace, { recursive: true, force: true }).catch((): undefined => undefined);
+    return true;
+  } catch {
+    return false;
   }
 }
 
