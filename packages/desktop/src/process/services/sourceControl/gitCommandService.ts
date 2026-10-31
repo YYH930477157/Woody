@@ -57,15 +57,19 @@ const parsePorcelainPaths = (output: string): string[] => {
   return [...paths].toSorted();
 };
 
+/** Fields are NUL-separated: refnames may contain `|` and any other printable separator. */
+const BRANCH_FORMAT = '--format=%(refname:short)%00%(upstream:short)%00%(HEAD)';
+
 const parseBranches = (output: string): GitBranch[] =>
   output
     .split('\n')
-    .map((line) => line.trim())
+    .map((line) => line.replace(/\r$/, ''))
     .filter(Boolean)
     .map((line) => {
-      const [name, upstream = '', head = ''] = line.split('|');
+      const [name, upstream = '', head = ''] = line.split('\0');
       return Object.assign({ name }, upstream ? { upstream } : {}, { current: head === `*` });
-    });
+    })
+    .filter((branch) => branch.name.length > 0);
 
 /** Push failures stay retryable: the user can fix the branch or remote setup, then retry the same commit. */
 const pushFailed = (stderr: string, stdout = ''): GitPushResult => ({ ok: false, retryable: true, stdout, stderr });
@@ -165,19 +169,19 @@ export const createGitCommandService = (runner: GitCommandRunner = defaultRunner
     },
 
     async getBranches(repoPath) {
-      const result = await runner(
-        ['for-each-ref', '--format=%(refname:short)|%(upstream:short)|%(HEAD)', 'refs/heads'],
-        {
-          cwd: repoPath,
-        }
-      );
+      const result = await runner(['for-each-ref', BRANCH_FORMAT, 'refs/heads'], {
+        cwd: repoPath,
+      });
       if (result.exitCode !== 0) throw new Error(result.stderr || 'Unable to read Git branches');
       return { branches: parseBranches(result.stdout) };
     },
 
     async checkoutBranch(repoPath, branch) {
-      const status = await this.getStatus(repoPath);
-      if (status.changedPaths.length > 0) return { ok: false, kind: 'dirty-worktree' };
+      // Untracked files only block `git checkout` when they would be overwritten, and Git reports that itself;
+      // refusing every untracked file made any freshly generated file block a branch switch.
+      const status = await runner(['status', '--porcelain=v1', '--untracked-files=no'], { cwd: repoPath });
+      if (status.exitCode !== 0) throw new Error(status.stderr || 'Unable to read Git status');
+      if (status.stdout.trim()) return { ok: false, kind: 'dirty-worktree' };
       const result = await runner(['checkout', branch], { cwd: repoPath });
       return result.exitCode === 0
         ? { ok: true }

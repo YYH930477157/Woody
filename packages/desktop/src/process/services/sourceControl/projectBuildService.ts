@@ -1,5 +1,5 @@
-import { readdir } from 'node:fs/promises';
-import { isAbsolute, relative, resolve } from 'node:path';
+import { readdir, realpath, stat } from 'node:fs/promises';
+import { basename, isAbsolute, relative, resolve, sep } from 'node:path';
 
 import type { GitWorkflowCompileResult } from '@/common/types/sourceControl/gitWorkflowTypes';
 import type { StaticScanProjectConfig } from '@/common/types/sourceControl/staticScanTypes';
@@ -16,6 +16,58 @@ const insideRepository = (repoPath: string, path: string): string => {
     throw new Error('Build paths must be inside the repository');
   }
   return target;
+};
+
+/** Shells and script hosts turn a data file into arbitrary command execution without shipping a binary. */
+const SCRIPT_HOSTS = new Set([
+  'cmd',
+  'cmd.exe',
+  'powershell',
+  'powershell.exe',
+  'pwsh',
+  'pwsh.exe',
+  'sh',
+  'bash',
+  'dash',
+  'zsh',
+  'wsl',
+  'wsl.exe',
+  'cscript',
+  'cscript.exe',
+  'wscript',
+  'wscript.exe',
+  'mshta',
+  'mshta.exe',
+]);
+
+const isWithin = (root: string, target: string): boolean => {
+  const rel = relative(root, target);
+  return rel === '' || (!isAbsolute(rel) && rel !== '..' && !rel.startsWith(`..${sep}`));
+};
+
+const hasControlCharacter = (value: string): boolean => [...value].some((character) => character.charCodeAt(0) < 0x20);
+
+/**
+ * `.woody/static-scan.json` travels with a clone, so it may only point the build at a toolchain that already
+ * exists on this machine: an absolute path, outside the repository, that is not a shell or script host.
+ * Otherwise a cloned repository could ship a binary (or name `cmd.exe`) and have it run as part of a scan.
+ */
+const resolveCustomExecutable = async (repoPath: string, configured: string): Promise<string> => {
+  if (!isAbsolute(configured) || hasControlCharacter(configured))
+    throw new Error('Custom build executable must be an absolute path');
+  const name = basename(configured).toLowerCase();
+  if (SCRIPT_HOSTS.has(name))
+    throw new Error(`Custom build executable cannot be a shell or script host: ${basename(configured)}`);
+  let resolved: string;
+  try {
+    resolved = await realpath(configured);
+  } catch {
+    throw new Error(`Custom build executable does not exist: ${configured}`);
+  }
+  if (!(await stat(resolved)).isFile()) throw new Error(`Custom build executable is not a file: ${configured}`);
+  if (isWithin(await realpath(repoPath), resolved))
+    throw new Error('Custom build executable must live outside the repository');
+  return resolved;
 };
 
 const discoverProjects = async (repoPath: string): Promise<{ iar: string[]; cmake: string[] }> => {
@@ -59,7 +111,14 @@ const planBuild = async (repoPath: string, config: BuildConfig): Promise<BuildSt
       !(config.arguments ?? []).every((arg) => typeof arg === 'string')
     )
       throw new Error('Invalid build command');
-    return [{ executable: config.executable, args: config.arguments ?? [], cwd, timeoutMs }];
+    return [
+      {
+        executable: await resolveCustomExecutable(repoPath, config.executable),
+        args: config.arguments ?? [],
+        cwd,
+        timeoutMs,
+      },
+    ];
   }
   const projects = await discoverProjects(repoPath);
   if (!config.system && projects.iar.length && projects.cmake.length) {

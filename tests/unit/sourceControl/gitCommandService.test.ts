@@ -193,6 +193,32 @@ describe('git command service', () => {
     expect(result).toEqual({ ok: false, kind: 'dirty-worktree' });
   });
 
+  it('allows branch checkout when only untracked files exist', async () => {
+    const repoPath = await makeRepo();
+    await writeFile(join(repoPath, 'untracked.c'), 'leave me\n', 'utf8');
+    await runGit(repoPath, ['checkout', '-b', 'other']);
+    const service = createGitCommandService();
+
+    // `git checkout` itself only refuses when an untracked file would be overwritten.
+    expect(await service.checkoutBranch(repoPath, 'main')).toEqual({ ok: true });
+    expect((await service.getStatus(repoPath)).branch).toBe('main');
+  });
+
+  it('parses branch names that contain a pipe character', async () => {
+    const runner = vi.fn(async (args: string[]) => ({
+      // `feat|x` is a legal refname; NUL keeps it from being split into fields.
+      stdout: args[0] === 'for-each-ref' ? 'feat|x\0\0*\nmain\0origin/main\0\n' : '',
+      stderr: '',
+      exitCode: 0,
+    }));
+    const service = createGitCommandService(runner);
+
+    expect((await service.getBranches('/repo')).branches).toEqual([
+      { name: 'feat|x', current: true },
+      { name: 'main', upstream: 'origin/main', current: false },
+    ]);
+  });
+
   it('returns a retryable push failure without hiding command output', async () => {
     const repoPath = await makeRepo();
     const service = createGitCommandService();

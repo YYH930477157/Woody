@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -28,12 +28,14 @@ describe('project build verification', () => {
   });
 
   it('prefers an explicit command and executes in the original repository', async () => {
-    await configure({ build: { executable: 'builder', arguments: ['a b', ';literal'], timeoutMs: 1000 } });
+    await configure({
+      build: { executable: process.execPath, arguments: ['a b', ';literal'], timeoutMs: 1000 },
+    });
     const run = runner();
     const result = await createProjectBuildService(run).compile({ repoPath: root });
     expect(result.ok).toBe(true);
     expect(run).toHaveBeenCalledWith(
-      'builder',
+      await realpath(process.execPath),
       ['a b', ';literal'],
       expect.objectContaining({ cwd: root, timeoutMs: 1000 })
     );
@@ -44,12 +46,51 @@ describe('project build verification', () => {
     await mkdir(join(root, '.woody'), { recursive: true });
     await writeFile(
       join(root, '.woody/static-scan.json'),
-      `\uFEFF${JSON.stringify({ build: { executable: 'builder', arguments: [] } })}`
+      `\uFEFF${JSON.stringify({ build: { executable: process.execPath, arguments: [] } })}`
     );
     const run = runner();
     const result = await createProjectBuildService(run).compile({ repoPath: root });
     expect(result.ok).toBe(true);
-    expect(run).toHaveBeenCalledWith('builder', [], expect.objectContaining({ cwd: root }));
+    expect(run).toHaveBeenCalledWith(await realpath(process.execPath), [], expect.objectContaining({ cwd: root }));
+  });
+
+  it('rejects a bare executable name so the build cannot resolve through PATH', async () => {
+    await configure({ build: { executable: 'builder', arguments: [] } });
+    const run = runner();
+    const result = await createProjectBuildService(run).compile({ repoPath: root });
+    expect(result).toMatchObject({ ok: false, reasonCode: 'buildFailed' });
+    expect(run).not.toHaveBeenCalled();
+    expect(result.stderr).toContain('absolute path');
+  });
+
+  it('rejects a shell host from repository configuration', async () => {
+    const shell = process.platform === 'win32' ? (process.env.ComSpec ?? 'C:\\Windows\\System32\\cmd.exe') : '/bin/sh';
+    await configure({ build: { executable: shell, arguments: ['/c', 'echo hi'] } });
+    const run = runner();
+    const result = await createProjectBuildService(run).compile({ repoPath: root });
+    expect(result).toMatchObject({ ok: false, reasonCode: 'buildFailed' });
+    expect(run).not.toHaveBeenCalled();
+    expect(result.stderr).toContain('shell or script host');
+  });
+
+  it('rejects an executable shipped inside the repository', async () => {
+    const inside = join(root, 'builder.exe');
+    await writeFile(inside, '');
+    await configure({ build: { executable: inside, arguments: [] } });
+    const run = runner();
+    const result = await createProjectBuildService(run).compile({ repoPath: root });
+    expect(result).toMatchObject({ ok: false, reasonCode: 'buildFailed' });
+    expect(run).not.toHaveBeenCalled();
+    expect(result.stderr).toContain('outside the repository');
+  });
+
+  it('rejects a toolchain path that does not exist', async () => {
+    await configure({ build: { executable: join(root, '..', 'missing-tool.exe'), arguments: [] } });
+    const run = runner();
+    const result = await createProjectBuildService(run).compile({ repoPath: root });
+    expect(result).toMatchObject({ ok: false, reasonCode: 'buildFailed' });
+    expect(run).not.toHaveBeenCalled();
+    expect(result.stderr).toContain('does not exist');
   });
 
   it('reports an unreadable project config as a failed build', async () => {

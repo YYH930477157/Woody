@@ -1,5 +1,5 @@
 /* eslint-disable no-await-in-loop -- Locking, metadata snapshots and journal publication use a deliberate, deterministic order. */
-import { chmod, copyFile, lstat, mkdir, open, readdir, rename, rm, rmdir, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, lstat, mkdir, open, readFile, readdir, rename, rm, rmdir, writeFile } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import type { GitExecutor } from '../executor';
@@ -295,6 +295,55 @@ export async function publishHistory(journal: HistoryJournal, resolveRef: Resolv
   }
 }
 
+const LOCK_MARKER = 'woody-history-lock';
+
+/** The marker lets a later run recognise a lock this application created but could not release (hard kill). */
+const lockContents = (): string => `${LOCK_MARKER}:${process.pid}:${new Date().toISOString()}\n`;
+
+const processIsAlive = (pid: number): boolean => {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    // EPERM means the process exists under another user; keep the lock rather than guess.
+    return (error as NodeJS.ErrnoException).code === 'EPERM';
+  }
+};
+
+/**
+ * Remove a lock this application left behind when its process died. Locks Git itself created carry no marker and
+ * are never touched: an unmarked `index.lock` belongs to whatever Git operation is holding it.
+ */
+const reclaimAbandonedLock = async (file: string): Promise<boolean> => {
+  let contents: string;
+  try {
+    contents = await readFile(file, 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+    throw error;
+  }
+  const match = new RegExp(`^${LOCK_MARKER}:(\\d+):`).exec(contents);
+  if (!match) return false;
+  const owner = Number(match[1]);
+  if (owner === process.pid || processIsAlive(owner)) return false;
+  await rm(file, { force: true });
+  return true;
+};
+
+const createLock = async (file: string): Promise<void> => {
+  const handle = await open(file, 'wx');
+  try {
+    await handle.writeFile(lockContents());
+  } finally {
+    await handle.close();
+  }
+};
+
+/**
+ * Take Git's HEAD and index locks, reclaiming only this application's own abandoned locks so a crash does not
+ * leave the repository permanently refused (both here and for the user's own Git commands).
+ */
 export async function acquireHistoryLocks(gitDir: string, indexPath: string) {
   const owned: string[] = [];
   const release = async () => {
@@ -302,9 +351,19 @@ export async function acquireHistoryLocks(gitDir: string, indexPath: string) {
   };
   try {
     for (const file of [path.join(gitDir, 'HEAD.lock'), `${indexPath}.lock`]) {
-      const handle = await open(file, 'wx');
+      for (let attempt = 0; ; attempt += 1) {
+        try {
+          await createLock(file);
+          break;
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+          if (attempt > 0 || !(await reclaimAbandonedLock(file)))
+            throw Object.assign(new Error(`Git lock file is held by another process: ${file}`), {
+              code: 'EEXIST',
+            });
+        }
+      }
       owned.push(file);
-      await handle.close();
     }
     return release;
   } catch (error) {

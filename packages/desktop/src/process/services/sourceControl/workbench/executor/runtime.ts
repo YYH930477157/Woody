@@ -84,7 +84,9 @@ export function systemGitCandidates(
   env: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform
 ): string[] {
-  const names = platform === 'win32' ? ['git.exe', 'git.cmd', 'git.bat'] : ['git'];
+  // Only native executables: a `.cmd`/`.bat` shim cannot be spawned without a shell, so listing it would add a
+  // candidate that always fails and hide the fact that the real `git.exe` is missing from PATH.
+  const names = platform === 'win32' ? ['git.exe'] : ['git'];
   const directories = (env.PATH ?? env.Path ?? '')
     .split(path.delimiter)
     .map((entry) => entry.trim().replace(/^"(.*)"$/, '$1'))
