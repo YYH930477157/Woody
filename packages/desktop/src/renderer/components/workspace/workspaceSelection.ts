@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { isBackendHttpError } from '@/common/adapter/httpBridge';
 import type { ProjectDetailDto } from '@/common/types/project';
 
 let selectedWorkspace: ProjectDetailDto | null = null;
@@ -32,7 +33,15 @@ export const hydrateSelectedWorkspace = async (load: (id: string) => Promise<Pro
     return;
   }
   if (!id) return;
-  const detail = await load(id);
+  let detail: ProjectDetailDto;
+  try {
+    detail = await load(id);
+  } catch (error) {
+    // The backend no longer has this workspace, so retrying can only repeat the failure. An outage keeps the identity.
+    if (!isBackendHttpError(error) || error.status !== 404) throw error;
+    if (!selectedWorkspace) selectWorkspace(null);
+    return;
+  }
   if (!selectedWorkspace && detail.project_id === id) selectWorkspace(detail);
 };
 export const useSelectedWorkspace = (): ProjectDetailDto | null =>

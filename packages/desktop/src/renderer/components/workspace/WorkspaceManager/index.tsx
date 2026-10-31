@@ -34,7 +34,7 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({ projectId, onWorksp
   const preview = useOptionalPreviewContext();
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
-  const operationPending = useRef(false);
+  const operations = useRef<Promise<void>>(Promise.resolve());
   const [name, setName] = useState('');
   useEffect(() => {
     void hydrateSelectedWorkspace((project_id) => ipcBridge.project.get.invoke({ project_id })).catch(() =>
@@ -43,38 +43,51 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({ projectId, onWorksp
   }, [t]);
   useEffect(() => setName(detail?.name || ''), [detail?.name]);
   const managed = detail?.workspace?.managed === true;
-  const perform = async (action: () => Promise<void>): Promise<void> => {
-    if (operationPending.current) return;
-    operationPending.current = true;
-    setBusy(true);
-    try {
-      await action();
-    } catch (error) {
-      // Older AionCore builds do not mount the workspace routes at all; say so instead of a generic failure.
-      const unsupported = isBackendHttpError(error) && (error.status === 404 || error.status === 405);
-      const code = isBackendHttpError(error) ? error.code : undefined;
-      Message.error(
-        t(
-          unsupported
-            ? 'conversation.managedWorkspace.unsupported'
-            : code === 'project_workspace_busy'
-              ? 'conversation.managedWorkspace.busy'
-              : code === 'project_explorer_duplicate'
-                ? 'conversation.explorer.attachDuplicate'
-                : code === 'project_explorer_overlap'
-                  ? 'conversation.explorer.attachOverlap'
-                  : 'conversation.managedWorkspace.failed'
-        )
-      );
-      void mutate();
-    } finally {
-      operationPending.current = false;
-      setBusy(false);
-    }
+  const latest = useRef(detail);
+  latest.current = detail;
+  const currentBody = (): ReturnType<typeof buildWorkspaceUpdate> => buildWorkspaceUpdate(latest.current!);
+  /**
+   * Operations run one at a time, in order, and read the newest detail when they start. Blur-triggered edits pass
+   * `background`: disabling the controls there would swallow the click that caused the blur.
+   */
+  const perform = (action: () => Promise<void>, { background = false } = {}): Promise<void> => {
+    const run = async (): Promise<void> => {
+      if (!background) setBusy(true);
+      try {
+        await action();
+      } catch (error) {
+        showFailure(error);
+        void mutate();
+      } finally {
+        if (!background) setBusy(false);
+      }
+    };
+    operations.current = operations.current.then(run);
+    return operations.current;
+  };
+  const showFailure = (error: unknown): void => {
+    // Older AionCore builds do not mount the workspace routes at all, which is an uncoded 404. A coded one is a real
+    // missing resource, and telling that user to update would send them the wrong way.
+    const unsupported = isBackendHttpError(error) && (error.status === 405 || (error.status === 404 && !error.code));
+    const code = isBackendHttpError(error) ? error.code : undefined;
+    Message.error(
+      t(
+        unsupported
+          ? 'conversation.managedWorkspace.unsupported'
+          : code === 'project_workspace_busy'
+            ? 'conversation.managedWorkspace.busy'
+            : code === 'project_explorer_duplicate'
+              ? 'conversation.explorer.attachDuplicate'
+              : code === 'project_explorer_overlap'
+                ? 'conversation.explorer.attachOverlap'
+                : 'conversation.managedWorkspace.failed'
+      )
+    );
   };
   const update = async (body: WorkspaceUpdate): Promise<void> => {
     if (!id) return;
     const next = await ipcBridge.project.updateWorkspace.invoke({ project_id: id, ...body });
+    latest.current = next;
     await mutate(next, false);
     if (selected?.project_id === id) selectWorkspace(next);
   };
@@ -117,7 +130,7 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({ projectId, onWorksp
   const remove = (peId: string) =>
     perform(async () => {
       if (!detail || !(await confirmRootEditors(preview, [peId]))) return;
-      await update(removeWorkspaceRoot(buildWorkspaceUpdate(detail), peId));
+      await update(removeWorkspaceRoot(currentBody(), peId));
       closeRootEditors(preview, [peId]);
     });
   const relocate = (peId: string) =>
@@ -125,7 +138,7 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({ projectId, onWorksp
       if (!detail) return;
       const paths = await ipcBridge.dialog.showOpen.invoke({ properties: ['openDirectory'] });
       if (!paths?.[0] || !(await confirmRootEditors(preview, [peId]))) return;
-      const body = buildWorkspaceUpdate(detail);
+      const body = currentBody();
       await update({
         ...body,
         roots: body.roots.map((root) => (root.pe_id === peId ? { ...root, uri: pathToFileUri(paths[0]) } : root)),
@@ -227,7 +240,7 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({ projectId, onWorksp
                 onChange={setName}
                 onBlur={() => {
                   if (name.trim() && name.trim() !== detail.name)
-                    void perform(() => update({ ...buildWorkspaceUpdate(detail), name: name.trim() }));
+                    void perform(() => update({ ...currentBody(), name: name.trim() }), { background: true });
                 }}
                 aria-label={t('conversation.managedWorkspace.name')}
               />
@@ -242,7 +255,7 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({ projectId, onWorksp
                 value={detail.workspace?.default_pe_id || ''}
                 aria-label={t('conversation.managedWorkspace.defaultRoot')}
                 onChange={(value: string) =>
-                  void perform(() => update({ ...buildWorkspaceUpdate(detail), default_pe_id: value || null }))
+                  void perform(() => update({ ...currentBody(), default_pe_id: value || null }))
                 }
                 options={[
                   { label: t('conversation.managedWorkspace.noDefault'), value: '' },
@@ -272,14 +285,17 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({ projectId, onWorksp
                   onBlur={(event) => {
                     const alias = event.target.value.trim();
                     if (alias === (root.display_name || '')) return;
-                    const body = buildWorkspaceUpdate(detail);
-                    void perform(() =>
-                      update({
-                        ...body,
-                        roots: body.roots.map((item) =>
-                          item.pe_id === root.pe_id ? { ...item, display_name: alias } : item
-                        ),
-                      })
+                    void perform(
+                      () => {
+                        const body = currentBody();
+                        return update({
+                          ...body,
+                          roots: body.roots.map((item) =>
+                            item.pe_id === root.pe_id ? { ...item, display_name: alias } : item
+                          ),
+                        });
+                      },
+                      { background: true }
                     );
                   }}
                 />
@@ -293,18 +309,14 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({ projectId, onWorksp
                   <Button
                     disabled={busy || index === 0}
                     size='mini'
-                    onClick={() =>
-                      void perform(() => update(moveWorkspaceRoot(buildWorkspaceUpdate(detail), root.pe_id, -1)))
-                    }
+                    onClick={() => void perform(() => update(moveWorkspaceRoot(currentBody(), root.pe_id, -1)))}
                   >
                     {t('conversation.managedWorkspace.moveUp')}
                   </Button>
                   <Button
                     disabled={busy || index === detail.explorer.entries.length - 1}
                     size='mini'
-                    onClick={() =>
-                      void perform(() => update(moveWorkspaceRoot(buildWorkspaceUpdate(detail), root.pe_id, 1)))
-                    }
+                    onClick={() => void perform(() => update(moveWorkspaceRoot(currentBody(), root.pe_id, 1)))}
                   >
                     {t('conversation.managedWorkspace.moveDown')}
                   </Button>
