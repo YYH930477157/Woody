@@ -16,7 +16,7 @@ Git 2.40.
 - **Git history** browses commits, branches and file history. An old version of a file
   opens in its own read-only tab, so it cannot replace the file you are editing.
 - **Repository operations** covers branches, tags, remotes, stashes and worktrees.
-  Fetch, pull and push show that they are running and can be cancelled. Pull only
+  Fetch, pull and push show their progress and can be cancelled. Pull only
   fast-forwards.
 - **Resolve conflicts** resolves conflicts and continues or aborts a merge or rebase.
   Saving keeps the file's line endings outside the lines you resolved.
