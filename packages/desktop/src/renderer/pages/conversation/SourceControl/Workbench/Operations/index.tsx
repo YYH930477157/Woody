@@ -37,6 +37,7 @@ export function Operations({
   }, [state.busy, onBusyChange]);
   useEffect(() => () => onBusyChange?.(false), [onBusyChange]);
   const [name, setName] = useState('');
+  const [newRemote, setNewRemote] = useState('');
   const [url, setUrl] = useState('');
   const [message, setMessage] = useState('');
   const [includeUntracked, setIncludeUntracked] = useState(true);
@@ -47,9 +48,19 @@ export function Operations({
   const text = (
     key: 'name' | 'url' | 'reference' | 'message' | 'includeUntracked' | 'confirm' | 'noHead' | 'activeOperation'
   ) => t(`conversation.gitWorkbench.operations.${key}`);
+  /** A form is cleared only by the action that used it, and only once that worked, so a refused value can be fixed. */
+  const execute = async (request: GitOperationRequest) => {
+    const result = await state.run(request);
+    if (result?.state !== 'complete') return;
+    if (request.kind === 'branch.create' || request.kind === 'branch.rename' || request.kind === 'tag.create')
+      setName('');
+    if (request.kind === 'remote.add') setNewRemote('');
+    if (request.kind === 'remote.add' || request.kind === 'remote.setUrl') setUrl('');
+    if (request.kind === 'stash.save') setMessage('');
+  };
   const run = (request: GitOperationRequest, target?: string) => {
     if (target) setPending({ request, target });
-    else void state.run(request);
+    else void execute(request);
   };
   const { data } = state;
   const outcome = state.outcome && explainOutcome(state.outcome, t);
@@ -268,13 +279,13 @@ export function Operations({
                 !head || !remote || !data?.branch
               )}
             </Space>
-            <Input aria-label={text('name')} placeholder={text('name')} value={name} onChange={setName} />
+            <Input aria-label={text('name')} placeholder={text('name')} value={newRemote} onChange={setNewRemote} />
             <Input aria-label={text('url')} placeholder={text('url')} value={url} onChange={setUrl} />
             <Space wrap>
               {button(
                 'remote.add',
-                () => run({ kind: 'remote.add', name: name.trim(), url: url.trim() }),
-                !name.trim() || !url.trim()
+                () => run({ kind: 'remote.add', name: newRemote.trim(), url: url.trim() }),
+                !newRemote.trim() || !url.trim()
               )}
               {button(
                 'remote.setUrl',
@@ -377,7 +388,7 @@ export function Operations({
         onCancel={() => setPending(undefined)}
         onOk={() => {
           if (pending) {
-            void state.run(pending.request);
+            void execute(pending.request);
             setPending(undefined);
           }
         }}

@@ -24,6 +24,28 @@ const usedKeys = [
   ),
 ];
 
+const workbench = path.join(renderer, 'pages/conversation/SourceControl/Workbench');
+const literals = (file: string, pattern: RegExp) =>
+  [...readFileSync(path.join(workbench, file), 'utf8').matchAll(pattern)].flatMap((call) =>
+    [...call[1].replace(/===\s*'[^']*'/g, '').matchAll(/'([\w.-]+)'/g)].map((literal) => literal[1])
+  );
+const inside = (prefix: string, keys: string[]) => keys.map((key) => `${prefix}.${key}`);
+const OPERATIONS = 'conversation.gitWorkbench.operations';
+const MERGE = 'conversation.gitWorkbench.merge';
+
+// Keys that only exist once a helper or a runtime value completes them.
+const composedKeys = [
+  ...inside(OPERATIONS, literals('Operations/index.tsx', /(?:button\(\s*|label\()('[\w.-]+')/g)),
+  ...inside(OPERATIONS, literals('Operations/index.tsx', /\btext\(\s*('[\w.-]+')\s*\)/g)),
+  ...inside(`${OPERATIONS}.reasons`, literals('operationOutcome.ts', /EXPLAINED = new Set\(\[([^\]]+)\]/g)),
+  ...inside(`${OPERATIONS}.outcomes`, ['complete', 'blocked', 'conflict', 'error', 'cancelled']),
+  ...inside(`${OPERATIONS}.progress`, ['counting', 'compressing', 'receiving', 'resolving', 'writing']),
+  ...inside(MERGE, literals('Merge/index.tsx', /\btext\(([^()]*)\)/g)),
+  ...inside(MERGE, literals('Merge/ConflictEditor.tsx', /\btext\(([^()]*)\)/g)),
+  ...inside(MERGE, ['inserted', 'deleted', 'modified', 'conflict']),
+  ...inside(`${MERGE}.confirmActions`, ['rebuild', 'discard', 'recover', 'result', 'ours', 'theirs', 'delete']),
+];
+
 const lookup = (locale: string, key: string): unknown => {
   const [module, ...rest] = key.split('.');
   const messages: unknown = JSON.parse(readFileSync(path.join(locales, locale, `${module}.json`), 'utf8'));
@@ -36,9 +58,10 @@ const lookup = (locale: string, key: string): unknown => {
 describe('translation keys of the Git workbench and workspace manager', () => {
   it('finds the keys it is meant to check', () => {
     expect(usedKeys.length).toBeGreaterThan(150);
+    expect(composedKeys.length).toBeGreaterThan(80);
   });
 
   it.each(config.supportedLanguages)('all exist in %s', (locale) => {
-    expect(usedKeys.filter((key) => typeof lookup(locale, key) !== 'string')).toEqual([]);
+    expect([...usedKeys, ...composedKeys].filter((key) => typeof lookup(locale, key) !== 'string')).toEqual([]);
   });
 });
