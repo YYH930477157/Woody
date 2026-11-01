@@ -105,7 +105,9 @@ test.describe('Everyday multi-root Git workflows', () => {
     write(appRoot, '中文 目录/配置 文件.ts', '\uFEFFexport const text = "中文最新值 @用户 #配置";\r\n');
     write(appRoot, 'assets/icon.bin', Buffer.from([0, 4, 5, 6]));
     write(appRoot, 'empty.ts', '');
-    write(appRoot, 'src/large.ts', 'export const header = "NEW";\n' + '// new filler line\n'.repeat(65000));
+    // One line more than the committed copy: Git for Windows compares file times by the second, so an edit of the same
+    // size written just after the commit can look unchanged to `git diff`.
+    write(appRoot, 'src/large.ts', 'export const header = "NEW";\n' + '// new filler line\n'.repeat(65001));
     write(appRoot, 'src/external.ts', 'export const externallySaved = "FIRST_EDIT";\n');
     write(appRoot, 'src/remove-later.ts', 'export const removed = "EDITED";\n');
     write(appRoot, 'ignored/cache.ts', 'SHOULD_NOT_APPEAR\n');
