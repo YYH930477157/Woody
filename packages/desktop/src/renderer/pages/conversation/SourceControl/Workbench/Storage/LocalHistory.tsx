@@ -33,19 +33,18 @@ function Comparison({
 }) {
   const { t } = useTranslation();
   const read = useCallback(() => gitStorage.historyCompare.invoke({ scope, request: { id, path } }), [scope, id, path]);
-  const comparison = useRequest(read);
+  const comparison = useRequest(read, `${id}:${path}`);
   const mutation = useStorageMutation(() => {
     comparison.retry();
     refresh();
   }, onBusyChange);
   const [confirm, setConfirm] = useState(false);
-  if (comparison.loading) return <Loading />;
   if (comparison.error) return <RequestError message={comparison.error} retry={comparison.retry} />;
-  if (!comparison.data) return null;
+  if (!comparison.data) return comparison.loading ? <Loading /> : null;
   const captured = comparison.data;
   return (
     <div className='flex flex-col gap-8px min-w-0'>
-      {mutation.error && <Alert type='error' content={mutation.error} />}
+      {mutation.error && !confirm && <Alert type='error' content={mutation.error} />}
       <div className='flex gap-12px min-w-0'>
         {(['before', 'current'] as const).map((side) => {
           const content = captured[side];
@@ -92,6 +91,7 @@ function Comparison({
           if (ok) setConfirm(false);
         }}
       >
+        {mutation.error && <Alert className='mb-12px' type='error' content={mutation.error} />}
         {t('conversation.gitWorkbench.storage.restoreWarning')}
         <pre>{path}</pre>
       </Modal>
@@ -115,7 +115,7 @@ export function LocalHistory({
     }),
     [scope]
   );
-  const request = useRequest(read);
+  const request = useRequest(read, JSON.stringify(scope));
   const [selected, setSelected] = useState<{ id: string; path: string }>();
   const [label, setLabel] = useState('');
   const [restoring, setRestoring] = useState(false);
@@ -155,12 +155,13 @@ export function LocalHistory({
         </Button>
       </div>
       {mutation.error && <Alert type='error' content={mutation.error} />}
-      {request.loading && <Loading />}
+      {request.loading && !request.data && <Loading />}
       {request.error && <RequestError message={request.error} retry={request.retry} />}
       {request.data?.status.limited && (
         <Alert type='warning' content={t('conversation.gitWorkbench.storage.recordingLimited')} />
       )}
-      {request.data?.status.errors.map((error) => (
+      {/* A recorder that keeps failing reports the same message on every poll. */}
+      {[...new Set(request.data?.status.errors)].map((error) => (
         <Alert key={error} type='warning' content={error} />
       ))}
       <div className='flex flex-wrap gap-12px min-h-0'>
