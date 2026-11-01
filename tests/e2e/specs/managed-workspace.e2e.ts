@@ -54,6 +54,11 @@ test('managed roots round-trip through desktop UI and shared conversation identi
     .click();
   await expect.poll(async () => (await httpGet<ProjectDetailDto>(page, endpoint)).explorer.entries.length).toBe(1);
   await modal.getByRole('button', { name: /^(Discard changes|放弃更改)$/ }).click();
+  await page
+    .locator('.arco-modal:visible')
+    .filter({ hasText: /cannot be undone|无法撤销/ })
+    .getByRole('button', { name: /^(Confirm|确定)$/ })
+    .click();
   await expect.poll(async () => (await httpGet<ProjectDetailDto>(page, endpoint)).explorer.entries.length).toBe(2);
   expect(fs.readFileSync(path.join(first, 'keep.ts'), 'utf8')).toBe('export const keep = 1;\n');
   const chats = [];
