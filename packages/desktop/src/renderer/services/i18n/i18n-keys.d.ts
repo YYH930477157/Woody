@@ -1066,6 +1066,7 @@ export type I18nKey =
   | 'conversation.managedWorkspace.busy'
   | 'conversation.managedWorkspace.defaultRoot'
   | 'conversation.managedWorkspace.discard'
+  | 'conversation.managedWorkspace.discardConfirm'
   | 'conversation.managedWorkspace.empty'
   | 'conversation.managedWorkspace.failed'
   | 'conversation.managedWorkspace.manage'

@@ -920,6 +920,7 @@
     "discard": "放棄變更",
     "unsavedTitle": "有未儲存的變更",
     "unsavedConfiguration": "離開前儲存工作區設定嗎？",
+    "discardConfirm": "放棄此工作區未儲存的變更？此操作無法復原。從未儲存過的工作區會清空資料夾清單，磁碟上的資料夾不受影響。",
     "unsavedEditors": "{{count}} 個已開啟檔案有未儲存的編輯。變更其目錄前儲存嗎？",
     "failed": "工作區操作失敗，請重試。",
     "unsupported": "目前 AionCore 版本還不支援多根工作區。請升級 AionCore 後重試；現有專案不受影響。",

@@ -922,6 +922,7 @@
     "discard": "Değişiklikleri iptal et",
     "unsavedTitle": "Kaydedilmemiş değişiklikler",
     "unsavedConfiguration": "Ayrılmadan önce çalışma alanı yapılandırması kaydedilsin mi?",
+    "discardConfirm": "Bu çalışma alanındaki kaydedilmemiş değişiklikler atılsın mı? Bu işlem geri alınamaz. Hiç kaydedilmemiş bir çalışma alanının klasör listesi boşalır; klasörler diskte kalır.",
     "unsavedEditors": "{{count}} açık dosyada kaydedilmemiş düzenlemeler var. Klasörlerini değiştirmeden önce kaydedilsin mi?",
     "failed": "Çalışma alanı işlemi başarısız oldu. Yeniden deneyin.",
     "unsupported": "Bu AionCore sürümü çok köklü çalışma alanlarını henüz desteklemiyor. AionCore’u güncelleyip yeniden deneyin; mevcut projeler etkilenmez.",

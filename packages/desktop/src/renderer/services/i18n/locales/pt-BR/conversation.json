@@ -926,6 +926,7 @@
     "discard": "Descartar alterações",
     "unsavedTitle": "Alterações não salvas",
     "unsavedConfiguration": "Salvar a configuração antes de sair?",
+    "discardConfirm": "Descartar as alterações não salvas deste espaço de trabalho? Isso não pode ser desfeito. Um espaço de trabalho que nunca foi salvo perde sua lista de pastas; as pastas continuam no disco.",
     "unsavedEditors": "{{count}} arquivos abertos têm edições não salvas. Salvar antes de alterar suas pastas?",
     "failed": "A operação falhou. Tente novamente.",
     "unsupported": "Esta versão do AionCore ainda não oferece suporte a espaços de trabalho com várias raízes. Atualize o AionCore e tente novamente; os projetos existentes não são afetados.",

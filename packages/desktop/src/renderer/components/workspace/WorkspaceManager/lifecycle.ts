@@ -89,6 +89,22 @@ export const askWorkspaceDecision = (message: string): Promise<'save' | 'discard
     })
   );
 
+/** Discarding restores the last saved state, and a workspace with no saved state ends up with no folders. */
+export const confirmWorkspaceDiscard = (): Promise<boolean> =>
+  whileUserDecides(
+    new Promise((resolve) => {
+      Modal.confirm({
+        title: i18n.t('conversation.managedWorkspace.discard'),
+        content: i18n.t('conversation.managedWorkspace.discardConfirm'),
+        okText: i18n.t('common.confirm'),
+        cancelText: i18n.t('common.cancel'),
+        okButtonProps: { status: 'danger' },
+        onOk: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    })
+  );
+
 export const saveWorkspaceConfiguration = async (projectId: string, saveAs = false): Promise<boolean> => {
   const state = await ipcBridge.project.getWorkspace.invoke({ project_id: projectId });
   let path = state.config_path;

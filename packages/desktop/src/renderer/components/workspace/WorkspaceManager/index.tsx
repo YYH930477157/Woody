@@ -12,6 +12,7 @@ import {
   addWorkspaceRoot,
   closeRootEditors,
   confirmRootEditors,
+  confirmWorkspaceDiscard,
   confirmWorkspaceLeave,
   publishWorkspaceDetail,
   saveWorkspaceConfiguration,
@@ -120,10 +121,11 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({ projectId, onWorksp
     });
   const add = () =>
     perform(async () => {
-      if (!detail) return;
+      if (!latest.current) return;
       const paths = await ipcBridge.dialog.showOpen.invoke({ properties: ['openDirectory', 'createDirectory'] });
       if (!paths?.[0]) return;
-      const next = await addWorkspaceRoot(detail, pathToFileUri(paths[0]));
+      const next = await addWorkspaceRoot(latest.current, pathToFileUri(paths[0]));
+      latest.current = next;
       await mutate(next, false);
       if (selected?.project_id === id) selectWorkspace(next);
     });
@@ -208,6 +210,7 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({ projectId, onWorksp
                 disabled={busy || !detail.workspace?.dirty}
                 onClick={() =>
                   void perform(async () => {
+                    if (!(await confirmWorkspaceDiscard())) return;
                     if (
                       !(await confirmRootEditors(
                         preview,
@@ -220,6 +223,7 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({ projectId, onWorksp
                       preview,
                       detail.explorer.entries.map((root) => root.pe_id)
                     );
+                    latest.current = next;
                     await mutate(next, false);
                     if (selected?.project_id === id) selectWorkspace(next);
                   })
@@ -239,7 +243,8 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({ projectId, onWorksp
                 disabled={busy}
                 onChange={setName}
                 onBlur={() => {
-                  if (name.trim() && name.trim() !== detail.name)
+                  if (!name.trim()) setName(detail.name);
+                  else if (name.trim() !== detail.name)
                     void perform(() => update({ ...currentBody(), name: name.trim() }), { background: true });
                 }}
                 aria-label={t('conversation.managedWorkspace.name')}
@@ -291,7 +296,7 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({ projectId, onWorksp
                         return update({
                           ...body,
                           roots: body.roots.map((item) =>
-                            item.pe_id === root.pe_id ? { ...item, display_name: alias } : item
+                            item.pe_id === root.pe_id ? { ...item, display_name: alias || undefined } : item
                           ),
                         });
                       },

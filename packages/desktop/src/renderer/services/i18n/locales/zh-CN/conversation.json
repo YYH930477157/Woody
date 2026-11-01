@@ -920,6 +920,7 @@
     "discard": "放弃更改",
     "unsavedTitle": "有未保存的更改",
     "unsavedConfiguration": "离开前保存工作区配置吗？",
+    "discardConfirm": "放弃此工作区未保存的更改？此操作无法撤销。从未保存过的工作区会清空文件夹列表，磁盘上的文件夹不受影响。",
     "unsavedEditors": "{{count}} 个已打开文件有未保存的编辑。修改其目录前保存吗？",
     "failed": "工作区操作失败，请重试。",
     "unsupported": "当前 AionCore 版本还不支持多根工作区。请升级 AionCore 后重试；现有项目不受影响。",

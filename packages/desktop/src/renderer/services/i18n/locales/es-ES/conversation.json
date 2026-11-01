@@ -921,6 +921,7 @@
     "discard": "Descartar cambios",
     "unsavedTitle": "Cambios sin guardar",
     "unsavedConfiguration": "¿Guardar la configuración antes de salir?",
+    "discardConfirm": "¿Descartar los cambios sin guardar de este espacio de trabajo? No se puede deshacer. Un espacio de trabajo que nunca se guardó pierde su lista de carpetas; las carpetas siguen en el disco.",
     "unsavedEditors": "Hay {{count}} archivos abiertos con cambios sin guardar. ¿Guardarlos antes de cambiar sus carpetas?",
     "failed": "La operación falló. Inténtalo de nuevo.",
     "unsupported": "Esta versión de AionCore todavía no admite espacios de trabajo con varias raíces. Actualiza AionCore y vuelve a intentarlo; los proyectos existentes no se ven afectados.",
