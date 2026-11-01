@@ -1029,7 +1029,8 @@
       "rebase": "变基到此提交",
       "history": {
         "continue": "继续操作",
-        "abort": "中止操作"
+        "abort": "中止操作",
+        "recover": "恢复仓库"
       },
       "running": "正在执行：{{operation}}…",
       "runningRemote": "正在执行：{{operation}}，可随时取消。",
@@ -1047,8 +1048,10 @@
         "localChanges": "下列文件中未提交的更改会被覆盖，请先提交或贮藏。",
         "rewriteUnsupported": "无法重写所选提交：不支持根提交、合并提交，也不支持压缩不相邻的提交。",
         "gitTooOld": "编辑历史需要 Git 2.40 或更高版本，请配置较新的 Git。",
-        "cancelled": "已取消。部分操作可能已经完成，请先刷新再重试。"
-      }
+        "cancelled": "已取消。部分操作可能已经完成，请先刷新再重试。",
+        "historyInterrupted": "一次历史重写被中断，这个仓库的 Git 操作已暂停。恢复后即可继续。"
+      },
+      "recoverWarning": "这会把仓库恢复到重写之前的状态。在那之后对相关文件的修改将会丢失。"
     },
     "merge": {
       "title": "解决冲突",

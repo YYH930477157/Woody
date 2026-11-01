@@ -36,7 +36,7 @@ export async function withIsolatedHistory<T>(
     try {
       result = await run(isolated);
     } catch (error) {
-      if (await rollBackHistory(root, journal, isolated)) throw error;
+      if (await rollBackHistory(root, journal, isolated, git)) throw error;
       throw pendingHistoryError(journal, error instanceof Error ? error.message : String(error));
     }
     const resolveRef = resolveHistoryRef(root, isolated);

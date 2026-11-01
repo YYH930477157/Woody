@@ -68,6 +68,22 @@ describe('native repository actions', () => {
     });
     expect(result.current.runningKind).toBeUndefined();
   });
+  it('offers to restore a repository after an interrupted rewrite, and only after confirming', async () => {
+    const complete = api.operate.getMockImplementation();
+    api.operate.mockImplementation(async (input) =>
+      input.request.kind === 'inspect'
+        ? { state: 'blocked', reason: 'historyInterrupted', output: 'pending' }
+        : complete!(input)
+    );
+    render(<Operations scope={scope} repoId='repo' />);
+
+    const restore = await screen.findByRole('button', { name: 'conversation.gitWorkbench.operations.history.recover' });
+    expect(screen.queryByRole('alert', { name: 'conversation.gitWorkbench.loadFailed' })).toBeNull();
+    fireEvent.click(restore);
+
+    expect(api.operate.mock.calls.some(([arg]) => arg.request.kind === 'history.recover')).toBe(false);
+    expect(await screen.findByText('conversation.gitWorkbench.operations.recoverWarning')).toBeVisible();
+  });
   it('asks for confirmation before deleting a branch', async () => {
     api.refs.mockResolvedValue([
       { name: 'feature', fullName: 'refs/heads/feature', type: 'local', hash: 'b'.repeat(40) },

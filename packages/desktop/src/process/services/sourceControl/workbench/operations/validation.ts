@@ -87,6 +87,7 @@ export const operationSchema = z.discriminatedUnion('kind', [
     })
     .strict(),
   z.object({ kind: z.literal('history.drop'), commits, expectedBranch: name, ...expectedHead, ...confirmed }).strict(),
+  z.object({ kind: z.literal('history.recover'), ...confirmed }).strict(),
   z
     .object({ kind: z.literal('merge'), target: hashSchema, expectedBranch: name, ...expectedHead, ...confirmed })
     .strict(),

@@ -1031,7 +1031,8 @@
       "rebase": "Rebase onto commit",
       "history": {
         "continue": "Continue operation",
-        "abort": "Abort operation"
+        "abort": "Abort operation",
+        "recover": "Depoyu geri yükle"
       },
       "running": "{{operation}} sürüyor…",
       "runningRemote": "{{operation}} sürüyor. İstediğiniz zaman iptal edebilirsiniz.",
@@ -1049,8 +1050,10 @@
         "localChanges": "Aşağıdaki dosyalardaki işlenmemiş değişikliklerinizin üzerine yazılır. Önce işleyin veya saklayın.",
         "rewriteUnsupported": "Bu commit'ler yeniden yazılamaz. Kök commit'ler, birleştirme commit'leri ve bitişik olmayan commit'lerin birleştirilmesi desteklenmez.",
         "gitTooOld": "Geçmişi düzenlemek için Git 2.40 veya üzeri gerekir. Daha yeni bir Git yapılandırın.",
-        "cancelled": "İptal edildi. İşin bir bölümü tamamlanmış olabilir, yeniden denemeden önce yenileyin."
-      }
+        "cancelled": "İptal edildi. İşin bir bölümü tamamlanmış olabilir, yeniden denemeden önce yenileyin.",
+        "historyInterrupted": "Bir geçmiş yeniden yazma işlemi kesildi, bu nedenle bu depodaki Git işlemleri duraklatıldı. Devam etmek için geri yükleyin."
+      },
+      "recoverWarning": "Bu işlem depoyu yeniden yazma öncesindeki durumuna döndürür. O zamandan beri bu dosyalarda yaptığınız düzenlemeler kaybolur."
     },
     "merge": {
       "title": "Resolve conflicts",

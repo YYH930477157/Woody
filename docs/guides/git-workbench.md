@@ -36,9 +36,13 @@ on a private copy of Git's state, and the real HEAD only moves once the rewrite
 succeeds. If a rewrite fails or runs past 30 minutes, Git restores your files and the
 repository stays usable.
 
-Continuing a rebase that was already paused is different: if that is interrupted,
-Woody keeps the retained state and blocks further history operations rather than risk
-your files. The message names where that state is, for manual recovery.
+If continuing a paused rebase is interrupted, the files return to that pause, and you
+can continue or abort again.
+
+If the app or the computer stops during a rewrite, Woody cannot tell whether files
+changed afterwards, so it pauses Git operations for that repository and shows
+**Restore repository** under **Repository operations**. It asks first, because edits
+made to those files since then are lost.
 
 ## When an Operation Stops
 

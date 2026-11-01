@@ -1035,7 +1035,8 @@
       "rebase": "Rebase onto commit",
       "history": {
         "continue": "Continue operation",
-        "abort": "Abort operation"
+        "abort": "Abort operation",
+        "recover": "Restaurar repositório"
       },
       "running": "{{operation}} em andamento…",
       "runningRemote": "{{operation}} em andamento. Você pode cancelar a qualquer momento.",
@@ -1053,8 +1054,10 @@
         "localChanges": "Suas alterações sem commit nos arquivos abaixo seriam sobrescritas. Faça commit ou stash primeiro.",
         "rewriteUnsupported": "Estes commits não podem ser reescritos. Commits raiz, commits de merge e squash de commits não adjacentes não são compatíveis.",
         "gitTooOld": "Editar o histórico exige Git 2.40 ou mais recente. Configure um Git mais novo.",
-        "cancelled": "Cancelado. Parte do trabalho pode já ter sido feita, então atualize antes de tentar novamente."
-      }
+        "cancelled": "Cancelado. Parte do trabalho pode já ter sido feita, então atualize antes de tentar novamente.",
+        "historyInterrupted": "Uma reescrita do histórico foi interrompida, então as operações do Git neste repositório estão pausadas. Restaure-o para continuar."
+      },
+      "recoverWarning": "Isso devolve o repositório ao estado anterior à reescrita. As edições feitas nesses arquivos desde então serão perdidas."
     },
     "merge": {
       "title": "Resolve conflicts",
