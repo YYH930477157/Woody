@@ -44,6 +44,16 @@ test('managed roots round-trip through desktop UI and shared conversation identi
   }, second);
   await modal.getByRole('button', { name: /^(Add folder to project|添加文件夹到项目)$/ }).click();
   await expect.poll(async () => (await httpGet<ProjectDetailDto>(page, endpoint)).explorer.entries.length).toBe(2);
+  const defaultRoot = modal.getByRole('combobox', { name: /^(Default execution folder|默认执行目录)$/ });
+  await defaultRoot.click();
+  await expect(defaultRoot).toHaveAttribute('aria-expanded', 'true');
+  await page.locator('.arco-select-popup .arco-select-option').filter({ hasText: 'library' }).click();
+  const library = (await httpGet<ProjectDetailDto>(page, endpoint)).explorer.entries.find((entry) =>
+    entry.display_path.endsWith('library')
+  );
+  await expect
+    .poll(async () => (await httpGet<ProjectDetailDto>(page, endpoint)).workspace?.default_pe_id)
+    .toBe(library?.pe_id);
   await modal.getByRole('button', { name: /^(Save|保存)$/ }).click();
   await expect.poll(async () => (await httpGet<ProjectDetailDto>(page, endpoint)).workspace?.dirty).toBe(false);
   const saved = JSON.parse(fs.readFileSync(config, 'utf8'));

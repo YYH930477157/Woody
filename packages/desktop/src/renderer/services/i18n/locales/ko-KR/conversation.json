@@ -910,7 +910,9 @@
       "cancelled": "인덱싱 취소됨"
     },
     "openLens": "시각화 열기",
-    "lensHint": "인덱싱 후 브라우저에서 이 프로젝트의 CBM Lens 아키텍처 그래프를 확인하세요."
+    "lensHint": "인덱싱 후 브라우저에서 이 프로젝트의 CBM Lens 아키텍처 그래프를 확인하세요.",
+    "unreadable": "인덱서가 이 폴더의 코드를 읽지 못했습니다. 파일이 암호화되어 있고 PowerShell 7로 시작해도 암호화된 내용만 읽히므로 인덱스에 코드가 없습니다.",
+    "noPowerShell": "PowerShell 7을 찾을 수 없어 인덱서를 직접 실행했습니다. 이 폴더의 파일이 암호화되어 있으면 인덱스에 코드가 포함되지 않습니다."
   },
   "managedWorkspace": {
     "manage": "작업 공간 관리",

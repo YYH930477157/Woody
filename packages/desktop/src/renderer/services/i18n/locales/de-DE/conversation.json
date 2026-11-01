@@ -911,7 +911,9 @@
       "cancelled": "Indizierung abgebrochen"
     },
     "openLens": "Visualisierung öffnen",
-    "lensHint": "Nach der Indexierung den CBM Lens Architekturgraphen dieses Projekts im Browser ansehen."
+    "lensHint": "Nach der Indexierung den CBM Lens Architekturgraphen dieses Projekts im Browser ansehen.",
+    "unreadable": "Der Indexer konnte den Code dieses Ordners nicht lesen. Die Dateien sind verschlüsselt, und auch beim Start über PowerShell 7 erhielt er nur verschlüsselte Inhalte. Der Index enthält daher keinen Code.",
+    "noPowerShell": "PowerShell 7 wurde nicht gefunden, daher wurde der Indexer direkt ausgeführt. Sind die Dateien dieses Ordners verschlüsselt, enthält der Index ihren Code nicht."
   },
   "managedWorkspace": {
     "manage": "Arbeitsbereiche",

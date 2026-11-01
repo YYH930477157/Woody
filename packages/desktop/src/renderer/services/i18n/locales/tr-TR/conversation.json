@@ -912,7 +912,9 @@
       "cancelled": "İndeksleme iptal edildi"
     },
     "openLens": "Görselleştirmeyi aç",
-    "lensHint": "İndeksleme sonrasında bu projenin CBM Lens mimari grafiğini tarayıcınızda görüntüleyin."
+    "lensHint": "İndeksleme sonrasında bu projenin CBM Lens mimari grafiğini tarayıcınızda görüntüleyin.",
+    "unreadable": "Dizinleyici bu klasörün kodunu okuyamadı. Dosyalar şifreli ve PowerShell 7 üzerinden başlatıldığında bile yalnızca şifreli içerik aldı, bu nedenle dizinde kod yok.",
+    "noPowerShell": "PowerShell 7 bulunamadı, bu nedenle dizinleyici doğrudan çalıştırıldı. Bu klasörün dosyaları şifreliyse dizinde kodları yer almaz."
   },
   "managedWorkspace": {
     "manage": "Çalışma alanları",

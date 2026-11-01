@@ -911,7 +911,9 @@
       "cancelled": "Indexación cancelada"
     },
     "openLens": "Abrir visualización",
-    "lensHint": "Tras la indexación, consulta el grafo de arquitectura CBM Lens de este proyecto en el navegador."
+    "lensHint": "Tras la indexación, consulta el grafo de arquitectura CBM Lens de este proyecto en el navegador.",
+    "unreadable": "El indexador no pudo leer el código de esta carpeta. Los archivos están cifrados y, aun iniciándolo con PowerShell 7, solo recibió contenido cifrado, por lo que el índice no contiene código.",
+    "noPowerShell": "No se encontró PowerShell 7, así que el indexador se ejecutó directamente. Si los archivos de esta carpeta están cifrados, el índice no contendrá su código."
   },
   "managedWorkspace": {
     "manage": "Espacios de trabajo",

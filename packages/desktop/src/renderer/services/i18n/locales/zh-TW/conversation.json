@@ -910,7 +910,9 @@
       "cancelled": "索引已取消"
     },
     "openLens": "開啟視覺化",
-    "lensHint": "完成索引後，在瀏覽器中檢視目前專案的 CBM Lens 架構圖。"
+    "lensHint": "完成索引後，在瀏覽器中檢視目前專案的 CBM Lens 架構圖。",
+    "unreadable": "索引程式讀不到這個資料夾的程式碼：檔案已加密，透過 PowerShell 7 啟動後讀到的仍是密文，因此索引中沒有程式碼內容。",
+    "noPowerShell": "找不到 PowerShell 7，本次直接執行了索引程式。如果這個資料夾的檔案已加密，索引中不會有程式碼內容。"
   },
   "managedWorkspace": {
     "manage": "工作區管理",

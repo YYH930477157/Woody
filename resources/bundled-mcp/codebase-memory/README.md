@@ -85,6 +85,15 @@ Core imports the skill's entire parent directory. The skill is guidance for the 
 guarantee. The adapter is responsible for enforcing project boundaries and
 disabling unsupported capabilities.
 
+Every native command starts through PowerShell 7 when `pwsh.exe` is on `PATH` or
+in `%ProgramFiles%\PowerShell\7`, because encrypted disks can restrict plain file
+content to listed programs. Without PowerShell 7 the command runs directly and the
+panel says so. After an index, sample source files are read through PowerShell and
+compared with a direct read. If they differ and the graph holds none of the symbols
+in the plain text, the index fails with reason `unreadable` instead of reporting
+success. Whether a program started by PowerShell also receives plain content depends
+on the encryption product. No decrypted copy of the source is ever written to disk.
+
 ## Provenance and redistribution
 
 - Upstream repository: `https://github.com/DeusData/codebase-memory-mcp`
