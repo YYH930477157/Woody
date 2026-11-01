@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { rename } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
 import type { ChangelistChange, ChangelistMutation, ChangelistState } from '@/common/types/sourceControl/storageTypes';
@@ -29,15 +30,37 @@ const mutationSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('move'), id: idSchema, keys: z.array(keySchema).max(MAX_FILES) }).strict(),
 ]);
 
+/**
+ * Lists only group changes, so a damaged store must not take the changes panel down with it. The file is kept beside
+ * the new one because the list names in it cannot be rebuilt. Failing to read the file at all still surfaces.
+ */
+async function setAsideDamagedStore(context: StorageContext, file: string): Promise<void> {
+  const copy = path.join(context.dir, `changelists.damaged-${context.now()}.json`);
+  await rename(file, copy);
+  context.log(`Changelists could not be read and were reset; the old file is at ${copy}`);
+}
+
 export async function readChangelists(context: StorageContext): Promise<ChangelistState> {
   const initial: ChangelistState = {
     lists: [{ id: 'default', name: 'Changes' }],
     activeId: 'default',
     assignments: {},
   };
-  const value = stateSchema.parse(await readJson<unknown>(path.join(context.dir, 'changelists.json'), initial));
-  if (!value.lists.some((list) => list.id === value.activeId)) throw new Error('Invalid active changelist');
-  return value as ChangelistState;
+  const file = path.join(context.dir, 'changelists.json');
+  let stored: unknown;
+  try {
+    stored = await readJson<unknown>(file, initial);
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) throw error;
+    await setAsideDamagedStore(context, file);
+    return initial;
+  }
+  const value = stateSchema.safeParse(stored);
+  if (value.success && value.data.lists.some((list) => list.id === value.data.activeId)) {
+    return value.data as ChangelistState;
+  }
+  await setAsideDamagedStore(context, file);
+  return initial;
 }
 
 export async function syncChangelists(context: StorageContext, changes: ChangelistChange[]): Promise<ChangelistState> {

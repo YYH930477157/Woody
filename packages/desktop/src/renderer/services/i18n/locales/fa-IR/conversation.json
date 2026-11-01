@@ -1133,6 +1133,7 @@
       "importPatch": "Import patch",
       "exportPatch": "Export patch",
       "noShelves": "No saved shelves",
+      "noChangesToShelve": "تغییری برای ذخیره کردن وجود ندارد.",
       "apply": "Apply saved changes",
       "applied": "Changes applied; shelf retained.",
       "retained": "Unable to apply all changes. The complete shelf is retained.",
@@ -1156,6 +1157,7 @@
       "activeList": "Active changelist",
       "moveSelected": "Move selected changes",
       "removeList": "Remove changelist",
+      "removeListWarning": "فهرست تغییرات «{{name}}» حذف شود؟ تغییرات آن به فهرست فعال منتقل می‌شوند و فایل‌های شما دست‌نخورده می‌مانند.",
       "defaultList": "Changes",
       "recordingError": "Local history recording could not start",
       "rename": "Rename"

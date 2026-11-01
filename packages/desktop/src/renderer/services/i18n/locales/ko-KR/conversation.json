@@ -1133,6 +1133,7 @@
       "importPatch": "Import patch",
       "exportPatch": "Export patch",
       "noShelves": "No saved shelves",
+      "noChangesToShelve": "저장할 변경 사항이 없습니다.",
       "apply": "Apply saved changes",
       "applied": "Changes applied; shelf retained.",
       "retained": "Unable to apply all changes. The complete shelf is retained.",
@@ -1156,6 +1157,7 @@
       "activeList": "Active changelist",
       "moveSelected": "Move selected changes",
       "removeList": "Remove changelist",
+      "removeListWarning": "변경 목록 \"{{name}}\"을(를) 삭제할까요? 포함된 변경 사항은 활성 변경 목록으로 이동하며 파일 내용은 그대로 유지됩니다.",
       "defaultList": "Changes",
       "recordingError": "Local history recording could not start",
       "rename": "Rename"
