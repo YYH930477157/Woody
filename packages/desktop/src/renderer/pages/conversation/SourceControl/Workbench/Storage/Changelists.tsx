@@ -5,6 +5,7 @@ import { ipcBridge } from '@/common';
 import type { GitWorkbenchScope } from '@/common/types/sourceControl/workbenchTypes';
 import type { ChangelistChange, ChangelistMutation } from '@/common/types/sourceControl/storageTypes';
 import { fileKey, type ScmResource } from '../../scmModel';
+import { RequestError } from '../RequestState';
 import { useRequest } from '../useRequest';
 import { useStorageMutation } from './useStorageMutation';
 
@@ -33,8 +34,10 @@ export function useChangelists(scope: GitWorkbenchScope | undefined, changes: Ch
     });
   }, [stableScope, signature]);
   const request = useRequest(read, scopeKey);
-  const [filter, setFilter] = useState('all');
+  const [chosenFilter, setFilter] = useState('all');
   useEffect(() => setFilter('all'), [scopeKey]);
+  // Another panel on this repository can remove the list; filtering by it would hide every change.
+  const filter = request.data?.lists.some((list) => list.id === chosenFilter) ? chosenFilter : 'all';
   const mutation = useStorageMutation(request.retry);
   const mutate = async (command: ChangelistMutation) => {
     if (!stableScope) return false;
@@ -63,15 +66,16 @@ export function Changelists({
   const [name, setName] = useState('');
   const [dialog, setDialog] = useState<'create' | 'edit' | 'remove'>();
   const state = controller.data;
-  if (!state) return controller.error ? <Alert type='warning' content={controller.error} /> : null;
-  const busy = disabled || controller.mutation.busy || controller.loading;
+  if (!state) return controller.error ? <RequestError message={controller.error} retry={controller.retry} /> : null;
+  // Not `controller.loading`: every status change resyncs, which would close open menus and drop clicks on Confirm.
+  const busy = disabled || controller.mutation.busy;
   const display = (id: string, value: string) =>
     id === 'default' && value === 'Changes' ? t('conversation.gitWorkbench.storage.defaultList') : value;
   const options = state.lists.map((list) => ({ value: list.id, label: display(list.id, list.name) }));
   const selectedList = state.lists.find((list) => list.id === controller.filter);
   return (
     <div className='p-8px flex flex-col gap-4px border-b border-b-base'>
-      {controller.mutation.error && <Alert type='error' content={controller.mutation.error} />}
+      {controller.mutation.error && !dialog && <Alert type='error' content={controller.mutation.error} />}
       <div className='flex gap-4px items-center'>
         <Select
           size='small'
@@ -116,7 +120,7 @@ export function Changelists({
               size='small'
               disabled={busy}
               onClick={() => {
-                setName(selectedList.name);
+                setName(display(selectedList.id, selectedList.name));
                 setDialog('edit');
               }}
             >
@@ -130,7 +134,13 @@ export function Changelists({
       </div>
       <Modal
         visible={Boolean(dialog)}
-        title={t('conversation.gitWorkbench.storage.changelists')}
+        title={t(
+          dialog === 'create'
+            ? 'conversation.gitWorkbench.storage.newList'
+            : dialog === 'edit'
+              ? 'conversation.gitWorkbench.storage.rename'
+              : 'conversation.gitWorkbench.storage.removeList'
+        )}
         okText={t('common.confirm')}
         cancelText={t('common.cancel')}
         confirmLoading={controller.mutation.busy}
@@ -152,8 +162,13 @@ export function Changelists({
           }
         }}
       >
+        {controller.mutation.error && <Alert className='mb-12px' type='error' content={controller.mutation.error} />}
         {dialog === 'remove' ? (
-          <p>{selectedList?.name}</p>
+          <p>
+            {t('conversation.gitWorkbench.storage.removeListWarning', {
+              name: selectedList && display(selectedList.id, selectedList.name),
+            })}
+          </p>
         ) : (
           <Input
             value={name}

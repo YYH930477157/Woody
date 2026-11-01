@@ -1133,6 +1133,7 @@
       "importPatch": "导入补丁",
       "exportPatch": "导出补丁",
       "noShelves": "暂无 Shelf",
+      "noChangesToShelve": "目前沒有可儲存的變更。",
       "apply": "应用保存的更改",
       "applied": "更改已应用，Shelf 已保留。",
       "retained": "未能应用全部更改，完整 Shelf 已保留。",
@@ -1156,6 +1157,7 @@
       "activeList": "活动变更列表",
       "moveSelected": "移动选中的更改",
       "removeList": "删除变更列表",
+      "removeListWarning": "刪除變更清單「{{name}}」？其中的變更會移到作用中的變更清單，檔案內容不受影響。",
       "defaultList": "更改",
       "recordingError": "本地历史记录未能启动",
       "rename": "重命名"

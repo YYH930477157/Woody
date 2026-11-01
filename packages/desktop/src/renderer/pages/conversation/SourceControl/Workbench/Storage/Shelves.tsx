@@ -1,11 +1,15 @@
 import React, { useCallback, useState } from 'react';
-import { Alert, Button, Checkbox, Empty, Input, Modal } from '@arco-design/web-react';
+import { Alert, Button, Checkbox, Empty, Input, Modal, Tooltip } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import { gitStorage } from '@/common/adapter/ipcBridge';
 import type { GitWorkbenchScope } from '@/common/types/sourceControl/workbenchTypes';
 import { useRequest } from '../useRequest';
 import { Loading, RequestError } from '../RequestState';
 import { useStorageMutation } from './useStorageMutation';
+
+/** A shelf name is free text, so it can hold characters a file name cannot. */
+export const patchFileName = (name: string): string =>
+  `${name.replace(/[\\/:*?"<>|\p{Cc}]/gu, '_').trim() || 'changes'}.patch`;
 
 /** Durable shelves and portable patches. Applying never implicitly deletes the saved patch. */
 export function Shelves({
@@ -19,7 +23,8 @@ export function Shelves({
 }) {
   const { t } = useTranslation();
   const read = useCallback(() => gitStorage.shelfList.invoke({ scope }), [scope]);
-  const request = useRequest(read);
+  // Every action reloads the list. The open shelf has to survive that: its details, and whether it is already deleted.
+  const request = useRequest(read, JSON.stringify(scope));
   const [id, setId] = useState<string>();
   const [patch, setPatch] = useState('');
   const [feedback, setFeedback] = useState<string>();
@@ -34,7 +39,7 @@ export function Shelves({
     const url = URL.createObjectURL(new Blob([patch], { type: 'text/x-patch;charset=utf-8' }));
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${item?.id ?? 'changes'}.patch`;
+    link.download = patchFileName(item?.name ?? '');
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
@@ -58,17 +63,19 @@ export function Shelves({
         <Button disabled={mutation.busy} onClick={request.retry}>
           {t('common.refresh')}
         </Button>
-        <Button
-          disabled={mutation.busy || paths.length === 0}
-          onClick={() => {
-            setName('');
-            setSelected([]);
-            setRollback(false);
-            setDialog('create');
-          }}
-        >
-          {t('conversation.gitWorkbench.storage.createShelf')}
-        </Button>
+        <Tooltip content={t('conversation.gitWorkbench.storage.noChangesToShelve')} disabled={paths.length > 0}>
+          <Button
+            disabled={mutation.busy || paths.length === 0}
+            onClick={() => {
+              setName('');
+              setSelected(paths);
+              setRollback(false);
+              setDialog('create');
+            }}
+          >
+            {t('conversation.gitWorkbench.storage.createShelf')}
+          </Button>
+        </Tooltip>
         <Button
           disabled={mutation.busy}
           onClick={() => {
@@ -80,9 +87,9 @@ export function Shelves({
           {t('conversation.gitWorkbench.storage.importPatch')}
         </Button>
       </div>
-      {mutation.error && <Alert type='error' content={mutation.error} />}
+      {mutation.error && !dialog && <Alert type='error' content={mutation.error} />}
       {feedback && <Alert type='info' content={feedback} />}
-      {request.loading && <Loading />}
+      {request.loading && !request.data && <Loading />}
       {request.error && <RequestError message={request.error} retry={request.retry} />}
       <div className='flex gap-12px flex-wrap'>
         <div className='flex flex-col gap-4px flex-1 min-w-180px max-h-440px overflow-auto'>
@@ -176,7 +183,7 @@ export function Shelves({
             : dialog === 'delete'
               ? 'common.delete'
               : dialog === 'rename'
-                ? 'common.rename'
+                ? 'conversation.gitWorkbench.storage.rename'
                 : 'conversation.gitWorkbench.storage.createShelf'
         )}
         onCancel={() => {
@@ -194,6 +201,7 @@ export function Shelves({
               (dialog === 'import' && !importPatch.trim())),
         }}
       >
+        {mutation.error && <Alert className='mb-12px' type='error' content={mutation.error} />}
         {dialog !== 'delete' && (
           <Input
             value={name}
