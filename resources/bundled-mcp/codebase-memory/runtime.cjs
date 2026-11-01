@@ -3,7 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { spawn } = require('node:child_process');
+const { execFile, spawn } = require('node:child_process');
 const TOOL_SCHEMAS = new Map(require('./tools.json').map((tool) => [tool.name, tool.inputSchema]));
 const DEFAULT_CONFIG = { version: 1, enabled: false, mode: 'fast' };
 const TOOLS = new Set([
@@ -20,6 +20,140 @@ const TOOLS = new Set([
   'check_index_coverage',
 ]);
 const LOG_LIMIT = 16384;
+const SAMPLE_FILES = 12;
+const SAMPLE_BYTES = 64 * 1024;
+const SAMPLE_NAMES = 40;
+const SAMPLE_EXTENSIONS = new Set([
+  '.c',
+  '.cc',
+  '.cpp',
+  '.cs',
+  '.cxx',
+  '.go',
+  '.h',
+  '.hpp',
+  '.java',
+  '.js',
+  '.py',
+  '.rs',
+  '.ts',
+  '.tsx',
+]);
+const SAMPLE_SKIPPED = new Set(['build', 'dist', 'node_modules', 'out', 'target', 'third_party', 'vendor']);
+const UNREADABLE_MESSAGE = 'The indexer received encrypted content, so the index contains no code from this folder';
+const POWERSHELL_FLAGS = ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand'];
+
+// Encrypted disks give plain content only to listed programs, and PowerShell 7 is the
+// one Woody can rely on. Both scripts are constant: paths and arguments stay environment data.
+// ArgumentList is the only form that quotes JSON arguments correctly on every 7.x release.
+const LAUNCH_SCRIPT = `
+$ErrorActionPreference = 'Stop'
+if ($PSVersionTable.PSVersion.Major -lt 7) { throw 'PowerShell 7 is required' }
+$start = [Diagnostics.ProcessStartInfo]::new($env:WOODY_CBM_EXECUTABLE)
+foreach ($value in $env:WOODY_CBM_ARGUMENTS -split ',') {
+  $start.ArgumentList.Add([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($value)))
+}
+$start.UseShellExecute = $false
+$start.WorkingDirectory = (Get-Location).ProviderPath
+$process = [Diagnostics.Process]::Start($start)
+$process.WaitForExit()
+exit $process.ExitCode
+`;
+const SAMPLE_SCRIPT = `
+$ErrorActionPreference = 'Stop'
+if ($PSVersionTable.PSVersion.Major -lt 7) { throw 'PowerShell 7 is required' }
+foreach ($file in $env:WOODY_CBM_SAMPLES -split [char]10) {
+  $stream = [IO.File]::Open($file, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
+  try {
+    $buffer = [byte[]]::new(${SAMPLE_BYTES})
+    $used = 0
+    do {
+      $count = $stream.Read($buffer, $used, $buffer.Length - $used)
+      $used += $count
+    } while ($count -gt 0 -and $used -lt $buffer.Length)
+    [Console]::Out.WriteLine([Convert]::ToBase64String($buffer, 0, $used))
+  } finally { $stream.Dispose() }
+}
+`;
+const encodedScript = (script) => Buffer.from(script, 'utf16le').toString('base64');
+
+/** Search absolute PATH entries only: the working directory is project content and never supplies a program. */
+function findPowerShell(env = process.env) {
+  if (process.platform !== 'win32') return undefined;
+  const variable = (name) => Object.entries(env).find(([key]) => key.toLowerCase() === name.toLowerCase())?.[1];
+  const directories = (variable('PATH') || '').split(path.delimiter).filter((value) => value && path.isAbsolute(value));
+  return [...directories, path.join(variable('ProgramFiles') || 'C:\\Program Files', 'PowerShell', '7')]
+    .map((directory) => path.join(directory, 'pwsh.exe'))
+    .find((candidate) => {
+      try {
+        return fs.statSync(candidate).isFile();
+      } catch {
+        return false;
+      }
+    });
+}
+function sampleFiles(root) {
+  const files = [];
+  const pending = [root];
+  for (let visited = 0; pending.length && files.length < SAMPLE_FILES && visited < 2000; visited++) {
+    const directory = pending.shift();
+    let entries;
+    try {
+      entries = fs.readdirSync(directory, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const child = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        if (!entry.name.startsWith('.') && !SAMPLE_SKIPPED.has(entry.name.toLowerCase())) pending.push(child);
+      } else if (entry.isFile() && SAMPLE_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
+        if (files.length < SAMPLE_FILES) files.push(child);
+      }
+    }
+  }
+  return files;
+}
+function readHead(file) {
+  const descriptor = fs.openSync(file, 'r');
+  try {
+    const buffer = Buffer.alloc(SAMPLE_BYTES);
+    return buffer.subarray(0, fs.readSync(descriptor, buffer, 0, SAMPLE_BYTES, 0));
+  } finally {
+    fs.closeSync(descriptor);
+  }
+}
+function readThroughPowerShell(executable, files) {
+  return new Promise((resolve, reject) => {
+    execFile(
+      executable,
+      [...POWERSHELL_FLAGS, encodedScript(SAMPLE_SCRIPT)],
+      {
+        env: { ...process.env, WOODY_CBM_SAMPLES: files.join('\n') },
+        maxBuffer: (SAMPLE_BYTES * files.length * 4) / 3 + 1024,
+        timeout: 20000,
+        windowsHide: true,
+      },
+      (error, stdout) => {
+        if (error) return reject(error);
+        resolve(
+          stdout
+            .split(/\r?\n/)
+            .filter((line, index, lines) => index < lines.length - 1)
+            .map((line) => Buffer.from(line, 'base64'))
+        );
+      }
+    );
+  });
+}
+/** Names that look like calls: at least one of them is a symbol if the indexer saw this text. */
+function symbolNames(contents) {
+  const names = new Set();
+  for (const content of contents)
+    for (const [name] of content.toString('utf8').matchAll(/\b[A-Za-z_][A-Za-z0-9_]{3,}(?=\s*\()/g))
+      if (names.size < SAMPLE_NAMES) names.add(name);
+  return [...names];
+}
 
 function canonical(repoPath) {
   if (typeof repoPath !== 'string' || !repoPath.trim() || !path.isAbsolute(repoPath))
@@ -288,10 +422,11 @@ function terminateOwnedProcess(child) {
   });
 }
 
-/** Create an isolated project runtime. binaryArgs supports executable wrappers. */
+/** Create an isolated project runtime. binaryArgs supports executable wrappers; null powerShell runs directly. */
 function createRuntime(options) {
   const jobs = new Map();
   const processes = new Set();
+  const powerShell = options.powerShell === undefined ? findPowerShell() : options.powerShell;
   let disposed = false;
   const projectFor = (repoPath) => identity(canonical(repoPath), path.resolve(options.cacheRoot));
   function available() {
@@ -303,8 +438,8 @@ function createRuntime(options) {
     return { repoPath: project.root, config, available: available(), phase: 'idle', log: '', ...saved };
   }
   function persist(project, value) {
-    const { phase, log, error, summary } = value;
-    atomicJson(project.statusFile, { phase, log, error, summary, updatedAt: Date.now() });
+    const { phase, log, error, summary, reason, launcher } = value;
+    atomicJson(project.statusFile, { phase, log, error, summary, reason, launcher, updatedAt: Date.now() });
   }
   function native(project, tool, args, onLog, owner) {
     if (disposed) throw new Error('Codebase memory service is disposed');
@@ -314,11 +449,22 @@ function createRuntime(options) {
       tool === 'index_repository'
         ? ['cli', '--json', tool, '--repo-path', project.root, '--name', project.name, '--mode', args.mode]
         : ['cli', '--json', tool, JSON.stringify(args)];
-    const child = spawn(options.binaryPath, [...(options.binaryArgs || []), ...cliArgs], {
+    const nativeArgs = [...(options.binaryArgs || []), ...cliArgs];
+    const launch = powerShell
+      ? {
+          command: powerShell,
+          args: [...POWERSHELL_FLAGS, encodedScript(LAUNCH_SCRIPT)],
+          env: {
+            WOODY_CBM_EXECUTABLE: options.binaryPath,
+            WOODY_CBM_ARGUMENTS: nativeArgs.map((value) => Buffer.from(value).toString('base64')).join(','),
+          },
+        }
+      : { command: options.binaryPath, args: nativeArgs, env: {} };
+    const child = spawn(launch.command, launch.args, {
       cwd: project.root,
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, CBM_CACHE_DIR: project.cache, CBM_RUNTIME_DIR: project.cache },
+      env: { ...process.env, CBM_CACHE_DIR: project.cache, CBM_RUNTIME_DIR: project.cache, ...launch.env },
     });
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
@@ -393,9 +539,40 @@ function createRuntime(options) {
     }
     return operation;
   }
+  /**
+   * An indexer that only saw ciphertext still reports success, with nothing in the index.
+   * Only a differing PowerShell view plus a graph without its symbols counts as proof.
+   */
+  async function assertReadable(project) {
+    if (!powerShell) return;
+    const files = sampleFiles(project.root);
+    if (!files.length) return;
+    let plain;
+    try {
+      plain = await (options.readThroughPowerShell || readThroughPowerShell)(powerShell, files);
+    } catch {
+      return;
+    }
+    if (plain.length !== files.length) return;
+    const names = symbolNames(plain.filter((content, index) => !content.equals(readHead(files[index]))));
+    if (!names.length) return;
+    let total;
+    try {
+      const result = await native(project, 'search_graph', {
+        project: project.name,
+        name_pattern: `^(${names.join('|')})$`,
+        limit: 1,
+        format: 'json',
+      }).promise;
+      total = JSON.parse(result.content[0].text).total;
+    } catch {
+      return;
+    }
+    if (total === 0) throw Object.assign(new Error(UNREADABLE_MESSAGE), { reason: 'unreadable' });
+  }
   function beginIndex(project, config) {
     const owner = acquireLock(project);
-    const state = { phase: 'running', log: '' };
+    const state = { phase: 'running', log: '', launcher: powerShell ? 'powershell' : 'direct' };
     let operation;
     try {
       persist(project, state);
@@ -415,6 +592,10 @@ function createRuntime(options) {
     const job = { operation, state, promise: undefined, startupError: operation.startupError };
     jobs.set(project.name, job);
     job.promise = operation.promise
+      .then(async (result) => {
+        await assertReadable(project);
+        return result;
+      })
       .then(
         (result) => {
           state.phase = 'succeeded';
@@ -424,6 +605,7 @@ function createRuntime(options) {
         (error) => {
           state.phase = error.message === 'Index cancelled' ? 'cancelled' : 'failed';
           state.error = error.message.slice(-LOG_LIMIT);
+          state.reason = error.reason;
           throw error;
         }
       )
@@ -532,4 +714,13 @@ function createRuntime(options) {
   };
   return api;
 }
-module.exports = { createRuntime, canonical, readConfig, validateConfig, identity, terminateOwnedProcess, TOOLS };
+module.exports = {
+  createRuntime,
+  canonical,
+  findPowerShell,
+  readConfig,
+  validateConfig,
+  identity,
+  terminateOwnedProcess,
+  TOOLS,
+};

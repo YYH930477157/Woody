@@ -18,12 +18,14 @@ function runtime(extra = {}) {
     cacheRoot: path.join(root, 'cache'),
     adapterPath: path.resolve('resources/bundled-mcp/codebase-memory/index.cjs'),
     skillPath: '/skill',
+    powerShell: null,
     ...extra,
   });
   disposables.push(value);
   return value;
 }
 const config = { version: 1, enabled: true, mode: 'fast' };
+const installedPowerShell = path.join(process.env.ProgramFiles ?? 'C:\\Program Files', 'PowerShell', '7', 'pwsh.exe');
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'woody-cbm-test-'));
   repo = path.join(root, '中文 project');
@@ -412,4 +414,197 @@ Start-Sleep -Seconds 120
     },
     20000
   );
+});
+
+describe.runIf(fs.existsSync(installedPowerShell))('native commands started through PowerShell 7', () => {
+  const started = () => runtime({ powerShell: installedPowerShell });
+  const alive = (pid: number) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  it('runs the native program as a child of PowerShell 7', async () => {
+    fs.writeFileSync(
+      path.join(root, 'fixture.cjs'),
+      `const { spawnSync } = require('node:child_process');
+      const filter = 'PID eq ' + process.ppid;
+      const parent = spawnSync('tasklist', ['/FI', filter, '/FO', 'CSV', '/NH'], { encoding: 'utf8' }).stdout;
+      console.log(JSON.stringify({ structuredContent: { parent } }));`
+    );
+    const service = started();
+    await service.save(repo, config);
+    const result = await service.callTool(repo, 'search_graph', { query: 'main' });
+    expect(result.structuredContent.parent).toMatch(/^"pwsh\.exe"/i);
+  }, 20000);
+
+  it('keeps non-ASCII paths and reports the launcher it used', async () => {
+    const service = started();
+    await service.save(repo, config);
+    await service.start(repo);
+    const result = await finished(service);
+    expect(result).toMatchObject({ phase: 'succeeded', launcher: 'powershell' });
+    expect(result.reason).toBeUndefined();
+    expect(JSON.parse(result.summary as string).args).toEqual([
+      'cli',
+      '--json',
+      'index_repository',
+      '--repo-path',
+      fs.realpathSync.native(repo),
+      '--name',
+      expect.stringMatching(/^woody-/),
+      '--mode',
+      'fast',
+    ]);
+  }, 20000);
+
+  it('passes JSON arguments with quotes and spaces unchanged', async () => {
+    const service = started();
+    await service.save(repo, config);
+    const result = await service.callTool(repo, 'search_graph', { query: 'say "hi" 你好' });
+    const args = result.structuredContent.args as string[];
+    expect(JSON.parse(args.at(-1) as string).query).toBe('say "hi" 你好');
+  }, 20000);
+
+  it('keeps the native exit code and its diagnostics', async () => {
+    const service = started();
+    await service.save(repo, config);
+    fs.writeFileSync(path.join(repo, 'behavior'), 'exit');
+    await service.start(repo);
+    const result = await finished(service);
+    expect(result.phase).toBe('failed');
+    expect(result.error).toMatch(/exited 3: .*fixture error/s);
+  }, 20000);
+
+  it('leaves no native process behind after cancelling', async () => {
+    const pidFile = path.join(root, 'native.pid');
+    fs.writeFileSync(
+      path.join(root, 'fixture.cjs'),
+      `require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setInterval(() => {}, 1000);`
+    );
+    const service = started();
+    await service.save(repo, config);
+    await service.start(repo);
+    await vi.waitFor(() => expect(fs.existsSync(pidFile)).toBe(true), { timeout: 10000 });
+    const pid = Number(fs.readFileSync(pidFile, 'utf8'));
+    expect(alive(pid)).toBe(true);
+    expect((await service.cancel(repo)).phase).toBe('cancelled');
+    await vi.waitFor(() => expect(alive(pid)).toBe(false), { timeout: 5000 });
+  }, 20000);
+
+  describe('checking that the indexer saw plain content', () => {
+    const plainText = Buffer.from('int compute_total(int value) { return value; }\n');
+    const queries = () => path.join(root, 'queries.log');
+    const readThrough = (content: Buffer) => async (_executable: string, files: string[]) => files.map(() => content);
+    // Answers search_graph the way the native tool does when asked for JSON.
+    function fixtureWithGraph(total: number) {
+      fs.writeFileSync(
+        path.join(root, 'fixture.cjs'),
+        `const fs = require('node:fs');
+        if (process.argv.includes('search_graph')) {
+          fs.appendFileSync(${JSON.stringify(queries())}, process.argv.at(-1) + '\\n');
+          console.log(JSON.stringify({ content: [{ type: 'text', text: JSON.stringify({ total: ${total} }) }] }));
+        } else console.log(JSON.stringify({ structuredContent: { nodes: 28 } }));`
+      );
+    }
+    async function index(extra: Record<string, unknown>) {
+      const service = runtime({ powerShell: installedPowerShell, ...extra });
+      await service.save(repo, config);
+      await service.start(repo);
+      return finished(service);
+    }
+
+    it('fails an index that holds none of the symbols PowerShell can read', async () => {
+      fs.writeFileSync(path.join(repo, 'app.cpp'), 'ciphertext as seen directly');
+      fixtureWithGraph(0);
+      const result = await index({ readThroughPowerShell: readThrough(plainText) });
+      expect(result).toMatchObject({ phase: 'failed', reason: 'unreadable', launcher: 'powershell' });
+      expect(result.error).toMatch(/encrypted content/);
+      expect(JSON.parse(fs.readFileSync(queries(), 'utf8').trim()).name_pattern).toBe('^(compute_total)$');
+    }, 20000);
+
+    it('tells an MCP client why the index cannot be used', async () => {
+      fs.writeFileSync(path.join(repo, 'app.cpp'), 'ciphertext as seen directly');
+      fixtureWithGraph(0);
+      const service = runtime({ powerShell: installedPowerShell, readThroughPowerShell: readThrough(plainText) });
+      await service.save(repo, config);
+      await expect(service.callTool(repo, 'index_repository', {})).rejects.toThrow(/encrypted content/);
+    }, 20000);
+
+    it('keeps the index when its graph holds those symbols', async () => {
+      fs.writeFileSync(path.join(repo, 'app.cpp'), 'ciphertext as seen directly');
+      fixtureWithGraph(3);
+      expect((await index({ readThroughPowerShell: readThrough(plainText) })).phase).toBe('succeeded');
+    }, 20000);
+
+    it('reads samples through real PowerShell and asks nothing for an unencrypted folder', async () => {
+      fs.mkdirSync(path.join(repo, '源码'));
+      fs.writeFileSync(path.join(repo, '源码', '模块.cpp'), `// 中文注释\n${'int value;\n'.repeat(8000)}`);
+      fixtureWithGraph(0);
+      expect((await index({})).phase).toBe('succeeded');
+      expect(fs.existsSync(queries())).toBe(false);
+    }, 20000);
+
+    it.each([
+      [
+        'PowerShell cannot read the samples',
+        { readThroughPowerShell: async () => Promise.reject(new Error('denied')) },
+      ],
+      ['the plain text has no symbols to look for', { readThroughPowerShell: readThrough(Buffer.from('// notes\n')) }],
+    ])(
+      'does not blame encryption when %s',
+      async (_name, extra) => {
+        fs.writeFileSync(path.join(repo, 'app.cpp'), 'ciphertext as seen directly');
+        fixtureWithGraph(0);
+        expect((await index(extra)).phase).toBe('succeeded');
+      },
+      20000
+    );
+
+    it('skips build output and folders without source', async () => {
+      fs.mkdirSync(path.join(repo, 'node_modules'));
+      fs.writeFileSync(path.join(repo, 'node_modules', 'dependency.js'), 'ciphertext as seen directly');
+      fs.writeFileSync(path.join(repo, 'notes.txt'), 'ciphertext as seen directly');
+      fixtureWithGraph(0);
+      const readThroughPowerShell = vi.fn(readThrough(plainText));
+      expect((await index({ readThroughPowerShell })).phase).toBe('succeeded');
+      expect(readThroughPowerShell).not.toHaveBeenCalled();
+    }, 20000);
+  });
+});
+
+describe('finding PowerShell 7', () => {
+  const find = (env: Record<string, string>) => require(runtimePath).findPowerShell(env);
+  const program = (directory: string) => {
+    fs.mkdirSync(directory, { recursive: true });
+    fs.writeFileSync(path.join(directory, 'pwsh.exe'), '');
+    return path.join(directory, 'pwsh.exe');
+  };
+
+  it('prefers PATH and falls back to the default install folder', () => {
+    const fromPath = program(path.join(root, 'tools'));
+    const installed = program(path.join(root, 'Program Files', 'PowerShell', '7'));
+    const ProgramFiles = path.join(root, 'Program Files');
+    expect(find({ Path: path.join(root, 'tools'), ProgramFiles })).toBe(fromPath);
+    expect(find({ Path: path.join(root, 'empty'), ProgramFiles })).toBe(installed);
+  });
+
+  it('never takes a program from a relative PATH entry', () => {
+    program(path.join(process.cwd(), 'tests', 'unit', 'zz-cbm-relative'));
+    try {
+      expect(find({ PATH: path.join('tests', 'unit', 'zz-cbm-relative'), ProgramFiles: root })).toBeUndefined();
+    } finally {
+      fs.rmSync(path.join(process.cwd(), 'tests', 'unit', 'zz-cbm-relative'), { recursive: true, force: true });
+    }
+  });
+
+  it('runs directly and says so when PowerShell 7 is absent', async () => {
+    const service = runtime();
+    await service.save(repo, config);
+    await service.start(repo);
+    expect(await finished(service)).toMatchObject({ phase: 'succeeded', launcher: 'direct' });
+  });
 });

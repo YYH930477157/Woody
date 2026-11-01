@@ -19,6 +19,8 @@ export type CodebaseMemoryStatus = {
   phase: 'idle' | 'running' | 'succeeded' | 'failed' | 'cancelled';
   log: string;
   error?: string;
+  reason?: 'unreadable';
+  launcher?: 'powershell' | 'direct';
   summary?: string;
   updatedAt?: number;
 };

@@ -910,7 +910,9 @@
       "cancelled": "Indexation annulée"
     },
     "openLens": "Ouvrir la visualisation",
-    "lensHint": "Après l’indexation, consultez le graphe d’architecture CBM Lens de ce projet dans votre navigateur."
+    "lensHint": "Après l’indexation, consultez le graphe d’architecture CBM Lens de ce projet dans votre navigateur.",
+    "unreadable": "L'indexeur n'a pas pu lire le code de ce dossier. Les fichiers sont chiffrés et, même lancé via PowerShell 7, il n'a reçu que du contenu chiffré : l'index ne contient donc aucun code.",
+    "noPowerShell": "PowerShell 7 est introuvable : l'indexeur a été lancé directement. Si les fichiers de ce dossier sont chiffrés, l'index ne contiendra pas leur code."
   },
   "managedWorkspace": {
     "manage": "Espaces de travail",

@@ -910,7 +910,9 @@
       "cancelled": "Indexing cancelled"
     },
     "openLens": "Open visualization",
-    "lensHint": "After indexing, view this project’s CBM Lens architecture graph in your browser."
+    "lensHint": "After indexing, view this project’s CBM Lens architecture graph in your browser.",
+    "unreadable": "The indexer could not read this folder's code. Its files are encrypted, and it still received encrypted content when started through PowerShell 7, so the index contains no code.",
+    "noPowerShell": "PowerShell 7 was not found, so the indexer ran directly. If this folder's files are encrypted, the index will not contain their code."
   },
   "managedWorkspace": {
     "manage": "Workspaces",

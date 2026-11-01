@@ -17,7 +17,8 @@ function FolderMemory({
   const { t } = useTranslation();
   const state = useCodebaseMemory(repoPath, visible, refreshToken);
   const { status, draft, dirty, loading, busy, error, readFailed, updateDraft, run } = state;
-  const activeError = error || status?.error;
+  const activeError =
+    error || (status?.reason === 'unreadable' ? t('conversation.codebaseMemory.unreadable') : status?.error);
   const running = status?.phase === 'running';
   const locked = loading || Boolean(busy) || readFailed || !status;
   const phaseKeys = {
@@ -40,7 +41,8 @@ function FolderMemory({
           onChange={(enabled) => updateDraft({ ...draft, enabled })}
         />
       </div>
-      <label className='flex flex-col gap-6px'>
+      {/* A wrapping label element would forward each click to the Select's input and close the popup again. */}
+      <div className='flex flex-col gap-6px'>
         <span>{t('conversation.codebaseMemory.mode')}</span>
         <Select
           aria-label={t('conversation.codebaseMemory.mode')}
@@ -53,7 +55,7 @@ function FolderMemory({
             { value: 'full', label: t('conversation.codebaseMemory.modes.full') },
           ]}
         />
-      </label>
+      </div>
       <div className='flex flex-wrap gap-8px'>
         <Button disabled={locked || running || !dirty} loading={busy === 'save'} onClick={() => void run('save')}>
           {t('common.save')}
@@ -85,6 +87,9 @@ function FolderMemory({
       <Alert type='info' content={t('conversation.codebaseMemory.newConversationHint')} />
       {loading && <Spin />}
       {status && !status.available && <Alert type='warning' content={t('conversation.codebaseMemory.unavailable')} />}
+      {status?.launcher === 'direct' && (
+        <Alert type='warning' content={t('conversation.codebaseMemory.noPowerShell')} />
+      )}
       {activeError && <Alert type='error' content={activeError} />}
       {readFailed && <Button onClick={() => void state.reload()}>{t('conversation.codebaseMemory.reload')}</Button>}
       {status && !(activeError && status.phase === 'succeeded') && (

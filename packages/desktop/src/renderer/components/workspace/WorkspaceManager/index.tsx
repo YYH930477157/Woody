@@ -253,7 +253,8 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({ projectId, onWorksp
             <div className='text-12px text-t-secondary break-all'>
               {detail.workspace?.config_path || t('conversation.managedWorkspace.unsavedFile')}
             </div>
-            <label className='flex flex-col gap-4px'>
+            {/* A wrapping label element would forward each click to the Select's input and close the popup again. */}
+            <div className='flex flex-col gap-4px'>
               <span>{t('conversation.managedWorkspace.defaultRoot')}</span>
               <Select
                 disabled={busy}
@@ -271,7 +272,7 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({ projectId, onWorksp
                   })),
                 ]}
               />
-            </label>
+            </div>
             <div className='flex justify-between items-center'>
               <span>{t('conversation.managedWorkspace.roots')}</span>
               <Button disabled={busy} onClick={add}>

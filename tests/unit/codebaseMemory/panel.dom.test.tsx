@@ -205,6 +205,42 @@ describe('project architecture panel', () => {
     expect(screen.getByRole('combobox', { name: key('mode') })).toHaveTextContent(key('modes.full'));
     expect(screen.getByRole('button', { name: 'common.save' })).toBeDisabled();
   });
+  it('marks a chosen mode as unsaved', async () => {
+    api.get.mockResolvedValue(status('D:/one', { config: { version: 1, enabled: true, mode: 'fast' } }));
+    render(<CodebaseMemoryPanel repoPaths={{ one: 'D:/one' }} />);
+    const select = await screen.findByRole('combobox', { name: key('mode') });
+    await waitFor(() => expect(select).not.toHaveAttribute('aria-disabled', 'true'));
+    fireEvent.click(select.querySelector('.arco-select-view-value') as Element);
+    fireEvent.click(await screen.findByText(key('modes.moderate')));
+    expect(select).toHaveTextContent(key('modes.moderate'));
+    expect(screen.getByRole('button', { name: 'common.save' })).not.toBeDisabled();
+  });
+  it('explains an index that only saw encrypted content instead of showing the raw error', async () => {
+    api.get.mockResolvedValue(
+      status('D:/one', {
+        config: { version: 1, enabled: true, mode: 'fast' },
+        phase: 'failed',
+        reason: 'unreadable',
+        launcher: 'powershell',
+        error: 'The indexer received encrypted content',
+      })
+    );
+    render(<CodebaseMemoryPanel repoPaths={{ one: 'D:/one' }} />);
+    expect(await screen.findByText(key('unreadable'))).toBeInTheDocument();
+    expect(screen.queryByText('The indexer received encrypted content')).toBeNull();
+    expect(screen.getByText(key('phase.failed'))).toBeInTheDocument();
+    expect(screen.queryByText(key('noPowerShell'))).toBeNull();
+  });
+  it('warns only when an index ran without PowerShell 7', async () => {
+    api.get.mockResolvedValue(status('D:/one', { phase: 'succeeded', launcher: 'direct' }));
+    render(<CodebaseMemoryPanel repoPaths={{ one: 'D:/one' }} />);
+    expect(await screen.findByText(key('noPowerShell'))).toBeInTheDocument();
+    cleanup();
+    api.get.mockResolvedValue(status('D:/one', { phase: 'succeeded', launcher: 'powershell' }));
+    render(<CodebaseMemoryPanel repoPaths={{ one: 'D:/one' }} />);
+    await screen.findByText(key('phase.succeeded'));
+    expect(screen.queryByText(key('noPowerShell'))).toBeNull();
+  });
   it('uses the folder chosen in the multi-root selector', async () => {
     api.get.mockImplementation(async ({ repoPath }) => status(repoPath, { log: `${repoPath} output` }));
     render(<CodebaseMemoryPanel repoPaths={{ one: 'D:/one', two: 'D:/two' }} />);
