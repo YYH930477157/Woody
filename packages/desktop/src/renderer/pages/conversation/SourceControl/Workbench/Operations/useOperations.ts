@@ -96,8 +96,8 @@ export function useOperations(scope: GitWorkbenchScope, repoId: string) {
     if (!running.current) void read(++generation.current);
   }, [read]);
   const run = useCallback(
-    async (request: GitOperationRequest) => {
-      if (running.current || loading) return;
+    async (request: GitOperationRequest): Promise<GitOperationOutcome | undefined> => {
+      if (running.current || loading) return undefined;
       running.current = true;
       setBusy(true);
       setRunningKind(request.kind);
@@ -106,13 +106,13 @@ export function useOperations(scope: GitWorkbenchScope, repoId: string) {
       const epoch = generation.current;
       const operationId = ['fetch', 'pull', 'push'].includes(request.kind) ? crypto.randomUUID() : undefined;
       if (operationId) activeRemote.current = { scope, operationId };
+      let result: GitOperationOutcome | undefined;
       try {
-        const result = await gitWorkbench.operate.invoke({ scope, request, operationId });
-        if (generation.current === epoch) setOutcome(result);
+        result = await gitWorkbench.operate.invoke({ scope, request, operationId });
       } catch (failure) {
-        if (generation.current === epoch)
-          setOutcome({ state: 'error', output: failure instanceof Error ? failure.message : String(failure) });
+        result = { state: 'error', output: failure instanceof Error ? failure.message : String(failure) };
       } finally {
+        if (generation.current === epoch) setOutcome(result);
         if (activeRemote.current?.operationId === operationId) activeRemote.current = undefined;
         try {
           await refreshRepo(repoId);
@@ -126,6 +126,7 @@ export function useOperations(scope: GitWorkbenchScope, repoId: string) {
           }
         }
       }
+      return generation.current === epoch ? result : undefined;
     },
     [scope, repoId, loading, read]
   );
