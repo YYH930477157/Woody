@@ -5,7 +5,7 @@
  */
 
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 
 const renderMock = vi.hoisted(() => vi.fn());
@@ -80,6 +80,14 @@ beforeAll(() => {
   });
 });
 
+// The diagram appears before the effect that resets the view has run, and that
+// reset would overwrite anything done to the diagram in the meantime.
+const findSettledDiagram = async () => {
+  const diagram = await screen.findByTestId('mermaid-diagram');
+  await act(async () => {});
+  return diagram;
+};
+
 describe('MermaidBlock pan/zoom', () => {
   beforeEach(() => {
     renderMock.mockReset().mockResolvedValue({ svg: '<svg width="120" height="80"></svg>' });
@@ -97,7 +105,7 @@ describe('MermaidBlock pan/zoom', () => {
 
   it('shows zoom controls and applies/resets scale when enablePanZoom is set', async () => {
     render(<MermaidBlock code={'graph TD; A-->B'} enablePanZoom />);
-    const diagram = await screen.findByTestId('mermaid-diagram');
+    const diagram = await findSettledDiagram();
     // Pan viewport clips (hidden overflow) instead of native scroll.
     expect(diagram.style.overflow).toBe('hidden');
 
@@ -131,14 +139,14 @@ describe('MermaidBlock pan/zoom', () => {
 
   it('opens the zoom overlay when the static diagram is clicked', async () => {
     render(<MermaidBlock code={'graph TD; A-->B'} />);
-    const diagram = await screen.findByTestId('mermaid-diagram');
+    const diagram = await findSettledDiagram();
     fireEvent.click(diagram);
     expect(screen.getByTestId('diagram-zoom-overlay')).toBeInTheDocument();
   });
 
   it('opens the zoom overlay on click without panning when drag-to-pan is enabled', async () => {
     render(<MermaidBlock code={'graph TD; A-->B'} enablePanZoom />);
-    const diagram = await screen.findByTestId('mermaid-diagram');
+    const diagram = await findSettledDiagram();
 
     fireEvent.pointerDown(diagram, { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
     fireEvent.pointerMove(diagram, { pointerId: 1, clientX: 12, clientY: 11 });
@@ -151,7 +159,7 @@ describe('MermaidBlock pan/zoom', () => {
 
   it('pans instead of opening the overlay when the pointer drags past the threshold', async () => {
     render(<MermaidBlock code={'graph TD; A-->B'} enablePanZoom />);
-    const diagram = await screen.findByTestId('mermaid-diagram');
+    const diagram = await findSettledDiagram();
 
     fireEvent.pointerDown(diagram, { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
     fireEvent.pointerMove(diagram, { pointerId: 1, clientX: 60, clientY: 40 });
