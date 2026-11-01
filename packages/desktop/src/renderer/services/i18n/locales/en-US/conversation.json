@@ -1051,7 +1051,14 @@
         "cancelled": "Cancelled. Part of the work may already be done, so refresh before trying again.",
         "historyInterrupted": "A history rewrite was interrupted, so Git operations are paused for this repository. Restore it to continue."
       },
-      "recoverWarning": "This returns the repository to where it was before the rewrite. Edits you made to those files since then will be lost."
+      "recoverWarning": "This returns the repository to where it was before the rewrite. Edits you made to those files since then will be lost.",
+      "progress": {
+        "counting": "Counting objects",
+        "compressing": "Compressing objects",
+        "receiving": "Receiving objects",
+        "resolving": "Resolving deltas",
+        "writing": "Writing objects"
+      }
     },
     "merge": {
       "title": "Resolve conflicts",

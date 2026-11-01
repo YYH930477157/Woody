@@ -1,5 +1,10 @@
 import type { GitWorkbenchScope } from '@/common/types/sourceControl/workbenchTypes';
-import type { GitOperationRequest, GitOperationOutcome, GitRemote } from '@/common/types/sourceControl/operationTypes';
+import type {
+  GitOperationOutcome,
+  GitOperationProgress,
+  GitOperationRequest,
+  GitRemote,
+} from '@/common/types/sourceControl/operationTypes';
 import { createGitExecutor, forUserOperation, type GitExecutor } from '../executor';
 import type { GitRuntime } from '../executor/runtime';
 import { createWorkbenchRootResolver, type GitWorkbenchOptions } from '../service';
@@ -14,6 +19,7 @@ import {
   inspectOperation,
   parseWorktrees,
   runConflictAware,
+  createProgressReader,
   safeOutput,
 } from './engine';
 
@@ -26,6 +32,7 @@ export function createGitOperationService(
     storeDir?: string;
     /** Git 2.38 added the explicit `--no-update-refs` spelling. Older Git defaults to the same behavior. */
     capabilities?: Partial<GitRuntime['capabilities']>;
+    onProgress?: (operationId: string, progress: GitOperationProgress) => void;
   }
 ) {
   // Operations pass no user pathspecs. The global literal flag breaks stash's internal :/ cleanup.
@@ -99,6 +106,10 @@ export function createGitOperationService(
       const checkCancelled = () => {
         if (controller.signal.aborted) throw new Error('Operation cancelled');
       };
+      const onStderr =
+        cancellable && options.onProgress
+          ? createProgressReader((progress) => options.onProgress?.(operationId, progress))
+          : undefined;
       try {
         const pendingRoot = rootFor(scope);
         if (cancellable) active.set(operationId, { root: pendingRoot, controller });
@@ -115,7 +126,7 @@ export function createGitOperationService(
             return runConflictAware(
               root,
               forUserOperation((cwd, command, allowFailure, commandOptions) =>
-                git(cwd, command, allowFailure, { ...commandOptions, signal: controller.signal })
+                git(cwd, command, allowFailure, { ...commandOptions, signal: controller.signal, onStderr })
               ),
               args
             );
@@ -279,7 +290,7 @@ export function createGitOperationService(
               return execute(['update-ref', '-d', `refs/tags/${req.name}`, req.expectedRef]);
             case 'fetch':
               await verifyRemote(root, req.remote);
-              return execute(['fetch', '--no-recurse-submodules', '--', req.remote]);
+              return execute(['fetch', '--progress', '--no-recurse-submodules', '--', req.remote]);
             case 'pull': {
               const checkBranch = async () => {
                 if (
@@ -293,6 +304,7 @@ export function createGitOperationService(
               await verifyRemote(root, req.remote);
               const fetched = await execute([
                 'fetch',
+                '--progress',
                 '--no-recurse-submodules',
                 req.remote,
                 `refs/heads/${req.branch}`,
@@ -311,6 +323,7 @@ export function createGitOperationService(
                 '-c',
                 `remote.${req.remote}.mirror=false`,
                 'push',
+                '--progress',
                 '--no-force',
                 '--no-follow-tags',
                 '--recurse-submodules=no',

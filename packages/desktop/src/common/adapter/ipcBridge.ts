@@ -17,7 +17,7 @@ import type { AcpSlashCommandApiItem } from '@/common/chat/slash/types';
 import { bridge } from '@/common/platform/bridge';
 import type * as GitStorage from '@/common/types/sourceControl/storageTypes';
 import { replyProvider } from '@/common/platform/replyProvider';
-import type { GitOperationRequest, GitOperationOutcome } from '@/common/types/sourceControl/operationTypes';
+import type { GitOperationOutcome, GitOperationProgress, GitOperationRequest } from '@/common/types/sourceControl/operationTypes';
 import type {
   GitMergeDocument,
   GitMergeList,
@@ -1855,6 +1855,9 @@ export const gitStorage = {
 };
 
 export const gitWorkbench = {
+  operationProgress: bridge.buildEmitter<{ operationId: string } & GitOperationProgress>(
+    'git-workbench.operation-progress'
+  ),
   runtime: replyProvider<GitRuntimeStatus, void>('git-workbench.runtime'),
   mergeList: replyProvider<GitMergeList, { scope: GitWorkbenchScope }>('git-workbench.merge-list'),
   mergeRead: replyProvider<GitMergeDocument, { scope: GitWorkbenchScope; file: string }>('git-workbench.merge-read'),

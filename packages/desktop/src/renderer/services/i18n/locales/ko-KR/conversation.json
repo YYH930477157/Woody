@@ -1051,7 +1051,14 @@
         "cancelled": "취소되었습니다. 일부 작업은 이미 완료되었을 수 있으니 새로 고친 후 다시 시도하세요.",
         "historyInterrupted": "기록 다시 쓰기가 중단되어 이 저장소의 Git 작업이 일시 중지되었습니다. 복원하면 계속할 수 있습니다."
       },
-      "recoverWarning": "저장소를 다시 쓰기 이전 상태로 되돌립니다. 그 이후 해당 파일에 적용한 편집 내용은 사라집니다."
+      "recoverWarning": "저장소를 다시 쓰기 이전 상태로 되돌립니다. 그 이후 해당 파일에 적용한 편집 내용은 사라집니다.",
+      "progress": {
+        "counting": "오브젝트 집계 중",
+        "compressing": "오브젝트 압축 중",
+        "receiving": "오브젝트 수신 중",
+        "resolving": "델타 처리 중",
+        "writing": "오브젝트 쓰는 중"
+      }
     },
     "merge": {
       "title": "Resolve conflicts",
