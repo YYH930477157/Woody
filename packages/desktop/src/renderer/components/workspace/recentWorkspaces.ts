@@ -9,7 +9,8 @@ const MAX_RECENT_WORKSPACES = 5;
 
 export const getRecentWorkspaces = (storageKey: string = DEFAULT_RECENT_WS_KEY): string[] => {
   try {
-    return JSON.parse(localStorage.getItem(storageKey) ?? '[]');
+    const stored: unknown = JSON.parse(localStorage.getItem(storageKey) ?? '[]');
+    return Array.isArray(stored) ? stored.filter((item): item is string => typeof item === 'string') : [];
   } catch {
     return [];
   }

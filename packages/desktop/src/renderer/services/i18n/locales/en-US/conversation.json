@@ -920,6 +920,7 @@
     "discard": "Discard changes",
     "unsavedTitle": "Unsaved changes",
     "unsavedConfiguration": "Save workspace configuration before leaving?",
+    "discardConfirm": "Discard the unsaved changes to this workspace? This cannot be undone. A workspace that was never saved loses its folder list; the folders stay on disk.",
     "unsavedEditors": "{{count}} open file(s) have unsaved edits. Save before changing their folders?",
     "failed": "Workspace operation failed. Please try again.",
     "unsupported": "This AionCore build does not support multi-root workspaces yet. Update AionCore and try again; existing projects are unaffected.",

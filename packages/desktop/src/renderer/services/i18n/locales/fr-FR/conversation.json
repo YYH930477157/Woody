@@ -920,6 +920,7 @@
     "discard": "Abandonner les modifications",
     "unsavedTitle": "Modifications non enregistrées",
     "unsavedConfiguration": "Enregistrer la configuration avant de quitter ?",
+    "discardConfirm": "Abandonner les modifications non enregistrées de cet espace de travail ? Cette action est irréversible. Un espace de travail jamais enregistré perd sa liste de dossiers ; les dossiers restent sur le disque.",
     "unsavedEditors": "{{count}} fichiers ouverts contiennent des modifications non enregistrées. Les enregistrer avant de modifier leurs dossiers ?",
     "failed": "Échec de l’opération. Veuillez réessayer.",
     "unsupported": "Cette version d’AionCore ne prend pas encore en charge les espaces de travail multi-racines. Mettez à jour AionCore et réessayez ; les projets existants ne sont pas concernés.",

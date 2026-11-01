@@ -921,6 +921,7 @@
     "discard": "Änderungen verwerfen",
     "unsavedTitle": "Ungespeicherte Änderungen",
     "unsavedConfiguration": "Arbeitsbereich vor dem Verlassen speichern?",
+    "discardConfirm": "Nicht gespeicherte Änderungen an diesem Arbeitsbereich verwerfen? Das lässt sich nicht rückgängig machen. Ein nie gespeicherter Arbeitsbereich verliert seine Ordnerliste; die Ordner bleiben auf der Festplatte erhalten.",
     "unsavedEditors": "{{count}} offene Dateien enthalten ungespeicherte Änderungen. Vor dem Ändern ihrer Ordner speichern?",
     "failed": "Arbeitsbereich konnte nicht geändert werden. Bitte erneut versuchen.",
     "unsupported": "Diese AionCore-Version unterstützt noch keine Arbeitsbereiche mit mehreren Wurzeln. Aktualisieren Sie AionCore und versuchen Sie es erneut; bestehende Projekte bleiben unverändert.",
