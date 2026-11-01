@@ -27,11 +27,14 @@
   background: var(--bg-2);
   border-bottom: 1px solid var(--border-base);
 }
-.pane > :global(.cm-theme) {
+.code {
   flex: 1;
   min-height: 0;
 }
-.pane :global(.cm-scroller) {
+.code :global(.cm-editor) {
+  height: 100%;
+}
+.code :global(.cm-scroller) {
   overflow: auto;
 }
 .changes {
