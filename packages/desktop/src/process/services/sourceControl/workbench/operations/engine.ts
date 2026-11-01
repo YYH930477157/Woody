@@ -5,7 +5,11 @@
  */
 import { access, readFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { GitOperationOutcome, GitWorktree } from '@/common/types/sourceControl/operationTypes';
+import type {
+  GitOperationOutcome,
+  GitOperationProgress,
+  GitWorktree,
+} from '@/common/types/sourceControl/operationTypes';
 import type { GitExecutor } from '../executor';
 import { recoverPendingHistory, resolveHistoryRef } from './historyWorkspace';
 
@@ -17,6 +21,25 @@ export const safeOutput = (text: string): string =>
     .replace(/([?&](?:token|access_token|password|secret|key)=)[^\s&#]+/gi, '$1[redacted]');
 
 /** `reason` names a case the UI can explain in the user's language; the message stays for logs and unknown cases. */
+const PROGRESS_LINE = /(Counting|Compressing|Receiving|Resolving|Writing) (?:objects|deltas):\s+(\d{1,3})%/g;
+
+/** Turn Git's `--progress` text into updates, skipping repeats of the same phase and percent. */
+export function createProgressReader(report: (progress: GitOperationProgress) => void) {
+  let last = '';
+  return (text: string): void => {
+    const match = [...text.matchAll(PROGRESS_LINE)].at(-1);
+    if (!match || match[0] === last) return;
+    last = match[0];
+    report({
+      phase: match[1].toLowerCase() as GitOperationProgress['phase'],
+      percent: Math.min(100, Number(match[2])),
+    });
+  };
+}
+
+/** Progress redraws itself with bare carriage returns, which only clutter the final report. */
+const withoutProgress = (text: string): string => text.replace(/[^\r\n]*\r(?!\n)/g, '');
+
 export class OperationBlocked extends Error {
   constructor(
     message: string,
@@ -75,7 +98,7 @@ export const conflictedFiles = async (root: string, git: GitExecutor): Promise<s
 /** Classify conflict and local-overwrite failures while retaining safe Git diagnostics. */
 export async function runConflictAware(root: string, git: GitExecutor, args: string[]): Promise<GitOperationOutcome> {
   const result = await git(root, args, true);
-  const output = safeOutput(`${result.stdout}\n${result.stderr}`.trim());
+  const output = safeOutput(`${result.stdout}\n${withoutProgress(result.stderr)}`.trim());
   if (result.code === 0) return { state: 'complete', output };
   const overwritten =
     /(Your local changes to the following files would be overwritten|The following untracked working tree files would be (?:overwritten|removed)) by [^:\n]+:\n((?:\t.*\n?)+)/.exec(

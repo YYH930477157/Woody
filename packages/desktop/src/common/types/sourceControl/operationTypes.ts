@@ -71,6 +71,11 @@ export type GitWorktree = {
   prunable: boolean;
   main: boolean;
 };
+export type GitOperationProgress = {
+  phase: 'counting' | 'compressing' | 'receiving' | 'resolving' | 'writing';
+  percent: number;
+};
+
 export type GitOperationOutcome = {
   state: 'complete' | 'blocked' | 'conflict' | 'error' | 'cancelled';
   output: string;

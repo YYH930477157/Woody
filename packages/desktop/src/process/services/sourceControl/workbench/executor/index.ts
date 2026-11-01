@@ -53,6 +53,8 @@ export const createGitExecutor =
       configFile?: string;
       /** Main-process generated script only; never accepted from IPC. */
       sequenceEditorFile?: string;
+      /** Receives standard error as it arrives, for progress that must not wait for the command to end. */
+      onStderr?: (text: string) => void;
       /** Internal child environment. Safety and non-interactive variables are applied after it. */
       env?: NodeJS.ProcessEnv;
     } = {}
@@ -164,6 +166,7 @@ export const createGitExecutor =
       };
       const capture = (stream: 'stdout' | 'stderr', chunk: Buffer) => {
         if (reason || finished) return;
+        if (stream === 'stderr') options.onStderr?.(chunk.toString('utf8'));
         const available = Math.max(0, limit - lengths[stream]);
         if (available) buffers[stream].push(chunk.subarray(0, available));
         lengths[stream] += Math.min(available, chunk.length);

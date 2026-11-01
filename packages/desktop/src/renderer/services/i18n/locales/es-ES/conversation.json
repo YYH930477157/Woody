@@ -1052,7 +1052,14 @@
         "cancelled": "Cancelado. Puede que parte del trabajo ya esté hecho, así que actualiza antes de volver a intentarlo.",
         "historyInterrupted": "Se interrumpió una reescritura del historial, por lo que las operaciones de Git de este repositorio están en pausa. Restáuralo para continuar."
       },
-      "recoverWarning": "Esto devuelve el repositorio al estado anterior a la reescritura. Se perderán las ediciones que hayas hecho en esos archivos desde entonces."
+      "recoverWarning": "Esto devuelve el repositorio al estado anterior a la reescritura. Se perderán las ediciones que hayas hecho en esos archivos desde entonces.",
+      "progress": {
+        "counting": "Contando objetos",
+        "compressing": "Comprimiendo objetos",
+        "receiving": "Recibiendo objetos",
+        "resolving": "Resolviendo deltas",
+        "writing": "Escribiendo objetos"
+      }
     },
     "merge": {
       "title": "Resolve conflicts",

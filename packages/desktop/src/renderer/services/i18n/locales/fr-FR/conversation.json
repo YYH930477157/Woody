@@ -1051,7 +1051,14 @@
         "cancelled": "Annulé. Une partie du travail est peut-être déjà effectuée, actualisez donc avant de réessayer.",
         "historyInterrupted": "Une réécriture de l'historique a été interrompue : les opérations Git de ce dépôt sont suspendues. Restaurez-le pour continuer."
       },
-      "recoverWarning": "Le dépôt reviendra à son état d'avant la réécriture. Les modifications apportées à ces fichiers depuis seront perdues."
+      "recoverWarning": "Le dépôt reviendra à son état d'avant la réécriture. Les modifications apportées à ces fichiers depuis seront perdues.",
+      "progress": {
+        "counting": "Comptage des objets",
+        "compressing": "Compression des objets",
+        "receiving": "Réception des objets",
+        "resolving": "Résolution des deltas",
+        "writing": "Écriture des objets"
+      }
     },
     "merge": {
       "title": "Resolve conflicts",

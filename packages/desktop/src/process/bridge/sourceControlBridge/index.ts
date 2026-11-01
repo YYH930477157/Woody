@@ -47,6 +47,8 @@ export function initGitWorkbenchBridge(runtimePromise: Promise<GitBridgeRuntime>
       ...options,
       git: runtime.operationsGit,
       run: runtime.coordinator.run,
+      onProgress: (operationId, progress) =>
+        ipcBridge.gitWorkbench.operationProgress.emit({ operationId, ...progress }),
       capabilities: runtime.runtime.capabilities,
       storeDir: path.join(app.getPath('userData'), 'git-history-recovery'),
     });

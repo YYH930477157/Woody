@@ -1051,7 +1051,14 @@
         "cancelled": "已取消。部分操作可能已經完成，請先重新整理再重試。",
         "historyInterrupted": "一次歷史重寫被中斷，這個儲存庫的 Git 操作已暫停。還原後即可繼續。"
       },
-      "recoverWarning": "這會把儲存庫還原到重寫之前的狀態。在那之後對相關檔案的修改將會遺失。"
+      "recoverWarning": "這會把儲存庫還原到重寫之前的狀態。在那之後對相關檔案的修改將會遺失。",
+      "progress": {
+        "counting": "正在統計物件",
+        "compressing": "正在壓縮物件",
+        "receiving": "正在接收物件",
+        "resolving": "正在處理差異",
+        "writing": "正在寫入物件"
+      }
     },
     "merge": {
       "title": "Resolve conflicts",

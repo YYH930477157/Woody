@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { gitWorkbench } from '@/common/adapter/ipcBridge';
 import type {
   GitOperationOutcome,
+  GitOperationProgress,
   GitOperationRequest,
   GitRemote,
   GitStash,
@@ -26,6 +27,7 @@ export function useOperations(scope: GitWorkbenchScope, repoId: string) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [runningKind, setRunningKind] = useState<GitOperationRequest['kind']>();
+  const [progress, setProgress] = useState<GitOperationProgress>();
   const [error, setError] = useState<string>();
   const [interrupted, setInterrupted] = useState(false);
   const [outcome, setOutcome] = useState<GitOperationOutcome>();
@@ -83,6 +85,13 @@ export function useOperations(scope: GitWorkbenchScope, repoId: string) {
       }
     };
   }, [read]);
+  useEffect(
+    () =>
+      gitWorkbench.operationProgress?.on(({ operationId, phase, percent }) => {
+        if (operationId === activeRemote.current?.operationId) setProgress({ phase, percent });
+      }),
+    []
+  );
   const refresh = useCallback(() => {
     if (!running.current) void read(++generation.current);
   }, [read]);
@@ -92,6 +101,7 @@ export function useOperations(scope: GitWorkbenchScope, repoId: string) {
       running.current = true;
       setBusy(true);
       setRunningKind(request.kind);
+      setProgress(undefined);
       setOutcome(undefined);
       const epoch = generation.current;
       const operationId = ['fetch', 'pull', 'push'].includes(request.kind) ? crypto.randomUUID() : undefined;
@@ -112,6 +122,7 @@ export function useOperations(scope: GitWorkbenchScope, repoId: string) {
             running.current = false;
             setBusy(false);
             setRunningKind(undefined);
+            setProgress(undefined);
           }
         }
       }
@@ -132,6 +143,7 @@ export function useOperations(scope: GitWorkbenchScope, repoId: string) {
     loading,
     busy,
     runningKind,
+    progress,
     error,
     interrupted,
     outcome,

@@ -1,5 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Button, Checkbox, Empty, Input, Modal, Select, Space, Spin, Tabs, Tag } from '@arco-design/web-react';
+import {
+  Alert,
+  Button,
+  Checkbox,
+  Empty,
+  Input,
+  Modal,
+  Progress,
+  Select,
+  Space,
+  Spin,
+  Tabs,
+  Tag,
+} from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import type { GitOperationRequest } from '@/common/types/sourceControl/operationTypes';
 import type { GitWorkbenchScope } from '@/common/types/sourceControl/workbenchTypes';
@@ -75,6 +88,12 @@ export function Operations({
           {t(`conversation.gitWorkbench.operations.${state.canCancel ? 'runningRemote' : 'running'}`, {
             operation: label(state.runningKind),
           })}
+          {state.progress && (
+            <>
+              <span>{t(`conversation.gitWorkbench.operations.progress.${state.progress.phase}`)}</span>
+              <Progress size='small' width={120} percent={state.progress.percent} />
+            </>
+          )}
         </div>
       )}
       {state.loading && !data && <Loading />}
