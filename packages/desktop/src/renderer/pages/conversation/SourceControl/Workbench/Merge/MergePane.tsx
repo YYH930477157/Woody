@@ -30,6 +30,8 @@ export function MergePane({
   const { theme } = useThemeContext();
   const [language, setLanguage] = useState<Extension[]>([]);
   const view = useRef<EditorView | undefined>(undefined);
+  // The editor is created after this component's first effects, so the first change has to wait for it.
+  const [created, setCreated] = useState(false);
   const large = shouldDisableHighlighting(value.length);
   useEffect(() => {
     let alive = true;
@@ -54,7 +56,7 @@ export function MergePane({
     view.current.dispatch({
       effects: EditorView.scrollIntoView(view.current.state.doc.line(number).from, { y: 'center' }),
     });
-  }, [line]);
+  }, [line, created]);
   return (
     <section className={styles.pane} aria-label={title}>
       <h4>{title}</h4>
@@ -68,6 +70,7 @@ export function MergePane({
         onChange={onChange}
         onCreateEditor={(editor) => {
           view.current = editor;
+          setCreated(true);
         }}
         basicSetup={{ lineNumbers: true, foldGutter: true, highlightActiveLine: !readOnly }}
       />

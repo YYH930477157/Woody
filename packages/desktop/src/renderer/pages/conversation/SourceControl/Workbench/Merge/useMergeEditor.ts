@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { gitWorkbench } from '@/common/adapter/ipcBridge';
 import type { GitMergeDocument, GitMergeFinishRequest } from '@/common/types/sourceControl/mergeTypes';
 import type { GitWorkbenchScope } from '@/common/types/sourceControl/workbenchTypes';
 import { refreshRepo } from '../../scmStore';
+import { outcomeText } from '../operationOutcome';
 import {
   createEditorState,
   editResult,
@@ -13,6 +15,7 @@ import {
 } from './editorState';
 
 export function useMergeEditor(scope: GitWorkbenchScope, repoId: string, file: string, onFinished: () => void) {
+  const { t } = useTranslation();
   const [document, setDocument] = useState<GitMergeDocument>();
   const [editor, setEditor] = useState<MergeEditorState>();
   const [loading, setLoading] = useState(true);
@@ -100,7 +103,7 @@ export function useMergeEditor(scope: GitWorkbenchScope, repoId: string, file: s
         });
         if (epoch !== generation.current) return;
         if (outcome.state !== 'complete') {
-          setError(outcome.output);
+          setError(outcomeText(outcome, t));
           return;
         }
         setDirty(false);
@@ -114,7 +117,7 @@ export function useMergeEditor(scope: GitWorkbenchScope, repoId: string, file: s
         if (epoch === generation.current) setBusy(false);
       }
     },
-    [scope, repoId, file, document, editor, onFinished]
+    [scope, repoId, file, document, editor, onFinished, t]
   );
   return {
     document,
