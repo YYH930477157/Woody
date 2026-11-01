@@ -1029,7 +1029,8 @@
       "rebase": "Rebase onto commit",
       "history": {
         "continue": "Continue operation",
-        "abort": "Abort operation"
+        "abort": "Abort operation",
+        "recover": "Restaurer le dépôt"
       },
       "running": "{{operation}} en cours…",
       "runningRemote": "{{operation}} en cours. Vous pouvez annuler à tout moment.",
@@ -1047,8 +1048,10 @@
         "localChanges": "Vos modifications non commitées dans les fichiers ci-dessous seraient écrasées. Commitez-les ou remisez-les d'abord.",
         "rewriteUnsupported": "Ces commits ne peuvent pas être réécrits. Les commits racines, les commits de fusion et le squash de commits non adjacents ne sont pas pris en charge.",
         "gitTooOld": "La modification de l'historique nécessite Git 2.40 ou une version ultérieure. Configurez un Git plus récent.",
-        "cancelled": "Annulé. Une partie du travail est peut-être déjà effectuée, actualisez donc avant de réessayer."
-      }
+        "cancelled": "Annulé. Une partie du travail est peut-être déjà effectuée, actualisez donc avant de réessayer.",
+        "historyInterrupted": "Une réécriture de l'historique a été interrompue : les opérations Git de ce dépôt sont suspendues. Restaurez-le pour continuer."
+      },
+      "recoverWarning": "Le dépôt reviendra à son état d'avant la réécriture. Les modifications apportées à ces fichiers depuis seront perdues."
     },
     "merge": {
       "title": "Resolve conflicts",

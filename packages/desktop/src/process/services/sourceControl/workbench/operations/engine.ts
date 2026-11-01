@@ -36,7 +36,10 @@ export async function inspectOperation(root: string, git: GitExecutor) {
       resolveHistoryRef(root, git)
     );
   } catch (error) {
-    throw new OperationBlocked(error instanceof Error ? error.message : 'History state recovery failed');
+    throw new OperationBlocked(
+      error instanceof Error ? error.message : 'History state recovery failed',
+      (error as { interrupted?: boolean }).interrupted ? 'historyInterrupted' : undefined
+    );
   }
   const markers = [
     ['rebase-merge', 'rebase'],

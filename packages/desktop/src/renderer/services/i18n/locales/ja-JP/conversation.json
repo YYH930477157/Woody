@@ -1029,7 +1029,8 @@
       "rebase": "Rebase onto commit",
       "history": {
         "continue": "Continue operation",
-        "abort": "Abort operation"
+        "abort": "Abort operation",
+        "recover": "リポジトリを復元"
       },
       "running": "{{operation}} を実行中…",
       "runningRemote": "{{operation}} を実行中です。いつでもキャンセルできます。",
@@ -1047,8 +1048,10 @@
         "localChanges": "以下のファイルの未コミットの変更が上書きされます。先にコミットまたはスタッシュしてください。",
         "rewriteUnsupported": "選択したコミットは書き換えできません。ルートコミット、マージコミット、隣接しないコミットのスカッシュには対応していません。",
         "gitTooOld": "履歴の編集には Git 2.40 以降が必要です。新しい Git を設定してください。",
-        "cancelled": "キャンセルしました。一部の処理は完了している可能性があるため、更新してからやり直してください。"
-      }
+        "cancelled": "キャンセルしました。一部の処理は完了している可能性があるため、更新してからやり直してください。",
+        "historyInterrupted": "履歴の書き換えが中断されたため、このリポジトリの Git 操作を一時停止しています。復元すると続行できます。"
+      },
+      "recoverWarning": "リポジトリを書き換え前の状態に戻します。その後に該当ファイルへ加えた編集は失われます。"
     },
     "merge": {
       "title": "Resolve conflicts",

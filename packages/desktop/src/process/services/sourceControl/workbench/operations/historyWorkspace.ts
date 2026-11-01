@@ -39,10 +39,13 @@ export const resolveHistoryRef =
     throw new Error(result.stderr || `Unable to resolve ${name}`);
   };
 export const pendingHistoryError = (journal: HistoryJournal, detail: string) =>
-  new Error(
-    detail.startsWith('History state publication is pending:')
-      ? detail
-      : `History state publication is pending: ${detail}. Recoverable Git state: ${privateGitDir(journal)}; index: ${path.join(privateGitDir(journal), 'index')}; journal: ${path.join(journal.gitDir, manifestName)}. ${journal.phase === 'ready' ? 'Restore access and retry Inspect' : 'Git execution was interrupted; inspect the retained Git state before manual recovery'}; further history operations are blocked until publication is recovered.`
+  Object.assign(
+    new Error(
+      detail.startsWith('History state publication is pending:')
+        ? detail
+        : `History state publication is pending: ${detail}. Recoverable Git state: ${privateGitDir(journal)}; index: ${path.join(privateGitDir(journal), 'index')}; journal: ${path.join(journal.gitDir, manifestName)}. ${journal.phase === 'ready' ? 'Restore access and retry Inspect' : 'Git execution was interrupted; inspect the retained Git state before manual recovery'}; further history operations are blocked until publication is recovered.`
+    ),
+    { interrupted: journal.phase === 'running' }
   );
 const commonFiles = new Set([
   'HEAD',
@@ -147,6 +150,22 @@ export async function writeJournal(journal: HistoryJournal) {
   }
 }
 
+const CONFIG_FILE = 'effective.config';
+
+/** Run Git against the private HEAD, index and rebase state, with the shared objects, refs and working tree. */
+const isolatedExecutor = (root: string, git: GitExecutor, workspace: string, commonDir: string): GitExecutor => {
+  const privateDir = path.join(workspace, 'git');
+  return (cwd, args, allowed, options) =>
+    git(cwd, args, allowed, {
+      ...options,
+      gitDirectory: privateDir,
+      commonDirectory: commonDir,
+      workTree: root,
+      indexFile: path.join(privateDir, 'index'),
+      configFile: path.join(workspace, CONFIG_FILE),
+    });
+};
+
 export async function createHistoryWorkspace(root: string, git: GitExecutor, gitDir: string, indexPath: string) {
   const workspace = path.join(gitDir, `${prefix}${randomUUID()}`);
   const privateDir = path.join(workspace, 'git');
@@ -189,20 +208,12 @@ export async function createHistoryWorkspace(root: string, git: GitExecutor, git
       git(root, ['config', '--null', '--list', '--includes']),
       git(root, ['rev-parse', '--git-path', 'hooks']),
     ]);
-    const configFile = path.join(workspace, 'effective.config');
+    const configFile = path.join(workspace, CONFIG_FILE);
     await writeFile(
       configFile,
       `${flattenConfig(config.stdout)}\n[core]\n\thooksPath = ${quoteConfig(path.resolve(root, hooks.stdout.trim()).replaceAll('\\', '/'))}\n`
     );
-    const isolated: GitExecutor = (cwd, args, allowed, options) =>
-      git(cwd, args, allowed, {
-        ...options,
-        gitDirectory: privateDir,
-        commonDirectory: commonDir,
-        workTree: root,
-        indexFile: path.join(privateDir, 'index'),
-        configFile,
-      });
+    const isolated = isolatedExecutor(root, git, workspace, commonDir);
     // Once journal installation starts, retain the directory even if that installation is interrupted.
     retained = true;
     await writeJournal(journal);
@@ -298,24 +309,41 @@ export async function publishHistory(journal: HistoryJournal, resolveRef: Resolv
 const inProgress = (name: string) => /^(?:rebase-merge|rebase-apply|sequencer)\//.test(name);
 
 /**
- * Undo a rewrite that failed before publishing, so it cannot leave the repository blocked. The real HEAD, index and
- * branch have not moved, but Git was changing the shared working tree, so its own abort restores the files. Returns
- * false, keeping the retained state for recovery, when the repository was already mid-operation: aborting then would
- * rewind the files past the paused state the real HEAD still records.
+ * Put the files back to the paused state the real index still records. `rebase --continue` refuses to start with
+ * unstaged changes, so at this point the working tree differed from that index only by what the run itself wrote.
  */
-export async function rollBackHistory(root: string, journal: HistoryJournal, isolated: GitExecutor): Promise<boolean> {
-  if (Object.keys(journal.before).some(inProgress)) return false;
+const restorePausedFiles = async (root: string, isolated: GitExecutor, git: GitExecutor) => {
+  const tracked = async (executor: GitExecutor) =>
+    new Set((await executor(root, ['ls-files', '-z'])).stdout.split('\0').filter(Boolean));
+  const [running, paused] = await Promise.all([tracked(isolated), tracked(git)]);
+  for (const file of running) if (!paused.has(file)) await rm(path.join(root, file), { force: true });
+  await forUserOperation(git)(root, ['checkout-index', '--all', '--force', '--quiet']);
+};
+
+/**
+ * Undo a run that failed before publishing, so it cannot leave the repository blocked. The real HEAD, index and branch
+ * have not moved, but Git was changing the shared working tree. A new rewrite is undone by Git's own abort. One that
+ * resumed a paused rebase must return to that pause instead, because aborting would rewind the files past the state
+ * the real HEAD records. Returns false, keeping the retained state, if either way cannot be proved safe.
+ */
+export async function rollBackHistory(
+  root: string,
+  journal: HistoryJournal,
+  isolated: GitExecutor,
+  git: GitExecutor
+): Promise<boolean> {
   try {
     const privateDir = privateGitDir(journal);
-    // The killed process cannot release this private lock, and nothing else can hold it.
-    await rm(path.join(privateDir, 'index.lock'), { force: true });
-    if (Object.keys(await metadataFiles(privateDir)).some(inProgress)) {
-      const abort = await forUserOperation(isolated)(root, ['rebase', '--abort'], true);
-      if (abort.code !== 0) return false;
-    }
     const resolveRef = resolveHistoryRef(root, isolated);
     for (const [name, expected] of Object.entries(journal.beforeRefs)) {
       if ((await resolveRef(name)) !== expected) return false;
+    }
+    // The killed process cannot release this private lock, and nothing else can hold it.
+    await rm(path.join(privateDir, 'index.lock'), { force: true });
+    if (Object.keys(journal.before).some(inProgress)) await restorePausedFiles(root, isolated, git);
+    else if (Object.keys(await metadataFiles(privateDir)).some(inProgress)) {
+      const abort = await forUserOperation(isolated)(root, ['rebase', '--abort'], true);
+      if (abort.code !== 0) return false;
     }
     await rm(path.join(journal.gitDir, manifestName));
     await rm(journal.workspace, { recursive: true, force: true }).catch((): undefined => undefined);
@@ -408,8 +436,43 @@ export async function recoverPendingHistory(
   actualIndexPath: () => Promise<string>,
   resolveRef: ResolveRef
 ) {
+  const journal = await readJournal(gitDir, actualIndexPath);
+  if (!journal) return;
+  let release: (() => Promise<void>) | undefined;
+  try {
+    release = await acquireHistoryLocks(gitDir, journal.indexPath);
+    await publishHistory(journal, resolveRef);
+  } catch (error) {
+    throw pendingHistoryError(journal, error instanceof Error ? error.message : String(error));
+  } finally {
+    await release?.();
+  }
+}
+
+/**
+ * Restore a repository whose rewrite died with the app, at the user's request. Unlike a failure the app saw happen,
+ * the files may have been edited since, so this only runs after they confirm that those edits can be lost.
+ */
+export async function recoverInterruptedHistory(root: string, git: GitExecutor) {
+  const gitDir = path.resolve(root, (await git(root, ['rev-parse', '--git-dir'])).stdout.trim());
+  const journal = await readJournal(gitDir, async () =>
+    path.resolve(root, (await git(root, ['rev-parse', '--git-path', 'index'])).stdout.trim())
+  );
+  if (journal?.phase !== 'running') return;
+  const release = await acquireHistoryLocks(gitDir, journal.indexPath);
+  try {
+    const commonDir = (await readFile(path.join(privateGitDir(journal), 'commondir'), 'utf8')).trim();
+    const isolated = isolatedExecutor(root, git, journal.workspace, commonDir);
+    if (!(await rollBackHistory(root, journal, isolated, git)))
+      throw pendingHistoryError(journal, 'the retained state could not be restored safely');
+  } finally {
+    await release();
+  }
+}
+
+async function readJournal(gitDir: string, actualIndexPath: () => Promise<string>) {
   const raw = await readOptional(path.join(gitDir, manifestName));
-  if (!raw) return;
+  if (!raw) return undefined;
   const journal = JSON.parse(raw.toString('utf8')) as HistoryJournal;
   if (
     !journal ||
@@ -436,13 +499,5 @@ export async function recoverPendingHistory(
   await noSymlinks(journal.workspace, 'git');
   await noSymlinks(gitDir, 'HEAD');
   await noSymlinks(path.dirname(journal.indexPath), path.basename(journal.indexPath));
-  let release: (() => Promise<void>) | undefined;
-  try {
-    release = await acquireHistoryLocks(gitDir, journal.indexPath);
-    await publishHistory(journal, resolveRef);
-  } catch (error) {
-    throw pendingHistoryError(journal, error instanceof Error ? error.message : String(error));
-  } finally {
-    await release?.();
-  }
+  return journal;
 }

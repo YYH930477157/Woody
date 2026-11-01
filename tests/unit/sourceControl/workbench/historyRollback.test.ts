@@ -6,6 +6,8 @@ import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createGitExecutor } from '@process/services/sourceControl/workbench/executor';
 import { inspectOperation } from '@process/services/sourceControl/workbench/operations/engine';
+import { createHistoryWorkspace } from '@process/services/sourceControl/workbench/operations/historyWorkspace';
+import { createGitOperationService } from '@process/services/sourceControl/workbench/operations';
 import { withIsolatedHistory } from '@process/services/sourceControl/workbench/operations/lockedHistory';
 
 const run = promisify(execFile);
@@ -69,23 +71,85 @@ describe('interrupted history rewrite', () => {
     await expect(inspectOperation(root, git)).resolves.toBeNull();
   });
 
-  it('keeps the retained state when the repository was already mid-rebase', async () => {
+  it('returns to the paused state when continuing a rebase is interrupted', async () => {
     const root = await repository();
     await git(root, STOP_AFTER_FIRST_COMMIT, true);
-    const paused = await readFile(path.join(root, 'file.txt'), 'utf8');
+    const paused = await head(root);
 
     await expect(
       withIsolatedHistory(
         root,
         git,
         async () => {},
-        async () => {
+        async (locked) => {
+          await locked(root, ['rebase', '--continue'], true);
+          expect(await readFile(path.join(root, 'file.txt'), 'utf8')).toBe('three');
+          throw new Error(INTERRUPTED);
+        }
+      )
+    ).rejects.toThrow(new RegExp(`^${INTERRUPTED}$`));
+
+    expect(await head(root)).toBe(paused);
+    expect(await readFile(path.join(root, 'file.txt'), 'utf8')).toBe('two');
+    await expect(access(path.join(root, 'added.txt'))).rejects.toThrow();
+    await expect(access(path.join(root, '.git', PENDING_JOURNAL))).rejects.toThrow();
+    await expect(inspectOperation(root, git)).resolves.toBe('rebase');
+  });
+
+  it('keeps the retained state when the branch moved during the run', async () => {
+    const root = await repository();
+
+    await expect(
+      withIsolatedHistory(
+        root,
+        git,
+        async () => {},
+        async (locked) => {
+          await locked(root, ['commit', '--allow-empty', '-m', 'moved the branch'], true);
           throw new Error(INTERRUPTED);
         }
       )
     ).rejects.toThrow(/publication is pending/);
 
     await expect(access(path.join(root, '.git', PENDING_JOURNAL))).resolves.toBeUndefined();
-    expect(await readFile(path.join(root, 'file.txt'), 'utf8')).toBe(paused);
+  });
+});
+
+describe('a rewrite that died with the app', () => {
+  const crashedRewrite = async () => {
+    const root = await repository();
+    const gitDir = path.join(root, '.git');
+    const { isolated } = await createHistoryWorkspace(root, git, gitDir, path.join(gitDir, 'index'));
+    await isolated(root, STOP_AFTER_FIRST_COMMIT, true);
+    return root;
+  };
+  const scope = { projectId: 'project', peId: 'root', relativePath: '' };
+
+  it('blocks Git operations and says it can be restored', async () => {
+    const root = await crashedRewrite();
+
+    await expect(inspectOperation(root, git)).rejects.toMatchObject({ reason: 'historyInterrupted' });
+  });
+
+  it('restores the repository only when the user asks', async () => {
+    const root = await crashedRewrite();
+    const service = createGitOperationService({ resolveRoot: async () => root });
+
+    const result = await service.operate(scope, { kind: 'history.recover', confirmed: true });
+
+    expect(result.state).toBe('complete');
+    expect(await readFile(path.join(root, 'file.txt'), 'utf8')).toBe('three');
+    await expect(inspectOperation(root, git)).resolves.toBeNull();
+  });
+
+  it('does nothing when no rewrite was interrupted', async () => {
+    const root = await repository();
+    const before = await head(root);
+    const service = createGitOperationService({ resolveRoot: async () => root });
+
+    const result = await service.operate(scope, { kind: 'history.recover', confirmed: true });
+
+    expect(result.state).toBe('complete');
+    expect(await head(root)).toBe(before);
   });
 });

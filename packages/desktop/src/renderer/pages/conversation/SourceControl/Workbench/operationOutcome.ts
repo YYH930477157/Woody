@@ -16,6 +16,7 @@ const EXPLAINED = new Set([
   'localChanges',
   'rewriteUnsupported',
   'gitTooOld',
+  'historyInterrupted',
   'cancelled',
 ]);
 

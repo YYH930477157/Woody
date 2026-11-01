@@ -1029,7 +1029,8 @@
       "rebase": "Rebase onto commit",
       "history": {
         "continue": "Continue operation",
-        "abort": "Abort operation"
+        "abort": "Abort operation",
+        "recover": "還原儲存庫"
       },
       "running": "正在執行：{{operation}}…",
       "runningRemote": "正在執行：{{operation}}，可隨時取消。",
@@ -1047,8 +1048,10 @@
         "localChanges": "下列檔案中未提交的變更會被覆寫，請先提交或暫存。",
         "rewriteUnsupported": "無法重寫所選提交：不支援根提交、合併提交，也不支援壓縮不相鄰的提交。",
         "gitTooOld": "編輯歷史需要 Git 2.40 或更新版本，請設定較新的 Git。",
-        "cancelled": "已取消。部分操作可能已經完成，請先重新整理再重試。"
-      }
+        "cancelled": "已取消。部分操作可能已經完成，請先重新整理再重試。",
+        "historyInterrupted": "一次歷史重寫被中斷，這個儲存庫的 Git 操作已暫停。還原後即可繼續。"
+      },
+      "recoverWarning": "這會把儲存庫還原到重寫之前的狀態。在那之後對相關檔案的修改將會遺失。"
     },
     "merge": {
       "title": "Resolve conflicts",

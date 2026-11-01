@@ -30,6 +30,7 @@ export type GitOperationRequest =
       expectedBranch: string;
       confirmed: true;
     }
+  | { kind: 'history.recover'; confirmed: true }
   | {
       kind: 'history.continue' | 'history.abort';
       operation: 'merge' | 'cherry-pick' | 'revert' | 'rebase';

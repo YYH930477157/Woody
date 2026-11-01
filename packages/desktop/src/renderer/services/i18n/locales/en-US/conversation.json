@@ -1029,7 +1029,8 @@
       "rebase": "Rebase onto commit",
       "history": {
         "continue": "Continue operation",
-        "abort": "Abort operation"
+        "abort": "Abort operation",
+        "recover": "Restore repository"
       },
       "running": "{{operation}} in progress…",
       "runningRemote": "{{operation}} in progress. You can cancel at any time.",
@@ -1047,8 +1048,10 @@
         "localChanges": "Your uncommitted changes to the files below would be overwritten. Commit or stash them first.",
         "rewriteUnsupported": "These commits cannot be rewritten. Root commits, merge commits and squashing non-adjacent commits are not supported.",
         "gitTooOld": "Editing history needs Git 2.40 or newer. Configure a newer Git.",
-        "cancelled": "Cancelled. Part of the work may already be done, so refresh before trying again."
-      }
+        "cancelled": "Cancelled. Part of the work may already be done, so refresh before trying again.",
+        "historyInterrupted": "A history rewrite was interrupted, so Git operations are paused for this repository. Restore it to continue."
+      },
+      "recoverWarning": "This returns the repository to where it was before the rewrite. Edits you made to those files since then will be lost."
     },
     "merge": {
       "title": "Resolve conflicts",

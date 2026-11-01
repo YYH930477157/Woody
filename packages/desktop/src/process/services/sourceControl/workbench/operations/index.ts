@@ -6,6 +6,7 @@ import { createWorkbenchRootResolver, type GitWorkbenchOptions } from '../servic
 import { repositoryCoordinator } from '../coordinator';
 import { scopeSchema } from '../validation';
 import { operationIdSchema, operationSchema, remoteUrlSchema } from './validation';
+import { recoverInterruptedHistory } from './historyWorkspace';
 import { createHistoryRewrite } from './rewrite';
 import {
   OperationBlocked,
@@ -119,6 +120,10 @@ export function createGitOperationService(
               args
             );
           };
+          if (req.kind === 'history.recover') {
+            await recoverInterruptedHistory(root, git);
+            return complete({});
+          }
           if (req.kind === 'inspect') {
             const operation = await inspectOperation(root, git);
             const head = await git(root, ['rev-parse', '--verify', 'HEAD'], true);

@@ -78,7 +78,31 @@ export function Operations({
         </div>
       )}
       {state.loading && !data && <Loading />}
-      {state.error && <RequestError message={state.error} retry={state.refresh} />}
+      {state.interrupted ? (
+        <Alert
+          type='warning'
+          content={
+            <div className='flex flex-col gap-8px items-start'>
+              {t('conversation.gitWorkbench.operations.reasons.historyInterrupted')}
+              <Button
+                size='small'
+                type='primary'
+                disabled={state.busy}
+                onClick={() =>
+                  run(
+                    { kind: 'history.recover', confirmed: true },
+                    t('conversation.gitWorkbench.operations.recoverWarning')
+                  )
+                }
+              >
+                {t('conversation.gitWorkbench.operations.history.recover')}
+              </Button>
+            </div>
+          }
+        />
+      ) : (
+        state.error && <RequestError message={state.error} retry={state.refresh} />
+      )}
       {state.outcome && (
         <Alert
           type={

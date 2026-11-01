@@ -27,6 +27,7 @@ export function useOperations(scope: GitWorkbenchScope, repoId: string) {
   const [busy, setBusy] = useState(false);
   const [runningKind, setRunningKind] = useState<GitOperationRequest['kind']>();
   const [error, setError] = useState<string>();
+  const [interrupted, setInterrupted] = useState(false);
   const [outcome, setOutcome] = useState<GitOperationOutcome>();
   const generation = useRef(0);
   const running = useRef(false);
@@ -43,6 +44,7 @@ export function useOperations(scope: GitWorkbenchScope, repoId: string) {
           ),
         ]);
         if (generation.current !== request) return;
+        setInterrupted(inspected.reason === 'historyInterrupted');
         for (const result of [inspected, remote, stash, tree])
           if (result.state !== 'complete') throw new Error(result.output || result.reason);
         setData({
@@ -131,6 +133,7 @@ export function useOperations(scope: GitWorkbenchScope, repoId: string) {
     busy,
     runningKind,
     error,
+    interrupted,
     outcome,
     refresh,
     run,

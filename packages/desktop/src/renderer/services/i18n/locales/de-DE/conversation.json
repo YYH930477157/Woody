@@ -1030,7 +1030,8 @@
       "rebase": "Rebase onto commit",
       "history": {
         "continue": "Continue operation",
-        "abort": "Abort operation"
+        "abort": "Abort operation",
+        "recover": "Repository wiederherstellen"
       },
       "running": "{{operation}} läuft…",
       "runningRemote": "{{operation}} läuft. Sie können jederzeit abbrechen.",
@@ -1048,8 +1049,10 @@
         "localChanges": "Ihre nicht committeten Änderungen an den folgenden Dateien würden überschrieben. Committen oder stashen Sie sie zuerst.",
         "rewriteUnsupported": "Diese Commits können nicht umgeschrieben werden. Root-Commits, Merge-Commits und das Zusammenfassen nicht benachbarter Commits werden nicht unterstützt.",
         "gitTooOld": "Zum Bearbeiten des Verlaufs ist Git 2.40 oder neuer erforderlich. Konfigurieren Sie eine neuere Git-Version.",
-        "cancelled": "Abgebrochen. Ein Teil der Arbeit ist möglicherweise bereits erledigt, aktualisieren Sie daher vor einem neuen Versuch."
-      }
+        "cancelled": "Abgebrochen. Ein Teil der Arbeit ist möglicherweise bereits erledigt, aktualisieren Sie daher vor einem neuen Versuch.",
+        "historyInterrupted": "Eine Verlaufsänderung wurde unterbrochen, daher sind Git-Vorgänge für dieses Repository angehalten. Stellen Sie es wieder her, um fortzufahren."
+      },
+      "recoverWarning": "Dadurch wird das Repository auf den Stand vor der Verlaufsänderung zurückgesetzt. Seitdem vorgenommene Bearbeitungen an diesen Dateien gehen verloren."
     },
     "merge": {
       "title": "Resolve conflicts",

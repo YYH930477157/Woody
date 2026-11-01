@@ -1030,7 +1030,8 @@
       "rebase": "Rebase onto commit",
       "history": {
         "continue": "Continue operation",
-        "abort": "Abort operation"
+        "abort": "Abort operation",
+        "recover": "Restaurar repositorio"
       },
       "running": "{{operation}} en curso…",
       "runningRemote": "{{operation}} en curso. Puedes cancelar en cualquier momento.",
@@ -1048,8 +1049,10 @@
         "localChanges": "Se sobrescribirían tus cambios sin confirmar en los archivos siguientes. Primero confírmalos o guárdalos en stash.",
         "rewriteUnsupported": "Estas confirmaciones no se pueden reescribir. No se admiten confirmaciones raíz, de fusión ni combinar confirmaciones no adyacentes.",
         "gitTooOld": "Editar el historial requiere Git 2.40 o posterior. Configura un Git más reciente.",
-        "cancelled": "Cancelado. Puede que parte del trabajo ya esté hecho, así que actualiza antes de volver a intentarlo."
-      }
+        "cancelled": "Cancelado. Puede que parte del trabajo ya esté hecho, así que actualiza antes de volver a intentarlo.",
+        "historyInterrupted": "Se interrumpió una reescritura del historial, por lo que las operaciones de Git de este repositorio están en pausa. Restáuralo para continuar."
+      },
+      "recoverWarning": "Esto devuelve el repositorio al estado anterior a la reescritura. Se perderán las ediciones que hayas hecho en esos archivos desde entonces."
     },
     "merge": {
       "title": "Resolve conflicts",
