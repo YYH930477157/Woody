@@ -61,6 +61,7 @@ export function MergePane({
     <section className={styles.pane} aria-label={title}>
       <h4>{title}</h4>
       <CodeMirror
+        className={styles.code}
         value={value}
         height='100%'
         theme={getCodeEditorBaseTheme(theme)}

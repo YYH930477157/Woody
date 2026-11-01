@@ -5,6 +5,7 @@ import type { GitWorkbenchScope } from '@/common/types/sourceControl/workbenchTy
 import type { GitMergeFinishRequest } from '@/common/types/sourceControl/mergeTypes';
 import { splitText } from '@/common/git/merge/mergeModel';
 import { Loading, RequestError } from '../RequestState';
+import { firstConflictMarker } from './editorState';
 import { useMergeEditor } from './useMergeEditor';
 import { MergePane } from './MergePane';
 import styles from './Merge.module.css';
@@ -25,7 +26,7 @@ export function ConflictEditor({
   const { t } = useTranslation();
   const state = useMergeEditor(scope, repoId, file, onFinished);
   const [reviewed, setReviewed] = useState(false);
-  const [change, setChange] = useState(0);
+  const [chosenChange, setChange] = useState<number>();
   const [pending, setPending] = useState<GitMergeFinishRequest['resolution'] | 'rebuild' | 'discard' | 'recover'>();
   const text = (key: string) => t(`conversation.gitWorkbench.merge.${key}`);
   useEffect(() => {
@@ -36,6 +37,13 @@ export function ConflictEditor({
   if (!state.document || !state.editor)
     return state.error ? <RequestError message={state.error} retry={state.retry} /> : null;
   const { document, editor } = state;
+  // Start at the first real conflict: changes Git could merge by itself come first in the list but need no decision.
+  const change =
+    chosenChange ??
+    Math.max(
+      0,
+      editor.model.changes.findIndex((item) => item.kind === 'conflict')
+    );
   const current = editor.model.changes[change];
   const range = editor.model.states[change];
   const canFinish = !document.binary && (reviewed || (!editor.manual && editor.model.unresolved.length === 0));
@@ -109,7 +117,7 @@ export function ConflictEditor({
               title={`${text('ours')}${document.stages.ours.deleted ? ` · ${text('deleted')}` : ''}`}
               value={splitText(document.stages.ours.text ?? '').lines.join('\n')}
               file={file}
-              line={!editor.manual ? current?.left[0] : undefined}
+              line={current?.left[0]}
             />
             <MergePane
               title={`${text('result')} · ${document.crlf ? 'CRLF' : 'LF'}`}
@@ -120,13 +128,14 @@ export function ConflictEditor({
                 setReviewed(false);
                 state.edit(value);
               }}
-              line={!editor.manual ? range?.start : undefined}
+              // Taken from the loaded file, not the edited text, so typing never moves the view.
+              line={!editor.manual ? range?.start : firstConflictMarker(document)}
             />
             <MergePane
               title={`${text('theirs')}${document.stages.theirs.deleted ? ` · ${text('deleted')}` : ''}`}
               value={splitText(document.stages.theirs.text ?? '').lines.join('\n')}
               file={file}
-              line={!editor.manual ? current?.right[0] : undefined}
+              line={current?.right[0]}
             />
           </div>
           <Checkbox checked={reviewed} disabled={state.busy} onChange={setReviewed}>

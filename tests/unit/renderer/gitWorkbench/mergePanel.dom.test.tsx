@@ -26,8 +26,18 @@ vi.mock('@/common/adapter/ipcBridge', () => ({
 vi.mock('@/renderer/pages/conversation/SourceControl/scmStore', () => ({ refreshRepo: api.refreshRepo }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 vi.mock('@/renderer/pages/conversation/SourceControl/Workbench/Merge/MergePane', () => ({
-  MergePane: ({ title, value, onChange }: { title: string; value: string; onChange?: (value: string) => void }) => (
-    <textarea aria-label={title} value={value} onChange={(event) => onChange?.(event.target.value)} />
+  MergePane: ({
+    title,
+    value,
+    line,
+    onChange,
+  }: {
+    title: string;
+    value: string;
+    line?: number;
+    onChange?: (value: string) => void;
+  }) => (
+    <textarea aria-label={title} data-line={line} value={value} onChange={(event) => onChange?.(event.target.value)} />
   ),
 }));
 
@@ -234,6 +244,62 @@ describe('conflict editor', () => {
     expect(button('acceptOursChange')).toBeDisabled();
     expect(button('finish')).toBeEnabled();
     expect(screen.getByRole('textbox', { name: /merge.result/ })).toHaveValue('theirs\n');
+  });
+
+  it('opens a file with Git conflict markers at the first one', async () => {
+    const result = await opened({ result: 'one\ntwo\n<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> feature\n' });
+
+    expect(result).toHaveAttribute('data-line', '2');
+  });
+
+  it('lines up both sides on the first real conflict, past changes Git merged by itself', async () => {
+    await opened({
+      stages: {
+        base: { ...stage, text: 'a\nb\nc\nd\n' },
+        ours: { ...stage, text: 'A\nb\nours\nd\n' },
+        theirs: { ...stage, text: 'a\nb\ntheirs\nd\n' },
+      },
+    });
+
+    expect(screen.getByRole('textbox', { name: /merge.ours/ })).toHaveAttribute('data-line', '2');
+    expect(screen.getByRole('textbox', { name: /merge.theirs/ })).toHaveAttribute('data-line', '2');
+  });
+
+  it('keeps the chosen change when the user picks another one', async () => {
+    await opened({
+      stages: {
+        base: { ...stage, text: 'a\nb\nc\nd\n' },
+        ours: { ...stage, text: 'A\nb\nours\nd\n' },
+        theirs: { ...stage, text: 'a\nb\ntheirs\nd\n' },
+      },
+    });
+    rebuild();
+
+    fireEvent.click(screen.getByLabelText(label('change')).querySelector('.arco-select-view') as HTMLElement);
+    fireEvent.click(await screen.findByRole('option', { name: /inserted|modified/ }));
+
+    expect(screen.getByRole('textbox', { name: /merge.ours/ })).toHaveAttribute('data-line', '0');
+  });
+
+  it('leaves the view alone while the user edits above the conflict', async () => {
+    const result = await opened({ result: 'one\n<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> feature\n' });
+
+    fireEvent.change(result, { target: { value: 'new line\none\n<<<<<<< HEAD\nours\n' } });
+
+    expect(result).toHaveAttribute('data-line', '1');
+  });
+
+  it('has nowhere to jump in a file with no markers', async () => {
+    const result = await opened({ result: 'clean\n' });
+
+    expect(result).not.toHaveAttribute('data-line');
+  });
+
+  it('follows the selected change once the result is tracked', async () => {
+    const result = await opened({ result: '<<<<<<< HEAD\n' });
+    rebuild();
+
+    expect(result).toHaveAttribute('data-line', '0');
   });
 
   it('asks for a fresh review once the accepted result is edited by hand', async () => {

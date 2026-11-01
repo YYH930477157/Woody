@@ -374,7 +374,16 @@ test.describe('Everyday multi-root Git workflows', () => {
           (await httpGet<ProjectDetailDto>(page, `/api/projects/${workspace.project_id}`)).explorer.entries.length
       )
       .toBe(3);
-    await modal.getByRole('button', { name: /^(Discard changes|放弃更改)$/ }).click();
+    const discard = modal.first().getByRole('button', { name: /^(Discard changes|放弃更改)$/ });
+    const confirmation = page.locator('.arco-modal:visible').filter({ hasText: /cannot be undone|无法撤销/ });
+    await discard.click();
+    await confirmation.getByRole('button', { name: /^(Cancel|取消)$/ }).click();
+    await expect(confirmation).toHaveCount(0);
+    expect(
+      (await httpGet<ProjectDetailDto>(page, `/api/projects/${workspace.project_id}`)).explorer.entries
+    ).toHaveLength(3);
+    await discard.click();
+    await confirmation.getByRole('button', { name: /^(Confirm|确定)$/ }).click();
     await expect
       .poll(
         async () =>

@@ -54,6 +54,12 @@ export function editResult(state: MergeEditorState, text: string): MergeEditorSt
   return { model, manual: true };
 }
 
+/** Where Git left its first conflict in the working file, for a result that has no tracked changes to jump to. */
+export function firstConflictMarker(document: GitMergeDocument): number | undefined {
+  const index = splitText(document.result ?? '').lines.findIndex((line) => line.startsWith('<<<<<<< '));
+  return index < 0 ? undefined : index;
+}
+
 export const resultText = (state: MergeEditorState, crlf: boolean) => joinText(state.model.lines, crlf);
 export const progressOf = (state: MergeEditorState): GitMergeProgress | undefined =>
   state.manual
