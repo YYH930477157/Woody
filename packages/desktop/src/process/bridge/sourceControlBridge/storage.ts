@@ -25,6 +25,8 @@ export function initGitStorageBridge(runtimePromise: Promise<GitBridgeRuntime> =
   const lifetimePromise = servicePromise.then((service) =>
     createRecorderLifecycle({ resolveRoot, start: service.historyStart, stop: service.historyStop })
   );
+  // With no usable Git this rejects at startup, before any window asks. Each caller still sees the failure.
+  lifetimePromise.catch((): void => undefined);
   gitStorage.shelfList.provider(async ({ scope }) => (await servicePromise).shelfList(scope));
   gitStorage.shelfRead.provider(async ({ scope, id }) => (await servicePromise).shelfRead(scope, id));
   gitStorage.shelfCreate.provider(async ({ scope, request }) => (await servicePromise).shelfCreate(scope, request));
