@@ -17,7 +17,11 @@ import type { AcpSlashCommandApiItem } from '@/common/chat/slash/types';
 import { bridge } from '@/common/platform/bridge';
 import type * as GitStorage from '@/common/types/sourceControl/storageTypes';
 import { replyProvider } from '@/common/platform/replyProvider';
-import type { GitOperationOutcome, GitOperationProgress, GitOperationRequest } from '@/common/types/sourceControl/operationTypes';
+import type {
+  GitOperationOutcome,
+  GitOperationProgress,
+  GitOperationRequest,
+} from '@/common/types/sourceControl/operationTypes';
 import type {
   GitMergeDocument,
   GitMergeList,
