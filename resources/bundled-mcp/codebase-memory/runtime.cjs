@@ -1,6 +1,7 @@
 // Shared by Electron and the dependency-free, project-bound stdio adapter.
 'use strict';
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { execFile, spawn } = require('node:child_process');
@@ -145,6 +146,165 @@ function readThroughPowerShell(executable, files) {
       }
     );
   });
+}
+// ---------------------------------------------------------------------------
+// Failure diagnostics
+//
+// An index that dies on an offline machine has to explain itself: the user's next
+// step depends on whether the folder was unreadable, encrypted away from this
+// process, or the launcher never started. Everything here is best-effort and must
+// never throw — it runs on the failure path and is itself the last resort.
+// ---------------------------------------------------------------------------
+const DIAGNOSTICS_LIMIT = 32768;
+const DIAGNOSTICS_SAMPLES = 5;
+const DIAGNOSTICS_KEEP = 20;
+const DIAGNOSIS_ADVICE = {
+  'encrypted-for-app':
+    "The indexer read ciphertext while PowerShell 7 read plaintext from the same files: the folder encryption client only gives plaintext to whitelisted programs. Add Woody (Woody.exe and its bundled codebase-memory-mcp.exe) to that client's process whitelist, or run the index from a folder that is not encrypted.",
+  'encrypted-on-disk':
+    'Every process that was probed read ciphertext: the files are encrypted on disk and this process is not allowed to see plaintext. Whitelist Woody in the encryption client, or index an unencrypted copy of the project.',
+  'permission-denied':
+    'Part of the folder is not readable by this user account (access denied). Check NTFS permissions on the listed paths, then index again.',
+  'missing-binary':
+    'The bundled codebase-memory-mcp.exe is missing from resources/bundled-mcp/codebase-memory/bin. Reinstall Woody from a complete package.',
+  'launcher-missing':
+    'The launcher process could not be started (ENOENT). PowerShell 7 was not found and the direct fallback failed too.',
+  timeout:
+    'The indexer did not finish before the timeout. Large repositories need the "moderate" or "full" mode and more time; a locked file can also stall it.',
+  unknown:
+    'No known cause matched. Attach the full report; it contains the native output and the samples that were readable.',
+};
+
+/** Text vs. ciphertext: random binary decodes into U+FFFD and control characters. */
+function looksLikeText(buffer) {
+  if (!buffer || buffer.length === 0) return true;
+  const text = buffer.toString('utf8');
+  if (!text.length) return true;
+  const replacement = (text.match(/\uFFFD/g) || []).length;
+  const control = (text.match(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g) || []).length;
+  return replacement / text.length < 0.02 && control / text.length < 0.02;
+}
+/** `attrib` reports E for EFS-encrypted files; it exists on every Windows install. */
+function encryptionFlags(files) {
+  if (process.platform !== 'win32' || files.length === 0) return Promise.resolve([]);
+  const executable = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'attrib.exe');
+  return Promise.all(
+    files.map(
+      (file) =>
+        new Promise((resolve) => {
+          execFile(executable, [file], { windowsHide: true, timeout: 5000 }, (error, stdout) => {
+            if (error) return resolve(undefined);
+            const line = String(stdout).split(/\r?\n/).find(Boolean) || '';
+            const attributes = line.slice(0, Math.max(0, line.toLowerCase().lastIndexOf(file.toLowerCase())));
+            resolve(attributes.toUpperCase().includes('E'));
+          });
+        })
+    )
+  );
+}
+function powerShellVersion(executable) {
+  if (!executable) return Promise.resolve(undefined);
+  return new Promise((resolve) => {
+    execFile(
+      executable,
+      ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', '$PSVersionTable.PSVersion.ToString()'],
+      { timeout: 8000, windowsHide: true },
+      (error, stdout) => resolve(error ? undefined : String(stdout).trim())
+    );
+  });
+}
+/** Bounded walk: counts what the indexer would see and records what it cannot open. */
+function folderScan(root, limit = 5000) {
+  const stats = { directories: 0, files: 0, unreadable: [], truncated: false };
+  const pending = [root];
+  while (pending.length > 0) {
+    if (stats.directories + stats.files >= limit) {
+      stats.truncated = true;
+      break;
+    }
+    const directory = pending.shift();
+    let entries;
+    try {
+      entries = fs.readdirSync(directory, { withFileTypes: true });
+    } catch (error) {
+      if (stats.unreadable.length < 10) stats.unreadable.push({ path: directory, code: error.code || error.message });
+      continue;
+    }
+    stats.directories += 1;
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        if (!entry.name.startsWith('.') && !SAMPLE_SKIPPED.has(entry.name.toLowerCase()))
+          pending.push(path.join(directory, entry.name));
+      } else if (entry.isFile()) stats.files += 1;
+    }
+  }
+  return stats;
+}
+/**
+ * Compare what this process reads with what PowerShell 7 reads. A difference is the
+ * fingerprint of a folder encryption client that whitelists PowerShell but not us.
+ */
+async function readingProbe(root, powerShell, readShell) {
+  const files = sampleFiles(root).slice(0, DIAGNOSTICS_SAMPLES);
+  const probe = { files, direct: [], shell: [], shellError: undefined };
+  for (const file of files) {
+    try {
+      const buffer = readHead(file);
+      probe.direct.push({ file, ok: true, text: looksLikeText(buffer) });
+    } catch (error) {
+      probe.direct.push({ file, ok: false, text: true, error: error.code || error.message });
+    }
+  }
+  if (!powerShell || files.length === 0) return probe;
+  try {
+    const buffers = await (readShell || readThroughPowerShell)(powerShell, files);
+    buffers.forEach((buffer, index) => {
+      const comparison = probe.direct[index];
+      probe.shell.push({
+        file: files[index],
+        ok: true,
+        text: looksLikeText(buffer),
+        differs: Boolean(comparison?.ok) && !buffer.equals(readHead(files[index])),
+      });
+    });
+  } catch (error) {
+    probe.shellError = error.message;
+  }
+  return probe;
+}
+function classifyFailure({ binaryAvailable, error, probe, scan }) {
+  if (!binaryAvailable) return 'missing-binary';
+  if (error && error.code === 'ENOENT') return 'launcher-missing';
+  if (error && /timed out/i.test(error.message || '')) return 'timeout';
+  const cipherDirect = probe.direct.filter((item) => item.ok && !item.text).length;
+  const cipherShell = probe.shell.filter((item) => item.ok && !item.text).length;
+  if (cipherDirect > 0 && probe.shell.length > 0 && cipherShell === 0) return 'encrypted-for-app';
+  if (cipherDirect > 0) return 'encrypted-on-disk';
+  const denied = probe.direct.filter((item) => !item.ok && /EACCES|EPERM/i.test(String(item.error))).length;
+  if (denied > 0 || scan.unreadable.length > 0) return 'permission-denied';
+  return 'unknown';
+}
+function sampleLines(items, render) {
+  return items.length > 0 ? items.map(render).join('\n') : '  (none)';
+}
+/** One report file per failure, newest DIAGNOSTICS_KEEP kept. Returns its path. */
+function writeReport(project, text) {
+  const directory = path.join(project.cache, 'diagnostics');
+  fs.mkdirSync(directory, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:]/g, '-').replace(/\..+$/, '');
+  const filename = path.join(directory, `${stamp}-${process.pid}.log`);
+  fs.writeFileSync(filename, `${text}\n`, 'utf8');
+  try {
+    const reports = fs
+      .readdirSync(directory)
+      .filter((name) => name.endsWith('.log'))
+      .sort();
+    for (const name of reports.slice(0, Math.max(0, reports.length - DIAGNOSTICS_KEEP)))
+      fs.rmSync(path.join(directory, name), { force: true });
+  } catch {
+    /* Retention is cosmetic. */
+  }
+  return filename;
 }
 /** Names that look like calls: at least one of them is a symbol if the indexer saw this text. */
 function symbolNames(contents) {
@@ -438,8 +598,113 @@ function createRuntime(options) {
     return { repoPath: project.root, config, available: available(), phase: 'idle', log: '', ...saved };
   }
   function persist(project, value) {
-    const { phase, log, error, summary, reason, launcher } = value;
-    atomicJson(project.statusFile, { phase, log, error, summary, reason, launcher, updatedAt: Date.now() });
+    const { phase, log, error, summary, reason, launcher, diagnostics, diagnosticsPath, conclusion } = value;
+    atomicJson(project.statusFile, {
+      phase,
+      log,
+      error,
+      summary,
+      reason,
+      launcher,
+      diagnostics,
+      diagnosticsPath,
+      conclusion,
+      updatedAt: Date.now(),
+    });
+  }
+  /**
+   * Collect what a support round-trip needs. Never throws: a diagnostic failure must
+   * never replace the indexing failure it is describing.
+   */
+  async function diagnose(project, info) {
+    const { readThroughPowerShell: readShell } = options;
+    let binaryBytes;
+    try {
+      binaryBytes = fs.statSync(options.binaryPath).size;
+    } catch {
+      binaryBytes = undefined;
+    }
+    const version = await powerShellVersion(powerShell);
+    const scan = folderScan(project.root);
+    const probe = await readingProbe(project.root, powerShell, readShell);
+    const flags = await encryptionFlags(probe.files);
+    const conclusion = classifyFailure({
+      binaryAvailable: binaryBytes !== undefined,
+      error: info.error,
+      probe,
+      scan,
+    });
+    const text = [
+      'Woody codebase-memory diagnostics',
+      `generated: ${new Date().toISOString()}`,
+      `conclusion: ${conclusion}`,
+      `advice: ${DIAGNOSIS_ADVICE[conclusion]}`,
+      '',
+      '--- failure ---',
+      `phase: ${info.phase}`,
+      `duration_ms: ${info.durationMs}`,
+      `exit_code: ${info.exitCode === undefined ? '(none)' : info.exitCode}`,
+      `message: ${info.message || '(none)'}`,
+      '',
+      '--- environment ---',
+      `platform: ${process.platform} ${process.arch} ${typeof os.release === 'function' ? os.release() : ''}`.trim(),
+      `node: ${process.version}`,
+      `electron: ${process.versions.electron || '(not electron)'}`,
+      `launcher: ${info.launcher}`,
+      `power_shell: ${powerShell ? `${powerShell} (${version || 'version unknown'})` : 'not found'}`,
+      `binary: ${options.binaryPath} (${binaryBytes === undefined ? 'MISSING' : `${binaryBytes} bytes`})`,
+      `project: ${project.root}`,
+      `cache: ${project.cache}`,
+      `mode: ${info.mode}`,
+      '',
+      '--- folder ---',
+      `directories: ${scan.directories}${scan.truncated ? ' (walk capped)' : ''}`,
+      `files: ${scan.files}`,
+      `unreadable_entries: ${scan.unreadable.length}`,
+      sampleLines(scan.unreadable, (item) => `  ${item.code}: ${item.path}`),
+      '',
+      '--- encryption ---',
+      `sampled_files: ${probe.files.length}`,
+      `encrypted_attribute: ${flags.filter((flag) => flag === true).length} of ${flags.filter((flag) => flag !== undefined).length}`,
+      sampleLines(
+        probe.files.map((file, index) => ({ file, flag: flags[index] })),
+        (item) => `  ${item.flag ? 'E' : '-'} ${item.file}`
+      ),
+      '',
+      '--- reads (this process) ---',
+      sampleLines(
+        probe.direct,
+        (item) => `  ${item.ok ? (item.text ? 'text' : 'CIPHERTEXT') : `error ${item.error}`}: ${item.file}`
+      ),
+      '',
+      '--- reads (PowerShell 7) ---',
+      probe.shell.length > 0
+        ? sampleLines(
+            probe.shell,
+            (item) =>
+              `  ${item.text ? 'text' : 'CIPHERTEXT'}${item.differs ? ' (differs from direct)' : ''}: ${item.file}`
+          )
+        : probe.shellError
+          ? `  failed: ${probe.shellError}`
+          : '  (not probed)',
+      '',
+      '--- native stderr (tail) ---',
+      info.log || '(empty)',
+      '',
+      '--- native stdout (tail) ---',
+      info.stdoutTail || '(empty)',
+      '',
+    ]
+      .join('\n')
+      .slice(0, DIAGNOSTICS_LIMIT);
+    let reportPath;
+    try {
+      reportPath = writeReport(project, text);
+    } catch (error) {
+      reportPath = undefined;
+      return { text: `${text}\n(report could not be written: ${error.message})\n`, path: undefined, conclusion };
+    }
+    return { text, path: reportPath, conclusion };
   }
   function native(project, tool, args, onLog, owner) {
     if (disposed) throw new Error('Codebase memory service is disposed');
@@ -513,7 +778,12 @@ function createRuntime(options) {
         await termination;
         processes.delete(operation);
         if (failure) return reject(failure);
-        if (code !== 0) return reject(new Error(`Native command exited ${code}: ${stderr}`));
+        if (code !== 0) {
+          const exitError = new Error(`Native command exited ${code}: ${stderr}`);
+          exitError.exitCode = code;
+          exitError.stdoutTail = stdout.slice(-4096);
+          return reject(exitError);
+        }
         try {
           const result = JSON.parse(stdout.replace(/^\uFEFF/, '').trim());
           if (!result || typeof result !== 'object' || (!result.content && !result.structuredContent))
@@ -572,6 +842,7 @@ function createRuntime(options) {
   }
   function beginIndex(project, config) {
     const owner = acquireLock(project);
+    const startedAt = Date.now();
     const state = { phase: 'running', log: '', launcher: powerShell ? 'powershell' : 'direct' };
     let operation;
     try {
@@ -602,10 +873,37 @@ function createRuntime(options) {
           state.summary = JSON.stringify(result.structuredContent || result.content).slice(0, LOG_LIMIT);
           return result;
         },
-        (error) => {
+        async (error) => {
           state.phase = error.message === 'Index cancelled' ? 'cancelled' : 'failed';
-          state.error = error.message.slice(-LOG_LIMIT);
           state.reason = error.reason;
+          if (state.phase === 'failed') {
+            try {
+              const diagnosis = await diagnose(project, {
+                phase: state.phase,
+                message: error.message,
+                error,
+                exitCode: error.exitCode,
+                log: state.log,
+                stdoutTail: error.stdoutTail,
+                durationMs: Date.now() - startedAt,
+                launcher: state.launcher,
+                mode: config.mode,
+              });
+              state.diagnostics = diagnosis.text;
+              state.diagnosticsPath = diagnosis.path;
+              state.conclusion = diagnosis.conclusion;
+              console.error(
+                `[CodebaseMemory] index failed (${diagnosis.conclusion}) for ${project.root}; diagnostics: ${diagnosis.path || '(not written)'}`
+              );
+              // The agent (and any caller that only sees the message) gets the conclusion inline.
+              error.message = `${error.message}\n\n[codebase-memory diagnosis: ${diagnosis.conclusion}] ${DIAGNOSIS_ADVICE[diagnosis.conclusion]}${
+                diagnosis.path ? `\nreport: ${diagnosis.path}` : ''
+              }`;
+            } catch (diagnosisError) {
+              state.diagnostics = `Diagnostics could not be collected: ${diagnosisError.message}`;
+            }
+          }
+          state.error = error.message.slice(-LOG_LIMIT);
           throw error;
         }
       )
@@ -723,4 +1021,8 @@ module.exports = {
   identity,
   terminateOwnedProcess,
   TOOLS,
+  // Exposed for the failure-diagnostics tests; not part of the runtime API.
+  classifyFailure,
+  readingProbe,
+  looksLikeText,
 };

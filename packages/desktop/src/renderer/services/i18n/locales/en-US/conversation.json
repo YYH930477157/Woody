@@ -912,7 +912,19 @@
     "openLens": "Open visualization",
     "lensHint": "After indexing, view this project’s CBM Lens architecture graph in your browser.",
     "unreadable": "The indexer could not read this folder's code. Its files are encrypted, and it still received encrypted content when started through PowerShell 7, so the index contains no code.",
-    "noPowerShell": "PowerShell 7 was not found, so the indexer ran directly. If this folder's files are encrypted, the index will not contain their code."
+    "noPowerShell": "PowerShell 7 was not found, so the indexer ran directly. If this folder's files are encrypted, the index will not contain their code.",
+    "diagnostics": "Failure diagnostics",
+    "copyDiagnostics": "Copy diagnostics",
+    "copied": "Copied",
+    "causes": {
+      "encryptedForApp": "This folder's files are encrypted for Woody: the indexer read ciphertext, while PowerShell 7 read plaintext. Add Woody to the encryption client's program whitelist.",
+      "encryptedOnDisk": "Every probe read ciphertext, so the files are encrypted on disk and this app is not allowed to see plaintext. Whitelist Woody in the encryption client.",
+      "permissionDenied": "Part of this folder is not readable by the current Windows account (access denied).",
+      "missingBinary": "The bundled codebase-memory executable is missing from this installation.",
+      "launcherMissing": "PowerShell 7 was not found and the direct launch also failed.",
+      "timeout": "The indexer did not finish before the timeout — a large project or a locked file can stall it.",
+      "unknown": "The index failed for a reason Woody could not classify; the diagnostics report has the native output."
+    }
   },
   "managedWorkspace": {
     "manage": "Workspaces",

@@ -1,7 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Button, Collapse, Select, Spin, Switch } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
+import type { CodebaseMemoryDiagnosis } from '@/common/types/codebaseMemory/types';
 import { useCodebaseMemory } from './useCodebaseMemory';
+
+/** Localized one-line cause for the report the runtime just wrote. */
+const CAUSE_KEYS: Record<CodebaseMemoryDiagnosis, string> = {
+  'encrypted-for-app': 'conversation.codebaseMemory.causes.encryptedForApp',
+  'encrypted-on-disk': 'conversation.codebaseMemory.causes.encryptedOnDisk',
+  'permission-denied': 'conversation.codebaseMemory.causes.permissionDenied',
+  'missing-binary': 'conversation.codebaseMemory.causes.missingBinary',
+  'launcher-missing': 'conversation.codebaseMemory.causes.launcherMissing',
+  timeout: 'conversation.codebaseMemory.causes.timeout',
+  unknown: 'conversation.codebaseMemory.causes.unknown',
+};
 
 export type CodebaseMemoryPanelProps = { repoPaths: Record<string, string>; visible?: boolean; refreshToken?: number };
 
@@ -21,6 +33,32 @@ function FolderMemory({
     error || (status?.reason === 'unreadable' ? t('conversation.codebaseMemory.unreadable') : status?.error);
   const running = status?.phase === 'running';
   const locked = loading || Boolean(busy) || readFailed || !status;
+  const [copied, setCopied] = useState(false);
+  const copyDiagnostics = async () => {
+    if (!status) return;
+    const text = [status.diagnostics, status.diagnosticsPath ? `report: ${status.diagnosticsPath}` : '']
+      .filter(Boolean)
+      .join('\n\n');
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        // file:// renderers do not always expose the async clipboard API.
+        const area = document.createElement('textarea');
+        area.value = text;
+        area.style.position = 'fixed';
+        area.style.opacity = '0';
+        document.body.appendChild(area);
+        area.select();
+        document.execCommand('copy');
+        document.body.removeChild(area);
+      }
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // The report stays selectable in the panel when copying is blocked.
+    }
+  };
   const phaseKeys = {
     idle: 'conversation.codebaseMemory.phase.idle',
     running: 'conversation.codebaseMemory.phase.running',
@@ -91,6 +129,24 @@ function FolderMemory({
         <Alert type='warning' content={t('conversation.codebaseMemory.noPowerShell')} />
       )}
       {activeError && <Alert type='error' content={activeError} />}
+      {status?.conclusion && <Alert type='warning' content={t(CAUSE_KEYS[status.conclusion])} />}
+      {status?.diagnostics && (
+        <Collapse bordered={false} defaultActiveKey={[]}>
+          <Collapse.Item name='diagnostics' header={t('conversation.codebaseMemory.diagnostics')}>
+            <div className='flex flex-wrap items-center gap-8px mb-8px'>
+              <Button size='mini' onClick={() => void copyDiagnostics()}>
+                {copied ? t('conversation.codebaseMemory.copied') : t('conversation.codebaseMemory.copyDiagnostics')}
+              </Button>
+              {status.diagnosticsPath && (
+                <span className='text-12px text-t-secondary break-all'>{status.diagnosticsPath}</span>
+              )}
+            </div>
+            <pre className='m-0 p-8px bg-2 text-t-primary text-12px whitespace-pre-wrap break-words max-h-320px overflow-auto'>
+              {status.diagnostics}
+            </pre>
+          </Collapse.Item>
+        </Collapse>
+      )}
       {readFailed && <Button onClick={() => void state.reload()}>{t('conversation.codebaseMemory.reload')}</Button>}
       {status && !(activeError && status.phase === 'succeeded') && (
         <div role='status'>{t(phaseKeys[status.phase])}</div>
