@@ -49,6 +49,15 @@ async function finished(service: ReturnType<typeof runtime>) {
   }
   return result;
 }
+/** The failure phase lands first; the report follows once the probes finish. */
+async function diagnosed(service: ReturnType<typeof runtime>) {
+  let result = await finished(service);
+  for (let i = 0; i < 150 && result.phase === 'failed' && result.diagnostics === undefined; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    result = await service.get(repo);
+  }
+  return result;
+}
 describe('project runtime', () => {
   it('defaults disabled without creating project configuration', async () => {
     const result = await runtime().get(repo);
@@ -84,7 +93,49 @@ describe('project runtime', () => {
     await service.save(repo, config);
     fs.writeFileSync(path.join(repo, 'behavior'), behavior);
     await service.start(repo);
-    expect((await finished(service)).phase).toBe('failed');
+    const result = await diagnosed(service);
+    expect(result.phase).toBe('failed');
+    expect(result.error).toBeTruthy();
+    expect(result.diagnostics).toContain('Woody codebase-memory diagnostics');
+    expect(result.diagnostics).toContain('--- native stderr (tail) ---');
+    expect(result.conclusion).toBeTruthy();
+    expect(fs.existsSync(result.diagnosticsPath as string)).toBe(true);
+  });
+  it('explains ciphertext reads as an encryption whitelist problem', async () => {
+    const { classifyFailure, readingProbe } = require(runtimePath);
+    fs.writeFileSync(
+      path.join(repo, 'cipher.ts'),
+      Buffer.from(Array.from({ length: 4096 }, (_, index) => (index * 37) % 256))
+    );
+    // The encryption client hands plaintext to PowerShell 7 but ciphertext to this process.
+    const probe = await readingProbe(repo, 'pwsh.exe', async (_executable: string, files: string[]) =>
+      files.map(() => Buffer.from('export function checkoutTotal() { return 1 }\n'))
+    );
+    expect(probe.direct[0].text).toBe(false);
+    expect(probe.shell[0].text).toBe(true);
+    expect(probe.shell[0].differs).toBe(true);
+    const scan = { directories: 1, files: 1, unreadable: [], truncated: false };
+    expect(classifyFailure({ binaryAvailable: true, error: new Error('exit 3'), probe, scan })).toBe(
+      'encrypted-for-app'
+    );
+    expect(classifyFailure({ binaryAvailable: false, error: new Error('x'), probe, scan })).toBe('missing-binary');
+    expect(classifyFailure({ binaryAvailable: true, error: new Error('timed out'), probe, scan })).toBe('timeout');
+    expect(
+      classifyFailure({
+        binaryAvailable: true,
+        error: new Error('exit 3'),
+        probe: { direct: [{ ok: false, text: true, error: 'EACCES' }], shell: [] },
+        scan,
+      })
+    ).toBe('permission-denied');
+    expect(
+      classifyFailure({
+        binaryAvailable: true,
+        error: new Error('exit 3'),
+        probe: { direct: [{ ok: true, text: true }], shell: [] },
+        scan,
+      })
+    ).toBe('unknown');
   });
   it('times out hung native work', async () => {
     const service = runtime({ timeoutMs: 100 });
