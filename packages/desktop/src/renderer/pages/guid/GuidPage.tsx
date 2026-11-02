@@ -29,6 +29,7 @@ import { useGuidSend } from './hooks/useGuidSend';
 import { useTypewriterPlaceholder } from './hooks/useTypewriterPlaceholder';
 import { ensureBackendMcpCatalog } from '@/renderer/hooks/mcp/catalog';
 import { resolveGuidAssistantDefaults } from './utils/assistantDefaults';
+import { defaultSelectedMcpServerIds, toggleMcpServerId } from './utils/mcpSelection';
 import SpeechInputButton from '@/renderer/components/chat/SpeechInputButton';
 import { chatFileRefPath, uploadFileRef } from '@/common/types/chatFile';
 import { useOpenFileSelector } from '@/renderer/hooks/file/useOpenFileSelector';
@@ -87,6 +88,12 @@ const GuidPage: React.FC = () => {
   const [availableMcpServers, setAvailableMcpServers] = useState<IMcpServer[]>([]);
   const [guidSelectedMcpServerIds, setGuidSelectedMcpServerIds] = useState<string[] | undefined>(undefined);
 
+  // Woody: new conversations default to every enabled MCP server, so `undefined`
+  // (picker untouched) means "all enabled". The first manual toggle materialises
+  // the list, which then keeps the user's explicit choice.
+  const defaultMcpServerIds = useMemo(() => defaultSelectedMcpServerIds(availableMcpServers), [availableMcpServers]);
+  const effectiveSelectedMcpServerIds = guidSelectedMcpServerIds ?? defaultMcpServerIds;
+
   useEffect(() => {
     ipcBridge.fs.listAvailableSkills
       .invoke()
@@ -127,12 +134,12 @@ const GuidPage: React.FC = () => {
     }
   }, []);
 
-  const handleToggleMcpServer = useCallback((serverId: string) => {
-    setGuidSelectedMcpServerIds((prev) => {
-      const current = prev ?? [];
-      return current.includes(serverId) ? current.filter((id) => id !== serverId) : [...current, serverId];
-    });
-  }, []);
+  const handleToggleMcpServer = useCallback(
+    (serverId: string) => {
+      setGuidSelectedMcpServerIds((prev) => toggleMcpServerId(prev ?? defaultMcpServerIds, serverId));
+    },
+    [defaultMcpServerIds]
+  );
 
   // --- Hooks ---
   // Only aionrs uses this provider-based model picker now (Gemini runs as a
@@ -274,7 +281,7 @@ const GuidPage: React.FC = () => {
     assistantDefaultSkillIds: resolvedAssistantDefaults.skillIds,
     assistantDefaultDisabledBuiltinSkillIds: resolvedAssistantDefaults.disabledBuiltinSkillIds,
     availableMcpServers,
-    selectedMcpServerIds: guidSelectedMcpServerIds,
+    selectedMcpServerIds: effectiveSelectedMcpServerIds,
     assistantDefaultMcpIds: resolvedAssistantDefaults.mcpIds,
     isGoogleAuth: modelSelection.isGoogleAuth,
 
@@ -459,7 +466,10 @@ const GuidPage: React.FC = () => {
           agentSelection.setSelectedThoughtLevelValue(fallbackThoughtLevel, { persistPreference: false });
         }
       }
-      setGuidSelectedMcpServerIds(resolvedDefaults.mcpIds);
+      // Woody: the MCP picker deliberately starts at "every enabled server"
+      // instead of replaying the assistant's stored mcpIds, so switching
+      // assistants does not shrink the default toolset. Any explicit toggle the
+      // user made is kept as-is.
     };
 
     void applyAssistantDefaults().catch((error) => {
@@ -641,7 +651,7 @@ const GuidPage: React.FC = () => {
       enabledSkills={guidEnabledSkills ?? []}
       onToggleSkill={handleToggleSkill}
       mcpServers={availableMcpServers}
-      selectedMcpServerIds={guidSelectedMcpServerIds ?? []}
+      selectedMcpServerIds={effectiveSelectedMcpServerIds}
       onToggleMcpServer={handleToggleMcpServer}
       speechInputNode={
         <SpeechInputButton onLiveTranscript={handleLiveTranscript} onTranscript={handleSpeechTranscript} />
