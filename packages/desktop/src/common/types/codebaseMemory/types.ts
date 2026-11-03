@@ -20,6 +20,7 @@ export type CodebaseMemoryDiagnosis =
   | 'missing-binary'
   | 'launcher-missing'
   | 'timeout'
+  | 'worker-crash'
   | 'unknown';
 
 export type CodebaseMemoryStatus = {

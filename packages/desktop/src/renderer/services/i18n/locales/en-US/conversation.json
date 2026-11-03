@@ -923,6 +923,7 @@
       "missingBinary": "The bundled codebase-memory executable is missing from this installation.",
       "launcherMissing": "PowerShell 7 was not found and the direct launch also failed.",
       "timeout": "The indexer did not finish before the timeout — a large project or a locked file can stall it.",
+      "workerCrash": "The index worker crashed (0xC0000005). If the folder is encrypted for this app, the worker was parsing ciphertext — fix the whitelist first.",
       "unknown": "The index failed for a reason Woody could not classify; the diagnostics report has the native output."
     }
   },
