@@ -526,6 +526,7 @@ export type I18nKey =
   | 'conversation.codebaseMemory.causes.permissionDenied'
   | 'conversation.codebaseMemory.causes.timeout'
   | 'conversation.codebaseMemory.causes.unknown'
+  | 'conversation.codebaseMemory.causes.workerCrash'
   | 'conversation.codebaseMemory.copied'
   | 'conversation.codebaseMemory.copyDiagnostics'
   | 'conversation.codebaseMemory.desktopOnly'

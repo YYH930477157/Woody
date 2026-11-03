@@ -12,6 +12,7 @@ const CAUSE_KEYS: Record<CodebaseMemoryDiagnosis, string> = {
   'missing-binary': 'conversation.codebaseMemory.causes.missingBinary',
   'launcher-missing': 'conversation.codebaseMemory.causes.launcherMissing',
   timeout: 'conversation.codebaseMemory.causes.timeout',
+  'worker-crash': 'conversation.codebaseMemory.causes.workerCrash',
   unknown: 'conversation.codebaseMemory.causes.unknown',
 };
 

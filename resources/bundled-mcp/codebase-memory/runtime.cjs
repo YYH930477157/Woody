@@ -42,6 +42,8 @@ const SAMPLE_EXTENSIONS = new Set([
 ]);
 const SAMPLE_SKIPPED = new Set(['build', 'dist', 'node_modules', 'out', 'target', 'third_party', 'vendor']);
 const UNREADABLE_MESSAGE = 'The indexer received encrypted content, so the index contains no code from this folder';
+// Windows STATUS_ACCESS_VIOLATION surfaces as exit=-1073741819 through the daemon.
+const WORKER_CRASH = /index worker ended with crash|exit=-?1073741819/i;
 const POWERSHELL_FLAGS = ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand'];
 
 // Encrypted disks give plain content only to listed programs, and PowerShell 7 is the
@@ -171,6 +173,8 @@ const DIAGNOSIS_ADVICE = {
     'The launcher process could not be started (ENOENT). PowerShell 7 was not found and the direct fallback failed too.',
   timeout:
     'The indexer did not finish before the timeout. Large repositories need the "moderate" or "full" mode and more time; a locked file can also stall it.',
+  'worker-crash':
+    'The native index worker crashed (0xC0000005 access violation). If the folder is encrypted for this process, the worker was parsing ciphertext — fix the whitelist first (see encrypted-for-app). Otherwise attach the worker log tail from this report.',
   unknown:
     'No known cause matched. Attach the full report; it contains the native output and the samples that were readable.',
 };
@@ -272,17 +276,32 @@ async function readingProbe(root, powerShell, readShell) {
   }
   return probe;
 }
-function classifyFailure({ binaryAvailable, error, probe, scan }) {
+function classifyFailure({ binaryAvailable, error, probe, scan, output }) {
   if (!binaryAvailable) return 'missing-binary';
   if (error && error.code === 'ENOENT') return 'launcher-missing';
   if (error && /timed out/i.test(error.message || '')) return 'timeout';
   const cipherDirect = probe.direct.filter((item) => item.ok && !item.text).length;
   const cipherShell = probe.shell.filter((item) => item.ok && !item.text).length;
+  // Encryption outranks the crash: a worker chewing on ciphertext is the reason it died.
   if (cipherDirect > 0 && probe.shell.length > 0 && cipherShell === 0) return 'encrypted-for-app';
   if (cipherDirect > 0) return 'encrypted-on-disk';
+  if (WORKER_CRASH.test(String(output || ''))) return 'worker-crash';
   const denied = probe.direct.filter((item) => !item.ok && /EACCES|EPERM/i.test(String(item.error))).length;
   if (denied > 0 || scan.unreadable.length > 0) return 'permission-denied';
   return 'unknown';
+}
+/** The native daemon names the worker log it wants inspected; keep its tail in the report. */
+function workerLogPath(output) {
+  const match = /inspect log:\s*([^\r\n"]+)/i.exec(String(output || ''));
+  return match ? match[1].trim() : undefined;
+}
+function readTail(file, limit = 8192) {
+  try {
+    const data = fs.readFileSync(file);
+    return data.subarray(Math.max(0, data.length - limit)).toString('utf8');
+  } catch {
+    return undefined;
+  }
 }
 function sampleLines(items, render) {
   return items.length > 0 ? items.map(render).join('\n') : '  (none)';
@@ -628,11 +647,16 @@ function createRuntime(options) {
     const scan = folderScan(project.root);
     const probe = await readingProbe(project.root, powerShell, readShell);
     const flags = await encryptionFlags(probe.files);
+    const output = `${info.message || ''}\n${info.stdoutTail || ''}\n${info.log || ''}`;
+    const workerPath = workerLogPath(output);
+    const workerTail = workerPath ? readTail(workerPath) : undefined;
+    const daemonTail = readTail(path.join(project.cache, 'logs', 'cbm-daemon.log'));
     const conclusion = classifyFailure({
       binaryAvailable: binaryBytes !== undefined,
       error: info.error,
       probe,
       scan,
+      output,
     });
     const text = [
       'Woody codebase-memory diagnostics',
@@ -693,6 +717,12 @@ function createRuntime(options) {
       '',
       '--- native stdout (tail) ---',
       info.stdoutTail || '(empty)',
+      '',
+      '--- index worker log (tail) ---',
+      workerTail || `  (not found: ${workerPath || 'native output named no log'})`,
+      '',
+      '--- daemon log (tail) ---',
+      daemonTail || '  (not found)',
       '',
     ]
       .join('\n')
@@ -840,13 +870,77 @@ function createRuntime(options) {
     }
     if (total === 0) throw Object.assign(new Error(UNREADABLE_MESSAGE), { reason: 'unreadable' });
   }
-  function beginIndex(project, config) {
+  /**
+   * Ciphertext now, crash later: an indexer fed encrypted bytes produces nothing at best
+   * and takes its worker down at worst. Probe a few files before spending minutes on it.
+   */
+  async function encryptedForProcess(project) {
+    if (!powerShell) return undefined;
+    try {
+      const probe = await readingProbe(project.root, powerShell, options.readThroughPowerShell);
+      if (!probe.files.length) return undefined;
+      const cipher = probe.direct.filter((item) => item.ok && !item.text).length;
+      if (!cipher) return undefined;
+      const shellPlain = probe.shell.filter((item) => item.ok && item.text).length;
+      return probe.shell.length > 0 && shellPlain === probe.shell.length ? 'encrypted-for-app' : 'encrypted-on-disk';
+    } catch {
+      // A failed probe must never block indexing: it is a hint, not a gate.
+      return undefined;
+    }
+  }
+  async function recordFailure(project, state, error, startedAt, config) {
+    state.phase = 'failed';
+    state.reason = error.reason;
+    try {
+      const diagnosis = await diagnose(project, {
+        phase: state.phase,
+        message: error.message,
+        error,
+        exitCode: error.exitCode,
+        log: state.log,
+        stdoutTail: error.stdoutTail,
+        durationMs: Date.now() - startedAt,
+        launcher: state.launcher,
+        mode: config.mode,
+      });
+      state.diagnostics = diagnosis.text;
+      state.diagnosticsPath = diagnosis.path;
+      state.conclusion = diagnosis.conclusion;
+      console.error(
+        `[CodebaseMemory] index failed (${diagnosis.conclusion}) for ${project.root}; diagnostics: ${diagnosis.path || '(not written)'}`
+      );
+      // The agent (and any caller that only sees the message) gets the conclusion inline.
+      error.message = `${error.message}\n\n[codebase-memory diagnosis: ${diagnosis.conclusion}] ${DIAGNOSIS_ADVICE[diagnosis.conclusion]}${
+        diagnosis.path ? `\nreport: ${diagnosis.path}` : ''
+      }`;
+    } catch (diagnosisError) {
+      state.diagnostics = `Diagnostics could not be collected: ${diagnosisError.message}`;
+    }
+    state.error = error.message.slice(-LOG_LIMIT);
+  }
+  async function beginIndex(project, config) {
     const owner = acquireLock(project);
     const startedAt = Date.now();
     const state = { phase: 'running', log: '', launcher: powerShell ? 'powershell' : 'direct' };
-    let operation;
+    const fail = async (error) => {
+      await recordFailure(project, state, error, startedAt, config);
+      try {
+        persist(project, state);
+      } finally {
+        releaseLock(project, owner);
+      }
+    };
     try {
       persist(project, state);
+      const encrypted = await encryptedForProcess(project);
+      if (encrypted)
+        throw Object.assign(new Error(UNREADABLE_MESSAGE), { reason: 'unreadable', conclusion: encrypted });
+    } catch (error) {
+      await fail(error);
+      throw error;
+    }
+    let operation;
+    try {
       operation = native(
         project,
         'index_repository',
@@ -857,7 +951,7 @@ function createRuntime(options) {
         owner
       );
     } catch (error) {
-      releaseLock(project, owner);
+      await fail(error);
       throw error;
     }
     const job = { operation, state, promise: undefined, startupError: operation.startupError };
@@ -874,36 +968,12 @@ function createRuntime(options) {
           return result;
         },
         async (error) => {
-          state.phase = error.message === 'Index cancelled' ? 'cancelled' : 'failed';
-          state.reason = error.reason;
-          if (state.phase === 'failed') {
-            try {
-              const diagnosis = await diagnose(project, {
-                phase: state.phase,
-                message: error.message,
-                error,
-                exitCode: error.exitCode,
-                log: state.log,
-                stdoutTail: error.stdoutTail,
-                durationMs: Date.now() - startedAt,
-                launcher: state.launcher,
-                mode: config.mode,
-              });
-              state.diagnostics = diagnosis.text;
-              state.diagnosticsPath = diagnosis.path;
-              state.conclusion = diagnosis.conclusion;
-              console.error(
-                `[CodebaseMemory] index failed (${diagnosis.conclusion}) for ${project.root}; diagnostics: ${diagnosis.path || '(not written)'}`
-              );
-              // The agent (and any caller that only sees the message) gets the conclusion inline.
-              error.message = `${error.message}\n\n[codebase-memory diagnosis: ${diagnosis.conclusion}] ${DIAGNOSIS_ADVICE[diagnosis.conclusion]}${
-                diagnosis.path ? `\nreport: ${diagnosis.path}` : ''
-              }`;
-            } catch (diagnosisError) {
-              state.diagnostics = `Diagnostics could not be collected: ${diagnosisError.message}`;
-            }
+          if (error.message === 'Index cancelled') {
+            state.phase = 'cancelled';
+            state.error = error.message.slice(-LOG_LIMIT);
+          } else {
+            await recordFailure(project, state, error, startedAt, config);
           }
-          state.error = error.message.slice(-LOG_LIMIT);
           throw error;
         }
       )
@@ -948,7 +1018,7 @@ function createRuntime(options) {
       const config = readConfig(project.root);
       if (!config.enabled) throw new Error('Codebase memory is disabled for this project');
       if (!available()) throw new Error('Bundled codebase-memory executable is unavailable');
-      const job = beginIndex(project, config);
+      const job = await beginIndex(project, config);
       if (job.startupError) await job.promise;
       return api.get(repoPath);
     },
@@ -1002,7 +1072,7 @@ function createRuntime(options) {
       const config = readConfig(project.root);
       if (!config.enabled) throw new Error('Codebase memory is disabled for this project');
       const bound = boundArguments(project, tool, args, config);
-      if (tool === 'index_repository') return beginIndex(project, config).promise;
+      if (tool === 'index_repository') return (await beginIndex(project, config)).promise;
       return native(project, tool, bound).promise;
     },
     dispose() {

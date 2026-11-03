@@ -101,6 +101,28 @@ describe('project runtime', () => {
     expect(result.conclusion).toBeTruthy();
     expect(fs.existsSync(result.diagnosticsPath as string)).toBe(true);
   });
+  it('refuses to index before spawning when this process reads ciphertext', async () => {
+    const service = runtime({
+      powerShell: 'pwsh.exe',
+      // The encryption client hands plaintext to PowerShell 7 but ciphertext to the indexer.
+      readThroughPowerShell: async (_executable: string, files: string[]) =>
+        files.map(() => Buffer.from('export function checkoutTotal() { return 1 }\n')),
+    });
+    await service.save(repo, config);
+    fs.writeFileSync(
+      path.join(repo, 'cipher.ts'),
+      Buffer.from(Array.from({ length: 4096 }, (_, index) => (index * 37) % 256))
+    );
+    const started = Date.now();
+    await expect(service.start(repo)).rejects.toThrow(/encrypted content/);
+    // Rejected by the preflight, not after a multi-minute native run.
+    expect(Date.now() - started).toBeLessThan(5000);
+    const result = await diagnosed(service);
+    expect(result.phase).toBe('failed');
+    expect(result.conclusion).toBe('encrypted-for-app');
+    expect(result.diagnostics).toContain('conclusion: encrypted-for-app');
+    expect(result.diagnostics).toContain('CIPHERTEXT');
+  });
   it('explains ciphertext reads as an encryption whitelist problem', async () => {
     const { classifyFailure, readingProbe } = require(runtimePath);
     fs.writeFileSync(
