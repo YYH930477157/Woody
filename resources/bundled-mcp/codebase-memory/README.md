@@ -94,6 +94,18 @@ in the plain text, the index fails with reason `unreadable` instead of reporting
 success. Whether a program started by PowerShell also receives plain content depends
 on the encryption product. No decrypted copy of the source is ever written to disk.
 
+Before an index starts, a few source files are read the same two ways. When
+PowerShell reads text and this process reads different, unreadable bytes, the run
+is refused within a second (`precheckRefused`), instead of letting the indexer
+spend minutes on ciphertext and crash. Identical bytes never count as encryption,
+however they decode; GBK and UTF-16 sources are text. The probe reads with Woody or
+`node`, not with the indexer, so it cannot tell whether `codebase-memory-mcp.exe`
+itself is on the encryption whitelist. The panel's Index anyway skips it once; when
+that index proves the indexer read symbols only PowerShell could see, the status
+keeps `indexerReadsPlain` and later runs, including MCP calls, skip the probe until
+an index reads ciphertext again. A failed run is published only after its
+diagnostics report is written, so a status never shows `failed` without its reason.
+
 ## Provenance and redistribution
 
 - Upstream repository: `https://github.com/DeusData/codebase-memory-mcp`

@@ -914,7 +914,22 @@
     "openLens": "Görselleştirmeyi aç",
     "lensHint": "İndeksleme sonrasında bu projenin CBM Lens mimari grafiğini tarayıcınızda görüntüleyin.",
     "unreadable": "Dizinleyici bu klasörün kodunu okuyamadı. Dosyalar şifreli ve PowerShell 7 üzerinden başlatıldığında bile yalnızca şifreli içerik aldı, bu nedenle dizinde kod yok.",
-    "noPowerShell": "PowerShell 7 bulunamadı, bu nedenle dizinleyici doğrudan çalıştırıldı. Bu klasörün dosyaları şifreliyse dizinde kodları yer almaz."
+    "precheckRefused": "Bu klasördeki kod Woody için şifreli: PowerShell 7 düz metni okuyor, Woody ise şifreli içerik alıyor; bu yüzden dizinleme başlatılmadı. Kodu okuyan program dizinleyicidir (codebase-memory-mcp.exe; yolu aşağıdaki tanılama bilgilerinde). Şifreleme istemcisinin beyaz listesine eklendiğinde \"Yine de dizinle\" seçeneğini seçin.",
+    "indexAnyway": "Yine de dizinle",
+    "noPowerShell": "PowerShell 7 bulunamadı, bu nedenle dizinleyici doğrudan çalıştırıldı. Bu klasörün dosyaları şifreliyse dizinde kodları yer almaz.",
+    "diagnostics": "Hata tanılama bilgileri",
+    "copyDiagnostics": "Tanılama bilgilerini kopyala",
+    "copied": "Kopyalandı",
+    "causes": {
+      "encryptedForApp": "PowerShell 7 bu dosyaları düz metin olarak okurken Woody farklı ve okunamayan baytlar alıyor: şifreleme istemcisi yalnızca beyaz listesindeki programlar için şifre çözüyor. Dizinleyiciyi (codebase-memory-mcp.exe) bu listeye ekleyin.",
+      "encryptedOnDisk": "PowerShell 7 dahil tüm okumalar şifreli içerik döndürdü: dosyalar diskte şifreli. Dizinleyiciyi (codebase-memory-mcp.exe) şifreleme istemcisinin beyaz listesine ekleyin veya şifrelenmemiş bir klasörü dizinleyin.",
+      "permissionDenied": "Bu klasörün bir kısmı geçerli Windows hesabı tarafından okunamıyor (erişim reddedildi).",
+      "missingBinary": "Bu kurulumda yerleşik codebase-memory dizinleyicisi eksik. Woody'yi eksiksiz bir kurulum paketiyle yeniden yükleyin.",
+      "launcherMissing": "PowerShell 7 bulunamadı ve dizinleyiciyi doğrudan başlatmak da başarısız oldu.",
+      "timeout": "Dizinleme zaman aşımından önce bitmedi. Büyük bir proje veya kilitli bir dosya onu durdurabilir.",
+      "workerCrash": "Dizinleme çalışan süreci çöktü (0xC0000005, erişim ihlali). Bu klasör Woody için şifreliyse süreç şifreli içeriği ayrıştırıyordu; önce beyaz liste sorununu çözün.",
+      "unknown": "Dizinleme, Woody'nin sınıflandıramadığı bir nedenle başarısız oldu; tanılama raporunda yerel programın tam çıktısı var."
+    }
   },
   "managedWorkspace": {
     "manage": "Çalışma alanları",

@@ -42,6 +42,8 @@ const SAMPLE_EXTENSIONS = new Set([
 ]);
 const SAMPLE_SKIPPED = new Set(['build', 'dist', 'node_modules', 'out', 'target', 'third_party', 'vendor']);
 const UNREADABLE_MESSAGE = 'The indexer received encrypted content, so the index contains no code from this folder';
+const PRECHECK_MESSAGE =
+  'This folder is encrypted for Woody: PowerShell 7 reads plaintext but Woody reads ciphertext, so the index was not started. The indexer (codebase-memory-mcp.exe) has to be on the encryption whitelist; once it is, use Index anyway in the Architecture panel.';
 // Windows STATUS_ACCESS_VIOLATION surfaces as exit=-1073741819 through the daemon.
 const WORKER_CRASH = /index worker ended with crash|exit=-?1073741819/i;
 const POWERSHELL_FLAGS = ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand'];
@@ -160,11 +162,12 @@ function readThroughPowerShell(executable, files) {
 const DIAGNOSTICS_LIMIT = 32768;
 const DIAGNOSTICS_SAMPLES = 5;
 const DIAGNOSTICS_KEEP = 20;
+// The indexer is the program that reads the code, so it is the one a whitelist has to name.
 const DIAGNOSIS_ADVICE = {
   'encrypted-for-app':
-    "The indexer read ciphertext while PowerShell 7 read plaintext from the same files: the folder encryption client only gives plaintext to whitelisted programs. Add Woody (Woody.exe and its bundled codebase-memory-mcp.exe) to that client's process whitelist, or run the index from a folder that is not encrypted.",
+    "PowerShell 7 reads plaintext from these files while Woody reads different, unreadable bytes: the folder encryption client only decrypts for whitelisted programs. Ask for the bundled indexer (codebase-memory-mcp.exe, path under 'binary' in this report) to be added to that client's whitelist, then use 'Index anyway' once in the Architecture panel, or index a folder that is not encrypted.",
   'encrypted-on-disk':
-    'Every process that was probed read ciphertext: the files are encrypted on disk and this process is not allowed to see plaintext. Whitelist Woody in the encryption client, or index an unencrypted copy of the project.',
+    "Every read that was probed returned ciphertext, PowerShell 7 included: the files are encrypted on disk. Ask for the bundled indexer (codebase-memory-mcp.exe, path under 'binary' in this report) to be added to the encryption client's whitelist, or index a folder that is not encrypted.",
   'permission-denied':
     'Part of the folder is not readable by this user account (access denied). Check NTFS permissions on the listed paths, then index again.',
   'missing-binary':
@@ -179,14 +182,50 @@ const DIAGNOSIS_ADVICE = {
     'No known cause matched. Attach the full report; it contains the native output and the samples that were readable.',
 };
 
-/** Text vs. ciphertext: random binary decodes into U+FFFD and control characters. */
+// Chinese projects often keep GBK sources. A runtime without the full ICU data has no
+// GB18030 decoder; it then judges by UTF-8 alone.
+const LEGACY_DECODERS = ['gb18030'].flatMap((label) => {
+  try {
+    return [new TextDecoder(label)];
+  } catch {
+    return [];
+  }
+});
+const ratio = (text, pattern) => (text.length ? (text.match(pattern) || []).length / text.length : 0);
+const REPLACEMENT = /\uFFFD/g;
+const CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g;
+/**
+ * Text vs. ciphertext. Random bytes carry control characters in any ASCII-compatible
+ * encoding and no decoder makes sense of them; text decodes cleanly as UTF-8, as GBK,
+ * or as UTF-16 when it starts with a byte order mark.
+ */
 function looksLikeText(buffer) {
   if (!buffer || buffer.length === 0) return true;
+  if (
+    buffer.length >= 2 &&
+    ((buffer[0] === 0xff && buffer[1] === 0xfe) || (buffer[0] === 0xfe && buffer[1] === 0xff))
+  ) {
+    const body = Buffer.from(buffer.subarray(2, buffer.length - (buffer.length % 2)));
+    const text = (buffer[0] === 0xfe ? body.swap16() : body).toString('utf16le');
+    return ratio(text, CONTROL) < 0.02 && ratio(text, REPLACEMENT) < 0.02;
+  }
   const text = buffer.toString('utf8');
-  if (!text.length) return true;
-  const replacement = (text.match(/\uFFFD/g) || []).length;
-  const control = (text.match(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g) || []).length;
-  return replacement / text.length < 0.02 && control / text.length < 0.02;
+  if (ratio(text, CONTROL) >= 0.02) return false;
+  return (
+    ratio(text, REPLACEMENT) < 0.02 ||
+    LEGACY_DECODERS.some((decoder) => ratio(decoder.decode(buffer), REPLACEMENT) < 0.02)
+  );
+}
+/**
+ * The fingerprint of an encryption client that whitelists PowerShell 7 but not Woody:
+ * PowerShell reads text where this process reads different, unreadable bytes. Identical
+ * bytes are never evidence, whatever they look like.
+ */
+function encryptedForThisProcess(probe) {
+  return probe.shell.some((item, index) => {
+    const direct = probe.direct[index];
+    return item.ok && item.text && item.differs && Boolean(direct?.ok) && !direct.text;
+  });
 }
 /** `attrib` reports E for EFS-encrypted files; it exists on every Windows install. */
 function encryptionFlags(files) {
@@ -251,11 +290,14 @@ function folderScan(root, limit = 5000) {
 async function readingProbe(root, powerShell, readShell) {
   const files = sampleFiles(root).slice(0, DIAGNOSTICS_SAMPLES);
   const probe = { files, direct: [], shell: [], shellError: undefined };
+  const heads = [];
   for (const file of files) {
     try {
       const buffer = readHead(file);
+      heads.push(buffer);
       probe.direct.push({ file, ok: true, text: looksLikeText(buffer) });
     } catch (error) {
+      heads.push(undefined);
       probe.direct.push({ file, ok: false, text: true, error: error.code || error.message });
     }
   }
@@ -263,12 +305,11 @@ async function readingProbe(root, powerShell, readShell) {
   try {
     const buffers = await (readShell || readThroughPowerShell)(powerShell, files);
     buffers.forEach((buffer, index) => {
-      const comparison = probe.direct[index];
       probe.shell.push({
         file: files[index],
         ok: true,
         text: looksLikeText(buffer),
-        differs: Boolean(comparison?.ok) && !buffer.equals(readHead(files[index])),
+        differs: heads[index] !== undefined && !buffer.equals(heads[index]),
       });
     });
   } catch (error) {
@@ -276,15 +317,18 @@ async function readingProbe(root, powerShell, readShell) {
   }
   return probe;
 }
-function classifyFailure({ binaryAvailable, error, probe, scan, output }) {
+/**
+ * indexerReadsPlain: an earlier index proved the indexer is whitelisted, so what this
+ * process reads says nothing about why the indexer failed this time.
+ */
+function classifyFailure({ binaryAvailable, error, probe, scan, output, indexerReadsPlain = false }) {
   if (!binaryAvailable) return 'missing-binary';
   if (error && error.code === 'ENOENT') return 'launcher-missing';
   if (error && /timed out/i.test(error.message || '')) return 'timeout';
   const cipherDirect = probe.direct.filter((item) => item.ok && !item.text).length;
-  const cipherShell = probe.shell.filter((item) => item.ok && !item.text).length;
   // Encryption outranks the crash: a worker chewing on ciphertext is the reason it died.
-  if (cipherDirect > 0 && probe.shell.length > 0 && cipherShell === 0) return 'encrypted-for-app';
-  if (cipherDirect > 0) return 'encrypted-on-disk';
+  if (!indexerReadsPlain && encryptedForThisProcess(probe)) return 'encrypted-for-app';
+  if (!indexerReadsPlain && cipherDirect > 0) return 'encrypted-on-disk';
   if (WORKER_CRASH.test(String(output || ''))) return 'worker-crash';
   const denied = probe.direct.filter((item) => !item.ok && /EACCES|EPERM/i.test(String(item.error))).length;
   if (denied > 0 || scan.unreadable.length > 0) return 'permission-denied';
@@ -617,7 +661,19 @@ function createRuntime(options) {
     return { repoPath: project.root, config, available: available(), phase: 'idle', log: '', ...saved };
   }
   function persist(project, value) {
-    const { phase, log, error, summary, reason, launcher, diagnostics, diagnosticsPath, conclusion } = value;
+    const {
+      phase,
+      log,
+      error,
+      summary,
+      reason,
+      launcher,
+      diagnostics,
+      diagnosticsPath,
+      conclusion,
+      precheckRefused,
+      indexerReadsPlain,
+    } = value;
     atomicJson(project.statusFile, {
       phase,
       log,
@@ -628,6 +684,8 @@ function createRuntime(options) {
       diagnostics,
       diagnosticsPath,
       conclusion,
+      precheckRefused,
+      indexerReadsPlain,
       updatedAt: Date.now(),
     });
   }
@@ -653,6 +711,7 @@ function createRuntime(options) {
     const daemonTail = readTail(path.join(project.cache, 'logs', 'cbm-daemon.log'));
     const conclusion = classifyFailure({
       binaryAvailable: binaryBytes !== undefined,
+      indexerReadsPlain: info.indexerReadsPlain === true,
       error: info.error,
       probe,
       scan,
@@ -675,6 +734,7 @@ function createRuntime(options) {
       `node: ${process.version}`,
       `electron: ${process.versions.electron || '(not electron)'}`,
       `launcher: ${info.launcher}`,
+      `indexer_reads_plain: ${info.indexerReadsPlain ? 'proven by an earlier index' : 'not proven'}`,
       `power_shell: ${powerShell ? `${powerShell} (${version || 'version unknown'})` : 'not found'}`,
       `binary: ${options.binaryPath} (${binaryBytes === undefined ? 'MISSING' : `${binaryBytes} bytes`})`,
       `project: ${project.root}`,
@@ -842,20 +902,28 @@ function createRuntime(options) {
   /**
    * An indexer that only saw ciphertext still reports success, with nothing in the index.
    * Only a differing PowerShell view plus a graph without its symbols counts as proof.
+   * Resolves true when the graph holds symbols that only PowerShell could read here:
+   * proof that the indexer itself is allowed to see plaintext.
    */
   async function assertReadable(project) {
-    if (!powerShell) return;
+    if (!powerShell) return false;
     const files = sampleFiles(project.root);
-    if (!files.length) return;
+    if (!files.length) return false;
     let plain;
     try {
       plain = await (options.readThroughPowerShell || readThroughPowerShell)(powerShell, files);
     } catch {
-      return;
+      return false;
     }
-    if (plain.length !== files.length) return;
-    const names = symbolNames(plain.filter((content, index) => !content.equals(readHead(files[index]))));
-    if (!names.length) return;
+    if (plain.length !== files.length) return false;
+    let differing;
+    try {
+      differing = plain.filter((content, index) => !content.equals(readHead(files[index])));
+    } catch {
+      return false;
+    }
+    const names = symbolNames(differing);
+    if (!names.length) return false;
     let total;
     try {
       const result = await native(project, 'search_graph', {
@@ -866,34 +934,37 @@ function createRuntime(options) {
       }).promise;
       total = JSON.parse(result.content[0].text).total;
     } catch {
-      return;
+      return false;
     }
     if (total === 0) throw Object.assign(new Error(UNREADABLE_MESSAGE), { reason: 'unreadable' });
+    return typeof total === 'number' && total > 0;
   }
   /**
    * Ciphertext now, crash later: an indexer fed encrypted bytes produces nothing at best
    * and takes its worker down at worst. Probe a few files before spending minutes on it.
+   *
+   * The probe reads with this process (Woody.exe from the panel, node for MCP calls),
+   * not with the indexer, so it cannot see whether the indexer itself is whitelisted.
+   * Callers skip it once an index has proved that, or when the user asks to index anyway.
    */
   async function encryptedForProcess(project) {
-    if (!powerShell) return undefined;
+    if (!powerShell) return false;
     try {
-      const probe = await readingProbe(project.root, powerShell, options.readThroughPowerShell);
-      if (!probe.files.length) return undefined;
-      const cipher = probe.direct.filter((item) => item.ok && !item.text).length;
-      if (!cipher) return undefined;
-      const shellPlain = probe.shell.filter((item) => item.ok && item.text).length;
-      return probe.shell.length > 0 && shellPlain === probe.shell.length ? 'encrypted-for-app' : 'encrypted-on-disk';
+      return encryptedForThisProcess(await readingProbe(project.root, powerShell, options.readThroughPowerShell));
     } catch {
       // A failed probe must never block indexing: it is a hint, not a gate.
-      return undefined;
+      return false;
     }
   }
+  /**
+   * Classify and report a failure, then publish it in one step: a status poll must never
+   * see 'failed' without the reason, and the lock stays held until the caller persists.
+   */
   async function recordFailure(project, state, error, startedAt, config) {
-    state.phase = 'failed';
-    state.reason = error.reason;
+    let diagnosis;
     try {
-      const diagnosis = await diagnose(project, {
-        phase: state.phase,
+      diagnosis = await diagnose(project, {
+        phase: 'failed',
         message: error.message,
         error,
         exitCode: error.exitCode,
@@ -902,10 +973,9 @@ function createRuntime(options) {
         durationMs: Date.now() - startedAt,
         launcher: state.launcher,
         mode: config.mode,
+        // Only an index that saw ciphertext disproves the earlier proof.
+        indexerReadsPlain: state.indexerReadsPlain === true && error.reason !== 'unreadable',
       });
-      state.diagnostics = diagnosis.text;
-      state.diagnosticsPath = diagnosis.path;
-      state.conclusion = diagnosis.conclusion;
       console.error(
         `[CodebaseMemory] index failed (${diagnosis.conclusion}) for ${project.root}; diagnostics: ${diagnosis.path || '(not written)'}`
       );
@@ -914,14 +984,31 @@ function createRuntime(options) {
         diagnosis.path ? `\nreport: ${diagnosis.path}` : ''
       }`;
     } catch (diagnosisError) {
-      state.diagnostics = `Diagnostics could not be collected: ${diagnosisError.message}`;
+      diagnosis = { text: `Diagnostics could not be collected: ${diagnosisError.message}` };
     }
-    state.error = error.message.slice(-LOG_LIMIT);
+    Object.assign(state, {
+      reason: error.reason,
+      precheckRefused: error.precheck === true ? true : undefined,
+      diagnostics: diagnosis.text,
+      diagnosticsPath: diagnosis.path,
+      conclusion: diagnosis.conclusion,
+      error: error.message.slice(-LOG_LIMIT),
+    });
+    // The indexer itself read ciphertext: it is no longer (or never was) whitelisted here.
+    if (error.reason === 'unreadable') state.indexerReadsPlain = undefined;
+    state.phase = 'failed';
   }
-  async function beginIndex(project, config) {
+  async function beginIndex(project, config, { bypassPrecheck = false } = {}) {
     const owner = acquireLock(project);
     const startedAt = Date.now();
-    const state = { phase: 'running', log: '', launcher: powerShell ? 'powershell' : 'direct' };
+    const previous = readJson(project.statusFile) || {};
+    const state = {
+      phase: 'running',
+      log: '',
+      launcher: powerShell ? 'powershell' : 'direct',
+      // Proof from an earlier run that the indexer reads plaintext here outlives later runs.
+      indexerReadsPlain: previous.indexerReadsPlain === true ? true : undefined,
+    };
     const fail = async (error) => {
       await recordFailure(project, state, error, startedAt, config);
       try {
@@ -932,9 +1019,8 @@ function createRuntime(options) {
     };
     try {
       persist(project, state);
-      const encrypted = await encryptedForProcess(project);
-      if (encrypted)
-        throw Object.assign(new Error(UNREADABLE_MESSAGE), { reason: 'unreadable', conclusion: encrypted });
+      if (!bypassPrecheck && !state.indexerReadsPlain && (await encryptedForProcess(project)))
+        throw Object.assign(new Error(PRECHECK_MESSAGE), { reason: 'unreadable', precheck: true });
     } catch (error) {
       await fail(error);
       throw error;
@@ -958,7 +1044,7 @@ function createRuntime(options) {
     jobs.set(project.name, job);
     job.promise = operation.promise
       .then(async (result) => {
-        await assertReadable(project);
+        if (await assertReadable(project)) state.indexerReadsPlain = true;
         return result;
       })
       .then(
@@ -1013,12 +1099,20 @@ function createRuntime(options) {
       if (!next.enabled) await api.cancel(repoPath);
       return api.get(repoPath);
     },
-    async start(repoPath) {
+    /** bypassPrecheck: the user says the indexer is whitelisted although Woody reads ciphertext. */
+    async start(repoPath, startOptions = {}) {
       const project = projectFor(repoPath);
       const config = readConfig(project.root);
       if (!config.enabled) throw new Error('Codebase memory is disabled for this project');
       if (!available()) throw new Error('Bundled codebase-memory executable is unavailable');
-      const job = await beginIndex(project, config);
+      let job;
+      try {
+        job = await beginIndex(project, config, { bypassPrecheck: startOptions?.bypassPrecheck === true });
+      } catch (error) {
+        // A refusal is a recorded outcome the panel explains, like any failed run.
+        if (error?.precheck === true) return api.get(repoPath);
+        throw error;
+      }
       if (job.startupError) await job.promise;
       return api.get(repoPath);
     },
@@ -1095,4 +1189,5 @@ module.exports = {
   classifyFailure,
   readingProbe,
   looksLikeText,
+  encryptedForThisProcess,
 };

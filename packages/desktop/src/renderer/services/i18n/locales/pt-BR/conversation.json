@@ -918,7 +918,22 @@
     "openLens": "Abrir visualização",
     "lensHint": "Após a indexação, veja o grafo de arquitetura CBM Lens deste projeto no navegador.",
     "unreadable": "O indexador não conseguiu ler o código desta pasta. Os arquivos estão criptografados e, mesmo iniciado pelo PowerShell 7, ele recebeu apenas conteúdo criptografado, portanto o índice não contém código.",
-    "noPowerShell": "O PowerShell 7 não foi encontrado, então o indexador foi executado diretamente. Se os arquivos desta pasta estiverem criptografados, o índice não conterá o código deles."
+    "precheckRefused": "O código desta pasta está criptografado para o Woody: o PowerShell 7 lê o texto simples, mas o Woody recebe conteúdo criptografado, então a indexação não foi iniciada. Quem lê o código é o indexador, codebase-memory-mcp.exe (o caminho está no diagnóstico abaixo). Depois que ele estiver na lista de permissões do cliente de criptografia, escolha \"Indexar mesmo assim\".",
+    "indexAnyway": "Indexar mesmo assim",
+    "noPowerShell": "O PowerShell 7 não foi encontrado, então o indexador foi executado diretamente. Se os arquivos desta pasta estiverem criptografados, o índice não conterá o código deles.",
+    "diagnostics": "Diagnóstico da falha",
+    "copyDiagnostics": "Copiar diagnóstico",
+    "copied": "Copiado",
+    "causes": {
+      "encryptedForApp": "O PowerShell 7 lê estes arquivos como texto simples, mas o Woody recebe bytes diferentes e ilegíveis: o cliente de criptografia só descriptografa para programas da lista de permissões. Adicione o indexador, codebase-memory-mcp.exe, a essa lista.",
+      "encryptedOnDisk": "Todas as leituras retornaram conteúdo criptografado, inclusive a do PowerShell 7: os arquivos estão criptografados no disco. Adicione o indexador, codebase-memory-mcp.exe, à lista de permissões do cliente de criptografia ou indexe uma pasta sem criptografia.",
+      "permissionDenied": "Parte desta pasta não pode ser lida pela conta atual do Windows (acesso negado).",
+      "missingBinary": "O indexador codebase-memory incluído está ausente desta instalação. Reinstale o Woody com um pacote de instalação completo.",
+      "launcherMissing": "O PowerShell 7 não foi encontrado e a inicialização direta do indexador também falhou.",
+      "timeout": "A indexação não terminou antes do tempo limite. Um projeto grande ou um arquivo bloqueado pode travá-la.",
+      "workerCrash": "O processo de indexação travou (0xC0000005, violação de acesso). Se esta pasta está criptografada para o Woody, o processo estava analisando conteúdo criptografado: resolva primeiro a lista de permissões.",
+      "unknown": "A indexação falhou por um motivo que o Woody não conseguiu classificar; o relatório de diagnóstico contém a saída completa do programa nativo."
+    }
   },
   "managedWorkspace": {
     "manage": "Espaços de trabalho",

@@ -21,7 +21,7 @@ export type CodebaseMemorySession = {
 export type CodebaseMemoryService = {
   get(repoPath: string): Promise<CodebaseMemoryStatus>;
   save(repoPath: string, config: CodebaseMemoryConfig): Promise<CodebaseMemoryStatus>;
-  start(repoPath: string): Promise<CodebaseMemoryStatus>;
+  start(repoPath: string, options?: { bypassPrecheck?: boolean }): Promise<CodebaseMemoryStatus>;
   cancel(repoPath: string): Promise<CodebaseMemoryStatus>;
   session(repoPath: string): Promise<CodebaseMemorySession>;
   openLens(repoPath: string): Promise<CodebaseMemoryStatus>;

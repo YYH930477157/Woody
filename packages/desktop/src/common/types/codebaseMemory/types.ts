@@ -38,5 +38,9 @@ export type CodebaseMemoryStatus = {
   /** File the same report was written to, ready to attach to a bug report. */
   diagnosticsPath?: string;
   conclusion?: CodebaseMemoryDiagnosis;
+  /** The run was refused before the indexer started: Woody reads ciphertext where PowerShell 7 reads text. */
+  precheckRefused?: boolean;
+  /** An earlier index proved the indexer reads plaintext here, so the pre-check is skipped. */
+  indexerReadsPlain?: boolean;
   updatedAt?: number;
 };

@@ -32,7 +32,7 @@ function provider<T, P>(name: string) {
 export const codebaseMemory = {
   get: provider<CodebaseMemoryStatus, ProjectRequest>('codebase-memory.get'),
   save: provider<CodebaseMemoryStatus, ProjectRequest & { config: CodebaseMemoryConfig }>('codebase-memory.save'),
-  start: provider<CodebaseMemoryStatus, ProjectRequest>('codebase-memory.start'),
+  start: provider<CodebaseMemoryStatus, ProjectRequest & { bypassPrecheck?: boolean }>('codebase-memory.start'),
   cancel: provider<CodebaseMemoryStatus, ProjectRequest>('codebase-memory.cancel'),
   session: provider<CodebaseMemorySession, ProjectRequest>('codebase-memory.session'),
   openLens: provider<CodebaseMemoryStatus, ProjectRequest>('codebase-memory.open-lens'),

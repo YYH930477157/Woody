@@ -16,7 +16,9 @@ export function initCodebaseMemoryBridge(): void {
   });
   codebaseMemory.get.provider(({ repoPath }) => service.get(repoPath));
   codebaseMemory.save.provider(({ repoPath, config }) => service.save(repoPath, config));
-  codebaseMemory.start.provider(({ repoPath }) => service.start(repoPath));
+  codebaseMemory.start.provider(({ repoPath, bypassPrecheck }) =>
+    service.start(repoPath, { bypassPrecheck: bypassPrecheck === true })
+  );
   codebaseMemory.cancel.provider(({ repoPath }) => service.cancel(repoPath));
   codebaseMemory.session.provider(({ repoPath }) => service.session(repoPath));
   codebaseMemory.openLens.provider(({ repoPath }) => service.openLens(repoPath));

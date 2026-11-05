@@ -30,8 +30,14 @@ function FolderMemory({
   const { t } = useTranslation();
   const state = useCodebaseMemory(repoPath, visible, refreshToken);
   const { status, draft, dirty, loading, busy, error, readFailed, updateDraft, run } = state;
+  const refused = status?.phase === 'failed' && status.precheckRefused === true;
   const activeError =
-    error || (status?.reason === 'unreadable' ? t('conversation.codebaseMemory.unreadable') : status?.error);
+    error ||
+    (refused
+      ? t('conversation.codebaseMemory.precheckRefused')
+      : status?.reason === 'unreadable'
+        ? t('conversation.codebaseMemory.unreadable')
+        : status?.error);
   const running = status?.phase === 'running';
   const locked = loading || Boolean(busy) || readFailed || !status;
   const [copied, setCopied] = useState(false);
@@ -129,8 +135,26 @@ function FolderMemory({
       {status?.launcher === 'direct' && (
         <Alert type='warning' content={t('conversation.codebaseMemory.noPowerShell')} />
       )}
-      {activeError && <Alert type='error' content={activeError} />}
-      {status?.conclusion && <Alert type='warning' content={t(CAUSE_KEYS[status.conclusion])} />}
+      {activeError && (
+        <Alert
+          type='error'
+          content={activeError}
+          action={
+            refused && !error ? (
+              <Button
+                size='small'
+                disabled={locked || dirty || !status?.config.enabled || !status?.available}
+                loading={busy === 'startAnyway'}
+                onClick={() => void run('startAnyway')}
+              >
+                {t('conversation.codebaseMemory.indexAnyway')}
+              </Button>
+            ) : undefined
+          }
+        />
+      )}
+      {/* A refusal already names its cause above; the cause line would only repeat it. */}
+      {status?.conclusion && !refused && <Alert type='warning' content={t(CAUSE_KEYS[status.conclusion])} />}
       {status?.diagnostics && (
         <Collapse bordered={false} defaultActiveKey={[]}>
           <Collapse.Item name='diagnostics' header={t('conversation.codebaseMemory.diagnostics')}>
