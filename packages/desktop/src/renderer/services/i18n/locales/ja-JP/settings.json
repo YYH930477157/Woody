@@ -9,6 +9,7 @@
     "title": "Website accounts",
     "importChrome": "Import Chrome CSV",
     "automaticLogin": "Automatic login",
+    "agentRisk": "自動ログインは、保存したパスワードを内蔵ブラウザーのページに入力します。AI がこのブラウザーを操作しているときは、ページ上でスクリプトを実行して入力されたパスワードを読み取れるため、AI を誤誘導するページによってパスワードが漏洩するおそれがあります。このリスクを許容できるアカウントだけを保存し、不要なときは自動ログインをオフにしてください。",
     "search": "Search website or username",
     "accountCount": "Accounts: {{count}}",
     "importSummary": "Added {{added}}, updated {{updated}}, skipped {{skipped}}",

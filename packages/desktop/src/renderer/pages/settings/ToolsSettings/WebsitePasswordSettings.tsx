@@ -138,6 +138,8 @@ function DesktopWebsitePasswordSettings() {
           }
         />
       </div>
+      {/* Accepted risk: filled passwords sit in the page, where browser-controlling AI can run scripts. */}
+      <Alert type='warning' className='mb-12px' content={t('settings.websitePasswords.agentRisk')} />
       {errorKey && !editing && <Alert type='error' className='mb-12px' content={t(errorKey)} action={retryButton} />}
       {status && !status.available && !errorKey && (
         <Alert

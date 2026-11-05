@@ -9,6 +9,7 @@
     "title": "Website accounts",
     "importChrome": "Import Chrome CSV",
     "automaticLogin": "Automatic login",
+    "agentRisk": "Die automatische Anmeldung trägt gespeicherte Passwörter in Seiten des integrierten Browsers ein. Wenn die KI diesen Browser steuert, kann sie auf diesen Seiten Skripte ausführen und die eingetragenen Passwörter lesen. Eine Seite, die die KI in die Irre führt, könnte sie so offenlegen. Speichern Sie nur Konten, bei denen Sie dieses Risiko akzeptieren, und schalten Sie die automatische Anmeldung aus, wenn Sie sie nicht brauchen.",
     "search": "Search website or username",
     "accountCount": "Accounts: {{count}}",
     "importSummary": "Added {{added}}, updated {{updated}}, skipped {{skipped}}",

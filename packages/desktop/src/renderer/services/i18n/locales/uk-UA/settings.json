@@ -9,6 +9,7 @@
     "title": "Website accounts",
     "importChrome": "Import Chrome CSV",
     "automaticLogin": "Automatic login",
+    "agentRisk": "Автоматичний вхід підставляє збережені паролі на сторінки вбудованого браузера. Коли ШІ керує цим браузером, він може виконувати скрипти на цих сторінках і читати підставлені паролі, тому сторінка, що вводить ШІ в оману, може їх розкрити. Зберігайте лише ті облікові записи, для яких ви приймаєте цей ризик, і вимикайте автоматичний вхід, коли він не потрібен.",
     "search": "Search website or username",
     "accountCount": "Accounts: {{count}}",
     "importSummary": "Added {{added}}, updated {{updated}}, skipped {{skipped}}",

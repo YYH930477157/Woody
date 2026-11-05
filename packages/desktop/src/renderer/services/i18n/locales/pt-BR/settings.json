@@ -9,6 +9,7 @@
     "title": "Website accounts",
     "importChrome": "Import Chrome CSV",
     "automaticLogin": "Automatic login",
+    "agentRisk": "O login automático preenche as senhas salvas nas páginas do navegador integrado. Quando a IA controla esse navegador, ela pode executar scripts nessas páginas e ler as senhas preenchidas, então uma página que engane a IA pode expô-las. Salve apenas contas para as quais você aceita esse risco e desative o login automático quando não precisar dele.",
     "search": "Search website or username",
     "accountCount": "Accounts: {{count}}",
     "importSummary": "Added {{added}}, updated {{updated}}, skipped {{skipped}}",

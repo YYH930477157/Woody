@@ -9,6 +9,7 @@
     "title": "Website accounts",
     "importChrome": "Import Chrome CSV",
     "automaticLogin": "Automatic login",
+    "agentRisk": "ورود خودکار، گذرواژه‌های ذخیره‌شده را در صفحه‌های مرورگر داخلی وارد می‌کند. وقتی هوش مصنوعی این مرورگر را کنترل می‌کند، می‌تواند در این صفحه‌ها اسکریپت اجرا کند و گذرواژه‌های واردشده را بخواند؛ بنابراین صفحه‌ای که هوش مصنوعی را گمراه کند ممکن است آن‌ها را فاش کند. فقط حساب‌هایی را ذخیره کنید که این خطر را برایشان می‌پذیرید و هر وقت به ورود خودکار نیاز ندارید آن را خاموش کنید.",
     "search": "Search website or username",
     "accountCount": "Accounts: {{count}}",
     "importSummary": "Added {{added}}, updated {{updated}}, skipped {{skipped}}",

@@ -9,6 +9,7 @@
     "title": "Website accounts",
     "importChrome": "Import Chrome CSV",
     "automaticLogin": "Automatic login",
+    "agentRisk": "Automatic login fills saved passwords into pages in the built-in browser. When AI controls that browser, it can run scripts on those pages and read the filled passwords, so a page that misleads the AI could expose them. Only save accounts you accept this risk for, and turn automatic login off when you do not need it.",
     "search": "Search website or username",
     "accountCount": "Accounts: {{count}}",
     "importSummary": "Added {{added}}, updated {{updated}}, skipped {{skipped}}",

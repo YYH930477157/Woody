@@ -9,6 +9,7 @@
     "title": "Website accounts",
     "importChrome": "Import Chrome CSV",
     "automaticLogin": "Automatic login",
+    "agentRisk": "Otomatik giriş, kayıtlı parolaları yerleşik tarayıcıdaki sayfalara doldurur. Yapay zekâ bu tarayıcıyı kontrol ederken bu sayfalarda komut dosyası çalıştırıp doldurulan parolaları okuyabilir; bu nedenle yapay zekâyı yanıltan bir sayfa parolaların açığa çıkmasına yol açabilir. Yalnızca bu riski kabul ettiğiniz hesapları kaydedin ve ihtiyacınız olmadığında otomatik girişi kapatın.",
     "search": "Search website or username",
     "accountCount": "Accounts: {{count}}",
     "importSummary": "Added {{added}}, updated {{updated}}, skipped {{skipped}}",
