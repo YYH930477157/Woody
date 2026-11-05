@@ -912,7 +912,22 @@
     "openLens": "Ouvrir la visualisation",
     "lensHint": "Après l’indexation, consultez le graphe d’architecture CBM Lens de ce projet dans votre navigateur.",
     "unreadable": "L'indexeur n'a pas pu lire le code de ce dossier. Les fichiers sont chiffrés et, même lancé via PowerShell 7, il n'a reçu que du contenu chiffré : l'index ne contient donc aucun code.",
-    "noPowerShell": "PowerShell 7 est introuvable : l'indexeur a été lancé directement. Si les fichiers de ce dossier sont chiffrés, l'index ne contiendra pas leur code."
+    "precheckRefused": "Le code de ce dossier est chiffré pour Woody : PowerShell 7 lit le texte en clair, mais Woody reçoit du contenu chiffré ; l'indexation n'a donc pas démarré. C'est l'indexeur codebase-memory-mcp.exe qui lit le code (son chemin figure dans le diagnostic ci-dessous). Une fois qu'il est dans la liste blanche du client de chiffrement, choisissez « Indexer quand même ».",
+    "indexAnyway": "Indexer quand même",
+    "noPowerShell": "PowerShell 7 est introuvable : l'indexeur a été lancé directement. Si les fichiers de ce dossier sont chiffrés, l'index ne contiendra pas leur code.",
+    "diagnostics": "Diagnostic de l'échec",
+    "copyDiagnostics": "Copier le diagnostic",
+    "copied": "Copié",
+    "causes": {
+      "encryptedForApp": "PowerShell 7 lit ces fichiers en clair, tandis que Woody reçoit des octets différents et illisibles : le client de chiffrement ne déchiffre que pour les programmes de sa liste blanche. Ajoutez l'indexeur codebase-memory-mcp.exe à cette liste.",
+      "encryptedOnDisk": "Toutes les lectures ont renvoyé du contenu chiffré, y compris via PowerShell 7 : les fichiers sont chiffrés sur le disque. Ajoutez l'indexeur codebase-memory-mcp.exe à la liste blanche du client de chiffrement, ou indexez un dossier non chiffré.",
+      "permissionDenied": "Une partie de ce dossier n'est pas lisible par le compte Windows actuel (accès refusé).",
+      "missingBinary": "L'indexeur codebase-memory intégré est absent de cette installation. Réinstallez Woody à partir d'un paquet d'installation complet.",
+      "launcherMissing": "PowerShell 7 est introuvable et le lancement direct de l'indexeur a également échoué.",
+      "timeout": "L'indexation ne s'est pas terminée avant le délai imparti. Un projet volumineux ou un fichier verrouillé peut la bloquer.",
+      "workerCrash": "Le processus d'indexation a planté (0xC0000005, violation d'accès). Si ce dossier est chiffré pour Woody, le processus analysait du contenu chiffré : réglez d'abord la liste blanche.",
+      "unknown": "L'indexation a échoué pour une raison que Woody n'a pas pu identifier ; le rapport de diagnostic contient la sortie complète du programme natif."
+    }
   },
   "managedWorkspace": {
     "manage": "Espaces de travail",

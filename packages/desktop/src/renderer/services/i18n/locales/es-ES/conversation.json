@@ -913,7 +913,22 @@
     "openLens": "Abrir visualización",
     "lensHint": "Tras la indexación, consulta el grafo de arquitectura CBM Lens de este proyecto en el navegador.",
     "unreadable": "El indexador no pudo leer el código de esta carpeta. Los archivos están cifrados y, aun iniciándolo con PowerShell 7, solo recibió contenido cifrado, por lo que el índice no contiene código.",
-    "noPowerShell": "No se encontró PowerShell 7, así que el indexador se ejecutó directamente. Si los archivos de esta carpeta están cifrados, el índice no contendrá su código."
+    "precheckRefused": "El código de esta carpeta está cifrado para Woody: PowerShell 7 lee el texto sin cifrar, pero Woody recibe contenido cifrado, así que no se inició la indexación. Quien lee el código es el indexador, codebase-memory-mcp.exe (su ruta está en el diagnóstico de abajo). Cuando esté en la lista blanca del cliente de cifrado, elige «Indexar de todos modos».",
+    "indexAnyway": "Indexar de todos modos",
+    "noPowerShell": "No se encontró PowerShell 7, así que el indexador se ejecutó directamente. Si los archivos de esta carpeta están cifrados, el índice no contendrá su código.",
+    "diagnostics": "Diagnóstico del error",
+    "copyDiagnostics": "Copiar diagnóstico",
+    "copied": "Copiado",
+    "causes": {
+      "encryptedForApp": "PowerShell 7 lee estos archivos como texto sin cifrar, pero Woody recibe bytes distintos e ilegibles: el cliente de cifrado solo descifra para los programas de su lista blanca. Añade el indexador, codebase-memory-mcp.exe, a esa lista.",
+      "encryptedOnDisk": "Todas las lecturas devolvieron contenido cifrado, también la de PowerShell 7: los archivos están cifrados en el disco. Añade el indexador, codebase-memory-mcp.exe, a la lista blanca del cliente de cifrado o indexa una carpeta sin cifrar.",
+      "permissionDenied": "La cuenta de Windows actual no puede leer parte de esta carpeta (acceso denegado).",
+      "missingBinary": "Falta el indexador codebase-memory incluido en esta instalación. Reinstala Woody con un paquete de instalación completo.",
+      "launcherMissing": "No se encontró PowerShell 7 y tampoco se pudo iniciar el indexador directamente.",
+      "timeout": "La indexación no terminó antes del tiempo límite. Un proyecto grande o un archivo bloqueado pueden detenerla.",
+      "workerCrash": "El proceso de indexación se bloqueó (0xC0000005, infracción de acceso). Si esta carpeta está cifrada para Woody, el proceso estaba analizando contenido cifrado: resuelve primero la lista blanca.",
+      "unknown": "La indexación falló por un motivo que Woody no pudo clasificar; el informe de diagnóstico contiene la salida completa del programa nativo."
+    }
   },
   "managedWorkspace": {
     "manage": "Espacios de trabajo",

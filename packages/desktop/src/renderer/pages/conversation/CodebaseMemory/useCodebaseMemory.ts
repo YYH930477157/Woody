@@ -11,7 +11,7 @@ export function useCodebaseMemory(repoPath: string, visible: boolean, refreshTok
   const [draft, setDraft] = useState(initialConfig);
   const [dirty, setDirty] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState<'save' | 'start' | 'cancel' | 'openLens'>();
+  const [busy, setBusy] = useState<'save' | 'start' | 'startAnyway' | 'cancel' | 'openLens'>();
   const [error, setError] = useState<string>();
   const [readError, setReadError] = useState<string>();
   const readFailed = readError !== undefined;
@@ -64,11 +64,13 @@ export function useCodebaseMemory(repoPath: string, visible: boolean, refreshTok
     setDirty(true);
     setDraft(config);
   };
-  const run = async (action: 'save' | 'start' | 'cancel' | 'openLens') => {
+  /** startAnyway skips the encryption pre-check, for an indexer the user had whitelisted. */
+  const run = async (action: 'save' | 'start' | 'startAnyway' | 'cancel' | 'openLens') => {
     if (actionPending.current || !status) return;
     if (action !== 'cancel' && (readFailed || status.phase === 'running')) return;
-    if ((action === 'start' || action === 'openLens') && (dirty || !status.config.enabled || !status.available)) return;
+    if (action !== 'save' && action !== 'cancel' && (dirty || !status.config.enabled || !status.available)) return;
     if (action === 'openLens' && status.phase !== 'succeeded') return;
+    if (action === 'startAnyway' && !status.precheckRefused) return;
     actionPending.current = true;
     const request = ++revision.current;
     setBusy(action);
@@ -77,7 +79,9 @@ export function useCodebaseMemory(repoPath: string, visible: boolean, refreshTok
       const result =
         action === 'save'
           ? await ipcBridge.codebaseMemory.save.invoke({ repoPath, config: draft })
-          : await ipcBridge.codebaseMemory[action].invoke({ repoPath });
+          : action === 'startAnyway'
+            ? await ipcBridge.codebaseMemory.start.invoke({ repoPath, bypassPrecheck: true })
+            : await ipcBridge.codebaseMemory[action].invoke({ repoPath });
       if (!mounted.current || revision.current !== request) return;
       setStatus(result);
       if (action === 'save') {

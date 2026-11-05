@@ -114,14 +114,79 @@ describe('project runtime', () => {
       Buffer.from(Array.from({ length: 4096 }, (_, index) => (index * 37) % 256))
     );
     const started = Date.now();
-    await expect(service.start(repo)).rejects.toThrow(/encrypted content/);
+    // The panel gets a recorded, explained refusal rather than a raw exception.
+    const result = await service.start(repo);
     // Rejected by the preflight, not after a multi-minute native run.
     expect(Date.now() - started).toBeLessThan(5000);
-    const result = await diagnosed(service);
-    expect(result.phase).toBe('failed');
-    expect(result.conclusion).toBe('encrypted-for-app');
+    expect(result).toMatchObject({
+      phase: 'failed',
+      reason: 'unreadable',
+      precheckRefused: true,
+      conclusion: 'encrypted-for-app',
+    });
+    expect(result.error).toMatch(/encrypted for Woody/);
     expect(result.diagnostics).toContain('conclusion: encrypted-for-app');
     expect(result.diagnostics).toContain('CIPHERTEXT');
+    // An agent's index_repository call still fails loudly.
+    await expect(service.callTool(repo, 'index_repository', {})).rejects.toThrow(/encrypted for Woody/);
+  });
+  it('never takes identical bytes for encryption, whatever they look like', async () => {
+    const { encryptedForThisProcess, readingProbe } = require(runtimePath);
+    // Unreadable to this process, and PowerShell 7 reads exactly the same bytes.
+    fs.writeFileSync(
+      path.join(repo, 'cipher.ts'),
+      Buffer.from(Array.from({ length: 4096 }, (_, index) => (index * 37) % 256))
+    );
+    const probe = await readingProbe(repo, 'pwsh.exe', async (_executable: string, files: string[]) =>
+      files.map((file) => fs.readFileSync(file))
+    );
+    expect(probe.direct[0].text).toBe(false);
+    expect(probe.shell[0].differs).toBe(false);
+    expect(encryptedForThisProcess(probe)).toBe(false);
+  });
+  it('reads GBK and UTF-16 sources as text, and random bytes as ciphertext', () => {
+    const { looksLikeText } = require(runtimePath);
+    // "/* 读取配置文件并初始化设备 */" in GBK, between lines of C.
+    const comment = Buffer.from([
+      0x2f, 0x2a, 0x20, 0xb6, 0xc1, 0xc8, 0xa1, 0xc5, 0xe4, 0xd6, 0xc3, 0xce, 0xc4, 0xbc, 0xfe, 0xb2, 0xa2, 0xb3, 0xf5,
+      0xca, 0xbc, 0xbb, 0xaf, 0xc9, 0xe8, 0xb1, 0xb8, 0x20, 0x2a, 0x2f, 0x0d, 0x0a,
+    ]);
+    const code = Buffer.from('int init_device(const char *path)\r\n{\r\n    return open_config(path);\r\n}\r\n');
+    const gbk = Buffer.concat(Array.from({ length: 30 }, () => [comment, code]).flat());
+    expect(gbk.toString('utf8')).toContain('�');
+    expect(looksLikeText(gbk)).toBe(true);
+    const source = '// 资源脚本\r\nIDS_TITLE "设备配置"\r\n'.repeat(40);
+    expect(looksLikeText(Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(source, 'utf16le')]))).toBe(true);
+    expect(looksLikeText(Buffer.concat([Buffer.from([0xfe, 0xff]), Buffer.from(source, 'utf16le').swap16()]))).toBe(
+      true
+    );
+    let seed = 7;
+    const random = Buffer.from(
+      Array.from({ length: 8192 }, () => {
+        seed = (seed * 1103515245 + 12345) % 2147483648;
+        return seed >> 16;
+      }).map((value) => value % 256)
+    );
+    expect(looksLikeText(random)).toBe(false);
+  });
+  it('publishes a failed run together with its reason', async () => {
+    const service = runtime();
+    await service.save(repo, config);
+    fs.writeFileSync(path.join(repo, 'behavior'), 'exit');
+    await service.start(repo);
+    const seen: Array<{ phase: string; error?: string; diagnostics?: string }> = [];
+    for (let i = 0; i < 400; i++) {
+      const state = await service.get(repo);
+      seen.push(state);
+      if (state.phase !== 'running') break;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    const failed = seen.filter((state) => state.phase === 'failed');
+    expect(failed.length).toBeGreaterThan(0);
+    for (const state of failed) {
+      expect(state.error).toMatch(/exited 3/);
+      expect(state.diagnostics).toContain('Woody codebase-memory diagnostics');
+    }
   });
   it('explains ciphertext reads as an encryption whitelist problem', async () => {
     const { classifyFailure, readingProbe } = require(runtimePath);
@@ -612,6 +677,67 @@ describe.runIf(fs.existsSync(installedPowerShell))('native commands started thro
       fixtureWithGraph(3);
       expect((await index({ readThroughPowerShell: readThrough(plainText) })).phase).toBe('succeeded');
     }, 20000);
+
+    it('indexes a plain folder holding GBK sources without asking about encryption', async () => {
+      const comment = Buffer.from([
+        0x2f, 0x2a, 0x20, 0xb6, 0xc1, 0xc8, 0xa1, 0xc5, 0xe4, 0xd6, 0xc3, 0xce, 0xc4, 0xbc, 0xfe, 0x20, 0x2a, 0x2f,
+        0x0a,
+      ]);
+      const code = Buffer.from('int init_device(const char *path) { return open_config(path); }\n');
+      fs.writeFileSync(
+        path.join(repo, 'device.c'),
+        Buffer.concat(Array.from({ length: 30 }, () => [comment, code]).flat())
+      );
+      fixtureWithGraph(0);
+      const result = await index({});
+      expect(result).toMatchObject({ phase: 'succeeded', launcher: 'powershell' });
+      expect(result.precheckRefused).toBeUndefined();
+      expect(fs.existsSync(queries())).toBe(false);
+    }, 20000);
+
+    it('does not refuse files that PowerShell 7 reads exactly as Woody does', async () => {
+      fs.writeFileSync(
+        path.join(repo, 'app.cpp'),
+        Buffer.from(Array.from({ length: 4096 }, (_, index) => (index * 37) % 256))
+      );
+      fixtureWithGraph(0);
+      const identical = async (_executable: string, files: string[]) => files.map((file) => fs.readFileSync(file));
+      const result = await index({ readThroughPowerShell: identical });
+      expect(result.phase).toBe('succeeded');
+      expect(result.precheckRefused).toBeUndefined();
+    }, 20000);
+
+    it('indexes anyway on request, and remembers once the indexer proves it reads plaintext', async () => {
+      const cipher = Buffer.from(Array.from({ length: 4096 }, (_, index) => (index * 37) % 256));
+      fs.writeFileSync(path.join(repo, 'app.cpp'), cipher);
+      fixtureWithGraph(3);
+      const service = runtime({ powerShell: installedPowerShell, readThroughPowerShell: readThrough(plainText) });
+      await service.save(repo, config);
+      // Woody reads ciphertext, so the pre-check refuses: it cannot see the indexer's whitelist.
+      expect(await service.start(repo)).toMatchObject({ phase: 'failed', precheckRefused: true });
+      // The user had codebase-memory-mcp.exe whitelisted and indexes anyway.
+      await service.start(repo, { bypassPrecheck: true });
+      expect(await finished(service)).toMatchObject({ phase: 'succeeded', indexerReadsPlain: true });
+      expect((await service.get(repo)).precheckRefused).toBeUndefined();
+      // Later runs, including an agent's, no longer stop at the pre-check.
+      await service.start(repo);
+      expect(await finished(service)).toMatchObject({ phase: 'succeeded', indexerReadsPlain: true });
+      await expect(service.callTool(repo, 'index_repository', {})).resolves.toBeTruthy();
+      // Woody still reads ciphertext, yet another failure is not blamed on encryption.
+      fs.writeFileSync(path.join(root, 'fixture.cjs'), `console.error('worker died'); process.exit(3);`);
+      await service.start(repo);
+      const crashed = await finished(service);
+      expect(crashed).toMatchObject({ phase: 'failed', indexerReadsPlain: true });
+      expect(crashed.conclusion).not.toMatch(/^encrypted/);
+      expect(crashed.diagnostics).toContain('indexer_reads_plain: proven by an earlier index');
+      // The whitelist entry is gone: the index fails, and the pre-check guards the next run again.
+      fixtureWithGraph(0);
+      await service.start(repo);
+      const lost = await finished(service);
+      expect(lost).toMatchObject({ phase: 'failed', reason: 'unreadable' });
+      expect(lost.indexerReadsPlain).toBeUndefined();
+      expect(await service.start(repo)).toMatchObject({ phase: 'failed', precheckRefused: true });
+    }, 40000);
 
     it('reads samples through real PowerShell and asks nothing for an unencrypted folder', async () => {
       fs.mkdirSync(path.join(repo, '源码'));

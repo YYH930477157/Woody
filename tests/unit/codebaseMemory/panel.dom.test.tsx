@@ -231,6 +231,50 @@ describe('project architecture panel', () => {
     expect(screen.getByText(key('phase.failed'))).toBeInTheDocument();
     expect(screen.queryByText(key('noPowerShell'))).toBeNull();
   });
+  it('explains a refused run and indexes anyway only on request', async () => {
+    const refused = status('D:/one', {
+      config: { version: 1, enabled: true, mode: 'fast' },
+      phase: 'failed',
+      reason: 'unreadable',
+      launcher: 'powershell',
+      precheckRefused: true,
+      conclusion: 'encrypted-for-app',
+      error: 'This folder is encrypted for Woody',
+      diagnostics: 'Woody codebase-memory diagnostics',
+    });
+    api.get.mockResolvedValue(refused);
+    api.start.mockResolvedValue(refused);
+    render(<CodebaseMemoryPanel repoPaths={{ one: 'D:/one' }} />);
+    expect(await screen.findByText(key('precheckRefused'))).toBeInTheDocument();
+    expect(screen.queryByText('This folder is encrypted for Woody')).toBeNull();
+    // The refusal already names the cause; the cause line would only repeat it.
+    expect(screen.queryByText(key('causes.encryptedForApp'))).toBeNull();
+    const anyway = screen.getByRole('button', { name: key('indexAnyway') });
+    await waitFor(() => expect(anyway).not.toBeDisabled());
+    fireEvent.click(screen.getByRole('button', { name: key('start') }));
+    await waitFor(() => expect(api.start).toHaveBeenCalledExactlyOnceWith({ repoPath: 'D:/one' }));
+    api.start.mockClear();
+    await waitFor(() => expect(screen.getByRole('button', { name: key('indexAnyway') })).not.toBeDisabled());
+    fireEvent.click(screen.getByRole('button', { name: key('indexAnyway') }));
+    await waitFor(() =>
+      expect(api.start).toHaveBeenCalledExactlyOnceWith({ repoPath: 'D:/one', bypassPrecheck: true })
+    );
+  });
+  it('offers no way around the pre-check after other failures', async () => {
+    api.get.mockResolvedValue(
+      status('D:/one', {
+        config: { version: 1, enabled: true, mode: 'fast' },
+        phase: 'failed',
+        reason: 'unreadable',
+        conclusion: 'encrypted-for-app',
+        error: 'The indexer received encrypted content',
+      })
+    );
+    render(<CodebaseMemoryPanel repoPaths={{ one: 'D:/one' }} />);
+    expect(await screen.findByText(key('unreadable'))).toBeInTheDocument();
+    expect(screen.getByText(key('causes.encryptedForApp'))).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: key('indexAnyway') })).toBeNull();
+  });
   it('warns only when an index ran without PowerShell 7', async () => {
     api.get.mockResolvedValue(status('D:/one', { phase: 'succeeded', launcher: 'direct' }));
     render(<CodebaseMemoryPanel repoPaths={{ one: 'D:/one' }} />);

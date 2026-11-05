@@ -912,7 +912,22 @@
     "openLens": "開啟視覺化",
     "lensHint": "完成索引後，在瀏覽器中檢視目前專案的 CBM Lens 架構圖。",
     "unreadable": "索引程式讀不到這個資料夾的程式碼：檔案已加密，透過 PowerShell 7 啟動後讀到的仍是密文，因此索引中沒有程式碼內容。",
-    "noPowerShell": "找不到 PowerShell 7，本次直接執行了索引程式。如果這個資料夾的檔案已加密，索引中不會有程式碼內容。"
+    "precheckRefused": "這個資料夾的程式碼對 Woody 是加密的：PowerShell 7 讀到明文，Woody 讀到密文，因此沒有啟動索引。實際讀取程式碼的是索引程式 codebase-memory-mcp.exe（路徑見下方診斷資訊），將它加入加密軟體的白名單後，請點「仍然建立索引」。",
+    "indexAnyway": "仍然建立索引",
+    "noPowerShell": "找不到 PowerShell 7，本次直接執行了索引程式。如果這個資料夾的檔案已加密，索引中不會有程式碼內容。",
+    "diagnostics": "失敗診斷資訊",
+    "copyDiagnostics": "複製診斷資訊",
+    "copied": "已複製",
+    "causes": {
+      "encryptedForApp": "PowerShell 7 讀到的是明文，Woody 讀到的是不同且無法辨識的位元組：加密軟體只對白名單中的程式解密。請將索引程式 codebase-memory-mcp.exe 加入白名單。",
+      "encryptedOnDisk": "所有讀取都是密文，PowerShell 7 也一樣：檔案在磁碟上是加密的。請將索引程式 codebase-memory-mcp.exe 加入加密軟體的白名單，或改用未加密的資料夾。",
+      "permissionDenied": "這個資料夾有部分內容目前的 Windows 帳戶無法讀取（拒絕存取）。",
+      "missingBinary": "安裝套件缺少內建的 codebase-memory 索引程式，請用完整的安裝套件重新安裝。",
+      "launcherMissing": "找不到 PowerShell 7，直接啟動索引程式也失敗了。",
+      "timeout": "索引在逾時前未完成：專案太大或有檔案被鎖定都可能讓它卡住。",
+      "workerCrash": "索引工作處理程序當機了（0xC0000005 存取違規）。如果這個資料夾對 Woody 是密文，工作處理程序是在解析密文時當機的，請先處理加密白名單。",
+      "unknown": "索引失敗，但 Woody 無法判斷原因；診斷報告中有原生程式的完整輸出。"
+    }
   },
   "managedWorkspace": {
     "manage": "工作區管理",

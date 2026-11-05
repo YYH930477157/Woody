@@ -913,7 +913,22 @@
     "openLens": "Visualisierung öffnen",
     "lensHint": "Nach der Indexierung den CBM Lens Architekturgraphen dieses Projekts im Browser ansehen.",
     "unreadable": "Der Indexer konnte den Code dieses Ordners nicht lesen. Die Dateien sind verschlüsselt, und auch beim Start über PowerShell 7 erhielt er nur verschlüsselte Inhalte. Der Index enthält daher keinen Code.",
-    "noPowerShell": "PowerShell 7 wurde nicht gefunden, daher wurde der Indexer direkt ausgeführt. Sind die Dateien dieses Ordners verschlüsselt, enthält der Index ihren Code nicht."
+    "precheckRefused": "Der Code in diesem Ordner ist für Woody verschlüsselt: PowerShell 7 liest Klartext, Woody erhält verschlüsselte Inhalte. Deshalb wurde die Indexierung nicht gestartet. Den Code liest der Indexer codebase-memory-mcp.exe (Pfad in der Diagnose unten). Sobald er auf der Whitelist des Verschlüsselungsclients steht, wählen Sie „Trotzdem indexieren“.",
+    "indexAnyway": "Trotzdem indexieren",
+    "noPowerShell": "PowerShell 7 wurde nicht gefunden, daher wurde der Indexer direkt ausgeführt. Sind die Dateien dieses Ordners verschlüsselt, enthält der Index ihren Code nicht.",
+    "diagnostics": "Fehlerdiagnose",
+    "copyDiagnostics": "Diagnose kopieren",
+    "copied": "Kopiert",
+    "causes": {
+      "encryptedForApp": "PowerShell 7 liest diese Dateien im Klartext, Woody dagegen erhält andere, unlesbare Bytes: Der Verschlüsselungsclient entschlüsselt nur für Programme auf seiner Whitelist. Fügen Sie den Indexer codebase-memory-mcp.exe zu dieser Whitelist hinzu.",
+      "encryptedOnDisk": "Jeder Lesevorgang lieferte verschlüsselte Inhalte, auch über PowerShell 7: Die Dateien sind auf dem Datenträger verschlüsselt. Fügen Sie den Indexer codebase-memory-mcp.exe zur Whitelist des Verschlüsselungsclients hinzu oder indexieren Sie einen unverschlüsselten Ordner.",
+      "permissionDenied": "Ein Teil dieses Ordners ist für das aktuelle Windows-Konto nicht lesbar (Zugriff verweigert).",
+      "missingBinary": "In dieser Installation fehlt der mitgelieferte codebase-memory-Indexer. Installieren Sie Woody mit einem vollständigen Installationspaket neu.",
+      "launcherMissing": "PowerShell 7 wurde nicht gefunden, und auch der direkte Start des Indexers ist fehlgeschlagen.",
+      "timeout": "Die Indexierung wurde vor Ablauf der Zeitüberschreitung nicht fertig. Ein großes Projekt oder eine gesperrte Datei kann sie aufhalten.",
+      "workerCrash": "Der Index-Arbeitsprozess ist abgestürzt (0xC0000005, Zugriffsverletzung). Wenn dieser Ordner für Woody verschlüsselt ist, hat der Prozess verschlüsselte Inhalte verarbeitet. Klären Sie zuerst die Whitelist.",
+      "unknown": "Die Indexierung ist fehlgeschlagen, und Woody konnte die Ursache nicht zuordnen. Der Diagnosebericht enthält die vollständige Ausgabe des nativen Programms."
+    }
   },
   "managedWorkspace": {
     "manage": "Arbeitsbereiche",
