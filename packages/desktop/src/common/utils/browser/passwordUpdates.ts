@@ -10,8 +10,19 @@ export function installWebsitePasswordCapture(): void {
   host.__woodyPasswordCapture = true;
   const wrongFlow =
     /sign.?up|register|registration|reset|forgot|change.?password|create.?account|注册|註冊|重置|忘记|修改密码/i;
+  // Page scripts can set a password field and fire events, but they cannot produce trusted
+  // input. Only a value the user typed or pasted is offered as a new saved password.
+  const typed = new WeakMap<HTMLInputElement, string>();
+  document.addEventListener(
+    'input',
+    (event) => {
+      if (event.isTrusted && event.target instanceof HTMLInputElement && event.target.type === 'password')
+        typed.set(event.target, event.target.value);
+    },
+    true
+  );
   const capture = (event: Event): void => {
-    if (!/^https?:$/.test(location.protocol)) return;
+    if (!event.isTrusted || !/^https?:$/.test(location.protocol)) return;
     const button =
       event instanceof SubmitEvent
         ? event.submitter
@@ -61,6 +72,7 @@ export function installWebsitePasswordCapture(): void {
       return element.getBoundingClientRect().width > 0 && element.getBoundingClientRect().height > 0;
     };
     if (password.disabled || !password.value || password.value.length > 65536 || !visible(password)) return;
+    if (typed.get(password) !== password.value) return;
     if (
       fields.some((field) =>
         field.matches(

@@ -13,6 +13,7 @@
     "search": "Search website or username",
     "accountCount": "Accounts: {{count}}",
     "importSummary": "Added {{added}}, updated {{updated}}, skipped {{skipped}}",
+    "csvReminder": "The exported CSV still holds every password in plain text. Delete it now that the import is done.",
     "defaultAccount": "Default",
     "setDefault": "Set as default",
     "deleteConfirm": "Delete website account?",
