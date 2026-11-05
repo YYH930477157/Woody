@@ -64,6 +64,25 @@ describe('project runtime', () => {
     expect(result.config).toEqual({ version: 1, enabled: false, mode: 'fast' });
     expect(fs.existsSync(path.join(repo, '.woody'))).toBe(false);
   });
+  it('starts C and C++ projects in full mode, which indexes their macros', async () => {
+    const firmware = path.join(root, 'firmware');
+    fs.mkdirSync(path.join(firmware, 'drv'), { recursive: true });
+    fs.mkdirSync(path.join(firmware, 'node_modules', 'tool'), { recursive: true });
+    for (const name of ['main.c', 'drv/uart.c', 'drv/uart.h']) fs.writeFileSync(path.join(firmware, name), '');
+    // Vendored or generated scripts elsewhere do not outvote the C sources.
+    for (const name of ['a.js', 'b.js', 'c.js', 'd.js'])
+      fs.writeFileSync(path.join(firmware, 'node_modules', 'tool', name), '');
+    fs.writeFileSync(path.join(firmware, 'flash.py'), '');
+    const web = path.join(root, 'web');
+    fs.mkdirSync(path.join(web, 'src'), { recursive: true });
+    for (const name of ['src/app.ts', 'src/view.tsx', 'src/native.h']) fs.writeFileSync(path.join(web, name), '');
+    const service = runtime();
+    expect((await service.get(firmware)).config).toEqual({ version: 1, enabled: false, mode: 'full' });
+    expect((await service.get(web)).config.mode).toBe('fast');
+    // A saved choice always wins.
+    await service.save(firmware, { version: 1, enabled: true, mode: 'fast' });
+    expect((await service.get(firmware)).config.mode).toBe('fast');
+  });
   it('accepts BOM and refuses to overwrite invalid configuration', async () => {
     const service = runtime();
     await service.save(repo, config);
@@ -304,6 +323,43 @@ describe('project runtime', () => {
     await service.start(repo);
     service.dispose();
     expect((await finished(service)).phase).toBe('cancelled');
+  });
+  it('names a project briefly while its cache keeps the old full-hash folder', () => {
+    const { identity } = require(runtimePath);
+    const cache = path.join(root, 'cache');
+    const plain = identity(path.join(root, 'Work', 'Meter_Firmware.v2'), cache);
+    expect(plain.name).toMatch(/^meter-firmware-v2-[0-9a-f]{8}$/);
+    expect(path.basename(plain.cache)).toMatch(/^woody-[0-9a-f]{64}$/);
+    expect(plain.legacyName).toBe(path.basename(plain.cache));
+    expect(plain.name.slice(-8)).toBe(plain.legacyName.slice(6, 14));
+    expect(identity(path.join(root, '工作', '电表'), cache).name).toMatch(/^project-[0-9a-f]{8}$/);
+    expect(identity(path.join(root, 'a'.repeat(60)), cache).name).toMatch(/^a{24}-[0-9a-f]{8}$/);
+    expect(identity(path.join(root, 'one', 'code'), cache).name).not.toBe(
+      identity(path.join(root, 'two', 'code'), cache).name
+    );
+  });
+  it('reports an index built under the old name as not indexed, then replaces it', async () => {
+    const service = runtime();
+    await service.save(repo, config);
+    const { identity } = require(runtimePath);
+    const project = identity(fs.realpathSync.native(repo), path.join(root, 'cache'));
+    // What the previous release left behind: a status without projectName, and its database.
+    fs.mkdirSync(project.cache, { recursive: true });
+    fs.writeFileSync(
+      project.statusFile,
+      JSON.stringify({ phase: 'succeeded', summary: '{"nodes":13}', indexerReadsPlain: true })
+    );
+    const legacyDatabase = path.join(project.cache, `${project.legacyName}.db`);
+    fs.writeFileSync(legacyDatabase, 'old index');
+    const before = await service.get(repo);
+    expect(before.phase).toBe('idle');
+    expect(before.summary).toBeUndefined();
+    // The whitelist proof survives the rename.
+    expect(before.indexerReadsPlain).toBe(true);
+    await service.start(repo);
+    const after = await finished(service);
+    expect(after).toMatchObject({ phase: 'succeeded', indexerReadsPlain: true, projectName: project.name });
+    expect(fs.existsSync(legacyDatabase)).toBe(false);
   });
   it('recovers a lock only after its owner is verified dead', async () => {
     const service = runtime();
@@ -593,7 +649,7 @@ describe.runIf(fs.existsSync(installedPowerShell))('native commands started thro
       '--repo-path',
       fs.realpathSync.native(repo),
       '--name',
-      expect.stringMatching(/^woody-/),
+      expect.stringMatching(/^project-[0-9a-f]{8}$/),
       '--mode',
       'fast',
     ]);

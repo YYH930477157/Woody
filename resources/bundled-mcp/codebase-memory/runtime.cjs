@@ -395,11 +395,46 @@ function validateConfig(config) {
     throw new Error('Invalid codebase-memory configuration');
   return { version: 1, enabled: config.enabled, mode: config.mode };
 }
+const C_FAMILY = new Set(['.c', '.cc', '.cpp', '.cxx', '.h', '.hh', '.hpp', '.hxx']);
+const defaultModes = new Map();
+/**
+ * The mode a project starts with before it is saved. C and C++ lean on macros, and
+ * only the full mode indexes them; on a 670-file firmware project full took 5.3 s
+ * against 4.2 s for fast. Other projects start fast. Cached: the panel polls this.
+ */
+function defaultMode(root) {
+  if (defaultModes.has(root)) return defaultModes.get(root);
+  let cFamily = 0;
+  let other = 0;
+  const pending = [root];
+  for (let visited = 0; pending.length && visited < 400 && cFamily + other < 3000; visited++) {
+    const directory = pending.shift();
+    let entries;
+    try {
+      entries = fs.readdirSync(directory, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        if (!entry.name.startsWith('.') && !SAMPLE_SKIPPED.has(entry.name.toLowerCase()))
+          pending.push(path.join(directory, entry.name));
+      } else if (entry.isFile()) {
+        const extension = path.extname(entry.name).toLowerCase();
+        if (C_FAMILY.has(extension)) cFamily++;
+        else if (SAMPLE_EXTENSIONS.has(extension)) other++;
+      }
+    }
+  }
+  const mode = cFamily > 0 && cFamily >= other ? 'full' : 'fast';
+  defaultModes.set(root, mode);
+  return mode;
+}
 function readConfig(root) {
   try {
     return validateConfig(JSON.parse(fs.readFileSync(configPath(root), 'utf8').replace(/^\uFEFF/, '')));
   } catch (error) {
-    if (error.code === 'ENOENT') return { ...DEFAULT_CONFIG };
+    if (error.code === 'ENOENT') return { ...DEFAULT_CONFIG, mode: defaultMode(root) };
     throw new Error(`Cannot read codebase-memory configuration: ${error.message}`);
   }
 }
@@ -446,11 +481,47 @@ function dead(pid) {
     return error.code === 'ESRCH';
   }
 }
+/**
+ * The indexer prefixes every qualified name it returns with the project name, so a
+ * 70-character hash took about 40% of each search or trace row the agent reads.
+ * Folder name plus 8 hex characters is unique enough within one cache root.
+ */
+function projectName(root, hash) {
+  const label = path
+    .basename(root)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 24)
+    .replace(/-+$/, '');
+  return `${label || 'project'}-${hash.slice(0, 8)}`;
+}
 function identity(root, cacheRoot) {
   const normalized = process.platform === 'win32' ? root.toLowerCase() : root;
-  const name = `woody-${crypto.createHash('sha256').update(normalized).digest('hex')}`;
-  const cache = path.join(cacheRoot, name);
-  return { root, name, cache, lock: path.join(cache, 'index.lock'), statusFile: path.join(cache, 'woody-status.json') };
+  const hash = crypto.createHash('sha256').update(normalized).digest('hex');
+  // The cache directory keeps the original full-hash name: the saved status, its
+  // indexerReadsPlain proof and the diagnostics stay where they were.
+  const legacyName = `woody-${hash}`;
+  const cache = path.join(cacheRoot, legacyName);
+  return {
+    root,
+    name: projectName(root, hash),
+    legacyName,
+    cache,
+    lock: path.join(cache, 'index.lock'),
+    statusFile: path.join(cache, 'woody-status.json'),
+  };
+}
+/** The index stored under the old full-hash name is unreachable once the new one exists. */
+function removeLegacyIndex(project) {
+  if (project.legacyName === project.name) return;
+  for (const suffix of ['.db', '.db-wal', '.db-shm']) {
+    try {
+      fs.rmSync(path.join(project.cache, `${project.legacyName}${suffix}`), { force: true });
+    } catch {
+      // A daemon may still hold it open; the next successful index tries again.
+    }
+  }
 }
 function acquireLock(project) {
   fs.mkdirSync(project.cache, { recursive: true });
@@ -658,6 +729,12 @@ function createRuntime(options) {
   function current(project) {
     const config = readConfig(project.root);
     const saved = readJson(project.statusFile) || {};
+    // An index built under another project name (the full-hash name before
+    // shortening) answers no query under this one: report it as not indexed.
+    if (saved.phase === 'succeeded' && saved.projectName !== project.name) {
+      saved.phase = 'idle';
+      delete saved.summary;
+    }
     return { repoPath: project.root, config, available: available(), phase: 'idle', log: '', ...saved };
   }
   function persist(project, value) {
@@ -686,6 +763,7 @@ function createRuntime(options) {
       conclusion,
       precheckRefused,
       indexerReadsPlain,
+      projectName: project.name,
       updatedAt: Date.now(),
     });
   }
@@ -1051,6 +1129,7 @@ function createRuntime(options) {
         (result) => {
           state.phase = 'succeeded';
           state.summary = JSON.stringify(result.structuredContent || result.content).slice(0, LOG_LIMIT);
+          removeLegacyIndex(project);
           return result;
         },
         async (error) => {
