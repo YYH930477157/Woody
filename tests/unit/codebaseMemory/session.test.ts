@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { IMcpServer, ISessionMcpServer } from '@/common/config/storage';
-import { prepareCodebaseMemorySession } from '@/common/adapter/codebaseMemory/session';
+import {
+  createCodebaseMemorySkillEnsurer,
+  prepareCodebaseMemorySession,
+} from '@/common/adapter/codebaseMemory/session';
 
 const server = {
   id: 'cbm',
@@ -82,5 +85,37 @@ describe('project architecture session preparation', () => {
     const deps = makeDeps();
     expect((await prepareCodebaseMemorySession({ ...input(), repoPath: '' }, deps)).servers).toEqual([other]);
     expect(deps.resolve).not.toHaveBeenCalled();
+  });
+});
+
+describe('keeping the bundled architecture skill current', () => {
+  const library = (installed: boolean) => ({
+    list: vi.fn().mockResolvedValue(installed ? [{ name: 'woody-codebase-memory' }] : []),
+    importSkill: vi.fn().mockResolvedValue('woody-codebase-memory'),
+  });
+  it('replaces an older imported copy once per run, then trusts the library', async () => {
+    const skills = library(true);
+    const ensure = createCodebaseMemorySkillEnsurer(skills);
+    await expect(ensure('D:/skills/SKILL.md')).resolves.toBe('woody-codebase-memory');
+    await expect(ensure('D:/skills/SKILL.md')).resolves.toBe('woody-codebase-memory');
+    expect(skills.importSkill).toHaveBeenCalledExactlyOnceWith('D:/skills/SKILL.md');
+  });
+  it('imports again when the skill was removed from the library', async () => {
+    const skills = library(true);
+    const ensure = createCodebaseMemorySkillEnsurer(skills);
+    await ensure('D:/skills/SKILL.md');
+    skills.list.mockResolvedValue([]);
+    await ensure('D:/skills/SKILL.md');
+    expect(skills.importSkill).toHaveBeenCalledTimes(2);
+  });
+  it('keeps the installed copy when the refresh fails', async () => {
+    const skills = library(true);
+    skills.importSkill.mockRejectedValue(new Error('disk full'));
+    await expect(createCodebaseMemorySkillEnsurer(skills)('D:/skills/SKILL.md')).resolves.toBe('woody-codebase-memory');
+  });
+  it('fails when the skill can be neither imported nor found', async () => {
+    const skills = library(false);
+    skills.importSkill.mockRejectedValue(new Error('disk full'));
+    await expect(createCodebaseMemorySkillEnsurer(skills)('D:/skills/SKILL.md')).rejects.toThrow('disk full');
   });
 });

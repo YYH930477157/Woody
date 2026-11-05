@@ -29,7 +29,7 @@ async function handle(request) {
         capabilities: { tools: {} },
         serverInfo: { name: 'woody-codebase-memory', version: '1.0.0' },
         instructions:
-          'Tools are bound to one enabled project. Start with index_status; project names and filesystem roots are supplied by Woody.',
+          'Tools are bound to one enabled project; project names and filesystem roots are supplied by Woody. Call the tool that answers the question directly, and index_status only when results are empty. Calls through C/C++ macros and function pointers are usually missing from the graph: confirm with search_code before concluding there are no callers.',
       };
       break;
     case 'ping':

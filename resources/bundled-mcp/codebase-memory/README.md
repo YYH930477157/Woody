@@ -22,7 +22,9 @@ configuration:
 
 This file lives at `<project>/.woody/codebase-memory.json`. The generated database
 stays in the user's local application cache, outside the source repository.
-Projects without the configuration are disabled by default.
+Projects without the configuration are disabled by default. Until a mode is saved,
+a folder whose sources are mostly C or C++ starts in `full`, the only mode that
+indexes macros; other folders start in `fast`.
 
 After indexing succeeds, **Open visualization** launches the bundled **CBM Lens**
 in your default browser. It uses a local `127.0.0.1` port and the selected project's
@@ -79,11 +81,19 @@ preparation to fail with a clear message.
 `index.cjs` and `runtime.cjs` provide a project-bound stdio adapter. Its curated
 schemas are in `tools.json`. Project enablement and index mode are saved in
 `.woody/codebase-memory.json`. `skills/woody-codebase-memory/SKILL.md` is imported
-as `woody-codebase-memory` for selected project sessions. The dedicated skill
+as `woody-codebase-memory` for selected project sessions. Import copies the skill,
+so the first project session of each app run imports it again and an older copy
+in the library is replaced. The dedicated skill
 directory excludes the native executable and other runtime resources, because
 Core imports the skill's entire parent directory. The skill is guidance for the model, not an execution
 guarantee. The adapter is responsible for enforcing project boundaries and
 disabling unsupported capabilities.
+
+The indexer prefixes every qualified name with the project name, so the name is
+short: the folder name in lowercase ASCII plus 8 hex characters of the path hash
+(`code-affc6c50`). The cache directory keeps the full-hash name `woody-<sha256>`,
+so the saved status survives. An index stored under the old full-hash name is
+reported as not indexed and deleted after the next successful index.
 
 Every native command starts through PowerShell 7 when `pwsh.exe` is on `PATH` or
 in `%ProgramFiles%\PowerShell\7`, because encrypted disks can restrict plain file

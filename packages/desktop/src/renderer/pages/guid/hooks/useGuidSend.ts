@@ -16,10 +16,18 @@ import { type TFunction } from 'i18next';
 import type { NavigateFunction } from 'react-router-dom';
 import { mutate as swrMutate } from 'swr';
 import { getConversationCreateErrorMessage } from '@/renderer/pages/conversation/utils/conversationCreateError';
-import { prepareCodebaseMemorySession } from '@/common/adapter/codebaseMemory/session';
-import { CODEBASE_MEMORY_SKILL_NAME } from '@/common/types/codebaseMemory/constants';
+import {
+  createCodebaseMemorySkillEnsurer,
+  prepareCodebaseMemorySession,
+} from '@/common/adapter/codebaseMemory/session';
 import { getSelectedWorkspace } from '@/renderer/components/workspace/workspaceSelection';
 import { workspaceConversationExtra } from '@/renderer/utils/workspace/managedWorkspace';
+
+// Module scope: the skill is refreshed once per app run, not once per conversation.
+const ensureCodebaseMemorySkill = createCodebaseMemorySkillEnsurer({
+  list: () => ipcBridge.fs.listAvailableSkills.invoke(),
+  importSkill: async (skillPath) => (await ipcBridge.fs.importSkill.invoke({ skill_path: skillPath })).skill_name,
+});
 
 export type GuidSendDeps = {
   // Input state
@@ -198,12 +206,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
       },
       {
         resolve: (repoPath) => ipcBridge.codebaseMemory.session.invoke({ repoPath }),
-        ensureSkill: async (skillPath) => {
-          const skills = await ipcBridge.fs.listAvailableSkills.invoke();
-          if (skills.some((skill) => skill.name === CODEBASE_MEMORY_SKILL_NAME)) return CODEBASE_MEMORY_SKILL_NAME;
-          const imported = await ipcBridge.fs.importSkill.invoke({ skill_path: skillPath });
-          return imported.skill_name;
-        },
+        ensureSkill: ensureCodebaseMemorySkill,
       }
     );
     const assistantOverrides = {
