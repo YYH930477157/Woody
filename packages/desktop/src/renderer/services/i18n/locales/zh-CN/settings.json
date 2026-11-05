@@ -13,6 +13,7 @@
     "search": "搜索网站或用户名",
     "accountCount": "账户数：{{count}}",
     "importSummary": "新增 {{added}} 个，更新 {{updated}} 个，跳过 {{skipped}} 个",
+    "csvReminder": "导出的 CSV 文件里所有密码都是明文，导入完成后请删除这个文件。",
     "defaultAccount": "默认",
     "setDefault": "设为默认",
     "deleteConfirm": "删除网站账户？",

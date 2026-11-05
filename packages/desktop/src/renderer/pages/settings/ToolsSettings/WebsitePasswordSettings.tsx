@@ -158,6 +158,8 @@ function DesktopWebsitePasswordSettings() {
           {t('settings.websitePasswords.importSummary', summary)}
         </div>
       )}
+      {/* The exported file keeps every password in plain text after the import. */}
+      {summary && <Alert type='warning' className='mb-12px' content={t('settings.websitePasswords.csvReminder')} />}
       <div className='flex items-center flex-wrap gap-12px'>
         <Input
           className='flex-1 min-w-160px'

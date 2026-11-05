@@ -215,6 +215,7 @@ describe('website account settings', () => {
     fireEvent.click(screen.getByRole('button', { name: key('importChrome') }));
     expect(await screen.findByText('carol')).toBeInTheDocument();
     expect(screen.getByText(`${key('importSummary')}: 1/2/3`)).toBeInTheDocument();
+    expect(screen.getByText(key('csvReminder'))).toBeInTheDocument();
     expect(api.importChrome.mock.calls[0]).toEqual([]);
   });
 
@@ -224,6 +225,7 @@ describe('website account settings', () => {
     fireEvent.click(screen.getByRole('button', { name: key('importChrome') }));
     await waitFor(() => expect(api.importChrome).toHaveBeenCalledOnce());
     expect(screen.queryByText(new RegExp(key('importSummary')))).not.toBeInTheDocument();
+    expect(screen.queryByText(key('csvReminder'))).not.toBeInTheDocument();
     expect(screen.getByText('alice')).toBeInTheDocument();
   });
 

@@ -13,6 +13,7 @@
     "search": "搜尋網站或使用者名稱",
     "accountCount": "帳戶數：{{count}}",
     "importSummary": "新增 {{added}} 個，更新 {{updated}} 個，略過 {{skipped}} 個",
+    "csvReminder": "匯出的 CSV 檔案中所有密碼都是明文，匯入完成後請刪除這個檔案。",
     "defaultAccount": "預設",
     "setDefault": "設為預設",
     "deleteConfirm": "刪除網站帳戶？",

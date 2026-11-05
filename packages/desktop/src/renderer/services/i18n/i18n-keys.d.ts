@@ -2972,6 +2972,7 @@ export type I18nKey =
   | 'settings.websitePasswords.accountCount'
   | 'settings.websitePasswords.agentRisk'
   | 'settings.websitePasswords.automaticLogin'
+  | 'settings.websitePasswords.csvReminder'
   | 'settings.websitePasswords.defaultAccount'
   | 'settings.websitePasswords.deleteAccount'
   | 'settings.websitePasswords.deleteConfirm'
