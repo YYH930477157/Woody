@@ -1,4 +1,37 @@
 {
+  "websitePasswords": {
+    "editPassword": "修改密码",
+    "newPassword": "新密码",
+    "updatePromptTitle": "更新已保存的密码？",
+    "updatePrompt": "是否已使用新密码成功登录？",
+    "updatePromptDetails": "网站：{{site}}\n用户名：{{username}}\n确认登录成功后，更新这里保存的密码。",
+    "updateSavedPassword": "更新密码",
+    "title": "网站账户",
+    "importChrome": "导入 Chrome CSV",
+    "automaticLogin": "自动登录",
+    "search": "搜索网站或用户名",
+    "accountCount": "账户数：{{count}}",
+    "importSummary": "新增 {{added}} 个，更新 {{updated}} 个，跳过 {{skipped}} 个",
+    "defaultAccount": "默认",
+    "setDefault": "设为默认",
+    "deleteConfirm": "删除网站账户？",
+    "deleteAccount": "删除 {{site}} 的账户 {{username}}？",
+    "noUsername": "无用户名",
+    "empty": "暂无网站账户",
+    "noMatches": "没有匹配的账户",
+    "loading": "正在加载账户",
+    "errors": {
+      "CONFLICT": "此账户已被修改或删除，请刷新后重试。",
+      "generic": "无法更新网站账户，请重试。",
+      "UNAVAILABLE": "系统加密不可用，网站账户已锁定。",
+      "CORRUPT": "无法读取已加密的账户文件。",
+      "INVALID_CSV": "请选择有效的 Chrome 密码 CSV 文件。",
+      "TOO_LARGE": "所选 CSV 文件过大。",
+      "LIMIT": "账户数量已达到上限。",
+      "IO": "无法读取或保存网站账户。",
+      "FORBIDDEN": "网站账户仅在桌面应用中可用。"
+    }
+  },
   "title": "设置",
   "skillsHub": {
     "title": "技能中心",
