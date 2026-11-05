@@ -1,4 +1,37 @@
 {
+  "websitePasswords": {
+    "editPassword": "Change saved password",
+    "newPassword": "New password",
+    "updatePromptTitle": "Update saved password?",
+    "updatePrompt": "Did sign-in succeed with the new password?",
+    "updatePromptDetails": "Website: {{site}}\nUsername: {{username}}\nUpdate the saved password only if sign-in succeeded.",
+    "updateSavedPassword": "Update password",
+    "title": "Website accounts",
+    "importChrome": "Import Chrome CSV",
+    "automaticLogin": "Automatic login",
+    "search": "Search website or username",
+    "accountCount": "Accounts: {{count}}",
+    "importSummary": "Added {{added}}, updated {{updated}}, skipped {{skipped}}",
+    "defaultAccount": "Default",
+    "setDefault": "Set as default",
+    "deleteConfirm": "Delete website account?",
+    "deleteAccount": "Delete {{username}} at {{site}}?",
+    "noUsername": "No username",
+    "empty": "No website accounts",
+    "noMatches": "No matching accounts",
+    "loading": "Loading accounts",
+    "errors": {
+      "CONFLICT": "This account changed or was deleted. Refresh and try again.",
+      "generic": "Unable to update website accounts. Try again.",
+      "UNAVAILABLE": "System encryption is unavailable. Website accounts are locked.",
+      "CORRUPT": "Unable to read the encrypted account file.",
+      "INVALID_CSV": "Select a valid Chrome password CSV file.",
+      "TOO_LARGE": "The selected CSV file is too large.",
+      "LIMIT": "The account limit has been reached.",
+      "IO": "Unable to read or save website accounts.",
+      "FORBIDDEN": "Website accounts are available only in the desktop app."
+    }
+  },
   "title": "Налаштування",
   "skillsHub": {
     "title": "Центр навичок",

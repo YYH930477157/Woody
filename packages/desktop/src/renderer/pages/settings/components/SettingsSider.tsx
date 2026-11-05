@@ -10,6 +10,7 @@ import {
   Earth,
   Inbox,
   Info,
+  Key,
   Lightning,
   LinkCloud,
   Puzzle,
@@ -31,6 +32,7 @@ export const BUILTIN_TAB_IDS = [
   'skills',
   'tools',
   'appearance',
+  'website-passwords',
   'webui',
   'pet',
   'system',
@@ -105,6 +107,12 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
         path: 'tools',
       },
       appearance: { id: 'appearance', label: t('settings.appearancePanel'), icon: <Computer />, path: 'appearance' },
+      'website-passwords': {
+        id: 'website-passwords',
+        label: t('settings.websitePasswords.title'),
+        icon: <Key />,
+        path: 'website-passwords',
+      },
       webui: {
         id: 'webui',
         label: t('settings.webui'),
@@ -123,7 +131,9 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
     };
 
     // Start with ordered builtin IDs, hiding desktop-only tabs in browser mode
-    const result: SiderItem[] = BUILTIN_TAB_IDS.filter((id) => isDesktop || id !== 'pet').map((id) => builtinMap[id]);
+    const result: SiderItem[] = BUILTIN_TAB_IDS.filter(
+      (id) => isDesktop || (id !== 'pet' && id !== 'website-passwords')
+    ).map((id) => builtinMap[id]);
 
     // Extension tabs with position anchoring
     const beforeMap = new Map<string, IExtensionSettingsTab[]>();

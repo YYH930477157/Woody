@@ -46,6 +46,7 @@ import type {
 export { terminal } from './terminal';
 export { cmake } from './cmake';
 export { codebaseMemory } from './codebaseMemory';
+export { websitePasswords } from './websitePasswords';
 import { buildListTasksPath } from './teamTaskPath';
 import type { OpenDialogOptions } from 'electron';
 import type {
@@ -789,7 +790,7 @@ export const application = {
    * in-app browser. Main validates getType() === 'webview', so even a misused call cannot
    * attach to the main window.
    */
-  reportBrowserWebContentsId: bridge.buildProvider<IBridgeResponse<void>, { webContentsId: number }>(
+  reportBrowserWebContentsId: bridge.buildProvider<IBridgeResponse<void>, { webContentsId: number; active?: boolean }>(
     'app.report-browser-webcontents-id'
   ),
   getStartOnBootStatus: bridge.buildProvider<IBridgeResponse<IStartOnBootStatus>, void>('app.get-start-on-boot-status'),

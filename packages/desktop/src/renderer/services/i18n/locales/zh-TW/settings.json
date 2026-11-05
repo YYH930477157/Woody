@@ -1,4 +1,37 @@
 {
+  "websitePasswords": {
+    "editPassword": "修改密碼",
+    "newPassword": "新密碼",
+    "updatePromptTitle": "更新已儲存的密碼？",
+    "updatePrompt": "是否已使用新密碼成功登入？",
+    "updatePromptDetails": "網站：{{site}}\n使用者名稱：{{username}}\n確認登入成功後，更新這裡儲存的密碼。",
+    "updateSavedPassword": "更新密碼",
+    "title": "網站帳戶",
+    "importChrome": "匯入 Chrome CSV",
+    "automaticLogin": "自動登入",
+    "search": "搜尋網站或使用者名稱",
+    "accountCount": "帳戶數：{{count}}",
+    "importSummary": "新增 {{added}} 個，更新 {{updated}} 個，略過 {{skipped}} 個",
+    "defaultAccount": "預設",
+    "setDefault": "設為預設",
+    "deleteConfirm": "刪除網站帳戶？",
+    "deleteAccount": "刪除 {{site}} 的帳戶 {{username}}？",
+    "noUsername": "無使用者名稱",
+    "empty": "尚無網站帳戶",
+    "noMatches": "沒有符合的帳戶",
+    "loading": "正在載入帳戶",
+    "errors": {
+      "CONFLICT": "此帳戶已被修改或刪除，請重新整理後重試。",
+      "generic": "無法更新網站帳戶，請重試。",
+      "UNAVAILABLE": "系統加密無法使用，網站帳戶已鎖定。",
+      "CORRUPT": "無法讀取已加密的帳戶檔案。",
+      "INVALID_CSV": "請選取有效的 Chrome 密碼 CSV 檔案。",
+      "TOO_LARGE": "所選 CSV 檔案過大。",
+      "LIMIT": "帳戶數量已達上限。",
+      "IO": "無法讀取或儲存網站帳戶。",
+      "FORBIDDEN": "網站帳戶僅能在桌面應用程式中使用。"
+    }
+  },
   "title": "Settings",
   "skillsHub": {
     "title": "技能中心",

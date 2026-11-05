@@ -16,6 +16,7 @@ import { getGpuStatus, setGpuUserOverride } from '@process/utils/gpuRecovery';
 import { initApplicationBridgeCore } from './applicationBridgeCore';
 import type { IStartOnBootStatus } from '@/common/adapter/ipcBridge';
 import { restartApplication } from './restartApplication';
+import { attachWebsitePasswordTarget, setWebsitePasswordWindow } from '@process/services/websitePasswords/runtime';
 
 let mainWindowRef: BrowserWindow | null = null;
 
@@ -95,6 +96,7 @@ export function setStartOnBootEnabled(enabled: boolean): IStartOnBootStatus {
 
 export function setApplicationMainWindow(win: BrowserWindow): void {
   mainWindowRef = win;
+  setWebsitePasswordWindow(win);
 }
 
 export function initApplicationBridge(): void {
@@ -222,7 +224,7 @@ export function initApplicationBridge(): void {
     }
   });
 
-  ipcBridge.application.reportBrowserWebContentsId.provider(async ({ webContentsId }) => {
+  ipcBridge.application.reportBrowserWebContentsId.provider(async ({ webContentsId, active = true }) => {
     /**
      * 把单目标 CDP 通道附加到侧边浏览器。
      *
@@ -237,6 +239,8 @@ export function initApplicationBridge(): void {
      * rather than all ten at once.
      */
     try {
+      attachWebsitePasswordTarget(webContentsId, active);
+      if (!active) return { success: true };
       const handle = getCdpBridgeHandle();
       if (!handle) return { success: false, msg: 'Agent browser control is not enabled.' };
       const result = handle.attach(webContentsId);

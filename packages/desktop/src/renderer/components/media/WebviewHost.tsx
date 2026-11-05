@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { Left, Right, Refresh, Loading } from '@icon-park/react';
 import { ipcBridge } from '@/common';
 import { InternalNavTracker, shouldResetHistoryForUrlProp } from './webviewHistory';
+import { installWebviewNavigationInterceptor } from '@/common/utils/browser/navigation';
 
 export interface WebviewHostProps {
   /** URL to display */
@@ -19,6 +20,8 @@ export interface WebviewHostProps {
   showNavBar?: boolean;
   /** Webview partition for cache/session isolation, e.g. "persist:ext-settings-feishu" */
   partition?: string;
+  /** True only for the currently visible built-in browser tab. */
+  isActiveBrowser?: boolean;
   /** Extra class names for root container */
   className?: string;
   /** Extra styles for root container */
@@ -62,6 +65,7 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
   id: _id,
   showNavBar = false,
   partition,
+  isActiveBrowser = false,
   className,
   style,
   onDidFinishLoad,
@@ -75,6 +79,8 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const webviewRef = useRef<Electron.WebviewTag | null>(null);
+  const initialUrlRef = useRef(url);
+  const previousUrlPropRef = useRef(url);
   const autoFitPendingRef = useRef(false);
 
   // Callbacks are mirrored into refs so the listener effect does not re-subscribe
@@ -92,6 +98,30 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [zoomFactor, setZoomFactor] = useState(1);
   const [webviewReady, setWebviewReady] = useState(false);
+
+  // Browser tabs stay mounted while hidden, so DOM readiness alone cannot select
+  // the active target. Cleanup identifies its own target to tolerate tab switches.
+  useEffect(() => {
+    if (!isActiveBrowser || !webviewReady) return;
+    let webContentsId: number;
+    try {
+      const id = webviewRef.current?.getWebContentsId?.();
+      if (typeof id !== 'number') return;
+      webContentsId = id;
+      void ipcBridge.application.reportBrowserWebContentsId
+        .invoke({ webContentsId, active: true })
+        .then((res) => {
+          if (!res.success && res.msg) console.warn('[browser] agent control unavailable:', res.msg);
+        })
+        .catch(() => {});
+    } catch (error) {
+      console.warn('[browser] could not report webContents id:', error);
+      return;
+    }
+    return () => {
+      void ipcBridge.application.reportBrowserWebContentsId.invoke({ webContentsId, active: false }).catch(() => {});
+    };
+  }, [isActiveBrowser, webviewReady]);
 
   // 最近由本组件内部触发的导航地址集合。
   //
@@ -137,6 +167,8 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
 
   // Reset when props.url changes
   useEffect(() => {
+    const changed = previousUrlPropRef.current !== url;
+    previousUrlPropRef.current = url;
     // 只有「外部」换址才该清空历史（换 tab、换预览文件）。判断逻辑抽到
     // shouldResetHistoryForUrlProp，那里有完整的回环说明与单测。
     //
@@ -144,6 +176,7 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
     // preview targets). The decision lives in shouldResetHistoryForUrlProp, which
     // carries the full explanation of the loop and its unit tests.
     if (!shouldResetHistoryForUrlProp(url, internalNavRef.current)) return;
+    if (changed && webviewRef.current) webviewRef.current.src = url;
     internalNavRef.current.clear();
     setCanGoBack(false);
     setCanGoForward(false);
@@ -208,51 +241,9 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
       setCanGoForward(Boolean(webviewEl.canGoForward?.()));
     };
 
-    // Inject script to intercept links / window.open / form submissions
+    // Intercept links/popups; forms must retain native POST bodies.
     const injectClickInterceptor = () => {
-      webviewEl
-        .executeJavaScript(
-          `
-        (function() {
-          if (window.__webviewHostInjected) return;
-          window.__webviewHostInjected = true;
-
-          document.addEventListener('click', function(e) {
-            let target = e.target;
-            while (target && target.tagName !== 'A') {
-              target = target.parentElement;
-            }
-            if (target && target.tagName === 'A') {
-              const href = target.href;
-              if (href && /^https?:/i.test(href)) {
-                e.preventDefault();
-                e.stopPropagation();
-                window.postMessage({ type: '__WEBVIEW_HOST_NAVIGATE__', url: href }, '*');
-              }
-            }
-          }, true);
-
-          const originalOpen = window.open;
-          window.open = function(url) {
-            if (url && /^https?:/i.test(url)) {
-              window.postMessage({ type: '__WEBVIEW_HOST_NAVIGATE__', url: url }, '*');
-              return null;
-            }
-            return originalOpen.apply(this, arguments);
-          };
-
-          document.addEventListener('submit', function(e) {
-            const form = e.target;
-            if (form && form.action && /^https?:/i.test(form.action)) {
-              e.preventDefault();
-              window.postMessage({ type: '__WEBVIEW_HOST_NAVIGATE__', url: form.action }, '*');
-            }
-          }, true);
-        })();
-        true;
-      `
-        )
-        .catch(() => {});
+      webviewEl.executeJavaScript(`(${installWebviewNavigationInterceptor.toString()})(); true;`).catch(() => {});
     };
 
     const handleConsoleMessage = (event: Electron.ConsoleMessageEvent) => {
@@ -300,30 +291,6 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
       setWebviewReady(true);
       syncNavState();
       injectClickInterceptor();
-
-      /**
-       * 把这个 webview 的 webContents id 报给主进程，让单目标 CDP 通道附加到它。
-       *
-       * 放在 dom-ready 里：此时 getWebContentsId() 才可用，而且每次导航/切 tab 后都会
-       * 再触发一次，正好让通道跟着用户当前看的页面走。失败只记日志不打扰用户 ——
-       * Agent 操作浏览器本就是可选能力，不该因为它挡住正常浏览。
-       *
-       * Report this webview's webContents id so the single-target CDP bridge can attach.
-       * Done on dom-ready because getWebContentsId() is only valid by then, and because it
-       * fires again after navigation or a tab switch, which keeps the bridge pointed at the
-       * page the user is actually viewing. Failures are logged only: agent browser control
-       * is optional and must not block ordinary browsing.
-       */
-      try {
-        const webContentsId = webviewEl.getWebContentsId?.();
-        if (typeof webContentsId === 'number') {
-          void ipcBridge.application.reportBrowserWebContentsId.invoke({ webContentsId }).then((res) => {
-            if (!res.success && res.msg) console.warn('[browser] agent control unavailable:', res.msg);
-          });
-        }
-      } catch (error) {
-        console.warn('[browser] could not report webContents id:', error);
-      }
 
       // Inject viewport meta for responsive pages
       webviewEl
@@ -782,9 +749,10 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
         style={{ minHeight: 0 }}
         onWheel={handleOuterWheelZoom}
       >
+        {/* Keep src stable so native POST responses are not reopened with GET. */}
         <webview
           ref={webviewRef as any}
-          src={currentUrl}
+          src={initialUrlRef.current}
           className='border-0 absolute start-0 top-0'
           style={{
             opacity: !showNavBar && isLoading ? 0 : 1,
