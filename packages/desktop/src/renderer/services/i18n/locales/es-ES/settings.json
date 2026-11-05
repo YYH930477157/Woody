@@ -9,6 +9,7 @@
     "title": "Website accounts",
     "importChrome": "Import Chrome CSV",
     "automaticLogin": "Automatic login",
+    "agentRisk": "El inicio de sesión automático introduce las contraseñas guardadas en las páginas del navegador integrado. Cuando la IA controla ese navegador, puede ejecutar scripts en esas páginas y leer las contraseñas introducidas, por lo que una página que engañe a la IA podría exponerlas. Guarda solo las cuentas para las que aceptes este riesgo y desactiva el inicio de sesión automático cuando no lo necesites.",
     "search": "Search website or username",
     "accountCount": "Accounts: {{count}}",
     "importSummary": "Added {{added}}, updated {{updated}}, skipped {{skipped}}",

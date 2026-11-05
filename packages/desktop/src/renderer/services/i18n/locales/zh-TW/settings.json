@@ -9,6 +9,7 @@
     "title": "網站帳戶",
     "importChrome": "匯入 Chrome CSV",
     "automaticLogin": "自動登入",
+    "agentRisk": "自動登入會把儲存的密碼填入內建瀏覽器的網頁。AI 操作這個瀏覽器時，可以在網頁中執行指令碼，讀到填入的密碼；如果網頁內容誤導了 AI，密碼可能因此外洩。請只儲存能接受這項風險的帳戶，不需要時關閉自動登入。",
     "search": "搜尋網站或使用者名稱",
     "accountCount": "帳戶數：{{count}}",
     "importSummary": "新增 {{added}} 個，更新 {{updated}} 個，略過 {{skipped}} 個",

@@ -273,6 +273,15 @@ describe('website account settings', () => {
     expect(api.setEnabled).toHaveBeenCalledExactlyOnceWith({ enabled: false });
   });
 
+  it('states that AI controlling the browser can read filled passwords, whatever the toggle says', async () => {
+    await ready();
+    expect(screen.getByText(key('agentRisk'))).toBeInTheDocument();
+    cleanup();
+    api.list.mockResolvedValue(status({ enabled: false }));
+    await ready();
+    expect(screen.getByText(key('agentRisk'))).toBeInTheDocument();
+  });
+
   it('shows encryption unavailability and prevents credential mutations', async () => {
     api.list.mockResolvedValue(status({ available: false }));
     await ready();

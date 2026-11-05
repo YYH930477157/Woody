@@ -2968,6 +2968,7 @@ export type I18nKey =
   | 'settings.updateReadyInstall'
   | 'settings.vertexApiKey'
   | 'settings.websitePasswords.accountCount'
+  | 'settings.websitePasswords.agentRisk'
   | 'settings.websitePasswords.automaticLogin'
   | 'settings.websitePasswords.defaultAccount'
   | 'settings.websitePasswords.deleteAccount'

@@ -9,6 +9,7 @@
     "title": "Website accounts",
     "importChrome": "Import Chrome CSV",
     "automaticLogin": "Automatic login",
+    "agentRisk": "La connexion automatique saisit les mots de passe enregistrés dans les pages du navigateur intégré. Lorsque l'IA contrôle ce navigateur, elle peut exécuter des scripts sur ces pages et lire les mots de passe saisis ; une page qui induit l'IA en erreur pourrait donc les exposer. N'enregistrez que les comptes pour lesquels vous acceptez ce risque, et désactivez la connexion automatique lorsque vous n'en avez pas besoin.",
     "search": "Search website or username",
     "accountCount": "Accounts: {{count}}",
     "importSummary": "Added {{added}}, updated {{updated}}, skipped {{skipped}}",
