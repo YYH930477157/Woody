@@ -1189,5 +1189,11 @@
       "missing": "This file did not exist in the selected version",
       "uncommitted": "Uncommitted"
     }
+  },
+  "sessionFiles": {
+    "rootFolder": "チャットファイル",
+    "workFolder": "作業",
+    "outputFolder": "成果物",
+    "untitled": "新しいチャット"
   }
 }

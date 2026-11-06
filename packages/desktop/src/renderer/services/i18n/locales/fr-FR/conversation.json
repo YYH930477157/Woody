@@ -1189,5 +1189,11 @@
       "missing": "This file did not exist in the selected version",
       "uncommitted": "Uncommitted"
     }
+  },
+  "sessionFiles": {
+    "rootFolder": "fichiers-de-chat",
+    "workFolder": "travail",
+    "outputFolder": "résultats",
+    "untitled": "nouveau-chat"
   }
 }

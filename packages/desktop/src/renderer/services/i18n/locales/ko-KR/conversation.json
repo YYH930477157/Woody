@@ -1189,5 +1189,11 @@
       "missing": "This file did not exist in the selected version",
       "uncommitted": "Uncommitted"
     }
+  },
+  "sessionFiles": {
+    "rootFolder": "채팅-파일",
+    "workFolder": "작업",
+    "outputFolder": "결과물",
+    "untitled": "새-채팅"
   }
 }

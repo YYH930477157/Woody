@@ -18,8 +18,19 @@ import useSWR from 'swr';
 import SettingsPageHeader from '../components/SettingsPageHeader';
 import SettingsPageWrapper from '../components/SettingsPageWrapper';
 import { resolveConversationLeadingMark } from '@/renderer/pages/conversation/utils/conversationAssistantIdentity';
+import type { SessionFolderState } from '@/common/adapter/ipcBridge';
+import SessionFoldersChoice from './SessionFoldersChoice';
+import { type ArchivedDeletion, findSessionFolders, type SessionFolderDeps } from './sessionFolders';
 
 const ARCHIVED_SWR_KEY = 'sidebar-archived';
+
+/** Reads every conversation, active and archived, to tell which chat folders a delete frees. */
+const sessionFolderDeps: SessionFolderDeps = {
+  listActive: (params) => ipcBridge.database.getUserConversations.invoke(params),
+  getArchived: (params) => ipcBridge.sidebar.get.invoke(params),
+  getArchivedItems: (params) => ipcBridge.sidebar.items.invoke(params),
+  inspect: (params) => ipcBridge.sessionFiles.inspect.invoke(params),
+};
 
 /**
  * Per-group window sizes for the archived page. The first screen shows a small
@@ -323,11 +334,48 @@ const ArchivedSettings: React.FC = () => {
     [t]
   );
 
+  /** Chat folders a delete would leave unused; a failed lookup just leaves the choice out. */
+  const lookUpSessionFolders = React.useCallback(async (deletion: ArchivedDeletion) => {
+    try {
+      return await findSessionFolders(deletion, sessionFolderDeps);
+    } catch (error) {
+      console.error('Failed to look up chat folders:', error);
+      return [];
+    }
+  }, []);
+
+  /** Runs only after the conversations are gone, so a failed delete never costs their files. */
+  const trashSessionFolders = React.useCallback(
+    async (folders: SessionFolderState[]) => {
+      let failed = folders.length;
+      try {
+        failed = (await ipcBridge.sessionFiles.trash.invoke({ dirs: folders.map((folder) => folder.dir) })).failed
+          .length;
+      } catch (error) {
+        console.error('Failed to move chat folders to the trash:', error);
+      }
+      if (failed > 0) Message.warning(t('settings.archived.trashSessionFoldersFailed', { count: failed }));
+    },
+    [t]
+  );
+
   const handleDelete = React.useCallback(
-    (row: ArchivedRow) => {
+    async (row: ArchivedRow) => {
+      const folders =
+        row.item_type === 'conversation'
+          ? await lookUpSessionFolders({ conversationIds: [row.item_id], projectIds: [] })
+          : [];
+      let trashFolders = false;
       Modal.confirm({
         title: t('settings.archived.deleteConfirmTitle'),
-        content: t('settings.archived.deleteConfirmContent', { name: row.name }),
+        content: (
+          <>
+            {t('settings.archived.deleteConfirmContent', { name: row.name })}
+            {folders.length > 0 ? (
+              <SessionFoldersChoice folders={folders} t={t} onChange={(checked) => (trashFolders = checked)} />
+            ) : null}
+          </>
+        ),
         okText: t('settings.archived.delete'),
         cancelText: t('common.cancel'),
         okButtonProps: { status: 'danger' },
@@ -339,35 +387,49 @@ const ArchivedSettings: React.FC = () => {
           } catch (error) {
             console.error('Failed to delete archived item:', error);
             Message.error(t('settings.archived.deleteFailed'));
+            return;
           }
+          if (trashFolders) await trashSessionFolders(folders);
         },
         style: { borderRadius: '12px' },
         alignCenter: true,
         getPopupContainer: () => document.body,
       });
     },
-    [refresh, t]
+    [lookUpSessionFolders, refresh, t, trashSessionFolders]
   );
 
-  const handleDeleteSelected = React.useCallback(() => {
+  const handleDeleteSelected = React.useCallback(async () => {
     if (selectedRows.length === 0) return;
+
+    // A project whose every loaded row is selected is removed whole, archived rows not yet
+    // paged in included; everything else goes row by row.
+    const selectedProjectBlocks = archivedBlocks.filter(
+      (block) => block.projectId && block.rows.length > 0 && block.rows.every((row) => selectedKeys.has(row.key))
+    );
+    const projectSelectedKeys = new Set(selectedProjectBlocks.flatMap((block) => block.rows.map((row) => row.key)));
+    const selectedSingleRows = selectedRows.filter((row) => !projectSelectedKeys.has(row.key));
+    const folders = await lookUpSessionFolders({
+      conversationIds: selectedSingleRows.filter((row) => row.item_type === 'conversation').map((row) => row.item_id),
+      projectIds: selectedProjectBlocks.map((block) => block.projectId as string),
+    });
+    let trashFolders = false;
 
     Modal.confirm({
       title: t('settings.archived.deleteSelectedConfirmTitle'),
-      content: t('settings.archived.deleteSelectedConfirmContent', { count: selectedRows.length }),
+      content: (
+        <>
+          {t('settings.archived.deleteSelectedConfirmContent', { count: selectedRows.length })}
+          {folders.length > 0 ? (
+            <SessionFoldersChoice folders={folders} t={t} onChange={(checked) => (trashFolders = checked)} />
+          ) : null}
+        </>
+      ),
       okText: t('settings.archived.deleteSelected'),
       cancelText: t('common.cancel'),
       okButtonProps: { status: 'danger' },
       onOk: async () => {
         try {
-          const selectedProjectBlocks = archivedBlocks.filter(
-            (block) => block.projectId && block.rows.length > 0 && block.rows.every((row) => selectedKeys.has(row.key))
-          );
-          const projectSelectedKeys = new Set(
-            selectedProjectBlocks.flatMap((block) => block.rows.map((row) => row.key))
-          );
-          const selectedSingleRows = selectedRows.filter((row) => !projectSelectedKeys.has(row.key));
-
           await Promise.all([
             ...selectedProjectBlocks.map((block) =>
               ipcBridge.sidebar.deleteArchivedProject.invoke({ project_id: block.projectId as string })
@@ -384,13 +446,15 @@ const ArchivedSettings: React.FC = () => {
         } catch (error) {
           console.error('Failed to delete selected archived items:', error);
           Message.error(t('settings.archived.deleteFailed'));
+          return;
         }
+        if (trashFolders) await trashSessionFolders(folders);
       },
       style: { borderRadius: '12px' },
       alignCenter: true,
       getPopupContainer: () => document.body,
     });
-  }, [refresh, archivedBlocks, selectedKeys, selectedRows, t]);
+  }, [refresh, archivedBlocks, lookUpSessionFolders, selectedKeys, selectedRows, t, trashSessionFolders]);
 
   const formatArchivedTime = React.useCallback(
     (timestamp?: number) => {
@@ -441,7 +505,7 @@ const ArchivedSettings: React.FC = () => {
             size='small'
             status='danger'
             icon={<DeleteOne theme='outline' size='14' />}
-            onClick={() => handleDelete(row)}
+            onClick={() => void handleDelete(row)}
           />
           <Button
             type='secondary'
@@ -484,7 +548,7 @@ const ArchivedSettings: React.FC = () => {
                     status='warning'
                     className='!h-32px !rounded-10px !px-12px !text-14px'
                     disabled={selectedRows.length === 0}
-                    onClick={handleDeleteSelected}
+                    onClick={() => void handleDeleteSelected()}
                   >
                     {t('settings.archived.deleteSelected')}
                   </Button>

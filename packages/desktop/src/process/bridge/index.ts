@@ -19,6 +19,7 @@ import { initSourceControlBridge, initGitWorkbenchBridge } from './sourceControl
 import { initStaticScanBridge } from './staticScanBridge';
 import { initCodebaseMemoryBridge } from './codebaseMemory';
 import { initWebsitePasswordsBridge } from './websitePasswordsBridge';
+import { initSessionFilesBridge } from '@process/sessionFiles';
 
 export type BridgeDependencies = Record<string, never>;
 
@@ -39,6 +40,7 @@ export function initAllBridges(_deps: BridgeDependencies = {}): void {
   initStaticScanBridge();
   initCodebaseMemoryBridge();
   initWebsitePasswordsBridge();
+  initSessionFilesBridge();
 }
 
 export {

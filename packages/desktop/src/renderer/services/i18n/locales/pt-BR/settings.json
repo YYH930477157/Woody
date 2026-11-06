@@ -1467,7 +1467,11 @@
     "deleteSelectedSuccess": "Selected archived items deleted",
     "selectAll": "Select all",
     "loadMore": "Carregar mais",
-    "loadMoreFailed": "Falha ao carregar mais"
+    "loadMoreFailed": "Falha ao carregar mais",
+    "trashSessionFolders": "Também mover as pastas dos chats para a lixeira ({{count}})",
+    "sessionFolderFiles": "{{count}} arquivos",
+    "sessionFoldersMore": "mais {{count}} pastas",
+    "trashSessionFoldersFailed": "Não foi possível mover {{count}} pastas de chat para a lixeira. Você pode excluí-las manualmente."
   },
   "crossSessionMessage": "Mensagens entre conversas",
   "crossSessionMessageDesc": "Permite que agentes enviem mensagens para suas outras conversas. Desativar também desliga a menção @@ na caixa de entrada.",

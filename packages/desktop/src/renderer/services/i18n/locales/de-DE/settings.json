@@ -1464,7 +1464,11 @@
     "deleteSelectedSuccess": "Selected archived items deleted",
     "selectAll": "Select all",
     "loadMore": "Mehr laden",
-    "loadMoreFailed": "Laden weiterer Einträge fehlgeschlagen"
+    "loadMoreFailed": "Laden weiterer Einträge fehlgeschlagen",
+    "trashSessionFolders": "Chat-Ordner ebenfalls in den Papierkorb verschieben ({{count}})",
+    "sessionFolderFiles": "{{count}} Dateien",
+    "sessionFoldersMore": "{{count}} weitere Ordner",
+    "trashSessionFoldersFailed": "{{count}} Chat-Ordner konnten nicht in den Papierkorb verschoben werden. Sie können sie selbst löschen."
   },
   "crossSessionMessage": "Nachrichten zwischen Unterhaltungen",
   "crossSessionMessageDesc": "Erlaubt Agenten, Nachrichten an Ihre anderen Unterhaltungen zu senden. Beim Ausschalten wird auch die @@-Erwähnung im Eingabefeld deaktiviert.",

@@ -1189,5 +1189,11 @@
       "missing": "所选版本中不存在此文件",
       "uncommitted": "未提交"
     }
+  },
+  "sessionFiles": {
+    "rootFolder": "会话文件",
+    "workFolder": "过程",
+    "outputFolder": "成品",
+    "untitled": "新会话"
   }
 }
