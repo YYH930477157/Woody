@@ -1464,7 +1464,11 @@
     "deleteSelectedSuccess": "Selected archived items deleted",
     "selectAll": "Select all",
     "loadMore": "Load more",
-    "loadMoreFailed": "Failed to load more"
+    "loadMoreFailed": "Failed to load more",
+    "trashSessionFolders": "Also move the chat folders to the trash ({{count}})",
+    "sessionFolderFiles": "{{count}} files",
+    "sessionFoldersMore": "{{count}} more folders",
+    "trashSessionFoldersFailed": "{{count}} chat folders couldn't be moved to the trash. You can delete them yourself."
   },
   "crossSessionMessage": "Cross-conversation messages",
   "crossSessionMessageDesc": "Let agents send messages to your other conversations. Turning this off also disables the @@ conversation mention in the input box.",

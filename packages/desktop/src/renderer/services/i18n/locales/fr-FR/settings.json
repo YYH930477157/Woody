@@ -1464,7 +1464,11 @@
     "deleteSelectedSuccess": "Selected archived items deleted",
     "selectAll": "Select all",
     "loadMore": "Charger plus",
-    "loadMoreFailed": "Échec du chargement"
+    "loadMoreFailed": "Échec du chargement",
+    "trashSessionFolders": "Déplacer aussi les dossiers des chats vers la corbeille ({{count}})",
+    "sessionFolderFiles": "{{count}} fichiers",
+    "sessionFoldersMore": "{{count}} dossiers de plus",
+    "trashSessionFoldersFailed": "{{count}} dossiers de chat n'ont pas pu être déplacés vers la corbeille. Vous pouvez les supprimer vous-même."
   },
   "crossSessionMessage": "Messages entre conversations",
   "crossSessionMessageDesc": "Permet aux agents d'envoyer des messages à vos autres conversations. La désactivation coupe aussi la mention @@ dans la zone de saisie.",

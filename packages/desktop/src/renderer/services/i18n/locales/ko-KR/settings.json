@@ -1466,7 +1466,11 @@
     "deleteSelectedSuccess": "Selected archived items deleted",
     "selectAll": "Select all",
     "loadMore": "더 보기",
-    "loadMoreFailed": "더 불러오지 못했습니다"
+    "loadMoreFailed": "더 불러오지 못했습니다",
+    "trashSessionFolders": "채팅 폴더도 휴지통으로 이동 ({{count}}개)",
+    "sessionFolderFiles": "파일 {{count}}개",
+    "sessionFoldersMore": "폴더 {{count}}개 더",
+    "trashSessionFoldersFailed": "채팅 폴더 {{count}}개를 휴지통으로 옮기지 못했습니다. 직접 삭제할 수 있습니다."
   },
   "crossSessionMessage": "대화 간 메시지",
   "crossSessionMessageDesc": "에이전트가 다른 대화로 메시지를 보낼 수 있게 합니다. 끄면 입력창의 @@ 대화 멘션도 비활성화됩니다.",

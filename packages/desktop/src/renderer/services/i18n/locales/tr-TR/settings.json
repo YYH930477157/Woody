@@ -1464,7 +1464,11 @@
     "deleteSelectedSuccess": "Selected archived items deleted",
     "selectAll": "Select all",
     "loadMore": "Daha fazla yükle",
-    "loadMoreFailed": "Daha fazlası yüklenemedi"
+    "loadMoreFailed": "Daha fazlası yüklenemedi",
+    "trashSessionFolders": "Sohbet klasörlerini de çöp kutusuna taşı ({{count}})",
+    "sessionFolderFiles": "{{count}} dosya",
+    "sessionFoldersMore": "{{count}} klasör daha",
+    "trashSessionFoldersFailed": "{{count}} sohbet klasörü çöp kutusuna taşınamadı. Bunları kendiniz silebilirsiniz."
   },
   "crossSessionMessage": "Sohbetler arası mesajlar",
   "crossSessionMessageDesc": "Aracıların diğer sohbetlerinize mesaj göndermesine izin verir. Kapatmak giriş alanındaki @@ sohbet etiketini de devre dışı bırakır.",

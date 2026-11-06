@@ -1205,5 +1205,11 @@
       "missing": "This file did not exist in the selected version",
       "uncommitted": "Uncommitted"
     }
+  },
+  "sessionFiles": {
+    "rootFolder": "файлы-чатов",
+    "workFolder": "работа",
+    "outputFolder": "результаты",
+    "untitled": "новый-чат"
   }
 }

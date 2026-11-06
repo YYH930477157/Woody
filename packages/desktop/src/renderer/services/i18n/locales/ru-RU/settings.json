@@ -1478,7 +1478,11 @@
     "deleteSelectedSuccess": "Selected archived items deleted",
     "selectAll": "Select all",
     "loadMore": "Загрузить ещё",
-    "loadMoreFailed": "Не удалось загрузить ещё"
+    "loadMoreFailed": "Не удалось загрузить ещё",
+    "trashSessionFolders": "Также переместить папки чатов в корзину ({{count}})",
+    "sessionFolderFiles": "файлов: {{count}}",
+    "sessionFoldersMore": "ещё папок: {{count}}",
+    "trashSessionFoldersFailed": "Не удалось переместить в корзину папки чатов: {{count}}. Их можно удалить вручную."
   },
   "crossSessionMessage": "Сообщения между беседами",
   "crossSessionMessageDesc": "Разрешить агентам отправлять сообщения в ваши другие беседы. При отключении также отключается упоминание @@ в поле ввода.",

@@ -5,7 +5,7 @@
  */
 
 import { act, renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IMcpServer } from '@/common/config/storage';
 import { useGuidSend, type GuidSendDeps } from '@/renderer/pages/guid/hooks/useGuidSend';
 
@@ -14,10 +14,12 @@ const swrMutateMock = vi.fn();
 const cbmSessionMock = vi.fn();
 const cbmSkillsMock = vi.fn();
 const cbmImportMock = vi.fn();
+const sessionFilesPrepareMock = vi.fn();
 
 vi.mock('@/common', () => ({
   ipcBridge: {
     codebaseMemory: { session: { invoke: (...args: unknown[]) => cbmSessionMock(...args) } },
+    sessionFiles: { prepare: { invoke: (...args: unknown[]) => sessionFilesPrepareMock(...args) } },
     fs: {
       listAvailableSkills: { invoke: () => cbmSkillsMock() },
       importSkill: { invoke: (...args: unknown[]) => cbmImportMock(...args) },
@@ -91,6 +93,7 @@ describe('useGuidSend', () => {
     cbmSessionMock.mockReset();
     cbmSkillsMock.mockReset();
     cbmImportMock.mockReset();
+    sessionFilesPrepareMock.mockReset();
   });
 
   it('attaches project-bound architecture tools and skill for a new desktop conversation', async () => {
@@ -425,5 +428,108 @@ describe('useGuidSend', () => {
     expect(deps.navigate).toHaveBeenCalledWith('/conversation/conv-1');
     expect(setItemSpy).not.toHaveBeenCalledWith('aionrs_initial_message_conv-1', expect.anything());
     setItemSpy.mockRestore();
+  });
+
+  describe('chat folders', () => {
+    const folders = {
+      dir: 'D:\\project\\.woody\\chat-files\\2026-11-06_hello',
+      work_dir: 'D:\\project\\.woody\\chat-files\\2026-11-06_hello\\work',
+      output_dir: 'D:\\project\\.woody\\chat-files\\2026-11-06_hello\\output',
+    };
+    let previous: PropertyDescriptor | undefined;
+
+    beforeEach(() => {
+      previous = Object.getOwnPropertyDescriptor(window, 'electronAPI');
+      Object.defineProperty(window, 'electronAPI', { configurable: true, value: {} });
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+      if (previous) Object.defineProperty(window, 'electronAPI', previous);
+      else Reflect.deleteProperty(window, 'electronAPI');
+    });
+
+    it('gives a chat in the chosen folder its own file folders, named from the first message', async () => {
+      sessionFilesPrepareMock.mockResolvedValue(folders);
+      const deps = createDeps();
+      deps.dir = 'D:\\project';
+      deps.input = '修复串口接收超时。然后看日志';
+
+      const { result } = renderHook(() => useGuidSend(deps));
+      await act(async () => result.current.handleSend());
+
+      expect(sessionFilesPrepareMock).toHaveBeenCalledWith({
+        workspace: 'D:\\project',
+        title: '修复串口接收超时。然后看日志',
+        names: {
+          root: 'conversation.sessionFiles.rootFolder',
+          work: 'conversation.sessionFiles.workFolder',
+          output: 'conversation.sessionFiles.outputFolder',
+          untitled: 'conversation.sessionFiles.untitled',
+        },
+      });
+      expect(createConversationInvokeMock.mock.calls[0][0].extra.session_files).toEqual(folders);
+    });
+
+    it('does the same for aionrs', async () => {
+      sessionFilesPrepareMock.mockResolvedValue(folders);
+      const deps = createDeps();
+      deps.dir = 'D:\\project';
+      deps.selectedAssistantBackend = 'aionrs';
+      deps.current_model = { provider_id: 'openai', model: 'm', use_model: 'm' } as never;
+
+      const { result } = renderHook(() => useGuidSend(deps));
+      await act(async () => result.current.handleSend());
+
+      expect(createConversationInvokeMock.mock.calls[0][0].extra.session_files).toEqual(folders);
+    });
+
+    it('asks for nothing when the chat runs in its own temporary folder', async () => {
+      const deps = createDeps();
+
+      const { result } = renderHook(() => useGuidSend(deps));
+      await act(async () => result.current.handleSend());
+
+      expect(sessionFilesPrepareMock).not.toHaveBeenCalled();
+      expect(createConversationInvokeMock.mock.calls[0][0].extra.session_files).toBeUndefined();
+    });
+
+    it('starts the chat without folders when the main process fails', async () => {
+      sessionFilesPrepareMock.mockRejectedValue(new Error('disk is read-only'));
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const deps = createDeps();
+      deps.dir = 'D:\\project';
+
+      const { result } = renderHook(() => useGuidSend(deps));
+      await act(async () => result.current.handleSend());
+
+      expect(createConversationInvokeMock).toHaveBeenCalledTimes(1);
+      expect(createConversationInvokeMock.mock.calls[0][0].extra.session_files).toBeUndefined();
+      warn.mockRestore();
+    });
+
+    it('stops waiting for the folders after three seconds', async () => {
+      vi.useFakeTimers();
+      sessionFilesPrepareMock.mockReturnValue(new Promise(() => undefined));
+      const deps = createDeps();
+      deps.dir = 'D:\\project';
+
+      const { result } = renderHook(() => useGuidSend(deps));
+      let sending: Promise<void> | undefined;
+      act(() => {
+        sending = result.current.handleSend();
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2999);
+      });
+      expect(createConversationInvokeMock).not.toHaveBeenCalled();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1);
+        await sending;
+      });
+
+      expect(createConversationInvokeMock).toHaveBeenCalledTimes(1);
+      expect(createConversationInvokeMock.mock.calls[0][0].extra.session_files).toBeUndefined();
+    });
   });
 });

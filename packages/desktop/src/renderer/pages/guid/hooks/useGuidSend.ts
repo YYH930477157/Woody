@@ -5,6 +5,7 @@
  */
 
 import { ipcBridge } from '@/common';
+import type { SessionFilesRef } from '@/common/adapter/ipcBridge';
 import { type ChatFileRef, chatFileRefPath } from '@/common/types/chatFile';
 import type { IMcpServer, TProviderWithModel } from '@/common/config/storage';
 import { toSessionMcpServer } from '@/renderer/hooks/mcp/catalog';
@@ -28,6 +29,43 @@ const ensureCodebaseMemorySkill = createCodebaseMemorySkillEnsurer({
   list: () => ipcBridge.fs.listAvailableSkills.invoke(),
   importSkill: async (skillPath) => (await ipcBridge.fs.importSkill.invoke({ skill_path: skillPath })).skill_name,
 });
+
+const SESSION_FILES_TIMEOUT_MS = 3000;
+
+/**
+ * Pick the folders a new chat in the user's own workspace keeps its files in. They are only
+ * a convenience: when the main process cannot answer (web UI, unusable folder, slow disk),
+ * the chat starts without them rather than waiting.
+ */
+async function prepareSessionFiles(
+  workspace: string,
+  title: string,
+  t: TFunction
+): Promise<SessionFilesRef | undefined> {
+  if (!workspace || typeof window === 'undefined' || !window.electronAPI) return undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const prepared = ipcBridge.sessionFiles.prepare.invoke({
+      workspace,
+      title,
+      names: {
+        root: t('conversation.sessionFiles.rootFolder'),
+        work: t('conversation.sessionFiles.workFolder'),
+        output: t('conversation.sessionFiles.outputFolder'),
+        untitled: t('conversation.sessionFiles.untitled'),
+      },
+    });
+    const timeout = new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), SESSION_FILES_TIMEOUT_MS);
+    });
+    return (await Promise.race([prepared, timeout])) ?? undefined;
+  } catch (error) {
+    console.warn('[useGuidSend] Chat folders unavailable:', error);
+    return undefined;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export type GuidSendDeps = {
   // Input state
@@ -224,6 +262,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
         return;
       }
       try {
+        const sessionFiles = isCustomWorkspace ? await prepareSessionFiles(finalWorkspace, input, t) : undefined;
         const conversation = await ipcBridge.conversation.create.invoke({
           name: input,
           model: current_model,
@@ -237,6 +276,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
             workspace: finalWorkspace,
             workspace_project_id: managedExtra?.workspace_project_id,
             custom_workspace: isCustomWorkspace,
+            session_files: sessionFiles,
             selected_mcp_server_ids: selectedUserMcpServerIdsToSend,
             selected_session_mcp_servers: codebaseMemory.servers,
             preset_enabled_skills: codebaseMemory.skills.length ? codebaseMemory.skills : undefined,
@@ -281,6 +321,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
     }
 
     try {
+      const sessionFiles = isCustomWorkspace ? await prepareSessionFiles(finalWorkspace, input, t) : undefined;
       const conversation = await ipcBridge.conversation.create.invoke({
         name: input,
         assistant: {
@@ -291,6 +332,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
         extra: {
           workspace: finalWorkspace,
           custom_workspace: isCustomWorkspace,
+          session_files: sessionFiles,
           default_files: files.map(chatFileRefPath),
           selected_mcp_server_ids: selectedUserMcpServerIdsToSend,
           selected_session_mcp_servers: codebaseMemory.servers,

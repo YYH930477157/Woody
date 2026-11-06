@@ -1189,5 +1189,11 @@
       "missing": "This file did not exist in the selected version",
       "uncommitted": "Uncommitted"
     }
+  },
+  "sessionFiles": {
+    "rootFolder": "فایل-چت",
+    "workFolder": "کار",
+    "outputFolder": "خروجی",
+    "untitled": "چت-جدید"
   }
 }

@@ -1917,6 +1917,29 @@ export const sourceControl = {
   ),
 };
 
+/**
+ * The folders a chat's agent keeps the files it creates in, stored in
+ * `conversation.extra.session_files`: `dir` is the chat's own folder, the
+ * other two are its subfolders for intermediate files and finished results.
+ */
+export type SessionFilesRef = { dir: string; work_dir: string; output_dir: string };
+/** Localized folder names; the main process makes each one safe for a path. */
+export type SessionFolderNames = { root: string; work: string; output: string; untitled: string };
+export type SessionFolderState = { dir: string; files: number };
+export type SessionFoldersTrashResult = { trashed: string[]; failed: string[] };
+
+export const sessionFiles = {
+  /** Choose a new chat's folders inside its workspace; `null` when the workspace cannot hold them. */
+  prepare: bridge.buildProvider<
+    SessionFilesRef | null,
+    { workspace: string; title: string; names: SessionFolderNames }
+  >('session-files.prepare'),
+  /** Which of these chat folders exist, and how many files each holds. */
+  inspect: bridge.buildProvider<SessionFolderState[], { dirs: string[] }>('session-files.inspect'),
+  /** Move chat folders to the system trash. */
+  trash: bridge.buildProvider<SessionFoldersTrashResult, { dirs: string[] }>('session-files.trash'),
+};
+
 export const staticScan = {
   scan: bridge.buildProvider<StaticScanResult, { repoPath: string; selectedPaths: string[]; config: StaticScanConfig }>(
     'source-control.static-scan'
@@ -2118,6 +2141,8 @@ export interface ICreateConversationParams {
     web_search_engine?: 'google' | 'default';
     context?: string;
     context_file_name?: string;
+    /** Where the agent keeps the files it creates; see {@link SessionFilesRef}. */
+    session_files?: SessionFilesRef;
     /** Transient: preset opt-in skills. Consumed by backend create handler
      *  and stripped before persistence. */
     preset_enabled_skills?: string[];

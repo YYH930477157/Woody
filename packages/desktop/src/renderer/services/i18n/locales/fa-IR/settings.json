@@ -1464,7 +1464,11 @@
     "deleteSelectedSuccess": "Selected archived items deleted",
     "selectAll": "Select all",
     "loadMore": "بارگذاری بیشتر",
-    "loadMoreFailed": "بارگذاری موارد بیشتر ناموفق بود"
+    "loadMoreFailed": "بارگذاری موارد بیشتر ناموفق بود",
+    "trashSessionFolders": "پوشه‌های چت هم به سطل زباله منتقل شوند ({{count}})",
+    "sessionFolderFiles": "{{count}} فایل",
+    "sessionFoldersMore": "{{count}} پوشهٔ دیگر",
+    "trashSessionFoldersFailed": "{{count}} پوشهٔ چت به سطل زباله منتقل نشد. می‌توانید خودتان آن‌ها را حذف کنید."
   },
   "crossSessionMessage": "پیام‌های بین گفتگوها",
   "crossSessionMessageDesc": "به عامل‌ها اجازه می‌دهد به گفتگوهای دیگر شما پیام بفرستند. با خاموش کردن، منشن @@ در کادر ورودی نیز غیرفعال می‌شود.",

@@ -1466,7 +1466,11 @@
     "deleteSelectedSuccess": "已刪除所選歸檔項目",
     "selectAll": "全選",
     "loadMore": "載入更多",
-    "loadMoreFailed": "載入更多失敗"
+    "loadMoreFailed": "載入更多失敗",
+    "trashSessionFolders": "同時把會話資料夾移到資源回收筒（{{count}} 個）",
+    "sessionFolderFiles": "{{count}} 個檔案",
+    "sessionFoldersMore": "還有 {{count}} 個資料夾",
+    "trashSessionFoldersFailed": "{{count}} 個會話資料夾無法移到資源回收筒，可以手動刪除。"
   },
   "crossSessionMessage": "跨對話訊息",
   "crossSessionMessageDesc": "允許 Agent 向你的其他對話傳送訊息。關閉後，輸入框的 @@ 對話提及與投遞功能會同時停用。",

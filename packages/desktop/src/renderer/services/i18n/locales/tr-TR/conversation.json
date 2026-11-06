@@ -1191,5 +1191,11 @@
       "missing": "This file did not exist in the selected version",
       "uncommitted": "Uncommitted"
     }
+  },
+  "sessionFiles": {
+    "rootFolder": "sohbet-dosyaları",
+    "workFolder": "çalışma",
+    "outputFolder": "çıktılar",
+    "untitled": "yeni-sohbet"
   }
 }
