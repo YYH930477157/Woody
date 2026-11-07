@@ -96,20 +96,24 @@ describe('useGuidSend', () => {
     sessionFilesPrepareMock.mockReset();
   });
 
-  it('attaches project-bound architecture tools and skill for a new desktop conversation', async () => {
+  /** Send from the new-chat page with codebase memory enabled for the project; returns the create extra. */
+  const sendWithCodebaseMemory = async (patch: Partial<GuidSendDeps> = {}) => {
     const previous = Object.getOwnPropertyDescriptor(window, 'electronAPI');
     Object.defineProperty(window, 'electronAPI', { configurable: true, value: {} });
     try {
-      const deps = createDeps();
+      const deps = { ...createDeps(), ...patch };
       deps.dir = 'D:/project';
       deps.selectedMcpServerIds = undefined;
-      deps.availableMcpServers.push({
-        id: 'cbm',
-        name: 'woody-codebase-memory',
-        enabled: true,
-        builtin: true,
-        transport: { type: 'stdio', command: 'node', args: ['generic.cjs'] },
-      } as IMcpServer);
+      deps.availableMcpServers = [
+        ...createDeps().availableMcpServers,
+        {
+          id: 'cbm',
+          name: 'woody-codebase-memory',
+          enabled: true,
+          builtin: true,
+          transport: { type: 'stdio', command: 'node', args: ['generic.cjs'] },
+        } as IMcpServer,
+      ];
       cbmSessionMock.mockResolvedValue({
         enabled: true,
         transport: { type: 'stdio', command: 'node', args: ['bound.cjs'] },
@@ -119,18 +123,38 @@ describe('useGuidSend', () => {
       cbmImportMock.mockResolvedValue({ skill_name: 'woody-codebase-memory' });
       const { result } = renderHook(() => useGuidSend(deps));
       await act(async () => result.current.handleSend());
-      const extra = createConversationInvokeMock.mock.calls[0][0].extra;
-      expect(extra.selected_session_mcp_servers).toContainEqual({
-        id: 'cbm',
-        name: 'woody-codebase-memory',
-        transport: { type: 'stdio', command: 'node', args: ['bound.cjs'] },
-      });
-      expect(extra.preset_enabled_skills).toEqual(['woody-codebase-memory']);
-      expect(cbmImportMock).toHaveBeenCalledWith({ skill_path: 'D:/skill/SKILL.md' });
+      return createConversationInvokeMock.mock.calls[0][0].extra;
     } finally {
       if (previous) Object.defineProperty(window, 'electronAPI', previous);
       else Reflect.deleteProperty(window, 'electronAPI');
     }
+  };
+
+  it('attaches project-bound architecture tools and skill for a new desktop conversation', async () => {
+    const extra = await sendWithCodebaseMemory();
+    expect(extra.selected_session_mcp_servers).toContainEqual({
+      id: 'cbm',
+      name: 'woody-codebase-memory',
+      transport: { type: 'stdio', command: 'node', args: ['bound.cjs'] },
+    });
+    expect(extra.preset_enabled_skills).toEqual(['woody-codebase-memory']);
+    expect(cbmImportMock).toHaveBeenCalledWith({ skill_path: 'D:/skill/SKILL.md' });
+  });
+
+  it('still attaches the skill once the page has filled in the assistant default skills', async () => {
+    // The page always sets guidEnabledSkills from the assistant defaults, which never name this skill.
+    const extra = await sendWithCodebaseMemory({ guidEnabledSkills: ['officecli'], guidDisabledBuiltinSkills: [] });
+    expect(extra.preset_enabled_skills).toEqual(['woody-codebase-memory']);
+  });
+
+  it('leaves the skill out when the user switched it off, but keeps the tools', async () => {
+    const extra = await sendWithCodebaseMemory({
+      guidEnabledSkills: ['officecli'],
+      guidDisabledBuiltinSkills: ['woody-codebase-memory'],
+    });
+    expect(extra.preset_enabled_skills).toBeUndefined();
+    expect(cbmImportMock).not.toHaveBeenCalled();
+    expect(extra.selected_session_mcp_servers).toContainEqual(expect.objectContaining({ id: 'cbm' }));
   });
 
   it('passes selected mode into assistant conversation overrides when creating a preset ACP conversation', async () => {
