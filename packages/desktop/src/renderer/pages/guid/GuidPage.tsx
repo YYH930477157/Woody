@@ -30,6 +30,7 @@ import { useTypewriterPlaceholder } from './hooks/useTypewriterPlaceholder';
 import { ensureBackendMcpCatalog } from '@/renderer/hooks/mcp/catalog';
 import { resolveGuidAssistantDefaults } from './utils/assistantDefaults';
 import { defaultSelectedMcpServerIds, toggleMcpServerId } from './utils/mcpSelection';
+import { type GuidSkillOption, toGuidSkillOption } from './utils/skillOptions';
 import SpeechInputButton from '@/renderer/components/chat/SpeechInputButton';
 import { chatFileRefPath, uploadFileRef } from '@/common/types/chatFile';
 import { useOpenFileSelector } from '@/renderer/hooks/file/useOpenFileSelector';
@@ -80,9 +81,9 @@ const GuidPage: React.FC = () => {
 
   // --- Skills state ---
   // Skill metadata comes from the database-backed catalog. Built-in auto-inject
-  // skills default checked; the rest are opt-in per conversation or pre-checked
-  // by assistant defaults.
-  const [allSkills, setAllSkills] = useState<Array<{ name: string; description: string; isAuto: boolean }>>([]);
+  // skills and the codebase memory skill default checked; the rest are opt-in per
+  // conversation or pre-checked by assistant defaults.
+  const [allSkills, setAllSkills] = useState<GuidSkillOption[]>([]);
   const [guidDisabledBuiltinSkills, setGuidDisabledBuiltinSkills] = useState<string[] | undefined>(undefined);
   const [guidEnabledSkills, setGuidEnabledSkills] = useState<string[] | undefined>(undefined);
   const [availableMcpServers, setAvailableMcpServers] = useState<IMcpServer[]>([]);
@@ -98,13 +99,7 @@ const GuidPage: React.FC = () => {
     ipcBridge.fs.listAvailableSkills
       .invoke()
       .then((availableSkills) => {
-        setAllSkills(
-          availableSkills.map((s) => ({
-            name: s.name,
-            description: s.description,
-            isAuto: s.source === 'builtin' && s.is_auto_inject,
-          }))
-        );
+        setAllSkills(availableSkills.map(toGuidSkillOption));
       })
       .catch(() => setAllSkills([]));
   }, []);

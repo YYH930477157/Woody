@@ -4,6 +4,7 @@ import {
   createCodebaseMemorySkillEnsurer,
   prepareCodebaseMemorySession,
 } from '@/common/adapter/codebaseMemory/session';
+import { toGuidSkillOption } from '@/renderer/pages/guid/utils/skillOptions';
 
 const server = {
   id: 'cbm',
@@ -26,7 +27,6 @@ const input = () => ({
   catalog: [server],
   servers: [other],
   selectedIds: undefined as string[] | undefined,
-  skillSelection: undefined as string[] | undefined,
   excludedSkills: [] as string[],
 });
 
@@ -63,13 +63,12 @@ describe('project architecture session preparation', () => {
     await prepareCodebaseMemorySession({ ...input(), catalog: [{ ...server, enabled: false }] }, deps);
     expect(deps.resolve).not.toHaveBeenCalled();
   });
-  it('does not import a skill explicitly deselected or excluded', async () => {
-    for (const selection of [{ skillSelection: [] }, { excludedSkills: ['woody-codebase-memory'] }]) {
-      const deps = makeDeps();
-      const result = await prepareCodebaseMemorySession({ ...input(), ...selection }, deps);
-      expect(deps.ensureSkill).not.toHaveBeenCalled();
-      expect(result.skills).toEqual([]);
-    }
+  it('does not import a skill the user switched off, but keeps the tools', async () => {
+    const deps = makeDeps();
+    const result = await prepareCodebaseMemorySession({ ...input(), excludedSkills: ['woody-codebase-memory'] }, deps);
+    expect(deps.ensureSkill).not.toHaveBeenCalled();
+    expect(result.skills).toEqual([]);
+    expect(result.servers.map((s) => s.id)).toEqual(['other', 'cbm']);
   });
   it('reports invalid project configuration rather than creating an incorrectly bound session', async () => {
     const deps = makeDeps();
@@ -117,5 +116,23 @@ describe('keeping the bundled architecture skill current', () => {
     const skills = library(false);
     skills.importSkill.mockRejectedValue(new Error('disk full'));
     await expect(createCodebaseMemorySkillEnsurer(skills)('D:/skills/SKILL.md')).rejects.toThrow('disk full');
+  });
+});
+
+const skill = (name: string, source: 'builtin' | 'custom', is_auto_inject: boolean) => ({
+  name,
+  description: name,
+  source,
+  is_auto_inject,
+});
+
+describe('codebase memory skill on the new-chat page', () => {
+  it('starts checked like an auto skill, so switching it off is an explicit opt-out', () => {
+    expect(toGuidSkillOption(skill('woody-codebase-memory', 'custom', false)).isAuto).toBe(true);
+  });
+  it('leaves other skills as they were', () => {
+    expect(toGuidSkillOption(skill('officecli', 'builtin', false)).isAuto).toBe(false);
+    expect(toGuidSkillOption(skill('cron', 'builtin', true)).isAuto).toBe(true);
+    expect(toGuidSkillOption(skill('mine', 'custom', true)).isAuto).toBe(false);
   });
 });

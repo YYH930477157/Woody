@@ -235,7 +235,6 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
         repoPath: typeof window !== 'undefined' && window.electronAPI ? finalWorkspace : '',
         catalog: availableMcpServers,
         selectedIds: selectedMcpServerIds,
-        skillSelection: guidEnabledSkills,
         excludedSkills: excludeBuiltinSkills,
         servers:
           assistantBackend !== 'aionrs' && selectedMcpServerIds !== undefined

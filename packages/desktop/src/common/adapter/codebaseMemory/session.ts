@@ -7,7 +7,7 @@ type Selection = {
   catalog: IMcpServer[];
   servers: ISessionMcpServer[];
   selectedIds?: string[];
-  skillSelection?: string[];
+  /** Skills the user switched off. The codebase skill counts as on unless it is listed here. */
   excludedSkills?: string[];
 };
 type Dependencies = {
@@ -59,10 +59,10 @@ export async function prepareCodebaseMemorySession(selection: Selection, deps: D
   if (!session.enabled) return result;
   if (!session.transport) throw new Error('Codebase memory project transport is unavailable');
   servers.push({ id: registered.id, name: registered.name, transport: session.transport });
+  // The new-chat page fills the enabled skill list from the assistant's defaults,
+  // which never name this skill, so that list cannot express an opt-out. The page
+  // shows the skill as on by default, and switching it off lands in excludedSkills.
   if (selection.excludedSkills?.includes(CODEBASE_MEMORY_SKILL_NAME)) return result;
-  if (selection.skillSelection !== undefined && !selection.skillSelection.includes(CODEBASE_MEMORY_SKILL_NAME)) {
-    return result;
-  }
   if (!session.skillPath) throw new Error('Bundled codebase memory skill is unavailable');
   const skillName = await deps.ensureSkill(session.skillPath);
   if (skillName !== CODEBASE_MEMORY_SKILL_NAME) throw new Error('Bundled codebase memory skill import failed');
