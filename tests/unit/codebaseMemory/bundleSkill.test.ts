@@ -23,6 +23,16 @@ describe('bundled skill tool contract', () => {
     }
   });
 
+  it('offers feature tracing and keeps feature cards in one place with user corrections preserved', () => {
+    const skill = readFileSync(`${skillDir}/SKILL.md`, 'utf8');
+    const description = /^description: (.+)$/m.exec(skill)?.[1] ?? '';
+    // The skills index only shows the description, so it must name the feature use case.
+    expect(description).toMatch(/feature end to end/);
+    expect(description).toContain('.woody/features');
+    expect(skill).toContain('`.woody/features/<feature>.md`');
+    expect(skill).toMatch(/Corrections from the user: .*Keep this section unchanged when you update the card/);
+  });
+
   it('isolates the imported skill directory from the large native bundle', () => {
     expect(existsSync(`${bundleDir}/SKILL.md`)).toBe(false);
     expect(readdirSync(skillDir)).toEqual(['SKILL.md']);
