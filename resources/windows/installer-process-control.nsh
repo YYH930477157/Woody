@@ -291,6 +291,7 @@ Var /GLOBAL AionUiCurrentOutDir
       ${EndIf}
   ${EndIf}
 
+  !insertmacro AIONUI_PROGRESS_BEFORE_PAYLOAD
 !macroend
 
 !endif

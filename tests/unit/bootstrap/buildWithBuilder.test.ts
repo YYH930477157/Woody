@@ -64,13 +64,54 @@ function resolveAppBuilderInstallUtil(): string {
 }
 
 describe('build-with-builder', () => {
-  it('keeps extraction and installation on an indeterminate progress bar until the finish page', () => {
+  it('gives the install page its own determinate bar that only the progress macros move', () => {
     const script = readFileSync(resolve(repoRoot, 'resources/windows/installer-update-verify.nsh'), 'utf8');
     const hook = script.match(/!macro customPageAfterChangeDir([\s\S]*?)!macroend/)?.[1];
     expect(hook).toContain('MUI_PAGE_CUSTOMFUNCTION_SHOW AionUiShowInstallProgress');
-    const callback = script.match(/Function AionUiShowInstallProgress([\s\S]*?)FunctionEnd/)?.[1];
-    expect(callback).toContain('0x08'); // PBS_MARQUEE
-    expect(callback).toContain('0x040A 1'); // PBM_SETMARQUEE
+    const show = script.match(/Function AionUiShowInstallProgress([\s\S]*?)FunctionEnd/)?.[1];
+    expect(show).toContain('"msctls_progress32"');
+    expect(show).toContain('ShowWindow $1 0 ; SW_HIDE'); // NSIS keeps moving its own bar 1004
+    expect(show).toContain('0x0406 0 ${AIONUI_PROGRESS_DONE}'); // PBM_SETRANGE32
+    expect(show).not.toContain('0x040A'); // no marquee
+    const extract = script.match(/!macro AIONUI_EXTRACT_7Z_WITH_PROGRESS([\s\S]*?)!macroend/)?.[1];
+    expect(extract).toContain('Nsis7z::ExtractWithCallback "${_FILE}" $AionUiExtractCallbackAddr');
+  });
+
+  it('keeps the install progress steps in order and ending at 100%', () => {
+    const script = readFileSync(resolve(repoRoot, 'resources/windows/installer-update-verify.nsh'), 'utf8');
+    const value = (name: string) => Number(script.match(new RegExp(`!define AIONUI_PROGRESS_${name} (\\d+)`))?.[1]);
+    const verifyMacro = script.match(/!macro AIONUI_VERIFY_CORE_APP_FILES([\s\S]*?)!macroend/)?.[1] ?? '';
+    const verifiedFiles = verifyMacro.match(/!insertmacro AIONUI_VERIFY_REQUIRED_FILE /g)?.length ?? 0;
+    expect(verifiedFiles).toBeGreaterThan(0);
+
+    const steps = [
+      0,
+      value('REMOVE_OLD'),
+      value('EXTRACT_START'),
+      value('EXTRACT_START') + value('EXTRACT_SPAN'),
+      value('REGISTER'),
+      value('VERIFY'),
+      value('VERIFY') + verifiedFiles * value('VERIFY_STEP'),
+      value('VERIFY_CORE'),
+      value('DONE'),
+    ];
+    expect(value('EXTRACT_START') + value('EXTRACT_SPAN')).toBe(value('COPY'));
+    for (let i = 1; i < steps.length; i++) expect(steps[i], `step ${i}`).toBeGreaterThan(steps[i - 1]);
+    expect(value('DONE')).toBe(1000);
+  });
+
+  it('has an English and a Chinese status line for every install step', () => {
+    const messages = readFileSync(resolve(repoRoot, 'resources/windows/installer-messages.nsh'), 'utf8');
+    const names = (lang: string) =>
+      Array.from(messages.matchAll(new RegExp(`!define AIONUI_MSG_PROGRESS_([A-Z_]+)_${lang} "`, 'g')), (m) => m[1]);
+    expect(names('ZH').length).toBeGreaterThan(0);
+    expect(names('ZH').toSorted()).toEqual(names('EN').toSorted());
+    const sources = ['installer-update-verify.nsh', 'installer-process-control.nsh']
+      .map((file) => readFileSync(resolve(repoRoot, 'resources/windows', file), 'utf8'))
+      .join('\n');
+    for (const used of sources.matchAll(/AIONUI_MSG_PROGRESS_([A-Z_]+)_(ZH|EN)\b/g)) {
+      expect(names(used[2]), used[0]).toContain(used[1]);
+    }
   });
 
   it('stages updates without reusing or deleting an earlier backup directory', () => {
@@ -309,6 +350,7 @@ childProcess.execSync = function mockedExecSync(command) {
     const callsPath = join(tempDir, 'prepare-calls.json');
     const appBuilderDir = resolve(tempDir, 'node_modules/app-builder-lib');
     const installUtilPath = resolve(appBuilderDir, 'templates/nsis/include/installUtil.nsh');
+    const extractPath = resolve(appBuilderDir, 'templates/nsis/include/extractAppPackage.nsh');
 
     writeFileSync(
       hookPath,
@@ -376,6 +418,7 @@ childProcess.execSync = function mockedExecSync(command) {
       mkdirSync(dirname(installUtilPath), { recursive: true });
       writeFileSync(resolve(appBuilderDir, 'package.json'), '{}\n');
       copyFileSync(resolveAppBuilderInstallUtil(), installUtilPath);
+      copyFileSync(resolve(dirname(resolveAppBuilderInstallUtil()), 'extractAppPackage.nsh'), extractPath);
 
       const result = spawnSync(process.execPath, ['scripts/build-with-builder.js', ...args], {
         cwd: tempDir,
@@ -397,6 +440,10 @@ childProcess.execSync = function mockedExecSync(command) {
         expect(installUtil).toContain('AionUi-bundled-uninstaller override source');
         expect(installUtil).toContain('$PLUGINSDIR\\AionUi-fixed-uninstaller.exe');
         expect(installUtil.match(/AionUi-bundled-uninstaller override source/g)).toHaveLength(1);
+        const extract = readFileSync(extractPath, 'utf8');
+        expect(extract.match(/!insertmacro AIONUI_EXTRACT_7Z_WITH_PROGRESS "\$\{FILE\}"/g)).toHaveLength(1);
+        // Only the first extraction is rerouted; the last-resort overwrite stays plain.
+        expect(extract.match(/^\s*Nsis7z::Extract "\$\{FILE\}"$/gm)).toHaveLength(2);
       }
 
       const calls = JSON.parse(readFileSync(callsPath, 'utf8')) as Array<{ arch?: string } | null>;
