@@ -170,6 +170,49 @@ function patchElectronBuilderNsisInstaller() {
     fs.writeFileSync(installUtilPath, patched);
     console.log('Patched electron-builder NSIS uninstall failure handoff.');
   }
+
+  patchElectronBuilderNsisExtractProgress(appBuilderDir);
+}
+
+/**
+ * Route the installer's main 7z extraction through AIONUI_EXTRACT_7Z_WITH_PROGRESS
+ * (resources/windows/installer-update-verify.nsh), which reports real bytes on the
+ * install page. Templates without that macro keep the plain Nsis7z::Extract.
+ * @param {string} appBuilderDir app-builder-lib package directory
+ */
+function patchElectronBuilderNsisExtractProgress(appBuilderDir) {
+  const extractPath = path.join(appBuilderDir, 'templates', 'nsis', 'include', 'extractAppPackage.nsh');
+  if (!fs.existsSync(extractPath)) {
+    console.warn(`Warning: electron-builder NSIS extractAppPackage.nsh not found: ${extractPath}`);
+    return;
+  }
+
+  const original = fs.readFileSync(extractPath, 'utf8');
+  const plainExtract = ['  SetOutPath "$PLUGINSDIR\\7z-out"', '  Nsis7z::Extract "${FILE}"', '  Pop $R0'].join('\n');
+  const progressExtract = [
+    '  SetOutPath "$PLUGINSDIR\\7z-out"',
+    '  !ifmacrodef AIONUI_EXTRACT_7Z_WITH_PROGRESS',
+    '    !insertmacro AIONUI_EXTRACT_7Z_WITH_PROGRESS "${FILE}"',
+    '  !else',
+    '    Nsis7z::Extract "${FILE}"',
+    '  !endif',
+    '  Pop $R0',
+  ].join('\n');
+
+  if (original.includes(progressExtract)) {
+    return;
+  }
+  if (!original.includes(plainExtract)) {
+    throw new Error(
+      'electron-builder NSIS 7z extraction template changed; update patchElectronBuilderNsisExtractProgress.'
+    );
+  }
+  // A replacer function keeps `$` sequences in the NSIS text literal.
+  fs.writeFileSync(
+    extractPath,
+    original.replace(plainExtract, () => progressExtract)
+  );
+  console.log('Patched electron-builder NSIS extraction progress.');
 }
 
 function walkFiles(dir, acc = []) {

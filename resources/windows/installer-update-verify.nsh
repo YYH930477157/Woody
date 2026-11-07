@@ -10,24 +10,165 @@ Var /GLOBAL AionUiActiveMarkerResult
 
 !define AIONUI_ACTIVE_INSTALLER_MARKER "aionui-installer-active.marker"
 
-; Nsis7z reports extraction-only percentages on the same control that NSIS uses
-; for the whole install. A busy indicator avoids false completion and resets.
+; Install page progress, in permille of the whole install.
+; NSIS moves its own bar (control 1004) after every script instruction, so it races
+; ahead on cheap instructions and stands still during extraction and copying, which
+; are one instruction each. The page therefore gets a second bar that only these
+; macros move, and the status line (control 1006) names the step and the percentage.
+; Weights follow a measured fresh install: extraction is about half of the time, the
+; per-file verification log lines about a quarter.
+!define AIONUI_PROGRESS_REMOVE_OLD 30
+!define AIONUI_PROGRESS_EXTRACT_START 80
+!define AIONUI_PROGRESS_EXTRACT_SPAN 620
+!define AIONUI_PROGRESS_COPY 700
+!define AIONUI_PROGRESS_REGISTER 740
+!define AIONUI_PROGRESS_VERIFY 760
+!define AIONUI_PROGRESS_VERIFY_STEP 17
+!define AIONUI_PROGRESS_VERIFY_CORE 940
+!define AIONUI_PROGRESS_DONE 1000
+
+Var /GLOBAL AionUiProgressBar
+Var /GLOBAL AionUiProgressText
+Var /GLOBAL AionUiProgressPos
+Var /GLOBAL AionUiProgressPercent
+Var /GLOBAL AionUiProgressZh
+Var /GLOBAL AionUiProgressEn
+Var /GLOBAL AionUiProgressMessage
+Var /GLOBAL AionUiExtractCallbackAddr
+Var /GLOBAL AionUiExtractDone
+Var /GLOBAL AionUiExtractTotal
+Var /GLOBAL AionUiExtractSwap
+Var /GLOBAL AionUiExtractStep
+Var /GLOBAL AionUiExtractPos
+Var /GLOBAL AionUiExtractLast
+Var /GLOBAL AionUiVerifyPos
+
+; Set the install page bar and status line. A no-op until the page has created its bar
+; (silent installs, the uninstaller, or when creating the bar failed).
+!macro AIONUI_PROGRESS _PERMILLE _ZH _EN
+  !ifndef BUILD_UNINSTALLER
+    StrCpy $AionUiProgressPos "${_PERMILLE}"
+    StrCpy $AionUiProgressZh "${_ZH}"
+    StrCpy $AionUiProgressEn "${_EN}"
+    Call AionUiSetProgress
+  !endif
+!macroend
+
 !ifndef BUILD_UNINSTALLER
+Function AionUiSetProgress
+  ${If} $AionUiProgressBar == ""
+  ${OrIf} $AionUiProgressBar == 0
+    Return
+  ${EndIf}
+  SendMessage $AionUiProgressBar 0x0402 $AionUiProgressPos 0 ; PBM_SETPOS
+  IntOp $AionUiProgressPercent $AionUiProgressPos / 10
+  ${If} $LANGUAGE == 2052
+    StrCpy $AionUiProgressMessage "$AionUiProgressZh  $AionUiProgressPercent%"
+  ${Else}
+    StrCpy $AionUiProgressMessage "$AionUiProgressEn  $AionUiProgressPercent%"
+  ${EndIf}
+  ${If} $AionUiProgressText != 0
+    SendMessage $AionUiProgressText 0x000C 0 "STR:$AionUiProgressMessage" ; WM_SETTEXT
+  ${EndIf}
+FunctionEnd
+
+; Runs on the page's UI thread, so the new bar belongs to a thread that pumps messages.
 Function AionUiShowInstallProgress
   Push $0
   Push $1
+  Push $2
+  Push $3
+  Push $4
+  Push $5
+  Push $6
+  StrCpy $AionUiProgressBar 0
   FindWindow $0 "#32770" "" $HWNDPARENT
-  GetDlgItem $0 $0 1004
-  ${If} $0 != 0
-    System::Call 'user32::GetWindowLongW(p r0, i -16) i .r1'
-    IntOp $1 $1 | 0x08 ; PBS_MARQUEE
-    System::Call 'user32::SetWindowLongW(p r0, i -16, i r1)'
-    SendMessage $0 0x040A 1 40 ; PBM_SETMARQUEE
+  GetDlgItem $1 $0 1004
+  GetDlgItem $AionUiProgressText $0 1006
+  ${If} $1 != 0
+    System::Call '*(i 0, i 0, i 0, i 0) p .r2'
+    System::Call 'user32::GetWindowRect(p r1, p r2)'
+    System::Call 'user32::MapWindowPoints(p 0, p r0, p r2, i 2)'
+    System::Call '*$2(i .r3, i .r4, i .r5, i .r6)'
+    System::Free $2
+    IntOp $5 $5 - $3
+    IntOp $6 $6 - $4
+    ; WS_CHILD | WS_VISIBLE
+    System::Call 'user32::CreateWindowExW(i 0, w "msctls_progress32", w "", i 0x50000000, i r3, i r4, i r5, i r6, p r0, p 0, p 0, p 0) p .r2'
+    ${If} $2 != 0
+      StrCpy $AionUiProgressBar $2
+      ShowWindow $1 0 ; SW_HIDE
+      SendMessage $AionUiProgressBar 0x0406 0 ${AIONUI_PROGRESS_DONE} ; PBM_SETRANGE32
+      !insertmacro AIONUI_PROGRESS 0 "${AIONUI_MSG_PROGRESS_PREPARE_ZH}" "${AIONUI_MSG_PROGRESS_PREPARE_EN}"
+    ${EndIf}
   ${EndIf}
+  Pop $6
+  Pop $5
+  Pop $4
+  Pop $3
+  Pop $2
   Pop $1
   Pop $0
 FunctionEnd
 
+; Nsis7z calls this during extraction with the bytes done and the total.
+Function AionUiExtractCallback
+  Pop $AionUiExtractDone
+  Pop $AionUiExtractTotal
+  ; Accept either argument order.
+  System::Int64Op $AionUiExtractDone > $AionUiExtractTotal
+  Pop $AionUiExtractSwap
+  ${If} $AionUiExtractSwap == 1
+    StrCpy $AionUiExtractSwap $AionUiExtractDone
+    StrCpy $AionUiExtractDone $AionUiExtractTotal
+    StrCpy $AionUiExtractTotal $AionUiExtractSwap
+  ${EndIf}
+  ; 64-bit division: the payload can pass 2 GB, beyond IntOp.
+  System::Int64Op $AionUiExtractTotal / ${AIONUI_PROGRESS_EXTRACT_SPAN}
+  Pop $AionUiExtractStep
+  ${If} $AionUiExtractStep == 0
+    Return
+  ${EndIf}
+  System::Int64Op $AionUiExtractDone / $AionUiExtractStep
+  Pop $AionUiExtractPos
+  ${If} $AionUiExtractPos > ${AIONUI_PROGRESS_EXTRACT_SPAN}
+    StrCpy $AionUiExtractPos ${AIONUI_PROGRESS_EXTRACT_SPAN}
+  ${EndIf}
+  IntOp $AionUiExtractPos $AionUiExtractPos + ${AIONUI_PROGRESS_EXTRACT_START}
+  ${If} $AionUiExtractPos != $AionUiExtractLast
+    StrCpy $AionUiExtractLast $AionUiExtractPos
+    !insertmacro AIONUI_PROGRESS $AionUiExtractPos "${AIONUI_MSG_PROGRESS_EXTRACT_ZH}" "${AIONUI_MSG_PROGRESS_EXTRACT_EN}"
+  ${EndIf}
+FunctionEnd
+!endif
+
+; Inserted by the build script's patch of electron-builder's extractUsing7za, in place of
+; its first Nsis7z::Extract. Same extraction into $OUTDIR, plus progress.
+!macro AIONUI_EXTRACT_7Z_WITH_PROGRESS _FILE
+  !insertmacro AIONUI_PROGRESS ${AIONUI_PROGRESS_EXTRACT_START} "${AIONUI_MSG_PROGRESS_EXTRACT_ZH}" "${AIONUI_MSG_PROGRESS_EXTRACT_EN}"
+  StrCpy $AionUiExtractLast ${AIONUI_PROGRESS_EXTRACT_START}
+  GetFunctionAddress $AionUiExtractCallbackAddr AionUiExtractCallback
+  Nsis7z::ExtractWithCallback "${_FILE}" $AionUiExtractCallbackAddr
+  !insertmacro AIONUI_PROGRESS ${AIONUI_PROGRESS_COPY} "${AIONUI_MSG_PROGRESS_COPY_ZH}" "${AIONUI_MSG_PROGRESS_COPY_EN}"
+!macroend
+
+; After the app running check: removing an earlier install, then unpacking the payload.
+!macro AIONUI_PROGRESS_BEFORE_PAYLOAD
+  !ifndef BUILD_UNINSTALLER
+    ${If} ${FileExists} "$INSTDIR\${AIONUI_APP_EXECUTABLE_FILENAME}"
+      !insertmacro AIONUI_PROGRESS ${AIONUI_PROGRESS_REMOVE_OLD} "${AIONUI_MSG_PROGRESS_REMOVE_OLD_ZH}" "${AIONUI_MSG_PROGRESS_REMOVE_OLD_EN}"
+    ${Else}
+      !insertmacro AIONUI_PROGRESS ${AIONUI_PROGRESS_REMOVE_OLD} "${AIONUI_MSG_PROGRESS_UNPACK_ZH}" "${AIONUI_MSG_PROGRESS_UNPACK_EN}"
+    ${EndIf}
+  !endif
+!macroend
+
+; After the payload is in place: the extraction log line, registry and shortcuts follow.
+!macro AIONUI_SHOW_REGISTER_PROGRESS
+  !insertmacro AIONUI_PROGRESS ${AIONUI_PROGRESS_REGISTER} "${AIONUI_MSG_PROGRESS_REGISTER_ZH}" "${AIONUI_MSG_PROGRESS_REGISTER_EN}"
+!macroend
+
+!ifndef BUILD_UNINSTALLER
 !macro customPageAfterChangeDir
   !define MUI_PAGE_CUSTOMFUNCTION_SHOW AionUiShowInstallProgress
 !macroend
@@ -189,9 +330,13 @@ FunctionEnd
   ${Else}
     !insertmacro AIONUI_LOG_EVENT "verify-required-file ok label=${_LABEL} path=${_PATH}"
   ${EndIf}
+  IntOp $AionUiVerifyPos $AionUiVerifyPos + ${AIONUI_PROGRESS_VERIFY_STEP}
+  !insertmacro AIONUI_PROGRESS $AionUiVerifyPos "${AIONUI_MSG_PROGRESS_VERIFY_ZH}" "${AIONUI_MSG_PROGRESS_VERIFY_EN}"
 !macroend
 
 !macro AIONUI_VERIFY_CORE_APP_FILES
+  StrCpy $AionUiVerifyPos ${AIONUI_PROGRESS_VERIFY}
+  !insertmacro AIONUI_PROGRESS $AionUiVerifyPos "${AIONUI_MSG_PROGRESS_VERIFY_ZH}" "${AIONUI_MSG_PROGRESS_VERIFY_EN}"
   !insertmacro AIONUI_LOG_EVENT "verify-install start instDir=$INSTDIR"
   !insertmacro AIONUI_VERIFY_REQUIRED_FILE "$INSTDIR\Woody.exe" "Woody.exe"
   !insertmacro AIONUI_VERIFY_REQUIRED_FILE "$INSTDIR\ffmpeg.dll" "ffmpeg.dll"
@@ -206,6 +351,7 @@ FunctionEnd
 !macroend
 
 !macro AIONUI_VERIFY_BUNDLED_AIONCORE_RESOURCES _RUNTIME_KEY
+  !insertmacro AIONUI_PROGRESS ${AIONUI_PROGRESS_VERIFY_CORE} "${AIONUI_MSG_PROGRESS_VERIFY_CORE_ZH}" "${AIONUI_MSG_PROGRESS_VERIFY_CORE_EN}"
   InitPluginsDir
   File "/oname=$PLUGINSDIR\verify-bundled-aioncore-install.ps1" "${PROJECT_DIR}\resources\windows\support\verify-bundled-aioncore-install.ps1"
   nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\verify-bundled-aioncore-install.ps1" -InstallDir "$INSTDIR" -RuntimeKey "${_RUNTIME_KEY}" -LogPath "$AionUiSessionLogPath"`
@@ -230,6 +376,7 @@ FunctionEnd
   !insertmacro AIONUI_LOG_EVENT "verify-install ok instDir=$INSTDIR"
   !insertmacro AIONUI_CLEAR_ACTIVE_INSTALLER_MARKER
   !insertmacro AIONUI_SESSION_SUCCESS
+  !insertmacro AIONUI_PROGRESS ${AIONUI_PROGRESS_DONE} "${AIONUI_MSG_PROGRESS_DONE_ZH}" "${AIONUI_MSG_PROGRESS_DONE_EN}"
 !macroend
 
 !endif

@@ -87,4 +87,24 @@
 !define AIONUI_MSG_RETRY_AFTER_CLOSING_DIR_EN "Click Retry after closing AionUi and any program using that folder. Click Cancel to show the diagnostics and installer log."
 !define AIONUI_MSG_RETRY_AFTER_CLOSING_DIR_ZH "请关闭 AionUi 以及任何使用该文件夹的程序后点击重试。点击取消会显示诊断信息和安装日志。"
 
+; Install page status line, one language at a time (picked from $LANGUAGE).
+!define AIONUI_MSG_PROGRESS_PREPARE_EN "Preparing to install…"
+!define AIONUI_MSG_PROGRESS_PREPARE_ZH "正在准备安装…"
+!define AIONUI_MSG_PROGRESS_REMOVE_OLD_EN "Removing the previous version…"
+!define AIONUI_MSG_PROGRESS_REMOVE_OLD_ZH "正在移除旧版本…"
+!define AIONUI_MSG_PROGRESS_UNPACK_EN "Preparing the installation files…"
+!define AIONUI_MSG_PROGRESS_UNPACK_ZH "正在准备安装文件…"
+!define AIONUI_MSG_PROGRESS_EXTRACT_EN "Extracting files…"
+!define AIONUI_MSG_PROGRESS_EXTRACT_ZH "正在解压文件…"
+!define AIONUI_MSG_PROGRESS_COPY_EN "Copying files to the installation folder…"
+!define AIONUI_MSG_PROGRESS_COPY_ZH "正在复制文件到安装目录…"
+!define AIONUI_MSG_PROGRESS_REGISTER_EN "Registering the installation and shortcuts…"
+!define AIONUI_MSG_PROGRESS_REGISTER_ZH "正在登记安装信息和快捷方式…"
+!define AIONUI_MSG_PROGRESS_VERIFY_EN "Verifying the installed files…"
+!define AIONUI_MSG_PROGRESS_VERIFY_ZH "正在校验安装文件…"
+!define AIONUI_MSG_PROGRESS_VERIFY_CORE_EN "Verifying the bundled AionCore…"
+!define AIONUI_MSG_PROGRESS_VERIFY_CORE_ZH "正在校验内置的 AionCore…"
+!define AIONUI_MSG_PROGRESS_DONE_EN "Installation complete"
+!define AIONUI_MSG_PROGRESS_DONE_ZH "安装完成"
+
 !endif

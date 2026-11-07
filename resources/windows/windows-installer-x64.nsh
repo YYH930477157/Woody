@@ -18,6 +18,7 @@
 !macroend
 
 !macro customFiles_x64
+  !insertmacro AIONUI_SHOW_REGISTER_PROGRESS
   !insertmacro AIONUI_LOG_EXTRACT_RESULT "7z"
 !macroend
 
