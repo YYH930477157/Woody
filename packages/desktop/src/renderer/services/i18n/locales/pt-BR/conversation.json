@@ -1217,5 +1217,36 @@
     "workFolder": "trabalho",
     "outputFolder": "resultados",
     "untitled": "novo-chat"
+  },
+  "memory": {
+    "title": "Memória",
+    "recalled": "{{number}} memórias adicionadas para o agente",
+    "autoDistill": "Extrair automaticamente",
+    "autoDistillHint": "Quando uma conversa fica parada por 5 minutos, guarda o que vale a pena lembrar.",
+    "autoRecall": "Incluir automaticamente",
+    "autoRecallHint": "Antes de cada mensagem, inclui as memórias mais relevantes para o agente.",
+    "distill": "Organizar memória",
+    "distillHint": "Extrai memórias da conversa aberta agora (apenas conversas aionrs). As memórias são arquivos Markdown que você pode editar.",
+    "distillDone": "{{added}} adicionadas, {{updated}} atualizadas.",
+    "add": "Nova memória",
+    "openFolder": "Abrir pasta",
+    "search": "Pesquisar memórias",
+    "empty": "Este projeto ainda não tem memórias. Elas são extraídas quando uma conversa fica parada por 5 minutos ou quando você escolhe Organizar memória.",
+    "noResults": "Nenhuma memória encontrada.",
+    "noWorkspace": "Abra um projeto para ver as memórias dele.",
+    "removeConfirm": "Excluir esta memória? O arquivo vai para a lixeira.",
+    "updatedAt": "Atualizada em {{time}}",
+    "fields": {
+      "name": "Nome",
+      "description": "Descrição em uma linha",
+      "type": "Tipo",
+      "body": "Conteúdo"
+    },
+    "types": {
+      "user": "Usuário",
+      "feedback": "Feedback",
+      "project": "Projeto",
+      "reference": "Referência"
+    }
   }
 }

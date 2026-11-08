@@ -18,6 +18,7 @@ import { initThemeBridge } from './themeBridge';
 import { initSourceControlBridge, initGitWorkbenchBridge } from './sourceControlBridge';
 import { initStaticScanBridge } from './staticScanBridge';
 import { initCodebaseMemoryBridge } from './codebaseMemory';
+import { initMemoryBridge } from './memoryBridge';
 import { initWebsitePasswordsBridge } from './websitePasswordsBridge';
 import { initSessionFilesBridge } from '@process/sessionFiles';
 
@@ -39,6 +40,7 @@ export function initAllBridges(_deps: BridgeDependencies = {}): void {
   initGitWorkbenchBridge();
   initStaticScanBridge();
   initCodebaseMemoryBridge();
+  initMemoryBridge();
   initWebsitePasswordsBridge();
   initSessionFilesBridge();
 }

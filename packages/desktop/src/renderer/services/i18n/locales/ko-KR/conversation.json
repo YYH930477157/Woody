@@ -1211,5 +1211,36 @@
     "workFolder": "작업",
     "outputFolder": "결과물",
     "untitled": "새-채팅"
+  },
+  "memory": {
+    "title": "메모리",
+    "recalled": "메모리 {{number}}개 첨부됨",
+    "autoDistill": "자동 정리",
+    "autoDistillHint": "대화가 5분 동안 멈추면 오래 기억할 만한 내용을 추출합니다.",
+    "autoRecall": "자동 첨부",
+    "autoRecallHint": "메시지를 보내기 전에 가장 관련 있는 메모리를 모델에 첨부합니다.",
+    "distill": "메모리 정리",
+    "distillHint": "지금 열린 대화에서 메모리를 추출합니다(aionrs 대화만). 메모리는 직접 편집할 수 있는 Markdown 파일입니다.",
+    "distillDone": "{{added}}개 추가, {{updated}}개 업데이트.",
+    "add": "새 메모리",
+    "openFolder": "폴더 열기",
+    "search": "메모리 검색",
+    "empty": "이 프로젝트에는 아직 메모리가 없습니다. 대화가 5분 동안 멈추면 자동으로 추출되며, \"메모리 정리\"로 바로 추출할 수도 있습니다.",
+    "noResults": "일치하는 메모리가 없습니다.",
+    "noWorkspace": "프로젝트를 열면 메모리를 볼 수 있습니다.",
+    "removeConfirm": "이 메모리를 삭제할까요? 파일은 휴지통으로 이동합니다.",
+    "updatedAt": "업데이트: {{time}}",
+    "fields": {
+      "name": "이름",
+      "description": "한 줄 설명",
+      "type": "유형",
+      "body": "내용"
+    },
+    "types": {
+      "user": "사용자",
+      "feedback": "피드백",
+      "project": "프로젝트",
+      "reference": "참고"
+    }
   }
 }

@@ -1211,5 +1211,36 @@
     "workFolder": "過程",
     "outputFolder": "成品",
     "untitled": "新會話"
+  },
+  "memory": {
+    "title": "記憶",
+    "recalled": "已帶入 {{number}} 條記憶",
+    "autoDistill": "自動提煉",
+    "autoDistillHint": "對話停止 5 分鐘後，從中提煉值得長期記住的內容。",
+    "autoRecall": "自動帶入",
+    "autoRecallHint": "每次傳送訊息前，把最相關的幾條記憶附給模型。",
+    "distill": "整理記憶",
+    "distillHint": "從目前開啟的對話中提煉記憶（僅限 aionrs 對話）。記憶是 Markdown 檔案，可以直接編輯。",
+    "distillDone": "新增 {{added}} 條，更新 {{updated}} 條。",
+    "add": "新增記憶",
+    "openFolder": "開啟資料夾",
+    "search": "搜尋記憶",
+    "empty": "這個專案還沒有記憶。對話停止 5 分鐘後會自動提煉，也可以點「整理記憶」。",
+    "noResults": "沒有符合的記憶。",
+    "noWorkspace": "開啟一個專案後才能查看它的記憶。",
+    "removeConfirm": "刪除這條記憶？檔案會移到資源回收筒。",
+    "updatedAt": "更新於 {{time}}",
+    "fields": {
+      "name": "名稱",
+      "description": "一句話描述",
+      "type": "類型",
+      "body": "內容"
+    },
+    "types": {
+      "user": "使用者",
+      "feedback": "回饋",
+      "project": "專案",
+      "reference": "參考"
+    }
   }
 }

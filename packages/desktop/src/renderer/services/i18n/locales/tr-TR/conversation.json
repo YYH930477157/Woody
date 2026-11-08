@@ -1213,5 +1213,36 @@
     "workFolder": "çalışma",
     "outputFolder": "çıktılar",
     "untitled": "yeni-sohbet"
+  },
+  "memory": {
+    "title": "Bellek",
+    "recalled": "Ajana {{number}} bellek eklendi",
+    "autoDistill": "Otomatik çıkar",
+    "autoDistillHint": "Bir konuşma 5 dakika sessiz kaldığında, hatırlanmaya değer bilgileri çıkarır.",
+    "autoRecall": "Otomatik ekle",
+    "autoRecallHint": "Her mesaj gönderilmeden önce en ilgili bellekleri modele ekler.",
+    "distill": "Belleği düzenle",
+    "distillHint": "Şu an açık olan konuşmadan bellek çıkarır (yalnızca aionrs konuşmaları). Bellekler düzenleyebileceğiniz Markdown dosyalarıdır.",
+    "distillDone": "{{added}} eklendi, {{updated}} güncellendi.",
+    "add": "Yeni bellek",
+    "openFolder": "Klasörü aç",
+    "search": "Bellekte ara",
+    "empty": "Bu projenin henüz belleği yok. Bir konuşma 5 dakika sessiz kaldığında ya da Belleği düzenle seçildiğinde bellek çıkarılır.",
+    "noResults": "Eşleşen bellek yok.",
+    "noWorkspace": "Belleğini görmek için bir proje açın.",
+    "removeConfirm": "Bu bellek silinsin mi? Dosya geri dönüşüm kutusuna taşınır.",
+    "updatedAt": "Güncellendi: {{time}}",
+    "fields": {
+      "name": "Ad",
+      "description": "Tek satırlık açıklama",
+      "type": "Tür",
+      "body": "İçerik"
+    },
+    "types": {
+      "user": "Kullanıcı",
+      "feedback": "Geri bildirim",
+      "project": "Proje",
+      "reference": "Referans"
+    }
   }
 }

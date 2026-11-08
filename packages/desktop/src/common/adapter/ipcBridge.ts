@@ -46,6 +46,7 @@ import type {
 export { terminal } from './terminal';
 export { cmake } from './cmake';
 export { codebaseMemory } from './codebaseMemory';
+export { memory } from './memory';
 export { websitePasswords } from './websitePasswords';
 import { buildListTasksPath } from './teamTaskPath';
 import type { OpenDialogOptions } from 'electron';

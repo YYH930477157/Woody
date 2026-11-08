@@ -9,6 +9,8 @@ import {
   AIONUI_SESSION_MESSAGE_MARKER,
   AIONUI_SESSIONS_END_MARKER,
   AIONUI_SESSIONS_MARKER,
+  WOODY_MEMORY_END_MARKER,
+  WOODY_MEMORY_MARKER,
 } from '@/common/config/constants';
 
 export type SessionMentionChip = {
@@ -51,6 +53,26 @@ function extractBlock(
       .filter((line) => line.length > 0),
     text: `${before}${after}`.trim(),
   };
+}
+
+/**
+ * Remove the `[[WOODY_MEMORY]]` block Woody appended to an aionrs message before
+ * sending it, and return the names of the memories it carried (its `### ` headings).
+ */
+export function parseMemoryBlock(content: string): { text: string; memories: string[] } {
+  const block = extractBlock(content, WOODY_MEMORY_MARKER, WOODY_MEMORY_END_MARKER);
+  if (!block) return { text: content, memories: [] };
+  const memories = block.body
+    .filter((line) => line.startsWith('### '))
+    .map((line) =>
+      line
+        .slice(4)
+        .replace(/\s+—\s+[^—]*$/, '')
+        .replace(/\s+\((user|feedback|project|reference)\)$/, '')
+        .trim()
+    )
+    .filter(Boolean);
+  return { text: block.text, memories };
 }
 
 /**

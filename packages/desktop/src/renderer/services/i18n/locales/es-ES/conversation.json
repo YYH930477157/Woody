@@ -1212,5 +1212,36 @@
     "workFolder": "trabajo",
     "outputFolder": "resultados",
     "untitled": "nuevo-chat"
+  },
+  "memory": {
+    "title": "Memoria",
+    "recalled": "{{number}} recuerdos añadidos para el agente",
+    "autoDistill": "Extraer automáticamente",
+    "autoDistillHint": "Cuando una conversación lleva 5 minutos parada, guarda lo que merece la pena recordar.",
+    "autoRecall": "Añadir automáticamente",
+    "autoRecallHint": "Antes de cada mensaje, añade los recuerdos más relevantes para el agente.",
+    "distill": "Ordenar memoria",
+    "distillHint": "Extrae recuerdos de la conversación abierta ahora (solo conversaciones aionrs). Los recuerdos son archivos Markdown que puedes editar.",
+    "distillDone": "{{added}} añadidos, {{updated}} actualizados.",
+    "add": "Nuevo recuerdo",
+    "openFolder": "Abrir carpeta",
+    "search": "Buscar recuerdos",
+    "empty": "Este proyecto aún no tiene recuerdos. Se extraen cuando una conversación lleva 5 minutos parada o cuando eliges Ordenar memoria.",
+    "noResults": "Ningún recuerdo coincide.",
+    "noWorkspace": "Abre un proyecto para ver sus recuerdos.",
+    "removeConfirm": "¿Eliminar este recuerdo? El archivo se moverá a la papelera.",
+    "updatedAt": "Actualizado {{time}}",
+    "fields": {
+      "name": "Nombre",
+      "description": "Descripción en una línea",
+      "type": "Tipo",
+      "body": "Contenido"
+    },
+    "types": {
+      "user": "Usuario",
+      "feedback": "Comentarios",
+      "project": "Proyecto",
+      "reference": "Referencia"
+    }
   }
 }
