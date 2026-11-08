@@ -32,7 +32,7 @@ beforeEach(() => {
   fs.mkdirSync(repo);
   fs.writeFileSync(
     path.join(root, 'fixture.cjs'),
-    `const fs=require('node:fs'); const path=require('node:path'); const marker=path.join(process.cwd(),'behavior'); const b=fs.existsSync(marker)?fs.readFileSync(marker,'utf8'):''; if(b==='hang')setInterval(()=>{},1000); else if(b==='invalid')console.log('oops'); else if(b==='exit'){console.error('fixture error');process.exit(3)} else if(b==='error')console.log(JSON.stringify({isError:true,content:[{type:'text',text:'native refused'}]})); else { console.error('index diagnostic');console.log(JSON.stringify({isError:false,structuredContent:{nodes:13,args:process.argv.slice(2),cache:process.env.CBM_CACHE_DIR,runtime:process.env.CBM_RUNTIME_DIR}})); }`
+    `const fs=require('node:fs'); const path=require('node:path'); const marker=path.join(process.cwd(),'behavior'); const b=fs.existsSync(marker)?fs.readFileSync(marker,'utf8'):''; if(process.argv.includes('check_index_coverage')&&fs.existsSync('coverage.json'))console.log(JSON.stringify({isError:false,structuredContent:JSON.parse(fs.readFileSync('coverage.json','utf8'))})); else if(b==='hang')setInterval(()=>{},1000); else if(b==='invalid')console.log('oops'); else if(b==='exit'){console.error('fixture error');process.exit(3)} else if(b==='error')console.log(JSON.stringify({isError:true,content:[{type:'text',text:'native refused'}]})); else { console.error('index diagnostic');console.log(JSON.stringify({isError:false,structuredContent:{nodes:13,args:process.argv.slice(2),cache:process.env.CBM_CACHE_DIR,runtime:process.env.CBM_RUNTIME_DIR}})); }`
   );
 });
 afterEach(() => {
@@ -828,6 +828,91 @@ describe.runIf(fs.existsSync(installedPowerShell))('native commands started thro
       expect((await index({ readThroughPowerShell })).phase).toBe('succeeded');
       expect(readThroughPowerShell).not.toHaveBeenCalled();
     }, 20000);
+  });
+
+  describe('source folders the indexer skipped by name', () => {
+    const write = (name: string, data: string | Buffer = '') => {
+      fs.mkdirSync(path.dirname(path.join(repo, name)), { recursive: true });
+      fs.writeFileSync(path.join(repo, name), data);
+    };
+    /** What check_index_coverage reports for scope `.`; the fixture answers with it. */
+    const skipped = (...folders: string[]) =>
+      write(
+        'coverage.json',
+        JSON.stringify({
+          scopes: [
+            {
+              scope: '.',
+              entries: folders.map((folder) => ({ path: folder, kind: 'not_indexed_dir', detail: 'excluded subtree' })),
+            },
+          ],
+        })
+      );
+    async function indexed(service: ReturnType<typeof runtime>) {
+      await service.start(repo);
+      return finished(service);
+    }
+
+    it('lists the ones holding source files and adds one back on request', async () => {
+      for (const name of [
+        'app/dlms/obj/push.c',
+        'app/dlms/obj/push/list.h',
+        'thirdparty/lib/b.c',
+        'tools/readme.txt',
+        'node_modules/m/index.js',
+        'genout/g.c',
+        '.vscode/task.ts',
+      ])
+        write(name);
+      skipped('.vscode', 'app/dlms/obj', 'genout', 'node_modules', 'thirdparty', 'tools');
+      const service = runtime();
+      await service.save(repo, config);
+      // Hidden folders, dependency stores, folders without source, and names the indexer
+      // only skips through .gitignore are not offered.
+      expect((await indexed(service)).skippedSources).toEqual([
+        { path: 'app/dlms/obj', files: 2 },
+        { path: 'thirdparty', files: 1 },
+      ]);
+      await expect(service.include(repo, 'src')).rejects.toThrow(/last index skipped/);
+      await expect(service.include(repo, 'genout')).rejects.toThrow(/last index skipped/);
+      expect(fs.existsSync(path.join(repo, '.cbmignore'))).toBe(false);
+
+      expect((await service.include(repo, 'app/dlms/obj')).phase).toBe('running');
+      const rule = '# Folders with source code that the indexer skips by name\n!/app/dlms/obj/\n';
+      expect(fs.readFileSync(path.join(repo, '.cbmignore'), 'utf8')).toBe(rule);
+      // The fixture still reports the folder, as the indexer does when .gitignore excludes it.
+      expect((await finished(service)).skippedSources?.[0]).toEqual({
+        path: 'app/dlms/obj',
+        files: 2,
+        requested: true,
+      });
+      await service.include(repo, 'app/dlms/obj');
+      await finished(service);
+      expect(fs.readFileSync(path.join(repo, '.cbmignore'), 'utf8')).toBe(rule);
+    });
+
+    it('appends to an existing .cbmignore byte for byte and never rewrites one it cannot read', async () => {
+      write('app/obj/a.c');
+      skipped('app/obj');
+      // "# 中文" in GBK, CRLF line endings, no final newline.
+      const original = Buffer.concat([Buffer.from([0x23, 0x20, 0xd6, 0xd0, 0xce, 0xc4]), Buffer.from('\r\nlogs/')]);
+      write('.cbmignore', original);
+      const service = runtime();
+      await service.save(repo, config);
+      expect((await indexed(service)).skippedSources).toEqual([{ path: 'app/obj', files: 1 }]);
+      await service.include(repo, 'app/obj');
+      await finished(service);
+      expect(fs.readFileSync(path.join(repo, '.cbmignore'))).toEqual(
+        Buffer.concat([original, Buffer.from('\r\n!/app/obj/\r\n')])
+      );
+
+      // Encrypted for Woody: the panel shows the line to add by hand, and nothing is written.
+      const ciphertext = Buffer.from(Array.from({ length: 256 }, (_, index) => index));
+      write('.cbmignore', ciphertext);
+      expect((await indexed(service)).skippedSources).toEqual([{ path: 'app/obj', files: 1, manual: true }]);
+      await expect(service.include(repo, 'app/obj')).rejects.toThrow('!/app/obj/');
+      expect(fs.readFileSync(path.join(repo, '.cbmignore'))).toEqual(ciphertext);
+    });
   });
 });
 

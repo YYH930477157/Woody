@@ -23,6 +23,17 @@ describe('codebase native bridge error delivery', () => {
     });
     await expect(codebaseMemory.openLens.invoke({ repoPath: 'D:/repo' })).rejects.toThrow('Lens did not start');
   });
+  it('hands the folder to include to the main process and returns its refusal', async () => {
+    const received: unknown[] = [];
+    dispose = codebaseMemory.include.provider(async (params) => {
+      received.push(params);
+      throw new Error('Only a folder the last index skipped can be added');
+    });
+    await expect(codebaseMemory.include.invoke({ repoPath: 'D:/repo', folder: 'src' })).rejects.toThrow(
+      'Only a folder the last index skipped can be added'
+    );
+    expect(received).toEqual([{ repoPath: 'D:/repo', folder: 'src' }]);
+  });
   it('returns configuration errors to the caller rather than leaving the promise pending', async () => {
     dispose = codebaseMemory.get.provider(() => {
       throw new Error('Invalid config');

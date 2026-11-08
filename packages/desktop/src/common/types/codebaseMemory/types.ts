@@ -23,6 +23,19 @@ export type CodebaseMemoryDiagnosis =
   | 'worker-crash'
   | 'unknown';
 
+export type CodebaseMemorySkippedFolder = {
+  /** Project-relative, with `/` separators. */
+  path: string;
+  /** Source files counted inside it, up to a cap. */
+  files: number;
+  /** The count stopped at the cap. */
+  more?: boolean;
+  /** .cbmignore already asks for it, yet it is still skipped: a .gitignore rule excludes it. */
+  requested?: boolean;
+  /** Woody cannot read the project's .cbmignore as text (encrypted for Woody); the user adds the rule. */
+  manual?: boolean;
+};
+
 export type CodebaseMemoryStatus = {
   repoPath: string;
   config: CodebaseMemoryConfig;
@@ -42,5 +55,7 @@ export type CodebaseMemoryStatus = {
   precheckRefused?: boolean;
   /** An earlier index proved the indexer reads plaintext here, so the pre-check is skipped. */
   indexerReadsPlain?: boolean;
+  /** Folders holding source files that the last index skipped by name (obj, build, thirdparty...). */
+  skippedSources?: CodebaseMemorySkippedFolder[];
   updatedAt?: number;
 };

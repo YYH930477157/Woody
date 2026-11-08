@@ -928,6 +928,14 @@
       "timeout": "La indexación no terminó antes del tiempo límite. Un proyecto grande o un archivo bloqueado pueden detenerla.",
       "workerCrash": "El proceso de indexación se bloqueó (0xC0000005, infracción de acceso). Si esta carpeta está cifrada para Woody, el proceso estaba analizando contenido cifrado: resuelve primero la lista blanca.",
       "unknown": "La indexación falló por un motivo que Woody no pudo clasificar; el informe de diagnóstico contiene la salida completa del programa nativo."
+    },
+    "skipped": {
+      "title": "Carpetas de código omitidas",
+      "hint": "El indexador omite estas carpetas de forma predeterminada por su nombre (obj, build, thirdparty y similares), pero contienen archivos de código fuente, así que el modelo no ve ese código. «Incluir en el índice» añade una línea a .cbmignore en la carpeta del proyecto y vuelve a indexar.",
+      "files": "{{number}} archivos de código fuente",
+      "include": "Incluir en el índice",
+      "stillSkipped": "Figura en .cbmignore, pero se sigue omitiendo. Probablemente una regla de .gitignore la excluye; el indexador siempre respeta .gitignore.",
+      "manual": "Woody no puede leer aquí .cbmignore; puede estar cifrado para Woody. Añade tú mismo esta línea y vuelve a indexar: {{line}}"
     }
   },
   "managedWorkspace": {

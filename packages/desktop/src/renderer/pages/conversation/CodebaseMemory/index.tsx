@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Button, Collapse, Select, Spin, Switch } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import type { CodebaseMemoryDiagnosis } from '@/common/types/codebaseMemory/types';
+import SkippedFolders from './SkippedFolders';
 import { useCodebaseMemory } from './useCodebaseMemory';
 
 /** Localized one-line cause for the report the runtime just wrote. */
@@ -175,6 +176,14 @@ function FolderMemory({
       {readFailed && <Button onClick={() => void state.reload()}>{t('conversation.codebaseMemory.reload')}</Button>}
       {status && !(activeError && status.phase === 'succeeded') && (
         <div role='status'>{t(phaseKeys[status.phase])}</div>
+      )}
+      {status?.phase === 'succeeded' && status.skippedSources && status.skippedSources.length > 0 && (
+        <SkippedFolders
+          folders={status.skippedSources}
+          disabled={locked || dirty || !status.config.enabled || !status.available}
+          including={busy === 'include'}
+          onInclude={(folder) => void run('include', folder)}
+        />
       )}
       {(status?.log || (!activeError && status?.summary)) && (
         <Collapse bordered={false} defaultActiveKey={[]}>

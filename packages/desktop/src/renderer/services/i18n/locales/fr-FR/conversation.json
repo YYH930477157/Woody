@@ -927,6 +927,14 @@
       "timeout": "L'indexation ne s'est pas terminée avant le délai imparti. Un projet volumineux ou un fichier verrouillé peut la bloquer.",
       "workerCrash": "Le processus d'indexation a planté (0xC0000005, violation d'accès). Si ce dossier est chiffré pour Woody, le processus analysait du contenu chiffré : réglez d'abord la liste blanche.",
       "unknown": "L'indexation a échoué pour une raison que Woody n'a pas pu identifier ; le rapport de diagnostic contient la sortie complète du programme natif."
+    },
+    "skipped": {
+      "title": "Dossiers source ignorés",
+      "hint": "L’indexeur ignore par défaut ces dossiers d’après leur nom (obj, build, thirdparty, etc.), mais ils contiennent des fichiers source : le modèle ne voit donc pas ce code. « Ajouter à l’index » ajoute une ligne à .cbmignore dans le dossier du projet, puis relance l’indexation.",
+      "files": "{{number}} fichiers source",
+      "include": "Ajouter à l’index",
+      "stillSkipped": "Inscrit dans .cbmignore, mais toujours ignoré. Une règle .gitignore l’exclut probablement ; l’indexeur respecte toujours .gitignore.",
+      "manual": "Woody ne peut pas lire .cbmignore ici ; il est peut-être chiffré pour Woody. Ajoutez vous-même cette ligne, puis relancez l’indexation : {{line}}"
     }
   },
   "managedWorkspace": {

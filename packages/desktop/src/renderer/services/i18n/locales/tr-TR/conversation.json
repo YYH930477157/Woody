@@ -929,6 +929,14 @@
       "timeout": "Dizinleme zaman aşımından önce bitmedi. Büyük bir proje veya kilitli bir dosya onu durdurabilir.",
       "workerCrash": "Dizinleme çalışan süreci çöktü (0xC0000005, erişim ihlali). Bu klasör Woody için şifreliyse süreç şifreli içeriği ayrıştırıyordu; önce beyaz liste sorununu çözün.",
       "unknown": "Dizinleme, Woody'nin sınıflandıramadığı bir nedenle başarısız oldu; tanılama raporunda yerel programın tam çıktısı var."
+    },
+    "skipped": {
+      "title": "Atlanan kaynak klasörleri",
+      "hint": "İndeksleyici bu klasörleri adlarına göre (obj, build, thirdparty vb.) varsayılan olarak atlar, ancak içlerinde kaynak dosyaları var; bu yüzden model bu kodu göremez. \"İndekse ekle\", proje klasöründeki .cbmignore dosyasına bir satır ekler ve yeniden indeksler.",
+      "files": "{{number}} kaynak dosyası",
+      "include": "İndekse ekle",
+      "stillSkipped": ".cbmignore dosyasında var ama hâlâ atlanıyor. Muhtemelen bir .gitignore kuralı onu hariç tutuyor; indeksleyici her zaman .gitignore kurallarına uyar.",
+      "manual": "Woody buradaki .cbmignore dosyasını okuyamıyor; dosya Woody için şifrelenmiş olabilir. Şu satırı kendiniz ekleyin, ardından yeniden indeksleyin: {{line}}"
     }
   },
   "managedWorkspace": {

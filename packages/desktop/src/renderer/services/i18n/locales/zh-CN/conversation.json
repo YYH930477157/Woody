@@ -927,6 +927,14 @@
       "timeout": "索引在超时前没有跑完——项目太大或有文件被占用都会卡住。",
       "workerCrash": "索引工作进程崩溃了（0xC0000005 访问越界）。如果这个文件夹对 Woody 是密文，工作进程是在解析密文时崩的——请先解决加密白名单。",
       "unknown": "索引失败，但 Woody 没能归类原因；诊断报告里有原生程序的完整输出。"
+    },
+    "skipped": {
+      "title": "被跳过的源码目录",
+      "hint": "索引程序按目录名默认跳过了这些目录（如 obj、build、thirdparty），但里面有源文件，模型看不到这部分代码。“加入索引”会在项目根目录的 .cbmignore 里加一行，然后重新索引。",
+      "files": "{{number}} 个源文件",
+      "include": "加入索引",
+      "stillSkipped": "已写入 .cbmignore，但仍被跳过。可能是 .gitignore 排除了它，索引程序总会遵守 .gitignore。",
+      "manual": "Woody 无法读取这里的 .cbmignore，它可能对 Woody 加密了。请自己在其中加上这一行，再重新索引：{{line}}"
     }
   },
   "managedWorkspace": {

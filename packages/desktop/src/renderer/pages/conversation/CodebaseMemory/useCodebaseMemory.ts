@@ -3,6 +3,7 @@ import { ipcBridge } from '@/common';
 import type { CodebaseMemoryConfig, CodebaseMemoryStatus } from '@/common/types/codebaseMemory/types';
 
 const initialConfig: CodebaseMemoryConfig = { version: 1, enabled: false, mode: 'fast' };
+type CodebaseMemoryAction = 'save' | 'start' | 'startAnyway' | 'include' | 'cancel' | 'openLens';
 const errorMessage = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
 
 /** Own one folder's requests; the panel remounts this hook when its path changes. */
@@ -11,7 +12,7 @@ export function useCodebaseMemory(repoPath: string, visible: boolean, refreshTok
   const [draft, setDraft] = useState(initialConfig);
   const [dirty, setDirty] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState<'save' | 'start' | 'startAnyway' | 'cancel' | 'openLens'>();
+  const [busy, setBusy] = useState<CodebaseMemoryAction>();
   const [error, setError] = useState<string>();
   const [readError, setReadError] = useState<string>();
   const readFailed = readError !== undefined;
@@ -64,13 +65,17 @@ export function useCodebaseMemory(repoPath: string, visible: boolean, refreshTok
     setDirty(true);
     setDraft(config);
   };
-  /** startAnyway skips the encryption pre-check, for an indexer the user had whitelisted. */
-  const run = async (action: 'save' | 'start' | 'startAnyway' | 'cancel' | 'openLens') => {
+  /**
+   * startAnyway skips the encryption pre-check, for an indexer the user had whitelisted.
+   * include adds `folder`, which the last index skipped by name, and indexes again.
+   */
+  const run = async (action: CodebaseMemoryAction, folder?: string) => {
     if (actionPending.current || !status) return;
     if (action !== 'cancel' && (readFailed || status.phase === 'running')) return;
     if (action !== 'save' && action !== 'cancel' && (dirty || !status.config.enabled || !status.available)) return;
     if (action === 'openLens' && status.phase !== 'succeeded') return;
     if (action === 'startAnyway' && !status.precheckRefused) return;
+    if (action === 'include' && !folder) return;
     actionPending.current = true;
     const request = ++revision.current;
     setBusy(action);
@@ -81,7 +86,9 @@ export function useCodebaseMemory(repoPath: string, visible: boolean, refreshTok
           ? await ipcBridge.codebaseMemory.save.invoke({ repoPath, config: draft })
           : action === 'startAnyway'
             ? await ipcBridge.codebaseMemory.start.invoke({ repoPath, bypassPrecheck: true })
-            : await ipcBridge.codebaseMemory[action].invoke({ repoPath });
+            : action === 'include'
+              ? await ipcBridge.codebaseMemory.include.invoke({ repoPath, folder: folder ?? '' })
+              : await ipcBridge.codebaseMemory[action].invoke({ repoPath });
       if (!mounted.current || revision.current !== request) return;
       setStatus(result);
       if (action === 'save') {

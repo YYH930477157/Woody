@@ -927,6 +927,14 @@
       "timeout": "索引在逾時前未完成：專案太大或有檔案被鎖定都可能讓它卡住。",
       "workerCrash": "索引工作處理程序當機了（0xC0000005 存取違規）。如果這個資料夾對 Woody 是密文，工作處理程序是在解析密文時當機的，請先處理加密白名單。",
       "unknown": "索引失敗，但 Woody 無法判斷原因；診斷報告中有原生程式的完整輸出。"
+    },
+    "skipped": {
+      "title": "被略過的原始碼資料夾",
+      "hint": "索引程式依資料夾名稱預設略過了這些資料夾（如 obj、build、thirdparty），但其中有原始碼檔案，模型看不到這部分程式碼。「加入索引」會在專案根目錄的 .cbmignore 中新增一行，然後重新索引。",
+      "files": "{{number}} 個原始碼檔案",
+      "include": "加入索引",
+      "stillSkipped": "已寫入 .cbmignore，但仍被略過。可能是 .gitignore 排除了它，索引程式一律遵守 .gitignore。",
+      "manual": "Woody 無法讀取這裡的 .cbmignore，它可能對 Woody 加密了。請自行在其中加入這一行，再重新索引：{{line}}"
     }
   },
   "managedWorkspace": {

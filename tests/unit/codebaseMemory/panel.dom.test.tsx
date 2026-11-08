@@ -4,7 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CodebaseMemoryStatus } from '@/common/types/codebaseMemory/types';
 import CodebaseMemoryPanel from '@/renderer/pages/conversation/CodebaseMemory';
 
-const api = vi.hoisted(() => ({ get: vi.fn(), save: vi.fn(), start: vi.fn(), cancel: vi.fn(), openLens: vi.fn() }));
+const api = vi.hoisted(() => ({
+  get: vi.fn(),
+  save: vi.fn(),
+  start: vi.fn(),
+  include: vi.fn(),
+  cancel: vi.fn(),
+  openLens: vi.fn(),
+}));
 vi.mock('@/common', () => ({
   ipcBridge: { codebaseMemory: Object.fromEntries(Object.entries(api).map(([key, invoke]) => [key, { invoke }])) },
 }));
@@ -53,6 +60,35 @@ describe('project architecture panel', () => {
     expect(api.openLens).toHaveBeenCalledExactlyOnceWith({ repoPath: 'D:/two' });
     await act(async () => opening.resolve(ready));
     expect(screen.getByText(key('phase.succeeded'))).toBeInTheDocument();
+  });
+  it('lists source folders the indexer skipped and adds one to the index on request', async () => {
+    const config = { version: 1, enabled: true, mode: 'full' } as const;
+    api.get.mockResolvedValue(
+      status('D:/one', {
+        phase: 'succeeded',
+        config,
+        skippedSources: [
+          { path: 'app/dlms/obj', files: 32 },
+          { path: 'build', files: 3, requested: true },
+          { path: 'gen', files: 1, manual: true },
+        ],
+      })
+    );
+    const including = deferred<CodebaseMemoryStatus>();
+    api.include.mockReturnValue(including.promise);
+    render(<CodebaseMemoryPanel repoPaths={{ one: 'D:/one' }} />);
+    expect(await screen.findByText('app/dlms/obj')).toBeInTheDocument();
+    // .gitignore keeps build skipped, and an unreadable .cbmignore needs the line by hand: no button for either.
+    expect(screen.getByText(key('skipped.stillSkipped'))).toBeInTheDocument();
+    expect(screen.getByText(key('skipped.manual'))).toBeInTheDocument();
+    const buttons = screen.getAllByRole('button', { name: key('skipped.include') });
+    expect(buttons).toHaveLength(1);
+    await waitFor(() => expect(buttons[0]).not.toBeDisabled());
+    fireEvent.click(buttons[0]);
+    fireEvent.click(buttons[0]);
+    expect(api.include).toHaveBeenCalledExactlyOnceWith({ repoPath: 'D:/one', folder: 'app/dlms/obj' });
+    await act(async () => including.resolve(status('D:/one', { phase: 'running', config })));
+    expect(screen.queryByText('app/dlms/obj')).not.toBeInTheDocument();
   });
   it('shows Lens launch errors and permits retry', async () => {
     api.get.mockResolvedValue(

@@ -22,6 +22,7 @@ The `woody-codebase-memory` tools answer structural questions from a local graph
 | How is this folder organized?                  | `get_architecture({"path":"src/module","aspects":["structure","dependencies"]})`                                        |
 | Where does this text appear?                   | `search_code({"pattern":"literal text","limit":10})`                                                                    |
 | What does my change affect?                    | `detect_changes({"scope":"impact","depth":2})` (Git projects)                                                           |
+| Is this file or folder in the index?           | `check_index_coverage({"paths":["src/module/file.c"]})`                                                                 |
 
 Use real names and project-relative paths. The project is bound for you: never pass `project`, `repo_path` or another project's paths. When a name is ambiguous, the result lists qualified names; repeat the call with one of them.
 
@@ -30,6 +31,7 @@ Use real names and project-relative paths. The project is bound for you: never p
 - Call the tool that answers the question directly. Use `index_status({})` only when a result is empty or an error says the project is missing; then tell the user the index needs updating in the Architecture panel.
 - Prefer `query` or `name_pattern` to `semantic_query`, whose matches are often unrelated.
 - In C and C++, calls made through macros (for example RTOS wrappers such as `xQueueSend` or `xSemaphoreGive`) and through function pointers, task tables, callback tables or API tables between firmware images are usually missing from the graph. Before concluding that something has no callers or no writers, run `search_code` for its name and for the macros that wrap it, and look for the table that holds it.
+- The indexer skips folders by name, such as `obj`, `build`, `tools`, `scripts` or `thirdparty` (some only in the fast and moderate modes), and everything `.gitignore` excludes. When code you expect is missing from the graph, check its path with `check_index_coverage`. If the result is `excluded`, read those files directly, and tell the user that the Architecture panel lists skipped source folders and can add them to the index.
 - Code you edited in this conversation is newer than the index: read those files directly.
 - Run `index_repository({})` only when the user asks for it, or the index is missing and the user agrees; it rescans the whole project.
 - If the tools are unavailable, say so and continue with ordinary file reading.
