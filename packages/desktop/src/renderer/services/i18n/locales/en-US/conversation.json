@@ -935,6 +935,14 @@
       "include": "Include in index",
       "stillSkipped": "Listed in .cbmignore but still skipped. A .gitignore rule probably excludes it; the indexer always follows .gitignore.",
       "manual": "Woody cannot read .cbmignore here; it may be encrypted for Woody. Add this line to it yourself, then index again: {{line}}"
+    },
+    "architecture": {
+      "title": "Architecture file",
+      "hint": "Woody writes .woody/architecture.md from the index and the source: the tasks, the dispatch tables in order, the order constraints, and which tables each module registers in. Once the file exists, every index updates it and keeps your Change rules section. The model reads it before changing code.",
+      "generate": "Generate",
+      "update": "Update now",
+      "summary": "Last generated {{time}}: {{tasks}} tasks, {{tables}} dispatch tables.",
+      "failed": "The architecture file could not be updated: {{error}}"
     }
   },
   "managedWorkspace": {

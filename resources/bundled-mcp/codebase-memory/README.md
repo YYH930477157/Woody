@@ -128,6 +128,21 @@ its encoding and line endings, and indexes again. A `.cbmignore` rule cannot ove
 `.cbmignore` as text, for example because it is encrypted for Woody, the folder is
 marked `manual` and the panel shows the line to add by hand.
 
+The panel's architecture file button writes `.woody/architecture.md` without a model
+(`architecture.cjs`, headings from `architecture-labels.json` in the panel's language).
+One `query_graph` call reads every function with its file and lines; `query_graph` is
+used only inside Woody and is not offered to the model. Woody then reads the source
+itself and finds the FreeRTOS tasks (`xTaskCreate`, `xTaskCreateStatic`,
+`osThreadNew`), what they wait on and call, and every array of functions a loop
+calls one by one, up to three calls deep from each task and from the product's `main`.
+Each table is listed in order with its `#if` conditions and comments. Entries whose
+function is not in the index keep their place and are marked. A module matrix shows
+which tables each module registers in, and which modules differ from most. Once the
+file exists, every successful index updates it. Only the part between the
+`woody:generated` markers is rewritten, so the team's Change rules section is kept.
+A file Woody cannot read as UTF-8, or one without the markers, is never overwritten.
+The skill's description tells the model to read the file before changing code.
+
 ## Provenance and redistribution
 
 - Upstream repository: `https://github.com/DeusData/codebase-memory-mcp`

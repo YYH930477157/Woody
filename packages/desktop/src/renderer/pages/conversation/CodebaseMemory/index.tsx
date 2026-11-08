@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Button, Collapse, Select, Spin, Switch } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import type { CodebaseMemoryDiagnosis } from '@/common/types/codebaseMemory/types';
+import ArchitectureFile from './ArchitectureFile';
 import SkippedFolders from './SkippedFolders';
 import { useCodebaseMemory } from './useCodebaseMemory';
 
@@ -129,6 +130,14 @@ function FolderMemory({
         </Button>
       </div>
       <div className='text-12px text-t-secondary'>{t('conversation.codebaseMemory.lensHint')}</div>
+      <ArchitectureFile
+        architecture={status?.architecture}
+        disabled={
+          locked || running || dirty || !status?.config.enabled || !status?.available || status.phase !== 'succeeded'
+        }
+        generating={busy === 'architecture'}
+        onGenerate={() => void run('architecture')}
+      />
       {dirty && <div className='text-12px text-t-secondary'>{t('conversation.codebaseMemory.unsaved')}</div>}
       <Alert type='info' content={t('conversation.codebaseMemory.newConversationHint')} />
       {loading && <Spin />}

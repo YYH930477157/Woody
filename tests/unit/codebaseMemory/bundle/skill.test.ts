@@ -33,6 +33,16 @@ describe('bundled skill tool contract', () => {
     expect(skill).toMatch(/Corrections from the user: .*Keep this section unchanged when you update the card/);
   });
 
+  it('tells the model to read and follow the architecture file before changing code', () => {
+    const skill = readFileSync(`${skillDir}/SKILL.md`, 'utf8');
+    // Weaker models may never load the skill body; the always-visible description must say it.
+    expect(/^description: (.+)$/m.exec(skill)?.[1]).toContain('.woody/architecture.md');
+    expect(skill).toMatch(/Change rules come first/);
+    expect(skill).toMatch(/keep that module's own style/);
+    expect(skill).toMatch(/Never edit between the `woody:generated` markers/);
+    expect(readFileSync(`${bundleDir}/index.cjs`, 'utf8')).toContain('.woody/architecture.md');
+  });
+
   it('isolates the imported skill directory from the large native bundle', () => {
     expect(existsSync(`${bundleDir}/SKILL.md`)).toBe(false);
     expect(readdirSync(skillDir)).toEqual(['SKILL.md']);

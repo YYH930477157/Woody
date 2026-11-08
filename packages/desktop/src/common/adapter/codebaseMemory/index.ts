@@ -34,6 +34,7 @@ export const codebaseMemory = {
   save: provider<CodebaseMemoryStatus, ProjectRequest & { config: CodebaseMemoryConfig }>('codebase-memory.save'),
   start: provider<CodebaseMemoryStatus, ProjectRequest & { bypassPrecheck?: boolean }>('codebase-memory.start'),
   include: provider<CodebaseMemoryStatus, ProjectRequest & { folder: string }>('codebase-memory.include'),
+  architecture: provider<CodebaseMemoryStatus, ProjectRequest & { language?: string }>('codebase-memory.architecture'),
   cancel: provider<CodebaseMemoryStatus, ProjectRequest>('codebase-memory.cancel'),
   session: provider<CodebaseMemorySession, ProjectRequest>('codebase-memory.session'),
   openLens: provider<CodebaseMemoryStatus, ProjectRequest>('codebase-memory.open-lens'),

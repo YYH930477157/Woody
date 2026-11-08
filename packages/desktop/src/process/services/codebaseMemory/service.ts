@@ -24,6 +24,8 @@ export type CodebaseMemoryService = {
   start(repoPath: string, options?: { bypassPrecheck?: boolean }): Promise<CodebaseMemoryStatus>;
   /** Add a folder the last index skipped by name to the project's .cbmignore, then index again. */
   include(repoPath: string, folder: string): Promise<CodebaseMemoryStatus>;
+  /** Write .woody/architecture.md from the index, with headings in `language`. */
+  architecture(repoPath: string, options?: { language?: string }): Promise<CodebaseMemoryStatus>;
   cancel(repoPath: string): Promise<CodebaseMemoryStatus>;
   session(repoPath: string): Promise<CodebaseMemorySession>;
   openLens(repoPath: string): Promise<CodebaseMemoryStatus>;

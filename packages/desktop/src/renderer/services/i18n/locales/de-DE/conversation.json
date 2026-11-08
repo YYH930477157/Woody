@@ -936,6 +936,14 @@
       "include": "Zum Index hinzufügen",
       "stillSkipped": "In .cbmignore eingetragen, wird aber weiterhin übersprungen. Vermutlich schließt eine .gitignore-Regel den Ordner aus; der Indexer befolgt .gitignore immer.",
       "manual": "Woody kann .cbmignore hier nicht lesen; die Datei ist möglicherweise für Woody verschlüsselt. Fügen Sie diese Zeile selbst hinzu und indexieren Sie danach erneut: {{line}}"
+    },
+    "architecture": {
+      "title": "Architekturdatei",
+      "hint": "Woody erstellt .woody/architecture.md aus dem Index und dem Quellcode: die Tasks, die Dispatch-Tabellen in Ausführungsreihenfolge, die Reihenfolgeregeln und in welchen Tabellen sich jedes Modul registriert. Sobald die Datei existiert, wird sie bei jeder Indexierung aktualisiert; der von Ihrem Team geschriebene Abschnitt „Änderungsregeln“ bleibt erhalten. Das Modell liest sie, bevor es Code ändert.",
+      "generate": "Erstellen",
+      "update": "Jetzt aktualisieren",
+      "summary": "Zuletzt erstellt {{time}}: {{tasks}} Tasks, {{tables}} Dispatch-Tabellen.",
+      "failed": "Die Architekturdatei konnte nicht aktualisiert werden: {{error}}"
     }
   },
   "managedWorkspace": {

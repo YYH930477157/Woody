@@ -6,6 +6,8 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { execFile, spawn } = require('node:child_process');
 const TOOL_SCHEMAS = new Map(require('./tools.json').map((tool) => [tool.name, tool.inputSchema]));
+const architecture = require('./architecture.cjs');
+const ARCHITECTURE_LABELS = require('./architecture-labels.json');
 const DEFAULT_CONFIG = { version: 1, enabled: false, mode: 'fast' };
 const TOOLS = new Set([
   'index_repository',
@@ -609,6 +611,64 @@ function addIncludeLine(root, folder) {
       : eol;
   atomicWrite(ignorePath(root), Buffer.concat([bytes, Buffer.from(`${lead}${line}${eol}`)]));
 }
+
+const ARCHITECTURE_FILE = '.woody/architecture.md';
+const FUNCTIONS_QUERY = 'MATCH (f:Function) RETURN f.name, f.file_path, f.start_line, f.end_line';
+const QUERY_PAGE = 10000;
+function architecturePath(root) {
+  const filename = path.join(root, ARCHITECTURE_FILE);
+  for (const candidate of [path.dirname(filename), filename]) {
+    try {
+      const relative = path.relative(root, fs.realpathSync.native(candidate));
+      if (relative.startsWith('..') || path.isAbsolute(relative))
+        throw new Error(`${ARCHITECTURE_FILE} points outside the project`);
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+  }
+  return filename;
+}
+/**
+ * The current file, or undefined when there is none. Woody only rewrites a file it reads as
+ * UTF-8 text with its markers, so an encrypted or hand-written file is never replaced.
+ */
+function readArchitecture(filename) {
+  let bytes;
+  try {
+    bytes = fs.readFileSync(filename);
+  } catch (error) {
+    if (error.code === 'ENOENT') return undefined;
+    throw error;
+  }
+  const text = bytes.toString('utf8');
+  if (!looksLikeText(bytes) || text.includes('�'))
+    throw new Error(
+      `Woody cannot read ${ARCHITECTURE_FILE} as UTF-8 text; it may be encrypted for Woody or saved in another encoding`
+    );
+  if (!text.includes(architecture.MARK.start) || !text.includes(architecture.MARK.end))
+    throw new Error(`${ARCHITECTURE_FILE} has no woody:generated markers; rename or delete it to generate a new one`);
+  return text;
+}
+/** Project source as text, or null: ciphertext, unreadable or outside the project. */
+function sourceReader(root) {
+  return (file) => {
+    if (typeof file !== 'string' || path.isAbsolute(file) || file.split(/[\\/]/).includes('..')) return null;
+    let bytes;
+    try {
+      bytes = fs.readFileSync(path.join(root, file));
+    } catch {
+      return null;
+    }
+    if (!looksLikeText(bytes)) return null;
+    const text = bytes.toString('utf8');
+    if (!text.includes('�') || !LEGACY_DECODERS.length) return text.replace(/^﻿/, '');
+    return LEGACY_DECODERS[0].decode(bytes);
+  };
+}
+function localStamp(time = new Date()) {
+  const pad = (value) => String(value).padStart(2, '0');
+  return `${time.getFullYear()}-${pad(time.getMonth() + 1)}-${pad(time.getDate())} ${pad(time.getHours())}:${pad(time.getMinutes())}`;
+}
 function dead(pid) {
   if (!Number.isInteger(pid) || pid <= 0) return false;
   try {
@@ -873,6 +933,8 @@ function createRuntime(options) {
       delete saved.summary;
       delete saved.skippedSources;
     }
+    // The user deleted the architecture file: nothing to report about it any more.
+    if (saved.architecture && !fs.existsSync(path.join(project.root, ARCHITECTURE_FILE))) delete saved.architecture;
     return { repoPath: project.root, config, available: available(), phase: 'idle', log: '', ...saved };
   }
   function persist(project, value) {
@@ -889,6 +951,7 @@ function createRuntime(options) {
       precheckRefused,
       indexerReadsPlain,
       skippedSources,
+      architecture: architectureStatus,
     } = value;
     atomicJson(project.statusFile, {
       phase,
@@ -903,6 +966,7 @@ function createRuntime(options) {
       precheckRefused,
       indexerReadsPlain,
       skippedSources,
+      architecture: architectureStatus,
       projectName: project.name,
       updatedAt: Date.now(),
     });
@@ -1256,6 +1320,72 @@ function createRuntime(options) {
       return undefined;
     }
   }
+  /**
+   * Every row of a Cypher query, page by page. query_graph is not offered to the model;
+   * Woody uses it to read the whole function list in one call instead of hundreds.
+   */
+  async function queryRows(project, query) {
+    const rows = [];
+    for (let offset = 0; ; ) {
+      const result = await native(project, 'query_graph', {
+        project: project.name,
+        query,
+        max_rows: QUERY_PAGE,
+        offset,
+        format: 'json',
+        max_output_tokens: 1000000,
+      }).promise;
+      const page = result.structuredContent || JSON.parse(result.content?.[0]?.text || '{}');
+      const batch = Array.isArray(page.rows) ? page.rows : [];
+      for (const row of batch) rows.push(row);
+      if (!page.has_more || !batch.length) return rows;
+      offset += batch.length;
+    }
+  }
+  /** Functions that call or reference each name, keyed `name|file`. */
+  async function callersOf(project, names) {
+    const safe = names.filter((name) => /^[A-Za-z_]\w*$/.test(name));
+    const callers = new Map();
+    if (!safe.length) return callers;
+    const rows = await queryRows(
+      project,
+      `MATCH (a:Function)-[:CALLS|CALL_REFERENCE]->(b:Function) WHERE b.name IN [${safe.map((name) => `'${name}'`).join(',')}] RETURN b.name, b.file_path, a.name`
+    );
+    for (const [name, file, caller] of rows) {
+      const key = `${name}|${file}`;
+      if (!callers.has(key)) callers.set(key, []);
+      callers.get(key).push(caller);
+    }
+    return callers;
+  }
+  /**
+   * Write .woody/architecture.md from the index and the source. Keeps everything outside the
+   * generated markers. `requested` is the panel's language; updates keep the file's own.
+   */
+  async function writeArchitecture(project, config, requested) {
+    const filename = architecturePath(project.root);
+    const existing = readArchitecture(filename);
+    const wanted = requested && ARCHITECTURE_LABELS[requested] ? requested : architecture.languageOf(existing);
+    const { language, text } = architecture.labelsFor(ARCHITECTURE_LABELS, wanted);
+    const functions = await queryRows(project, FUNCTIONS_QUERY);
+    const model = await architecture.analyze({
+      functions,
+      readSource: sourceReader(project.root),
+      callersOf: (names) => callersOf(project, names),
+    });
+    const generated = architecture.render(model, text, { language, date: localStamp(), mode: config.mode });
+    atomicWrite(filename, architecture.merge(existing, generated, text));
+    return { generatedAt: Date.now(), tasks: model.tasks.length, tables: model.tables.length, language };
+  }
+  /** After an index: update an existing file. Never throws; a failure is kept in the status. */
+  async function refreshArchitecture(project, config, previous) {
+    if (!fs.existsSync(path.join(project.root, ARCHITECTURE_FILE))) return previous;
+    try {
+      return await writeArchitecture(project, config);
+    } catch (error) {
+      return { ...previous, error: error.message };
+    }
+  }
   async function beginIndex(project, config, { bypassPrecheck = false } = {}) {
     const owner = acquireLock(project);
     const startedAt = Date.now();
@@ -1266,6 +1396,7 @@ function createRuntime(options) {
       launcher: powerShell ? 'powershell' : 'direct',
       // Proof from an earlier run that the indexer reads plaintext here outlives later runs.
       indexerReadsPlain: previous.indexerReadsPlain === true ? true : undefined,
+      architecture: previous.architecture,
     };
     const fail = async (error) => {
       await recordFailure(project, state, error, startedAt, config);
@@ -1304,6 +1435,7 @@ function createRuntime(options) {
       .then(async (result) => {
         if (await assertReadable(project)) state.indexerReadsPlain = true;
         state.skippedSources = await skippedSources(project, config);
+        state.architecture = await refreshArchitecture(project, config, state.architecture);
         return result;
       })
       .then(
@@ -1387,6 +1519,37 @@ function createRuntime(options) {
       safeRelative(project.root, folder);
       addIncludeLine(project.root, folder);
       return api.start(repoPath);
+    },
+    /**
+     * Write .woody/architecture.md now, in `language` (the panel's). Holds the index lock so
+     * an index cannot rebuild the graph underneath it.
+     */
+    async architecture(repoPath, architectureOptions = {}) {
+      const project = projectFor(repoPath);
+      const status = await api.get(repoPath);
+      if (!status.config.enabled) throw new Error('Codebase memory is disabled for this project');
+      if (!available()) throw new Error('Bundled codebase-memory executable is unavailable');
+      if (status.phase === 'running') throw new Error('An index is already running for this project');
+      if (status.phase !== 'succeeded')
+        throw new Error('Index the project successfully before generating the architecture file');
+      const owner = acquireLock(project);
+      try {
+        const language = typeof architectureOptions.language === 'string' ? architectureOptions.language : undefined;
+        let result;
+        try {
+          result = await writeArchitecture(project, status.config, language);
+        } catch (error) {
+          persist(project, {
+            ...(readJson(project.statusFile) || {}),
+            architecture: { ...status.architecture, error: error.message },
+          });
+          throw error;
+        }
+        persist(project, { ...(readJson(project.statusFile) || {}), architecture: result });
+      } finally {
+        releaseLock(project, owner);
+      }
+      return api.get(repoPath);
     },
     async cancel(repoPath) {
       const project = projectFor(repoPath);
