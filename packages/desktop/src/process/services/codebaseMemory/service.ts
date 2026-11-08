@@ -22,6 +22,8 @@ export type CodebaseMemoryService = {
   get(repoPath: string): Promise<CodebaseMemoryStatus>;
   save(repoPath: string, config: CodebaseMemoryConfig): Promise<CodebaseMemoryStatus>;
   start(repoPath: string, options?: { bypassPrecheck?: boolean }): Promise<CodebaseMemoryStatus>;
+  /** Add a folder the last index skipped by name to the project's .cbmignore, then index again. */
+  include(repoPath: string, folder: string): Promise<CodebaseMemoryStatus>;
   cancel(repoPath: string): Promise<CodebaseMemoryStatus>;
   session(repoPath: string): Promise<CodebaseMemorySession>;
   openLens(repoPath: string): Promise<CodebaseMemoryStatus>;

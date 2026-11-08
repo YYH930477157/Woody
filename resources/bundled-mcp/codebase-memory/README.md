@@ -116,6 +116,18 @@ keeps `indexerReadsPlain` and later runs, including MCP calls, skip the probe un
 an index reads ciphertext again. A failed run is published only after its
 diagnostics report is written, so a status never shows `failed` without its reason.
 
+The indexer skips folders by name (`obj`, `tmp` and `dist` in every mode; `build`,
+`tools`, `scripts`, `thirdparty` and more in fast and moderate), matching the exact,
+case-sensitive name, as well as everything `.gitignore` excludes. After each successful
+index, `check_index_coverage` with scope `.` lists every skipped folder (the index
+summary stops after five). Woody keeps the ones that have an offered name and hold
+source files, counted by file name only, in `skippedSources`. The panel's Include in
+index appends `!/<folder>/` to the project's `.cbmignore` as bytes, so the file keeps
+its encoding and line endings, and indexes again. A `.cbmignore` rule cannot override
+`.gitignore`; such a folder stays listed as `requested`. When Woody cannot read
+`.cbmignore` as text, for example because it is encrypted for Woody, the folder is
+marked `manual` and the panel shows the line to add by hand.
+
 ## Provenance and redistribution
 
 - Upstream repository: `https://github.com/DeusData/codebase-memory-mcp`

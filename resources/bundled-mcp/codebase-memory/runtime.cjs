@@ -451,11 +451,11 @@ function configPath(root) {
   }
   return filename;
 }
-function atomicJson(filename, value) {
+function atomicWrite(filename, data) {
   fs.mkdirSync(path.dirname(filename), { recursive: true });
   const temp = `${filename}.${process.pid}.${crypto.randomUUID()}.tmp`;
   try {
-    fs.writeFileSync(temp, JSON.stringify(value, null, 2) + '\n', { flag: 'wx' });
+    fs.writeFileSync(temp, data, { flag: 'wx' });
     fs.renameSync(temp, filename);
   } finally {
     try {
@@ -465,12 +465,149 @@ function atomicJson(filename, value) {
     }
   }
 }
+function atomicJson(filename, value) {
+  atomicWrite(filename, JSON.stringify(value, null, 2) + '\n');
+}
 function readJson(filename) {
   try {
     return JSON.parse(fs.readFileSync(filename, 'utf8'));
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Folder names the indexer skips by default where a project's own code can live (fast and
+ * moderate skip more of them than full). Its list also holds hidden folders, dependency
+ * stores and caches, which are never worth offering. The indexer still decides what it
+ * skipped; these names only choose which of its skipped folders the panel offers back.
+ */
+const OFFERED_SKIPPED_NAMES = new Set([
+  'obj',
+  'tmp',
+  'temp',
+  'env',
+  'dist',
+  'target',
+  'deploy',
+  'deployed',
+  'vendor',
+  'vendored',
+  'generated',
+  'gen',
+  'auto-generated',
+  'fixtures',
+  'testdata',
+  'test_data',
+  'docs',
+  'doc',
+  'documentation',
+  'examples',
+  'example',
+  'samples',
+  'sample',
+  'assets',
+  'static',
+  'public',
+  'media',
+  'third_party',
+  'thirdparty',
+  '3rdparty',
+  'external',
+  'migrations',
+  'seeds',
+  'e2e',
+  'integration',
+  'locale',
+  'locales',
+  'i18n',
+  'l10n',
+  'scripts',
+  'tools',
+  'hack',
+  'bin',
+  'build',
+  'out',
+]);
+const SOURCE_EXTENSIONS = new Set([...C_FAMILY, ...SAMPLE_EXTENSIONS]);
+const SKIPPED_FILE_CAP = 1000;
+const SKIPPED_ENTRY_BUDGET = 20000;
+const SKIPPED_LIMIT = 50;
+const IGNORE_FILE = '.cbmignore';
+/** Source files under a folder, counted by name (an encrypted disk still lists names). */
+function countSources(directory, budget) {
+  let files = 0;
+  const pending = [directory];
+  while (pending.length && files < SKIPPED_FILE_CAP && budget.entries > 0) {
+    const current = pending.shift();
+    let entries;
+    try {
+      entries = fs.readdirSync(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    budget.entries -= entries.length;
+    for (const entry of entries) {
+      if (entry.isDirectory()) pending.push(path.join(current, entry.name));
+      else if (entry.isFile() && SOURCE_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) files++;
+    }
+  }
+  return Math.min(files, SKIPPED_FILE_CAP);
+}
+function ignorePath(root) {
+  const filename = path.join(root, IGNORE_FILE);
+  try {
+    const relative = path.relative(root, fs.realpathSync.native(filename));
+    if (relative.startsWith('..') || path.isAbsolute(relative))
+      throw new Error(`${IGNORE_FILE} points outside the project`);
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+  return filename;
+}
+function readIgnore(root) {
+  try {
+    return fs.readFileSync(ignorePath(root));
+  } catch (error) {
+    if (error.code === 'ENOENT') return Buffer.alloc(0);
+    throw error;
+  }
+}
+/** Folders a .cbmignore asks to index again, written as `!/folder/`, `!folder/` or without the slashes. */
+function includedFolders(bytes) {
+  const folders = new Set();
+  for (const line of bytes.toString('utf8').split(/\r?\n/)) {
+    const match = /^!\/?(.+?)\/?$/.exec(line.trim());
+    if (match) folders.add(match[1]);
+  }
+  return folders;
+}
+/** Woody only appends to a .cbmignore it reads as text: not one encrypted for Woody, nor UTF-16. */
+function ignoreWritable(bytes) {
+  const utf16 =
+    bytes.length >= 2 && ((bytes[0] === 0xff && bytes[1] === 0xfe) || (bytes[0] === 0xfe && bytes[1] === 0xff));
+  return !utf16 && looksLikeText(bytes);
+}
+/**
+ * Ask the indexer to index a folder it skips by name, with one `!/<folder>/` line. The line
+ * is appended as bytes, so the rest of the file keeps its encoding and line endings.
+ */
+function addIncludeLine(root, folder) {
+  const line = `!/${folder}/`;
+  const yourself = `Add this line to ${IGNORE_FILE} in the project folder yourself: ${line}`;
+  if (/[\r\n*?[\]\\]/.test(folder)) throw new Error(`Woody cannot write this folder name as a rule. ${yourself}`);
+  const bytes = readIgnore(root);
+  if (!ignoreWritable(bytes))
+    throw new Error(`Woody cannot read ${IGNORE_FILE} as text; it may be encrypted for Woody. ${yourself}`);
+  if (includedFolders(bytes).has(folder)) return;
+  const text = bytes.toString('utf8');
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  const lead = !bytes.length
+    ? `# Folders with source code that the indexer skips by name${eol}`
+    : text.endsWith('\n')
+      ? ''
+      : eol;
+  atomicWrite(ignorePath(root), Buffer.concat([bytes, Buffer.from(`${lead}${line}${eol}`)]));
 }
 function dead(pid) {
   if (!Number.isInteger(pid) || pid <= 0) return false;
@@ -734,6 +871,7 @@ function createRuntime(options) {
     if (saved.phase === 'succeeded' && saved.projectName !== project.name) {
       saved.phase = 'idle';
       delete saved.summary;
+      delete saved.skippedSources;
     }
     return { repoPath: project.root, config, available: available(), phase: 'idle', log: '', ...saved };
   }
@@ -750,6 +888,7 @@ function createRuntime(options) {
       conclusion,
       precheckRefused,
       indexerReadsPlain,
+      skippedSources,
     } = value;
     atomicJson(project.statusFile, {
       phase,
@@ -763,6 +902,7 @@ function createRuntime(options) {
       conclusion,
       precheckRefused,
       indexerReadsPlain,
+      skippedSources,
       projectName: project.name,
       updatedAt: Date.now(),
     });
@@ -1076,6 +1216,46 @@ function createRuntime(options) {
     if (error.reason === 'unreadable') state.indexerReadsPlain = undefined;
     state.phase = 'failed';
   }
+  /**
+   * Folders with source files that the indexer skipped by name, so the model cannot see them.
+   * Coverage lists every skipped folder; the index summary stops after five. Never throws:
+   * this only adds a hint to a finished index.
+   */
+  async function skippedSources(project, config) {
+    try {
+      const args = boundArguments(
+        project,
+        'check_index_coverage',
+        { scopes: ['.'], scope_limit: 1000, format: 'json' },
+        config
+      );
+      const result = await native(project, 'check_index_coverage', args).promise;
+      const coverage = result.structuredContent || JSON.parse(result.content?.[0]?.text || '{}');
+      const ignore = readIgnore(project.root);
+      const manual = !ignoreWritable(ignore);
+      const requested = manual ? new Set() : includedFolders(ignore);
+      const budget = { entries: SKIPPED_ENTRY_BUDGET };
+      const found = [];
+      for (const entry of coverage.scopes?.[0]?.entries || []) {
+        if (found.length >= SKIPPED_LIMIT) break;
+        if (entry?.kind !== 'not_indexed_dir' || typeof entry.path !== 'string') continue;
+        if (!OFFERED_SKIPPED_NAMES.has(entry.path.split('/').pop())) continue;
+        const files = countSources(path.join(project.root, entry.path), budget);
+        if (files === 0) continue;
+        found.push({
+          path: entry.path,
+          files,
+          ...(files >= SKIPPED_FILE_CAP ? { more: true } : {}),
+          // Asked for and still skipped: .gitignore wins over .cbmignore.
+          ...(requested.has(entry.path) ? { requested: true } : {}),
+          ...(manual ? { manual: true } : {}),
+        });
+      }
+      return found;
+    } catch {
+      return undefined;
+    }
+  }
   async function beginIndex(project, config, { bypassPrecheck = false } = {}) {
     const owner = acquireLock(project);
     const startedAt = Date.now();
@@ -1123,6 +1303,7 @@ function createRuntime(options) {
     job.promise = operation.promise
       .then(async (result) => {
         if (await assertReadable(project)) state.indexerReadsPlain = true;
+        state.skippedSources = await skippedSources(project, config);
         return result;
       })
       .then(
@@ -1194,6 +1375,18 @@ function createRuntime(options) {
       }
       if (job.startupError) await job.promise;
       return api.get(repoPath);
+    },
+    /** Index a folder the last index skipped by name: add it to .cbmignore, then index again. */
+    async include(repoPath, folder) {
+      const project = projectFor(repoPath);
+      const status = await api.get(repoPath);
+      if (!status.config.enabled) throw new Error('Codebase memory is disabled for this project');
+      if (status.phase === 'running') throw new Error('An index is already running for this project');
+      if (typeof folder !== 'string' || !status.skippedSources?.some((item) => item.path === folder))
+        throw new Error('Only a folder the last index skipped can be added');
+      safeRelative(project.root, folder);
+      addIncludeLine(project.root, folder);
+      return api.start(repoPath);
     },
     async cancel(repoPath) {
       const project = projectFor(repoPath);

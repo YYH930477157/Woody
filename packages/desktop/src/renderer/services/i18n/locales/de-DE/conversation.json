@@ -928,6 +928,14 @@
       "timeout": "Die Indexierung wurde vor Ablauf der Zeitüberschreitung nicht fertig. Ein großes Projekt oder eine gesperrte Datei kann sie aufhalten.",
       "workerCrash": "Der Index-Arbeitsprozess ist abgestürzt (0xC0000005, Zugriffsverletzung). Wenn dieser Ordner für Woody verschlüsselt ist, hat der Prozess verschlüsselte Inhalte verarbeitet. Klären Sie zuerst die Whitelist.",
       "unknown": "Die Indexierung ist fehlgeschlagen, und Woody konnte die Ursache nicht zuordnen. Der Diagnosebericht enthält die vollständige Ausgabe des nativen Programms."
+    },
+    "skipped": {
+      "title": "Übersprungene Quellordner",
+      "hint": "Der Indexer überspringt diese Ordner standardmäßig anhand ihres Namens (obj, build, thirdparty und ähnliche), sie enthalten aber Quelldateien, daher sieht das Modell diesen Code nicht. „Zum Index hinzufügen“ ergänzt eine Zeile in .cbmignore im Projektordner und indexiert erneut.",
+      "files": "{{number}} Quelldateien",
+      "include": "Zum Index hinzufügen",
+      "stillSkipped": "In .cbmignore eingetragen, wird aber weiterhin übersprungen. Vermutlich schließt eine .gitignore-Regel den Ordner aus; der Indexer befolgt .gitignore immer.",
+      "manual": "Woody kann .cbmignore hier nicht lesen; die Datei ist möglicherweise für Woody verschlüsselt. Fügen Sie diese Zeile selbst hinzu und indexieren Sie danach erneut: {{line}}"
     }
   },
   "managedWorkspace": {

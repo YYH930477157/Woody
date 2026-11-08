@@ -927,6 +927,14 @@
       "timeout": "The indexer did not finish before the timeout — a large project or a locked file can stall it.",
       "workerCrash": "The index worker crashed (0xC0000005). If the folder is encrypted for this app, the worker was parsing ciphertext — fix the whitelist first.",
       "unknown": "The index failed for a reason Woody could not classify; the diagnostics report has the native output."
+    },
+    "skipped": {
+      "title": "Skipped source folders",
+      "hint": "The indexer skips these folders by name (obj, build, thirdparty and similar), but they hold source files, so the model cannot see this code. Include in index adds a line to .cbmignore in the project folder and indexes again.",
+      "files": "{{number}} source files",
+      "include": "Include in index",
+      "stillSkipped": "Listed in .cbmignore but still skipped. A .gitignore rule probably excludes it; the indexer always follows .gitignore.",
+      "manual": "Woody cannot read .cbmignore here; it may be encrypted for Woody. Add this line to it yourself, then index again: {{line}}"
     }
   },
   "managedWorkspace": {

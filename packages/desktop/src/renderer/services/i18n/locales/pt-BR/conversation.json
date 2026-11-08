@@ -933,6 +933,14 @@
       "timeout": "A indexação não terminou antes do tempo limite. Um projeto grande ou um arquivo bloqueado pode travá-la.",
       "workerCrash": "O processo de indexação travou (0xC0000005, violação de acesso). Se esta pasta está criptografada para o Woody, o processo estava analisando conteúdo criptografado: resolva primeiro a lista de permissões.",
       "unknown": "A indexação falhou por um motivo que o Woody não conseguiu classificar; o relatório de diagnóstico contém a saída completa do programa nativo."
+    },
+    "skipped": {
+      "title": "Pastas de código ignoradas",
+      "hint": "O indexador ignora estas pastas por padrão pelo nome (obj, build, thirdparty e semelhantes), mas elas contêm arquivos de código-fonte, então o modelo não vê esse código. \"Incluir no índice\" adiciona uma linha ao .cbmignore na pasta do projeto e indexa novamente.",
+      "files": "{{number}} arquivos de código-fonte",
+      "include": "Incluir no índice",
+      "stillSkipped": "Listada no .cbmignore, mas ainda ignorada. Provavelmente uma regra do .gitignore a exclui; o indexador sempre segue o .gitignore.",
+      "manual": "O Woody não consegue ler o .cbmignore aqui; ele pode estar criptografado para o Woody. Adicione você mesmo esta linha e indexe novamente: {{line}}"
     }
   },
   "managedWorkspace": {
