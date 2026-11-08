@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { execFile, spawn } = require('node:child_process');
+const { execFile, spawn, spawnSync } = require('node:child_process');
 const TOOL_SCHEMAS = new Map(require('./tools.json').map((tool) => [tool.name, tool.inputSchema]));
 const architecture = require('./architecture.cjs');
 const ARCHITECTURE_LABELS = require('./architecture-labels.json');
@@ -152,6 +152,20 @@ function readThroughPowerShell(executable, files) {
       }
     );
   });
+}
+/** One small file through PowerShell 7, synchronously: the configuration is read on every call. */
+function readFileThroughPowerShellSync(executable, file) {
+  const result = spawnSync(executable, [...POWERSHELL_FLAGS, encodedScript(SAMPLE_SCRIPT)], {
+    env: { ...process.env, WOODY_CBM_SAMPLES: file },
+    encoding: 'utf8',
+    maxBuffer: SAMPLE_BYTES * 2,
+    timeout: 20000,
+    windowsHide: true,
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0)
+    throw new Error(`PowerShell 7 could not read ${path.basename(file)}: ${(result.stderr || '').trim().slice(-300)}`);
+  return Buffer.from(result.stdout.split(/\r?\n/)[0] || '', 'base64');
 }
 // ---------------------------------------------------------------------------
 // Failure diagnostics
@@ -432,9 +446,22 @@ function defaultMode(root) {
   defaultModes.set(root, mode);
   return mode;
 }
-function readConfig(root) {
+/**
+ * `throughPowerShell(filename)` returns the plain bytes when this process reads the file
+ * as ciphertext: Woody may be on an encryption whitelist that the chat tools' node.exe is
+ * not on, and a whitelisted program's files can be encrypted on disk.
+ */
+function readConfig(root, throughPowerShell) {
   try {
-    return validateConfig(JSON.parse(fs.readFileSync(configPath(root), 'utf8').replace(/^\uFEFF/, '')));
+    const filename = configPath(root);
+    let bytes = fs.readFileSync(filename);
+    if (!looksLikeText(bytes)) {
+      if (!throughPowerShell) throw new Error('the file is not readable as text, and PowerShell 7 was not found');
+      bytes = throughPowerShell(filename);
+      if (!bytes?.length || !looksLikeText(bytes))
+        throw new Error('the file is not readable as text, and PowerShell 7 also reads it as ciphertext');
+    }
+    return validateConfig(JSON.parse(bytes.toString('utf8').replace(/^\uFEFF/, '')));
   } catch (error) {
     if (error.code === 'ENOENT') return { ...DEFAULT_CONFIG, mode: defaultMode(root) };
     throw new Error(`Cannot read codebase-memory configuration: ${error.message}`);
@@ -918,13 +945,29 @@ function createRuntime(options) {
   const jobs = new Map();
   const processes = new Set();
   const powerShell = options.powerShell === undefined ? findPowerShell() : options.powerShell;
+  const plainReader =
+    options.readConfigThroughPowerShell ||
+    (powerShell ? (file) => readFileThroughPowerShellSync(powerShell, file) : undefined);
+  // Starting PowerShell takes about a second; reuse a read until the file changes.
+  const plainConfigs = new Map();
+  const throughPowerShell = plainReader
+    ? (file) => {
+        const { mtimeMs, size } = fs.statSync(file);
+        const cached = plainConfigs.get(file);
+        if (cached && cached.mtimeMs === mtimeMs && cached.size === size) return cached.bytes;
+        const bytes = plainReader(file);
+        plainConfigs.set(file, { mtimeMs, size, bytes });
+        return bytes;
+      }
+    : undefined;
+  const readProjectConfig = (root) => readConfig(root, throughPowerShell);
   let disposed = false;
   const projectFor = (repoPath) => identity(canonical(repoPath), path.resolve(options.cacheRoot));
   function available() {
     return fs.existsSync(options.binaryPath);
   }
   function current(project) {
-    const config = readConfig(project.root);
+    const config = readProjectConfig(project.root);
     const saved = readJson(project.statusFile) || {};
     // An index built under another project name (the full-hash name before
     // shortening) answers no query under this one: report it as not indexed.
@@ -1373,6 +1416,13 @@ function createRuntime(options) {
       readSource: sourceReader(project.root),
       callersOf: (names) => callersOf(project, names),
     });
+    // An index started from a chat runs in a process that may not be on the encryption
+    // whitelist; what it reads would replace a good file with an empty one.
+    const unreadable = model.gaps.unreadable.length;
+    if (model.files > 0 && unreadable * 2 >= model.files)
+      throw new Error(
+        `This process reads ${unreadable} of ${model.files} source files as ciphertext; ${ARCHITECTURE_FILE} was left unchanged`
+      );
     const generated = architecture.render(model, text, { language, date: localStamp(), mode: config.mode });
     atomicWrite(filename, architecture.merge(existing, generated, text));
     return { generatedAt: Date.now(), tasks: model.tasks.length, tables: model.tables.length, language };
@@ -1485,7 +1535,7 @@ function createRuntime(options) {
     },
     async save(repoPath, config) {
       const project = projectFor(repoPath);
-      readConfig(project.root);
+      readProjectConfig(project.root);
       const next = validateConfig(config);
       atomicJson(configPath(project.root), next);
       if (!next.enabled) await api.cancel(repoPath);
@@ -1494,7 +1544,7 @@ function createRuntime(options) {
     /** bypassPrecheck: the user says the indexer is whitelisted although Woody reads ciphertext. */
     async start(repoPath, startOptions = {}) {
       const project = projectFor(repoPath);
-      const config = readConfig(project.root);
+      const config = readProjectConfig(project.root);
       if (!config.enabled) throw new Error('Codebase memory is disabled for this project');
       if (!available()) throw new Error('Bundled codebase-memory executable is unavailable');
       let job;
@@ -1578,7 +1628,7 @@ function createRuntime(options) {
     },
     async session(repoPath) {
       const project = projectFor(repoPath);
-      const config = readConfig(project.root);
+      const config = readProjectConfig(project.root);
       if (!config.enabled) return { enabled: false };
       if (!available()) throw new Error('Bundled codebase-memory executable is unavailable');
       return {
@@ -1598,7 +1648,7 @@ function createRuntime(options) {
     },
     async callTool(repoPath, tool, args) {
       const project = projectFor(repoPath);
-      const config = readConfig(project.root);
+      const config = readProjectConfig(project.root);
       if (!config.enabled) throw new Error('Codebase memory is disabled for this project');
       const bound = boundArguments(project, tool, args, config);
       if (tool === 'index_repository') return (await beginIndex(project, config)).promise;
@@ -1625,4 +1675,5 @@ module.exports = {
   readingProbe,
   looksLikeText,
   encryptedForThisProcess,
+  readFileThroughPowerShellSync,
 };

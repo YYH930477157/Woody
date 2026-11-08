@@ -116,6 +116,13 @@ keeps `indexerReadsPlain` and later runs, including MCP calls, skip the probe un
 an index reads ciphertext again. A failed run is published only after its
 diagnostics report is written, so a status never shows `failed` without its reason.
 
+Once Woody itself is on an encryption whitelist, the files it saves, such as
+`.woody/codebase-memory.json`, may be ciphertext on disk. The chat tools run in
+AionCore's `node.exe`, which may not be listed. When that process reads the
+configuration as ciphertext, it reads it again through PowerShell 7 and reuses the
+result until the file changes. An architecture file update that reads most source
+files as ciphertext leaves the existing file unchanged and records why.
+
 The indexer skips folders by name (`obj`, `tmp` and `dist` in every mode; `build`,
 `tools`, `scripts`, `thirdparty` and more in fast and moderate), matching the exact,
 case-sensitive name, as well as everything `.gitignore` excludes. After each successful

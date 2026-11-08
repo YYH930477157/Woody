@@ -916,6 +916,54 @@ describe.runIf(fs.existsSync(installedPowerShell))('native commands started thro
   });
 });
 
+describe('a configuration file encrypted for this process', () => {
+  // Woody is on the encryption whitelist, so the file it saves may be ciphertext on disk;
+  // the chat tools run in a node.exe that may not be listed.
+  const ciphertext = Buffer.from(Array.from({ length: 256 }, (_, index) => index));
+  const configFile = () => path.join(repo, '.woody', 'codebase-memory.json');
+  const encryptConfig = (bytes = ciphertext) => {
+    fs.mkdirSync(path.dirname(configFile()), { recursive: true });
+    fs.writeFileSync(configFile(), bytes);
+  };
+
+  it('is read through PowerShell 7, once until the file changes', async () => {
+    encryptConfig();
+    const reader = vi.fn(() => Buffer.from(JSON.stringify(config)));
+    const service = runtime({ readConfigThroughPowerShell: reader });
+    expect((await service.get(repo)).config).toEqual(config);
+    expect((await service.session(repo)).enabled).toBe(true);
+    await expect(service.callTool(repo, 'index_status', {})).resolves.toBeTruthy();
+    expect(reader).toHaveBeenCalledTimes(1);
+    expect(reader).toHaveBeenCalledWith(configFile());
+    // Woody saved the file again.
+    encryptConfig(Buffer.concat([ciphertext, ciphertext]));
+    await service.get(repo);
+    expect(reader).toHaveBeenCalledTimes(2);
+  });
+
+  it('says why it cannot be used when PowerShell 7 is missing or also reads ciphertext', async () => {
+    encryptConfig();
+    await expect(runtime().get(repo)).rejects.toThrow(/not readable as text, and PowerShell 7 was not found/);
+    const service = runtime({ readConfigThroughPowerShell: () => ciphertext });
+    await expect(service.get(repo)).rejects.toThrow(/PowerShell 7 also reads it as ciphertext/);
+    // A plain file never starts PowerShell.
+    const reader = vi.fn();
+    fs.writeFileSync(configFile(), JSON.stringify(config));
+    expect((await runtime({ readConfigThroughPowerShell: reader }).get(repo)).config).toEqual(config);
+    expect(reader).not.toHaveBeenCalled();
+  });
+
+  it.runIf(fs.existsSync(installedPowerShell))(
+    'reads the exact bytes through the real PowerShell 7, under a non-ASCII path',
+    () => {
+      encryptConfig();
+      const { readFileThroughPowerShellSync } = require(runtimePath);
+      expect(readFileThroughPowerShellSync(installedPowerShell, configFile())).toEqual(ciphertext);
+    },
+    20000
+  );
+});
+
 describe('finding PowerShell 7', () => {
   const find = (env: Record<string, string>) => require(runtimePath).findPowerShell(env);
   const program = (directory: string) => {
