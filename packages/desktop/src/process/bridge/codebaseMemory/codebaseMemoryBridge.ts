@@ -20,6 +20,7 @@ export function initCodebaseMemoryBridge(): void {
     service.start(repoPath, { bypassPrecheck: bypassPrecheck === true })
   );
   codebaseMemory.include.provider(({ repoPath, folder }) => service.include(repoPath, folder));
+  codebaseMemory.architecture.provider(({ repoPath, language }) => service.architecture(repoPath, { language }));
   codebaseMemory.cancel.provider(({ repoPath }) => service.cancel(repoPath));
   codebaseMemory.session.provider(({ repoPath }) => service.session(repoPath));
   codebaseMemory.openLens.provider(({ repoPath }) => service.openLens(repoPath));

@@ -9,13 +9,16 @@ const api = vi.hoisted(() => ({
   save: vi.fn(),
   start: vi.fn(),
   include: vi.fn(),
+  architecture: vi.fn(),
   cancel: vi.fn(),
   openLens: vi.fn(),
 }));
 vi.mock('@/common', () => ({
   ipcBridge: { codebaseMemory: Object.fromEntries(Object.entries(api).map(([key, invoke]) => [key, { invoke }])) },
 }));
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'zh-CN' } }),
+}));
 const key = (name: string) => `conversation.codebaseMemory.${name}`;
 const status = (repoPath = 'D:/one', extra: Partial<CodebaseMemoryStatus> = {}): CodebaseMemoryStatus => ({
   repoPath,
@@ -60,6 +63,37 @@ describe('project architecture panel', () => {
     expect(api.openLens).toHaveBeenCalledExactlyOnceWith({ repoPath: 'D:/two' });
     await act(async () => opening.resolve(ready));
     expect(screen.getByText(key('phase.succeeded'))).toBeInTheDocument();
+  });
+  it('generates the architecture file in the interface language once the project is indexed', async () => {
+    const config = { version: 1, enabled: true, mode: 'full' } as const;
+    api.get.mockResolvedValue(status('D:/one', { phase: 'succeeded', config }));
+    const generating = deferred<CodebaseMemoryStatus>();
+    api.architecture.mockReturnValue(generating.promise);
+    render(<CodebaseMemoryPanel repoPaths={{ one: 'D:/one' }} />);
+    const button = await screen.findByRole('button', { name: key('architecture.generate') });
+    await waitFor(() => expect(button).not.toBeDisabled());
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(api.architecture).toHaveBeenCalledExactlyOnceWith({ repoPath: 'D:/one', language: 'zh-CN' });
+    await act(async () =>
+      generating.resolve(
+        status('D:/one', { phase: 'succeeded', config, architecture: { generatedAt: 1, tasks: 6, tables: 8 } })
+      )
+    );
+    expect(screen.getByRole('button', { name: key('architecture.update') })).toBeInTheDocument();
+    expect(screen.getByText(key('architecture.summary'))).toBeInTheDocument();
+  });
+  it('shows why the architecture file was not updated, and needs an index first', async () => {
+    api.get.mockResolvedValue(
+      status('D:/one', {
+        phase: 'idle',
+        config: { version: 1, enabled: true, mode: 'full' },
+        architecture: { generatedAt: 1, tasks: 6, tables: 8, error: 'no woody:generated markers' },
+      })
+    );
+    render(<CodebaseMemoryPanel repoPaths={{ one: 'D:/one' }} />);
+    expect(await screen.findByText(key('architecture.failed'))).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: key('architecture.update') })).toBeDisabled();
   });
   it('lists source folders the indexer skipped and adds one to the index on request', async () => {
     const config = { version: 1, enabled: true, mode: 'full' } as const;

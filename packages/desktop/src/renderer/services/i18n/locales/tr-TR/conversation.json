@@ -937,6 +937,14 @@
       "include": "İndekse ekle",
       "stillSkipped": ".cbmignore dosyasında var ama hâlâ atlanıyor. Muhtemelen bir .gitignore kuralı onu hariç tutuyor; indeksleyici her zaman .gitignore kurallarına uyar.",
       "manual": "Woody buradaki .cbmignore dosyasını okuyamıyor; dosya Woody için şifrelenmiş olabilir. Şu satırı kendiniz ekleyin, ardından yeniden indeksleyin: {{line}}"
+    },
+    "architecture": {
+      "title": "Mimari dosyası",
+      "hint": "Woody, .woody/architecture.md dosyasını indeks ve kaynak koddan oluşturur: görevler, sırasıyla dağıtım tabloları, sıra kısıtları ve her modülün hangi tablolara kayıtlı olduğu. Dosya oluştuktan sonra her indekslemede güncellenir ve ekibinizin yazdığı Değişiklik kuralları bölümü korunur. Model, kodu değiştirmeden önce bu dosyayı okur.",
+      "generate": "Oluştur",
+      "update": "Şimdi güncelle",
+      "summary": "Son oluşturma {{time}}: {{tasks}} görev, {{tables}} dağıtım tablosu.",
+      "failed": "Mimari dosyası güncellenemedi: {{error}}"
     }
   },
   "managedWorkspace": {

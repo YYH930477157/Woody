@@ -5,7 +5,10 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 const require = createRequire(import.meta.url);
-const { prepareCodebaseMemory, resolveBuildTarget } = require('../../../scripts/bundled-mcp/prepareCodebaseMemory.js');
+const {
+  prepareCodebaseMemory,
+  resolveBuildTarget,
+} = require('../../../../scripts/bundled-mcp/prepareCodebaseMemory.js');
 const roots: string[] = [];
 function fixtureRoot() {
   const root = mkdtempSync(path.join(tmpdir(), 'woody-cbm-bundle-test-'));

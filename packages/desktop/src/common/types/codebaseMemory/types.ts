@@ -36,6 +36,18 @@ export type CodebaseMemorySkippedFolder = {
   manual?: boolean;
 };
 
+/** The project's .woody/architecture.md, as the last generation left it. */
+export type CodebaseMemoryArchitecture = {
+  generatedAt?: number;
+  /** Tasks and dispatch tables found. */
+  tasks?: number;
+  tables?: number;
+  /** Language of the generated headings. */
+  language?: string;
+  /** The last update failed; the file keeps its earlier content. */
+  error?: string;
+};
+
 export type CodebaseMemoryStatus = {
   repoPath: string;
   config: CodebaseMemoryConfig;
@@ -57,5 +69,7 @@ export type CodebaseMemoryStatus = {
   indexerReadsPlain?: boolean;
   /** Folders holding source files that the last index skipped by name (obj, build, thirdparty...). */
   skippedSources?: CodebaseMemorySkippedFolder[];
+  /** Present once .woody/architecture.md exists; updated after every index. */
+  architecture?: CodebaseMemoryArchitecture;
   updatedAt?: number;
 };

@@ -935,6 +935,14 @@
       "include": "Ajouter à l’index",
       "stillSkipped": "Inscrit dans .cbmignore, mais toujours ignoré. Une règle .gitignore l’exclut probablement ; l’indexeur respecte toujours .gitignore.",
       "manual": "Woody ne peut pas lire .cbmignore ici ; il est peut-être chiffré pour Woody. Ajoutez vous-même cette ligne, puis relancez l’indexation : {{line}}"
+    },
+    "architecture": {
+      "title": "Fichier d’architecture",
+      "hint": "Woody génère .woody/architecture.md à partir de l’index et du code source : les tâches, les tables de répartition dans l’ordre, les contraintes d’ordre et les tables dans lesquelles chaque module s’enregistre. Une fois le fichier créé, chaque indexation le met à jour et conserve la section Règles de modification rédigée par votre équipe. Le modèle le lit avant de modifier le code.",
+      "generate": "Générer",
+      "update": "Mettre à jour",
+      "summary": "Dernière génération {{time}} : {{tasks}} tâches, {{tables}} tables de répartition.",
+      "failed": "Impossible de mettre à jour le fichier d’architecture : {{error}}"
     }
   },
   "managedWorkspace": {

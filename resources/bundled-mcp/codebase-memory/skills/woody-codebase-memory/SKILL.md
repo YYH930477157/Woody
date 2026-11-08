@@ -1,6 +1,6 @@
 ---
 name: woody-codebase-memory
-description: Use to find where something is implemented, who calls a function, what it calls, what a change affects, or how a module is organized, in a Woody project with Codebase Memory enabled. Also use to explain a feature end to end (entry points, flow, parameters and where they are stored, where its data comes from) and to write or update a feature card in .woody/features.
+description: Use to find where something is implemented, who calls a function, what it calls, what a change affects, or how a module is organized, in a Woody project with Codebase Memory enabled. Also use to explain a feature end to end (entry points, flow, parameters and where they are stored, where its data comes from) and to write or update a feature card in .woody/features. Before changing code in a project that has .woody/architecture.md, read that file and follow its tasks, dispatch table order and Change rules.
 ---
 
 # Woody Codebase Memory
@@ -65,6 +65,18 @@ A feature card records one traced feature, so later conversations start from it 
 
 Mark each fact as read in the source, from the graph, or inferred. When a card is used again, compare its commit with the current one; if files it cites changed, re-check those facts and update the card and its basis line.
 
+## Architecture file
+
+Woody writes `.woody/architecture.md` from the index and keeps it up to date after every index. It lists the RTOS tasks and what they wait on, the dispatch tables each task runs (in order, with `#if` conditions and comments), the order constraints from those comments, and which tables each module registers in. Its last section, the Change rules, is written by the team.
+
+Read it before you change code, and follow it:
+
+1. The team's Change rules come first. They win over the generated part and over your own judgment.
+2. When you change an existing module, keep that module's own style, even where it differs from the others; the file lists modules that differ.
+3. When you add periodic work or a new module, register it the way most modules do: the module matrix shows which tables (initialisation, periodic, idle, power-down and so on) a module usually provides a function for. Put each entry where it belongs in the table's order, keep every order constraint, copy the `#if` condition of related entries, and say why you chose that position.
+4. Never edit between the `woody:generated` markers; Woody rewrites that part. If you learn a rule the team should keep, suggest adding it to the Change rules.
+5. Entries marked as not in the index are real code in a skipped folder or behind `#if`: read their files directly.
+
 ## Around a change
 
-Before editing, find the entry point, trace callers and callees one or two levels, and read the exact code you will change. After editing, run the relevant tests; in a Git project `detect_changes` lists affected symbols you may have missed. If the change touches a feature that has a card, update the card.
+Before editing, find the entry point, trace callers and callees one or two levels, and read the exact code you will change. In a project with `.woody/architecture.md`, read it first. After editing, run the relevant tests; in a Git project `detect_changes` lists affected symbols you may have missed. If the change touches a feature that has a card, update the card.
