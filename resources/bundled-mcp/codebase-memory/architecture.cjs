@@ -547,7 +547,7 @@ async function analyze({ functions, readSource, callersOf }) {
       for (const entry of variant.entries)
         if (!entry.def && !gaps.entriesNotIndexed.includes(entry.names[0])) gaps.entriesNotIndexed.push(entry.names[0]);
 
-  return { tasks, tables, otherTables, gaps, modules: modules(tables) };
+  return { tasks, tables, otherTables, gaps, modules: modules(tables), files: files.length };
 }
 
 /** Every definition of `name` in a file, with its entries in order. */

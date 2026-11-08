@@ -136,6 +136,22 @@ describe('architecture file in the project runtime', () => {
     expect(updated).toContain('language=zh-CN');
   });
 
+  it('keeps a good file when this process reads the source as ciphertext', async () => {
+    const service = runtime();
+    await service.save(repo, { version: 1, enabled: true, mode: 'full' });
+    await indexed(service);
+    await service.architecture(repo, { language: 'en-US' });
+    const good = fs.readFileSync(architectureFile(), 'utf8');
+    // A chat's index runs in a node.exe the encryption client may not list.
+    const ciphertext = Buffer.from(Array.from({ length: 256 }, (_, index) => index));
+    for (const file of ['app/task.c', 'app/alarm.c', 'app/clock.c']) write(file, ciphertext);
+    await expect(service.architecture(repo, { language: 'en-US' })).rejects.toThrow(
+      /reads 3 of 3 source files as ciphertext/
+    );
+    expect((await indexed(service)).architecture?.error).toMatch(/left unchanged/);
+    expect(fs.readFileSync(architectureFile(), 'utf8')).toBe(good);
+  });
+
   it('never overwrites a file it cannot use, and forgets a file the user deleted', async () => {
     const service = runtime();
     await service.save(repo, { version: 1, enabled: true, mode: 'full' });
