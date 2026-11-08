@@ -1212,5 +1212,36 @@
     "workFolder": "Arbeit",
     "outputFolder": "Ergebnisse",
     "untitled": "Neuer-Chat"
+  },
+  "memory": {
+    "title": "Gedächtnis",
+    "recalled": "{{number}} Erinnerungen für den Agenten angefügt",
+    "autoDistill": "Automatisch extrahieren",
+    "autoDistillHint": "Ist ein Gespräch 5 Minuten ruhig, wird festgehalten, was sich zu merken lohnt.",
+    "autoRecall": "Automatisch anfügen",
+    "autoRecallHint": "Vor jeder Nachricht werden die passendsten Erinnerungen für den Agenten angefügt.",
+    "distill": "Gedächtnis ordnen",
+    "distillHint": "Erinnerungen aus dem gerade geöffneten Gespräch extrahieren (nur aionrs-Gespräche). Erinnerungen sind Markdown-Dateien, die Sie bearbeiten können.",
+    "distillDone": "{{added}} hinzugefügt, {{updated}} aktualisiert.",
+    "add": "Neue Erinnerung",
+    "openFolder": "Ordner öffnen",
+    "search": "Erinnerungen durchsuchen",
+    "empty": "Dieses Projekt hat noch keine Erinnerungen. Sie werden extrahiert, wenn ein Gespräch 5 Minuten ruhig ist oder Sie „Gedächtnis ordnen“ wählen.",
+    "noResults": "Keine passenden Erinnerungen.",
+    "noWorkspace": "Öffnen Sie ein Projekt, um seine Erinnerungen zu sehen.",
+    "removeConfirm": "Diese Erinnerung löschen? Die Datei wird in den Papierkorb verschoben.",
+    "updatedAt": "Aktualisiert {{time}}",
+    "fields": {
+      "name": "Name",
+      "description": "Einzeilige Beschreibung",
+      "type": "Typ",
+      "body": "Inhalt"
+    },
+    "types": {
+      "user": "Nutzer",
+      "feedback": "Feedback",
+      "project": "Projekt",
+      "reference": "Referenz"
+    }
   }
 }

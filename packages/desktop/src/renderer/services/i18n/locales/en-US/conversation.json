@@ -1211,5 +1211,36 @@
     "workFolder": "work",
     "outputFolder": "output",
     "untitled": "untitled"
+  },
+  "memory": {
+    "title": "Memory",
+    "recalled": "{{number}} memories added for the agent",
+    "autoDistill": "Distill automatically",
+    "autoDistillHint": "When a conversation has been quiet for 5 minutes, keep what is worth remembering from it.",
+    "autoRecall": "Recall automatically",
+    "autoRecallHint": "Before each message is sent, add the most relevant memories for the agent.",
+    "distill": "Distill now",
+    "distillHint": "Distill from the conversation that is open now (aionrs conversations only). Memories are Markdown files you can edit.",
+    "distillDone": "Added {{added}}, updated {{updated}}.",
+    "add": "New memory",
+    "openFolder": "Open folder",
+    "search": "Search memories",
+    "empty": "This project has no memories yet. They are distilled when a conversation has been quiet for 5 minutes, or when you choose Distill now.",
+    "noResults": "No memories match.",
+    "noWorkspace": "Open a project to see its memories.",
+    "removeConfirm": "Delete this memory? The file moves to the recycle bin.",
+    "updatedAt": "Updated {{time}}",
+    "fields": {
+      "name": "Name",
+      "description": "One-line description",
+      "type": "Type",
+      "body": "Content"
+    },
+    "types": {
+      "user": "User",
+      "feedback": "Feedback",
+      "project": "Project",
+      "reference": "Reference"
+    }
   }
 }

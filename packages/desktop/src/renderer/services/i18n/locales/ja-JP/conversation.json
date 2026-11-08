@@ -1211,5 +1211,36 @@
     "workFolder": "作業",
     "outputFolder": "成果物",
     "untitled": "新しいチャット"
+  },
+  "memory": {
+    "title": "メモリー",
+    "recalled": "メモリー {{number}} 件を追加",
+    "autoDistill": "自動で抽出",
+    "autoDistillHint": "会話が 5 分間止まったら、長く覚えておく価値のある内容を抽出します。",
+    "autoRecall": "自動で添付",
+    "autoRecallHint": "メッセージを送る前に、関連の高いメモリーをモデルに添付します。",
+    "distill": "メモリーを整理",
+    "distillHint": "いま開いている会話からメモリーを抽出します（aionrs の会話のみ）。メモリーは編集できる Markdown ファイルです。",
+    "distillDone": "追加 {{added}} 件、更新 {{updated}} 件。",
+    "add": "新しいメモリー",
+    "openFolder": "フォルダーを開く",
+    "search": "メモリーを検索",
+    "empty": "このプロジェクトにはまだメモリーがありません。会話が 5 分間止まると自動で抽出されます。「メモリーを整理」ですぐに抽出することもできます。",
+    "noResults": "一致するメモリーはありません。",
+    "noWorkspace": "プロジェクトを開くとメモリーが表示されます。",
+    "removeConfirm": "このメモリーを削除しますか？ファイルはごみ箱に移動します。",
+    "updatedAt": "更新: {{time}}",
+    "fields": {
+      "name": "名前",
+      "description": "一行の説明",
+      "type": "種類",
+      "body": "内容"
+    },
+    "types": {
+      "user": "ユーザー",
+      "feedback": "フィードバック",
+      "project": "プロジェクト",
+      "reference": "参照"
+    }
   }
 }

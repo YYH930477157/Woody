@@ -7,7 +7,7 @@
 import type { IMessageText } from '@/common/chat/chatLib';
 import { parseFileMarker, resolveMessageFilePath } from './fileMarker';
 import SessionMentionAction from './SessionMentionAction';
-import { parseSessionMessageBlock, parseSessionsBlock } from './sessionMarkers';
+import { parseMemoryBlock, parseSessionMessageBlock, parseSessionsBlock } from './sessionMarkers';
 import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { useLocalFilePreview } from '@/renderer/pages/conversation/Preview/hooks/useLocalFilePreview';
@@ -142,9 +142,14 @@ const MessageText: React.FC<{
   // `[[AION_SESSIONS]]` block is appended to the user's own message, and a
   // delivery is persisted as a user message too. Not parsing them would show
   // raw marker text in a bubble.
-  const { text: textWithoutMentions, sessions: mentionedSessions } = useMemo(
-    () => (isUserMessage ? parseSessionsBlock(text) : { text, sessions: [] }),
+  // Memories Woody added before sending (aionrs): hidden, named in a short note.
+  const { text: textWithoutMemory, memories: recalledMemories } = useMemo(
+    () => (isUserMessage ? parseMemoryBlock(text) : { text, memories: [] }),
     [isUserMessage, text]
+  );
+  const { text: textWithoutMentions, sessions: mentionedSessions } = useMemo(
+    () => (isUserMessage ? parseSessionsBlock(textWithoutMemory) : { text: textWithoutMemory, sessions: [] }),
+    [isUserMessage, textWithoutMemory]
   );
   const { text: visibleText, source: deliverySource } = useMemo(
     () => (isUserMessage ? parseSessionMessageBlock(textWithoutMentions) : { text: textWithoutMentions, source: null }),
@@ -290,6 +295,16 @@ const MessageText: React.FC<{
               />
             ))}
           </div>
+        )}
+        {recalledMemories.length > 0 && (
+          <Tooltip content={recalledMemories.join('\n')}>
+            <div
+              className={classNames('mt-4px text-12px text-t-secondary', { 'self-end': isUserMessage })}
+              data-testid='message-recalled-memories'
+            >
+              {t('conversation.memory.recalled', { number: recalledMemories.length })}
+            </div>
+          </Tooltip>
         )}
         {files.length > 0 && (
           <div className={classNames('mt-6px min-w-0 max-w-full', { 'self-end': isUserMessage })}>

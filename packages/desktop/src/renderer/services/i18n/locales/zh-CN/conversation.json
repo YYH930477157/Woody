@@ -1211,5 +1211,36 @@
     "workFolder": "过程",
     "outputFolder": "成品",
     "untitled": "新会话"
+  },
+  "memory": {
+    "title": "记忆",
+    "recalled": "已带入 {{number}} 条记忆",
+    "autoDistill": "自动提炼",
+    "autoDistillHint": "对话停下 5 分钟后，从中提炼值得长期记住的内容。",
+    "autoRecall": "自动带入",
+    "autoRecallHint": "每次发送消息前，把最相关的几条记忆附给模型。",
+    "distill": "整理记忆",
+    "distillHint": "从当前打开的对话中提炼记忆（仅限 aionrs 对话）。记忆是 Markdown 文件，可以直接编辑。",
+    "distillDone": "新增 {{added}} 条，更新 {{updated}} 条。",
+    "add": "新建记忆",
+    "openFolder": "打开文件夹",
+    "search": "搜索记忆",
+    "empty": "这个工程还没有记忆。对话停下 5 分钟后会自动提炼，也可以点“整理记忆”。",
+    "noResults": "没有匹配的记忆。",
+    "noWorkspace": "打开一个工程后才能查看它的记忆。",
+    "removeConfirm": "删除这条记忆？文件会移到回收站。",
+    "updatedAt": "更新于 {{time}}",
+    "fields": {
+      "name": "名称",
+      "description": "一句话描述",
+      "type": "类型",
+      "body": "内容"
+    },
+    "types": {
+      "user": "用户",
+      "feedback": "反馈",
+      "project": "项目",
+      "reference": "参考"
+    }
   }
 }

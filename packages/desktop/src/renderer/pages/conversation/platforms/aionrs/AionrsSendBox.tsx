@@ -54,6 +54,7 @@ import { Brain, Lightning, MagicHat, Shield } from '@icon-park/react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { classifyConversationBusyError } from '../conversationBusyError';
+import { withRecalledMemory } from './memoryRecall';
 import { useAionrsMessage } from './useAionrsMessage';
 import type { AionrsModelSelection } from './useAionrsModelSelection';
 
@@ -285,7 +286,7 @@ const AionrsSendBox: React.FC<{
         markSendStarted();
         setWaitingResponse(true);
         const res = await ipcBridge.conversation.sendMessage.invoke({
-          input,
+          input: await withRecalledMemory(conversation_id, input),
           conversation_id,
           files,
           // `@@` references. Omitting this makes the whole feature silently

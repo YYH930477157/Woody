@@ -250,6 +250,17 @@ describe('MessageText attachment paths', () => {
     expect(screen.getByTestId('file-preview')).toHaveTextContent('/workspace/demo/uploads/photo.png');
   });
 
+  it('hides the memories Woody added to a sent message and names them in a short note', () => {
+    renderMessageText(
+      '过流阈值改成多少？\n\n[[WOODY_MEMORY]]\nSaved notes.\n\n### 报警阈值 (project) — alarm.md\nAlarmPara 在 parameter.c。\n[[/WOODY_MEMORY]]',
+      { position: 'right' }
+    );
+    expect(screen.getByText('过流阈值改成多少？')).toBeInTheDocument();
+    expect(screen.queryByText(/AlarmPara/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/WOODY_MEMORY/)).not.toBeInTheDocument();
+    expect(screen.getByTestId('message-recalled-memories')).toBeInTheDocument();
+  });
+
   it('lets text message content use the available row width on desktop', () => {
     const message: IMessageText = {
       id: 'msg-width',

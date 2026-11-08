@@ -63,6 +63,7 @@ import { SearchPanel } from './search/SearchPanel';
 import type { SearchHit } from './search/searchModel';
 import { Workbench } from '../SourceControl/Workbench';
 import CodebaseMemoryPanel from '../CodebaseMemory';
+import MemoryPanel from '../Memory';
 import WorkspaceManager from '@/renderer/components/workspace/WorkspaceManager';
 import {
   buildWorkspaceUpdate,
@@ -95,6 +96,8 @@ export type ExplorerContainerProps = {
  * (`''` = pe root). One dialog serves all three so the modal + submit path have
  * a single implementation.
  */
+type ExplorerTab = 'files' | 'changes' | 'architecture' | 'memory';
+
 type NameDialogState =
   | ({ mode: 'rename' } & RenameRequest)
   | { mode: 'newFile'; peId: string; targetDir: string }
@@ -294,13 +297,16 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({
   // unmounts the inactive one for `changes`, which is safe because the SCM
   // subscription is owned by its store per project, not by the component's mount
   // (see ScmPanel's lifecycle note) — a tab switch never drops the backend watch.
-  const [activeTab, setActiveTab] = useState<'files' | 'changes' | 'architecture'>('files');
+  const [activeTab, setActiveTab] = useState<ExplorerTab>('files');
   const [architectureVisited, setArchitectureVisited] = useState(false);
   const [architectureRefresh, setArchitectureRefresh] = useState(0);
+  const [memoryVisited, setMemoryVisited] = useState(false);
+  const [memoryRefresh, setMemoryRefresh] = useState(0);
   const [changesVisited, setChangesVisited] = useState(false);
   useEffect(() => {
     if (activeTab === 'changes') setChangesVisited(true);
     if (activeTab === 'architecture') setArchitectureVisited(true);
+    if (activeTab === 'memory') setMemoryVisited(true);
   }, [activeTab]);
   // Busy flag for the top-bar refresh: spins the icon and disables re-click while a
   // refresh is in flight (so rapid clicks don't fan out redundant backend round-trips).
@@ -555,6 +561,8 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({
     try {
       if (activeTab === 'architecture') {
         setArchitectureRefresh((value) => value + 1);
+      } else if (activeTab === 'memory') {
+        setMemoryRefresh((value) => value + 1);
       } else if (activeTab === 'changes') {
         await Promise.all([rediscoverRepos(), refreshAllRepos()]);
       } else {
@@ -565,7 +573,7 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({
     }
   };
 
-  const tabButton = (key: 'files' | 'changes' | 'architecture', label: string) => (
+  const tabButton = (key: ExplorerTab, label: string) => (
     <Button
       type='text'
       size='small'
@@ -602,6 +610,7 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({
           {tabButton('files', t('conversation.explorer.tabs.files'))}
           {tabButton('changes', t('conversation.explorer.tabs.changes'))}
           {tabButton('architecture', t('conversation.codebaseMemory.title'))}
+          {tabButton('memory', t('conversation.memory.title'))}
         </div>
         <div data-explorer-actions className='flex items-center justify-end gap-2px flex-shrink-0'>
           {/* Right cluster order (VS Code parity): project-scope actions first (add
@@ -626,7 +635,7 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({
           {workspacePath && <WorkspaceOpenButton workspacePath={workspacePath} isTemporary={false} />}
           <Tooltip
             content={
-              activeTab === 'architecture'
+              activeTab === 'architecture' || activeTab === 'memory'
                 ? t('conversation.codebaseMemory.reload')
                 : activeTab === 'changes'
                   ? t('conversation.explorer.refreshChanges')
@@ -642,7 +651,7 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({
               loading={refreshing}
               icon={<Refresh theme='outline' size='16' />}
               aria-label={
-                activeTab === 'architecture'
+                activeTab === 'architecture' || activeTab === 'memory'
                   ? t('conversation.codebaseMemory.reload')
                   : activeTab === 'changes'
                     ? t('conversation.explorer.refreshChanges')
@@ -722,6 +731,16 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({
             repoPaths={repoPaths}
             visible={activeTab === 'architecture'}
             refreshToken={architectureRefresh}
+          />
+        </div>
+      )}
+      {(activeTab === 'memory' || memoryVisited) && (
+        <div className={`flex-1 min-h-0 ${activeTab === 'memory' ? '' : 'hidden'}`}>
+          <MemoryPanel
+            workspace={workspacePath}
+            conversationId={activeConversationId}
+            visible={activeTab === 'memory'}
+            refreshToken={memoryRefresh}
           />
         </div>
       )}
