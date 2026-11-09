@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import { execFileSync } from 'node:child_process';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -106,6 +107,50 @@ describe('project runtime', () => {
     const result = await finished(service);
     expect(result.phase).toBe('succeeded');
     expect(result.summary).toContain('13');
+  });
+  it('restores source-only overlays after successful native indexing', async () => {
+    execFileSync('git', ['-C', repo, 'init', '-q'], { windowsHide: true });
+    const excludePath = path.join(repo, '.git', 'info', 'exclude');
+    const cbmignorePath = path.join(repo, '.cbmignore');
+    const excludeBefore = Buffer.from('# existing exclude\r\n', 'utf8');
+    const cbmignoreBefore = Buffer.from('# existing cbmignore\r\n', 'utf8');
+    fs.writeFileSync(excludePath, excludeBefore);
+    fs.writeFileSync(cbmignorePath, cbmignoreBefore);
+    fs.writeFileSync(
+      path.join(root, 'fixture.cjs'),
+      `const fs=require('node:fs'); const path=require('node:path'); const root=process.cwd(); const file=(...parts)=>path.join(root,...parts); if(process.argv.includes('index_repository')) { const snapshot=()=>({exclude:fs.readFileSync(file('.git','info','exclude'),'utf8'),cbm:fs.readFileSync(file('.cbmignore'),'utf8')}); const read=()=>{fs.writeFileSync(file('overlay-seen'),JSON.stringify({cwd:root,...snapshot()})); console.log(JSON.stringify({isError:false,structuredContent:{nodes:13}}));}; setTimeout(read,300); } else { console.log(JSON.stringify({isError:false,structuredContent:{folders:[]}})); }`
+    );
+    const service = runtime();
+    await service.save(repo, config);
+    await service.start(repo);
+    expect(fs.readFileSync(excludePath, 'utf8')).toContain('WOODY-CBM-SOURCE-ONLY');
+    expect((await finished(service)).phase).toBe('succeeded');
+    expect(JSON.parse(fs.readFileSync(path.join(repo, 'overlay-seen'), 'utf8'))).toMatchObject({
+      exclude: expect.stringContaining('WOODY-CBM-SOURCE-ONLY'),
+      cbm: expect.stringContaining('WOODY-CBM-SOURCE-ONLY'),
+    });
+    expect(fs.readFileSync(excludePath)).toEqual(excludeBefore);
+    expect(fs.readFileSync(cbmignorePath)).toEqual(cbmignoreBefore);
+  });
+  it('restores source-only overlays after native indexing fails', async () => {
+    execFileSync('git', ['-C', repo, 'init', '-q'], { windowsHide: true });
+    const excludePath = path.join(repo, '.git', 'info', 'exclude');
+    const cbmignorePath = path.join(repo, '.cbmignore');
+    const excludeBefore = Buffer.from('# existing exclude\r\n', 'utf8');
+    const cbmignoreBefore = Buffer.from('# existing cbmignore\r\n', 'utf8');
+    fs.writeFileSync(excludePath, excludeBefore);
+    fs.writeFileSync(cbmignorePath, cbmignoreBefore);
+    fs.writeFileSync(
+      path.join(root, 'fixture.cjs'),
+      `const fs=require('node:fs'); const path=require('node:path'); const root=process.cwd(); const exclude=fs.readFileSync(path.join(root,'.git','info','exclude'),'utf8'); const cbm=fs.readFileSync(path.join(root,'.cbmignore'),'utf8'); fs.writeFileSync(path.join(root,'overlay-seen'),String(exclude.includes('WOODY-CBM-SOURCE-ONLY')&&cbm.includes('WOODY-CBM-SOURCE-ONLY'))); process.exit(3);`
+    );
+    const service = runtime();
+    await service.save(repo, config);
+    await service.start(repo);
+    expect((await diagnosed(service)).phase).toBe('failed');
+    expect(fs.readFileSync(path.join(repo, 'overlay-seen'), 'utf8')).toBe('true');
+    expect(fs.readFileSync(excludePath)).toEqual(excludeBefore);
+    expect(fs.readFileSync(cbmignorePath)).toEqual(cbmignoreBefore);
   });
   it.each(['invalid', 'exit', 'error'])('surfaces native %s failures', async (behavior) => {
     const service = runtime();

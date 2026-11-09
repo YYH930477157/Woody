@@ -89,6 +89,16 @@ Core imports the skill's entire parent directory. The skill is guidance for the 
 guarantee. The adapter is responsible for enforcing project boundaries and
 disabling unsupported capabilities.
 
+During index initialization Woody applies a temporary source-only filter. In a
+Git worktree it adds `*` to a marked block in `.git/info/exclude`, so only
+tracked files are visible to the indexer. It also adds marked rules to the
+project's `.cbmignore` for test, build, generated, vendored, script, and
+temporary directories plus common test-file names. The original bytes,
+including line endings, are restored after both successful and failed indexes;
+an external edit is left in place and reported as a cleanup conflict. When
+Git is unavailable, the same `.cbmignore` rules provide the directory and
+filename filtering without excluding untracked files.
+
 The indexer prefixes every qualified name with the project name, so the name is
 short: the folder name in lowercase ASCII plus 8 hex characters of the path hash
 (`code-affc6c50`). The cache directory keeps the full-hash name `woody-<sha256>`,
