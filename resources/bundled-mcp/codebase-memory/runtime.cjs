@@ -7,6 +7,7 @@ const crypto = require('node:crypto');
 const { execFile, spawn, spawnSync } = require('node:child_process');
 const TOOL_SCHEMAS = new Map(require('./tools.json').map((tool) => [tool.name, tool.inputSchema]));
 const architecture = require('./architecture.cjs');
+const { prepareSourceOnlyOverlay } = require('./sourceFilter.cjs');
 const ARCHITECTURE_LABELS = require('./architecture-labels.json');
 const DEFAULT_CONFIG = { version: 1, enabled: false, mode: 'fast' };
 const TOOLS = new Set([
@@ -1464,6 +1465,18 @@ function createRuntime(options) {
       await fail(error);
       throw error;
     }
+    let overlay;
+    try {
+      overlay = prepareSourceOnlyOverlay(project.root);
+      state.indexFilter = {
+        gitTrackedOnly: overlay.gitTrackedOnly,
+        files: overlay.files,
+        restored: false,
+      };
+    } catch (error) {
+      await fail(error);
+      throw error;
+    }
     let operation;
     try {
       operation = native(
@@ -1476,12 +1489,29 @@ function createRuntime(options) {
         owner
       );
     } catch (error) {
+      const cleanup = overlay.cleanup();
+      state.indexFilter.restored = cleanup.restored;
+      if (!cleanup.restored) error.message = `${error.message}; ${cleanup.conflict}`;
       await fail(error);
       throw error;
     }
+    const indexed = operation.promise.then(
+      (result) => {
+        const cleanup = overlay.cleanup();
+        state.indexFilter.restored = cleanup.restored;
+        if (!cleanup.restored) throw new Error(`Source-only index filter cleanup failed: ${cleanup.conflict}`);
+        return result;
+      },
+      (error) => {
+        const cleanup = overlay.cleanup();
+        state.indexFilter.restored = cleanup.restored;
+        if (!cleanup.restored) error.message = `${error.message}; ${cleanup.conflict}`;
+        throw error;
+      }
+    );
     const job = { operation, state, promise: undefined, startupError: operation.startupError };
     jobs.set(project.name, job);
-    job.promise = operation.promise
+    job.promise = indexed
       .then(async (result) => {
         if (await assertReadable(project)) state.indexerReadsPlain = true;
         state.skippedSources = await skippedSources(project, config);
