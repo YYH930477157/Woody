@@ -41,6 +41,10 @@
     "failed": "Failed to apply setting. The previous state is still shown."
   },
   "thoughtLevel": {
+    "omit": "Omit parameter",
+    "providerNone": "none (provider value)",
+    "auto": "Auto",
+    "defaultLabel": "Default thinking level",
     "label": "Thinking Level",
     "switchSuccess": "Thinking level switched",
     "switchFailed": "Failed to switch thinking level"

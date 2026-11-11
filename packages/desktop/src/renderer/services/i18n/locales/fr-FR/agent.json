@@ -41,6 +41,10 @@
     "failed": "Échec de l'application du paramètre. L'état précédent est toujours affiché."
   },
   "thoughtLevel": {
+    "omit": "Omettre le paramètre",
+    "providerNone": "none (valeur du fournisseur)",
+    "auto": "Automatique",
+    "defaultLabel": "Niveau de réflexion par défaut",
     "label": "Niveau de réflexion",
     "switchSuccess": "Niveau de réflexion changé",
     "switchFailed": "Échec du changement de niveau de réflexion"

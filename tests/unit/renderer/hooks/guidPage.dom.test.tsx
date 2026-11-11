@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
+import type { IProvider, TProviderWithModel } from '@/common/config/storage';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LayoutContext } from '@/renderer/hooks/context/LayoutContext';
@@ -25,9 +26,9 @@ const {
   navigateMock,
 } = vi.hoisted(() => ({
   modelSelectionMock: {
-    modelList: [],
+    modelList: [] as IProvider[],
     isGoogleAuth: false,
-    current_model: undefined,
+    current_model: undefined as TProviderWithModel | undefined,
     setCurrentModel: vi.fn(),
     resetCurrentModel: vi.fn(),
   },
@@ -307,7 +308,9 @@ describe('GuidPage', () => {
     locationMock.state = null;
     locationMock.key = 'guid-location';
     navigateMock.mockReset();
-    swrMock.useSWRMock.mockReturnValue({ data: null });
+    swrMock.useSWRMock.mockReturnValue({
+      data: { ...assistantDetailFixture, prompts: { recommended: [], recommended_i18n: {} } },
+    });
     capturedGuidActionRowProps.length = 0;
     capturedAssistantSelectionAreaProps.length = 0;
     capturedGuidInputCardProps.length = 0;
@@ -319,6 +322,7 @@ describe('GuidPage', () => {
       mcpIds: [],
     });
     modelSelectionMock.modelList = [];
+    modelSelectionMock.current_model = undefined;
     modelSelectionMock.setCurrentModel.mockReset();
     modelSelectionMock.resetCurrentModel.mockReset();
     agentSelectionMock.currentAgentModeOptions = [];
@@ -348,6 +352,182 @@ describe('GuidPage', () => {
         deletable: false,
       },
     ];
+  });
+
+  it('uses the model default before chat and sends a manual override instead', () => {
+    const provider: IProvider = {
+      id: 'test-provider',
+      name: 'Test',
+      platform: 'openai',
+      api_key: 'local-test',
+      base_url: 'http://localhost/v1',
+      models: ['glm-3', 'other'],
+      model_settings: { 'glm-3': { reasoning_effort: 'high' }, other: { reasoning_effort: 'medium' } },
+    };
+    modelSelectionMock.modelList = [provider];
+    modelSelectionMock.current_model = { ...provider, use_model: 'glm-3' };
+    const { rerender } = render(<GuidPage />);
+    expect(capturedGuidActionRowProps.at(-1)?.thoughtLevelOption).toMatchObject({ currentValue: 'high' });
+    expect(capturedGuidSendDeps.at(-1)?.selectedThoughtLevelValue).toBe('high');
+
+    act(() => {
+      (capturedGuidActionRowProps.at(-1)!.onThoughtLevelSelect as (value: string) => void)('low');
+    });
+    expect(capturedGuidSendDeps.at(-1)?.selectedThoughtLevelValue).toBe('low');
+    modelSelectionMock.current_model = { ...provider, use_model: 'other' };
+    rerender(<GuidPage />);
+    expect(capturedGuidSendDeps.at(-1)?.selectedThoughtLevelValue).toBe('medium');
+  });
+
+  it.each(['auto', 'none'])('passes %s explicitly so a model default can be overridden', (strength) => {
+    const provider: IProvider = {
+      id: 'test-provider',
+      name: 'Test',
+      platform: 'openai',
+      api_key: 'local-test',
+      base_url: 'http://localhost/v1',
+      models: ['model'],
+      model_settings: { model: { reasoning_effort: 'high' } },
+    };
+    modelSelectionMock.modelList = [provider];
+    modelSelectionMock.current_model = { ...provider, use_model: 'model' };
+    render(<GuidPage />);
+    act(() => {
+      (capturedGuidActionRowProps.at(-1)!.onThoughtLevelSelect as (value: string) => void)(strength);
+    });
+    expect(capturedGuidSendDeps.at(-1)?.selectedThoughtLevelValue).toBe(strength);
+  });
+
+  it('leaves fallback resolution to the backend until assistant defaults are available', () => {
+    const provider: IProvider = {
+      id: 'test-provider',
+      name: 'Test',
+      platform: 'openai',
+      api_key: 'local-test',
+      base_url: 'http://localhost/v1',
+      models: ['model'],
+      model_settings: { model: { reasoning_effort: 'low' } },
+    };
+    modelSelectionMock.modelList = [provider];
+    modelSelectionMock.current_model = { ...provider, use_model: 'model' };
+    swrMock.useSWRMock.mockReturnValue({ data: undefined });
+    const { rerender } = render(<GuidPage />);
+    expect(capturedGuidSendDeps.at(-1)?.selectedThoughtLevelValue).toBeUndefined();
+    expect(capturedGuidActionRowProps.at(-1)?.thoughtLevelOption).toBeNull();
+    swrMock.useSWRMock.mockReturnValue({ data: null });
+    rerender(<GuidPage />);
+    expect(capturedGuidSendDeps.at(-1)?.selectedThoughtLevelValue).toBeUndefined();
+    expect(capturedGuidActionRowProps.at(-1)?.thoughtLevelOption).toBeNull();
+
+    swrMock.useSWRMock.mockReturnValue({
+      data: {
+        ...assistantDetailFixture,
+        defaults: { ...assistantDetailFixture.defaults, thought_level: { mode: 'fixed', value: 'high' } },
+      },
+    });
+    resolveGuidAssistantDefaultsMock.mockReturnValue({
+      disabledBuiltinSkillIds: [],
+      skillIds: [],
+      mcpIds: [],
+      thoughtLevel: 'high',
+    });
+    rerender(<GuidPage />);
+    expect(capturedGuidSendDeps.at(-1)?.selectedThoughtLevelValue).toBe('high');
+    expect(capturedGuidActionRowProps.at(-1)?.thoughtLevelOption).toMatchObject({ currentValue: 'high' });
+
+    act(() => {
+      (capturedGuidActionRowProps.at(-1)!.onThoughtLevelSelect as (value: string) => void)('auto');
+    });
+    swrMock.useSWRMock.mockReturnValue({ data: undefined });
+    rerender(<GuidPage />);
+    expect(capturedGuidSendDeps.at(-1)?.selectedThoughtLevelValue).toBe('auto');
+  });
+
+  it('reads refreshed defaults from the provider catalog and resets manual choice for a new page visit', () => {
+    const provider: IProvider = {
+      id: 'test-provider',
+      name: 'Test',
+      platform: 'openai',
+      api_key: 'local-test',
+      base_url: 'http://localhost/v1',
+      models: ['model'],
+    };
+    modelSelectionMock.current_model = { ...provider, use_model: 'model' };
+    modelSelectionMock.modelList = [provider];
+    const { rerender } = render(<GuidPage />);
+    expect(capturedGuidSendDeps.at(-1)?.selectedThoughtLevelValue).toBe('none');
+    modelSelectionMock.modelList = [{ ...provider, model_settings: { model: { reasoning_effort: 'high' } } }];
+    rerender(<GuidPage />);
+    expect(capturedGuidSendDeps.at(-1)?.selectedThoughtLevelValue).toBe('high');
+    act(() => {
+      (capturedGuidActionRowProps.at(-1)!.onThoughtLevelSelect as (value: string) => void)('low');
+    });
+    expect(capturedGuidSendDeps.at(-1)?.selectedThoughtLevelValue).toBe('low');
+    locationMock.key = 'new-page-visit';
+    rerender(<GuidPage />);
+    expect(capturedGuidSendDeps.at(-1)?.selectedThoughtLevelValue).toBe('high');
+  });
+
+  it('does not expose or send an unsupported protocol strength', () => {
+    const provider: IProvider = {
+      id: 'test-provider',
+      name: 'Test',
+      platform: 'new-api',
+      api_key: 'local-test',
+      base_url: 'http://localhost/v1',
+      models: ['model'],
+      model_protocols: { model: 'anthropic' },
+      model_settings: { model: { reasoning_effort: 'high' } },
+    };
+    modelSelectionMock.modelList = [provider];
+    modelSelectionMock.current_model = { ...provider, use_model: 'model' };
+    render(<GuidPage />);
+    expect(capturedGuidActionRowProps.at(-1)?.thoughtLevelOption).toBeNull();
+    expect(capturedGuidSendDeps.at(-1)?.selectedThoughtLevelValue).toBeUndefined();
+  });
+
+  it('defaults an unknown model to omission instead of inheriting another model strength', () => {
+    const provider: IProvider = {
+      id: 'unknown-provider',
+      name: 'Test',
+      platform: 'openai',
+      api_key: 'local-test',
+      base_url: 'http://localhost/v1',
+      models: ['opaque'],
+    };
+    modelSelectionMock.modelList = [provider];
+    modelSelectionMock.current_model = { ...provider, use_model: 'opaque' };
+    resolveGuidAssistantDefaultsMock.mockReturnValue({
+      disabledBuiltinSkillIds: [],
+      skillIds: [],
+      mcpIds: [],
+      thoughtLevel: 'high',
+    });
+    render(<GuidPage />);
+    expect(capturedGuidSendDeps.at(-1)?.selectedThoughtLevelValue).toBe('none');
+  });
+
+  it('uses a model none default instead of a remembered high choice', () => {
+    const provider: IProvider = {
+      id: 'test-provider',
+      name: 'Test',
+      platform: 'openai',
+      api_key: 'local-test',
+      base_url: 'http://localhost/v1',
+      models: ['model'],
+      model_settings: { model: { reasoning_effort: 'none' } },
+    };
+    modelSelectionMock.modelList = [provider];
+    modelSelectionMock.current_model = { ...provider, use_model: 'model' };
+    resolveGuidAssistantDefaultsMock.mockReturnValue({
+      disabledBuiltinSkillIds: [],
+      skillIds: [],
+      mcpIds: [],
+      thoughtLevel: 'high',
+    });
+    render(<GuidPage />);
+    expect(capturedGuidActionRowProps.at(-1)?.thoughtLevelOption).toMatchObject({ currentValue: 'none' });
+    expect(capturedGuidSendDeps.at(-1)?.selectedThoughtLevelValue).toBe('none');
   });
 
   it('keeps the existing replace contract for ordinary Guid prefills', () => {

@@ -392,7 +392,9 @@ const AddPlatformModal = ModalHOC<{
           selectedModels,
           imageInput,
           showOpenAiApiMode ? openAiApiMode : 'auto',
-          pickContextLimits(selectedModels, undefined, modelListState.data?.context_limits)
+          pickContextLimits(selectedModels, undefined, modelListState.data?.context_limits),
+          undefined,
+          modelListState.data?.reported_reasoning_capabilities
         );
 
         onSubmit(provider);

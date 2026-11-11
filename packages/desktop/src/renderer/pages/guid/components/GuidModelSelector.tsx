@@ -139,40 +139,71 @@ const GuidModelSelector: React.FC<GuidModelSelectorProps> = ({
         {t('settings.addModel')}
       </Menu.Item>
     );
+    const modelListNode = (
+      <RuntimeSelectorModelList
+        groups={providerModelGroups}
+        currentModelId={currentProviderModelId}
+        onSelect={(id) => {
+          const entry = providerModelLookup.get(id);
+          if (!entry) return;
+          setCurrentModel({ ...entry.provider, use_model: entry.modelName } as TProviderWithModel).catch((error) => {
+            console.error('Failed to set current model:', error);
+          });
+        }}
+      />
+    );
 
     return (
       <Dropdown
-        trigger='hover'
+        trigger='click'
         droplist={
           <Menu selectedKeys={currentProviderModelId ? [currentProviderModelId] : []}>
-            {providerModelGroups.length === 0
-              ? [
-                  <Menu.Item
-                    key='no-models'
-                    className='px-12px py-12px text-t-secondary text-14px text-center flex justify-center items-center'
-                    disabled
-                  >
-                    {t('settings.noAvailableModels')}
-                  </Menu.Item>,
-                  addModelItem,
-                ]
-              : [
-                  <RuntimeSelectorModelList
-                    key='model-list'
-                    groups={providerModelGroups}
-                    currentModelId={currentProviderModelId}
-                    onSelect={(id) => {
-                      const entry = providerModelLookup.get(id);
-                      if (!entry) return;
-                      setCurrentModel({ ...entry.provider, use_model: entry.modelName } as TProviderWithModel).catch(
-                        (error) => {
-                          console.error('Failed to set current model:', error);
-                        }
-                      );
-                    }}
-                  />,
-                  addModelItem,
-                ]}
+            {providerModelGroups.length === 0 ? (
+              <>
+                <Menu.Item
+                  key='no-models'
+                  className='px-12px py-12px text-t-secondary text-14px text-center flex justify-center items-center'
+                  disabled
+                >
+                  {t('settings.noAvailableModels')}
+                </Menu.Item>
+                {addModelItem}
+              </>
+            ) : normalizedThoughtLevelOption ? (
+              <>
+                <Menu.SubMenu
+                  key='model'
+                  triggerProps={RUNTIME_SUBMENU_TRIGGER_PROPS}
+                  title={<RuntimeSelectorSubMenuTitle label={t('common.model')} value={geminiButtonLabel} />}
+                >
+                  {modelListNode}
+                  {addModelItem}
+                </Menu.SubMenu>
+                <Menu.SubMenu
+                  key='thought-level'
+                  triggerProps={RUNTIME_SUBMENU_TRIGGER_PROPS}
+                  title={
+                    <RuntimeSelectorSubMenuTitle
+                      label={t('agent.thoughtLevel.label')}
+                      value={getCurrentThoughtLevelLabel(normalizedThoughtLevelOption)}
+                    />
+                  }
+                >
+                  {normalizedThoughtLevelOption.options.map((item) => (
+                    <Menu.Item key={item.value} onClick={() => onThoughtLevelSelect?.(item.value)}>
+                      <RuntimeSelectorCheckedItem selected={item.value === normalizedThoughtLevelOption.currentValue}>
+                        {item.label}
+                      </RuntimeSelectorCheckedItem>
+                    </Menu.Item>
+                  ))}
+                </Menu.SubMenu>
+              </>
+            ) : (
+              <>
+                {modelListNode}
+                {addModelItem}
+              </>
+            )}
           </Menu>
         }
       >
@@ -184,7 +215,12 @@ const GuidModelSelector: React.FC<GuidModelSelectorProps> = ({
         >
           <span className='flex items-center gap-6px min-w-0'>
             <Brain theme='outline' size='14' fill={iconColors.secondary} className='shrink-0' />
-            <span className='guid-model-label'>{geminiButtonLabel}</span>
+            <span className='guid-model-label'>
+              {composeRuntimeSelectorLabel({
+                modelLabel: geminiButtonLabel,
+                thoughtLevel: normalizedThoughtLevelOption,
+              })}
+            </span>
             <Down theme='outline' size='12' fill={iconColors.secondary} className='shrink-0' />
           </span>
         </Button>

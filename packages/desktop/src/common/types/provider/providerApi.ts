@@ -54,6 +54,7 @@ export interface UpdateProviderRequest {
   model_enabled?: Record<string, boolean>;
   model_health?: IProvider['model_health'];
   model_settings?: IProvider['model_settings'];
+  reported_reasoning_capabilities?: IProvider['reasoning_capabilities'];
   bedrock_config?: IProvider['bedrock_config'];
   is_full_url?: boolean;
 }
@@ -69,6 +70,8 @@ export interface FetchModelsResponse {
   fixed_base_url?: string;
   /** Context windows the remote API reported, keyed by model id. */
   context_limits?: Record<string, number>;
+  reasoning_capabilities?: IProvider['reasoning_capabilities'];
+  reported_reasoning_capabilities?: IProvider['reasoning_capabilities'];
 }
 
 /**

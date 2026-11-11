@@ -521,11 +521,22 @@ export type ModelOpenAiApiMode = 'chat_completions' | 'responses';
 
 export type ModelImageInputCapability = 'supported' | 'unsupported';
 
+/** `none` is an application sentinel: omit the effort parameter from the model request. */
+export type ModelReasoningEffort = 'none' | 'provider_none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+
+export type ModelReasoningCapability = {
+  supported?: boolean;
+  /** Wire values; literal `none` is distinct from our omission sentinel. */
+  efforts?: string[];
+};
+
 export type ModelSettings = {
   image_input?: ModelImageInputCapability;
   openai_api_mode?: ModelOpenAiApiMode;
   /** Context window in tokens; overrides the provider-wide `context_limit`. */
   context_limit?: number;
+  reasoning_effort?: ModelReasoningEffort;
+  reasoning_capability?: ModelReasoningCapability;
 };
 
 export interface IProvider {
@@ -592,6 +603,7 @@ export interface IProvider {
    * capability and OpenAI API mode resolution.
    */
   model_settings?: Record<string, ModelSettings>;
+  reasoning_capabilities?: Record<string, ModelReasoningCapability>;
   is_full_url?: boolean;
 }
 

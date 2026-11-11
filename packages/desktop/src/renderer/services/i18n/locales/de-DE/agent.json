@@ -41,6 +41,10 @@
     "failed": "Einstellung konnte nicht angewendet werden. Vorheriger Status wird angezeigt."
   },
   "thoughtLevel": {
+    "omit": "Parameter weglassen",
+    "providerNone": "none (Anbieterwert)",
+    "auto": "Automatisch",
+    "defaultLabel": "Standard-Denkstufe",
     "label": "Denk-Stufe",
     "switchSuccess": "Denk-Stufe gewechselt",
     "switchFailed": "Wechsel der Denk-Stufe fehlgeschlagen"

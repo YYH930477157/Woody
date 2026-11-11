@@ -1,5 +1,6 @@
 import { ipcBridge } from '@/common';
 import useSWR from 'swr';
+import type { IProvider } from '@/common/config/storage';
 
 // Gemini 模型排序函数：Pro 优先，版本号降序
 const sortGeminiModels = (models: { label: string; value: string }[]) => {
@@ -49,6 +50,8 @@ const useModeModeList = (
       models: { label: string; value: string }[];
       fix_base_url?: string;
       context_limits?: Record<string, number>;
+      reasoning_capabilities?: IProvider['reasoning_capabilities'];
+      reported_reasoning_capabilities?: IProvider['reasoning_capabilities'];
     }> => {
       // Only call the backend when we have credentials it can actually use:
       // - bedrock: bedrock_config carries the credentials (api_key not required)
@@ -76,7 +79,11 @@ const useModeModeList = (
           modelList = sortGeminiModels(modelList);
         }
 
-        const contextLimits = res.context_limits ? { context_limits: res.context_limits } : {};
+        const contextLimits = {
+          ...(res.context_limits ? { context_limits: res.context_limits } : {}),
+          reasoning_capabilities: res.reasoning_capabilities,
+          reported_reasoning_capabilities: res.reported_reasoning_capabilities,
+        };
 
         // 如果返回了修复的 base_url，将其添加到结果中
         if (res.fixed_base_url) {

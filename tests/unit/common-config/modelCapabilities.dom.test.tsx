@@ -180,7 +180,9 @@ vi.mock('@arco-design/web-react', async (importOriginal) => {
             ? 'api-mode-select'
             : optionValues.has('anthropic') && optionValues.has('gemini')
               ? 'protocol-select'
-              : undefined;
+              : optionValues.has('high')
+                ? 'reasoning-select'
+                : undefined;
 
     return (
       <select
@@ -266,7 +268,13 @@ vi.mock('@arco-design/web-react', async (importOriginal) => {
   };
 });
 
-import { pickContextLimits, supportsOpenAiApiMode, updateModelSettings } from '@/common/utils/modelCapabilities';
+import {
+  mergeReportedReasoningCapabilities,
+  pickContextLimits,
+  supportsOpenAiApiMode,
+  supportsModelReasoningEffort,
+  updateModelSettings,
+} from '@/common/utils/modelCapabilities';
 import AddModelModal from '@/renderer/pages/settings/components/AddModelModal';
 import AddPlatformModal from '@/renderer/pages/settings/components/AddPlatformModal';
 import ModelModalContent from '@/renderer/components/settings/SettingsModal/contents/ModelModalContent';
@@ -297,7 +305,50 @@ describe('supportsOpenAiApiMode', () => {
   });
 });
 
+describe('supportsModelReasoningEffort', () => {
+  it.each([
+    ['openai', 'openai', true],
+    ['custom', 'openai', true],
+    ['custom', 'anthropic', false],
+    ['new-api', 'gemini', true],
+    ['new-api', 'anthropic', false],
+    ['anthropic', 'openai', false],
+    ['bedrock', 'openai', false],
+    ['gemini-vertex-ai', 'gemini', false],
+  ])('matches the runtime mapping for %s / %s', (platform, protocol, expected) => {
+    expect(supportsModelReasoningEffort(platform, protocol)).toBe(expected);
+  });
+});
+
 describe('updateModelSettings', () => {
+  it('refreshes discovered metadata without changing preferences or unrelated offline caches', () => {
+    const current = {
+      model: { reasoning_effort: 'high' as const, context_limit: 8192, reasoning_capability: { supported: true } },
+      offline: { reasoning_capability: { supported: false } },
+    };
+    expect(mergeReportedReasoningCapabilities(current, ['model'], { model: { supported: false } })).toEqual({
+      ...current,
+      model: { ...current.model, reasoning_capability: { supported: false } },
+    });
+    expect(mergeReportedReasoningCapabilities(current, ['model'], {})).toEqual({
+      ...current,
+      model: { reasoning_effort: 'high', context_limit: 8192 },
+    });
+    expect(mergeReportedReasoningCapabilities(current, ['model'])).toEqual(current);
+  });
+  it('preserves the reasoning default when a caller only edits other model settings', () => {
+    expect(updateModelSettings({ model: { reasoning_effort: 'high' } }, ['model'], 'auto', 'auto')).toEqual({
+      model: { reasoning_effort: 'high' },
+    });
+  });
+
+  it('sets and explicitly clears the reasoning default without losing the API mode', () => {
+    const settings = updateModelSettings(undefined, ['model'], 'auto', 'responses', {}, 'high');
+    expect(settings.model).toEqual({ openai_api_mode: 'responses', reasoning_effort: 'high' });
+    expect(updateModelSettings(settings, ['model'], 'auto', 'responses', {}, 'auto')).toEqual({
+      model: { openai_api_mode: 'responses' },
+    });
+  });
   it('applies explicit settings to every selected model without changing other models', () => {
     const result = updateModelSettings(
       { existing: { image_input: 'unsupported' } },
@@ -437,6 +488,63 @@ describe('model capability selectors', () => {
     );
   });
 
+  it('limits effort choices to provider capabilities and distinguishes literal none from omission', async () => {
+    render(
+      <AddModelModal
+        data={provider({
+          reasoning_capabilities: { 'gpt-4o': { supported: true, efforts: ['none', 'high', 'xhigh'] } },
+        })}
+        model='gpt-4o'
+        modalProps={{ visible: true }}
+        modalCtrl={{ close: mocks.close }}
+        onSubmit={mocks.onSubmit}
+      />
+    );
+    const select = await screen.findByTestId('reasoning-select');
+    expect(Array.from((select as HTMLSelectElement).options, (option) => option.value)).toEqual([
+      'auto',
+      'none',
+      'provider_none',
+      'high',
+      'xhigh',
+    ]);
+    fireEvent.change(select, { target: { value: 'provider_none' } });
+    fireEvent.click(screen.getByRole('button', { name: 'common.confirm' }));
+    expect(mocks.onSubmit).toHaveBeenLastCalledWith(
+      expect.objectContaining({ model_settings: { 'gpt-4o': { reasoning_effort: 'provider_none' } } })
+    );
+  });
+
+  it.each(['low', 'none'])('restores, changes to %s and clears the configured reasoning strength', async (strength) => {
+    render(
+      <AddModelModal
+        data={provider({
+          model_settings: { 'gpt-4o': { reasoning_effort: 'high', openai_api_mode: 'responses' } },
+        })}
+        model='gpt-4o'
+        modalProps={{ visible: true }}
+        modalCtrl={{ close: mocks.close }}
+        onSubmit={mocks.onSubmit}
+      />
+    );
+    const select = await screen.findByTestId('reasoning-select');
+    expect(select).toHaveValue('high');
+    fireEvent.change(select, { target: { value: strength } });
+    fireEvent.click(screen.getByRole('button', { name: 'common.confirm' }));
+    expect(mocks.onSubmit).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        model_settings: { 'gpt-4o': { openai_api_mode: 'responses', reasoning_effort: strength } },
+      })
+    );
+    fireEvent.change(select, { target: { value: 'auto' } });
+    fireEvent.click(screen.getByRole('button', { name: 'common.confirm' }));
+    expect(mocks.onSubmit).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        model_settings: { 'gpt-4o': { openai_api_mode: 'responses' } },
+      })
+    );
+  });
+
   it('edits the context limit of a configured model', async () => {
     render(
       <AddModelModal
@@ -521,6 +629,7 @@ describe('model capability selectors', () => {
       expect(screen.getByTestId('vision-select')).toHaveValue('auto');
     });
     expect(screen.queryByTestId('api-mode-select')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('reasoning-select')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'common.confirm' }));
     expect(mocks.onSubmit).toHaveBeenCalledWith(expect.objectContaining({ model_settings: {} }));

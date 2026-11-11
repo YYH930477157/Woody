@@ -41,6 +41,10 @@
     "failed": "設定失敗，介面已保留原狀態"
   },
   "thoughtLevel": {
+    "omit": "不傳參數",
+    "providerNone": "none（供應商值）",
+    "auto": "自動",
+    "defaultLabel": "預設思考強度",
     "label": "思考強度",
     "switchSuccess": "思考強度切換成功",
     "switchFailed": "思考強度切換失敗"
