@@ -41,6 +41,10 @@
     "failed": "Ayar uygulanamadı. Önceki durum gösterilmeye devam ediyor."
   },
   "thoughtLevel": {
+    "omit": "Parametreyi gönderme",
+    "providerNone": "none (sağlayıcı değeri)",
+    "auto": "Otomatik",
+    "defaultLabel": "Varsayılan düşünme düzeyi",
     "label": "Düşünme düzeyi",
     "switchSuccess": "Düşünme düzeyi değiştirildi",
     "switchFailed": "Düşünme düzeyi değiştirilemedi"

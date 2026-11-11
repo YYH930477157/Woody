@@ -1,4 +1,5 @@
 import type { IProvider } from '@/common/config/storage';
+import type { UpdateProviderRequest } from '@/common/types/provider/providerApi';
 import ModalHOC from '@/renderer/utils/ui/ModalHOC';
 import { Form, Input, Message, Select, Tag } from '@arco-design/web-react';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -8,6 +9,7 @@ import { ipcBridge } from '@/common';
 import useModeModeList from '@renderer/hooks/agent/useModeModeList';
 import { getProviderLogo } from '@/renderer/utils/model/modelPlatforms';
 import { ProviderLogo } from '@/renderer/components/agent/ThemedLogo';
+import { mergeReportedReasoningCapabilities } from '@/common/utils/modelCapabilities';
 
 const EditModeModal = ModalHOC<{ data?: IProvider; onChange(data: IProvider): void }>(
   ({ modalProps, modalCtrl, ...props }) => {
@@ -87,7 +89,14 @@ const EditModeModal = ModalHOC<{ data?: IProvider; onChange(data: IProvider): vo
           typeof v === 'string' ? { label: v, value: v } : { label: v.name, value: v.id }
         );
         // Refresh the dropdown candidates only — selection is untouched.
-        void modelListState.mutate({ models }, false);
+        void modelListState.mutate(
+          {
+            models,
+            reasoning_capabilities: res.reasoning_capabilities,
+            reported_reasoning_capabilities: res.reported_reasoning_capabilities,
+          },
+          false
+        );
 
         // An empty list almost always means the fetch didn't really succeed
         // (bad URL / unauthenticated returns no models rather than an error), so
@@ -139,11 +148,17 @@ const EditModeModal = ModalHOC<{ data?: IProvider; onChange(data: IProvider): vo
         onOk={async () => {
           try {
             const values = await form.validate();
-            const updatedProvider: IProvider = {
+            const updatedProvider: IProvider & Pick<UpdateProviderRequest, 'reported_reasoning_capabilities'> = {
               ...data,
               ...values,
               // Ensure models is always an array
               models: Array.isArray(values.model) ? values.model : [values.model],
+              reported_reasoning_capabilities: modelListState.data?.reported_reasoning_capabilities,
+              model_settings: mergeReportedReasoningCapabilities(
+                data?.model_settings,
+                modelListState.data?.models.map((model) => model.value) ?? [],
+                modelListState.data?.reported_reasoning_capabilities
+              ),
             };
 
             // Add Bedrock configuration if platform is Bedrock
@@ -362,7 +377,14 @@ const EditModeModal = ModalHOC<{ data?: IProvider; onChange(data: IProvider): vo
                           }
                         }) || [];
                       // Update the model list state manually
-                      void modelListState.mutate({ models }, false);
+                      void modelListState.mutate(
+                        {
+                          models,
+                          reasoning_capabilities: res.reasoning_capabilities,
+                          reported_reasoning_capabilities: res.reported_reasoning_capabilities,
+                        },
+                        false
+                      );
                     } catch (error: any) {
                       message.error(error.message || 'Failed to fetch models');
                     }

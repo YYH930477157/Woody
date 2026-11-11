@@ -41,6 +41,10 @@
     "failed": "설정 적용에 실패했습니다. 이전 상태가 계속 표시됩니다."
   },
   "thoughtLevel": {
+    "omit": "매개변수 생략",
+    "providerNone": "none (공급자 값)",
+    "auto": "자동",
+    "defaultLabel": "기본 사고 강도",
     "label": "사고 강도",
     "switchSuccess": "사고 강도가 전환되었습니다",
     "switchFailed": "사고 강도 전환에 실패했습니다"

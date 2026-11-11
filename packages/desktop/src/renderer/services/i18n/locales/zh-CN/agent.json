@@ -41,6 +41,10 @@
     "failed": "设置失败，界面已保留原状态"
   },
   "thoughtLevel": {
+    "omit": "不传参数",
+    "providerNone": "none（供应商值）",
+    "auto": "自动",
+    "defaultLabel": "默认思考强度",
     "label": "思考强度",
     "switchSuccess": "思考强度切换成功",
     "switchFailed": "思考强度切换失败"

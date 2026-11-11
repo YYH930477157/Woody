@@ -96,6 +96,29 @@ describe('useGuidSend', () => {
     sessionFilesPrepareMock.mockReset();
   });
 
+  it.each(['low', 'high', 'auto', 'none'])('sends %s on the first provider-backed conversation', async (strength) => {
+    const deps: GuidSendDeps = {
+      ...createDeps(),
+      selectedAssistantBackend: 'aionrs',
+      selectedThoughtLevelValue: strength,
+      current_model: {
+        id: 'provider-1',
+        platform: 'openai',
+        name: 'Test',
+        base_url: 'http://localhost/v1',
+        api_key: 'local-test',
+        models: ['model'],
+        use_model: 'model',
+      },
+    };
+    const { result } = renderHook(() => useGuidSend(deps));
+    await act(async () => {
+      await result.current.handleSend();
+    });
+    expect(createConversationInvokeMock).toHaveBeenCalledTimes(1);
+    expect(createConversationInvokeMock.mock.calls[0][0].assistant.conversation_overrides.thought_level).toBe(strength);
+  });
+
   /** Send from the new-chat page with codebase memory enabled for the project; returns the create extra. */
   const sendWithCodebaseMemory = async (patch: Partial<GuidSendDeps> = {}) => {
     const previous = Object.getOwnPropertyDescriptor(window, 'electronAPI');

@@ -9,6 +9,12 @@ import { buildGuidSlashCommands } from '@/common/chat/slash/guidSlashCommands';
 import type { SlashCommandItem } from '@/common/chat/slash/types';
 import type { IMcpServer, TProviderWithModel } from '@/common/config/storage';
 import { resolveLocaleKey } from '@/common/utils';
+import {
+  modelReasoningChoices,
+  reasoningEffortLabelKey,
+  supportsModelReasoningEffort,
+} from '@/common/utils/modelCapabilities';
+import type { AgentRuntimeDerivedOption } from '@/renderer/utils/model/agentRuntimeCatalog';
 import type { AssistantDetail } from '@/common/types/agent/assistantTypes';
 
 import { useInputFocusRing } from '@/renderer/hooks/chat/useInputFocusRing';
@@ -179,6 +185,66 @@ const GuidPage: React.FC = () => {
     () => resolveGuidAssistantDefaults(selectedAssistantDetail),
     [selectedAssistantDetail]
   );
+  const [providerThoughtSelection, setProviderThoughtSelection] = useState<{ scope: string; value: string } | null>(
+    null
+  );
+  const providerThoughtScope = JSON.stringify([
+    location.key,
+    selectedAssistantId,
+    modelSelection.current_model?.id,
+    modelSelection.current_model?.use_model,
+  ]);
+  const providerThoughtLevelOption = useMemo<AgentRuntimeDerivedOption | null>(() => {
+    const selectedModel = modelSelection.current_model;
+    const provider = modelSelection.modelList.find((item) => item.id === selectedModel?.id) ?? selectedModel;
+    const model = selectedModel?.use_model;
+    if (
+      agentSelection.selectedAssistantBackend !== 'aionrs' ||
+      !provider ||
+      !model ||
+      (selectedAssistantDetail == null && providerThoughtSelection?.scope !== providerThoughtScope) ||
+      !supportsModelReasoningEffort(provider.platform, provider.model_protocols?.[model])
+    ) {
+      return null;
+    }
+    const capability =
+      provider.reasoning_capabilities?.[model] ?? provider.model_settings?.[model]?.reasoning_capability;
+    const options = [
+      { value: 'auto', label: t('agent.thoughtLevel.auto') },
+      ...modelReasoningChoices(capability).map((value) => {
+        const key = reasoningEffortLabelKey(value);
+        return { value, label: key ? t(key) : value };
+      }),
+    ];
+    const defaults = [
+      providerThoughtSelection?.scope === providerThoughtScope ? providerThoughtSelection.value : undefined,
+      selectedAssistantDetail?.defaults.thought_level?.mode === 'fixed'
+        ? resolvedAssistantDefaults.thoughtLevel
+        : undefined,
+      provider.model_settings?.[model]?.reasoning_effort,
+      capability?.supported === true ? resolvedAssistantDefaults.thoughtLevel : undefined,
+      'none',
+    ];
+    return {
+      id: 'reasoning_effort',
+      category: 'thought_level',
+      currentValue: defaults.find((value) => options.some((option) => option.value === value)),
+      options,
+    };
+  }, [
+    agentSelection.selectedAssistantBackend,
+    modelSelection.current_model,
+    modelSelection.modelList,
+    providerThoughtScope,
+    providerThoughtSelection,
+    resolvedAssistantDefaults.thoughtLevel,
+    selectedAssistantDetail,
+    t,
+  ]);
+  const guidThoughtLevelOption =
+    agentSelection.selectedAssistantBackend === 'aionrs'
+      ? providerThoughtLevelOption
+      : agentSelection.currentThoughtLevelOption;
   const selectedSkillNames = useMemo(() => {
     const disabledBuiltinSkillSet = new Set(
       guidDisabledBuiltinSkills ?? resolvedAssistantDefaults.disabledBuiltinSkillIds
@@ -268,7 +334,10 @@ const GuidPage: React.FC = () => {
     selectedAssistantBackend: agentSelection.selectedAssistantBackend,
     selectedMode: agentSelection.selectedMode,
     selectedAcpModel: agentSelection.selectedAcpModel,
-    selectedThoughtLevelValue: agentSelection.selectedThoughtLevelValue,
+    selectedThoughtLevelValue:
+      agentSelection.selectedAssistantBackend === 'aionrs'
+        ? providerThoughtLevelOption?.currentValue
+        : agentSelection.selectedThoughtLevelValue,
     current_model: modelSelection.current_model,
 
     guidDisabledBuiltinSkills,
@@ -500,10 +569,16 @@ const GuidPage: React.FC = () => {
   );
   const setGuidSelectedThoughtLevel = useCallback(
     (value: string) => {
+      if (agentSelection.selectedAssistantBackend === 'aionrs') {
+        if (providerThoughtLevelOption?.options.some((option) => option.value === value)) {
+          setProviderThoughtSelection({ scope: providerThoughtScope, value });
+        }
+        return;
+      }
       manualThoughtLevelSelectionAssistantRef.current = selectedAssistantId;
       agentSelection.setSelectedThoughtLevelValue(value, { persistPreference: !hasSelectedAssistant });
     },
-    [agentSelection, hasSelectedAssistant, selectedAssistantId]
+    [agentSelection, hasSelectedAssistant, selectedAssistantId, providerThoughtLevelOption, providerThoughtScope]
   );
   const setGuidCurrentModel = useCallback(
     (model: TProviderWithModel) => {
@@ -608,7 +683,7 @@ const GuidPage: React.FC = () => {
       currentAcpCachedModelInfo={agentSelection.currentAcpCachedModelInfo}
       selectedAcpModel={agentSelection.selectedAcpModel}
       setSelectedAcpModel={setGuidSelectedAcpModel}
-      thoughtLevelOption={isGeminiMode ? null : agentSelection.currentThoughtLevelOption}
+      thoughtLevelOption={guidThoughtLevelOption}
       onThoughtLevelSelect={setGuidSelectedThoughtLevel}
     />
   );
@@ -635,7 +710,7 @@ const GuidPage: React.FC = () => {
       currentAcpCachedModelInfo={agentSelection.currentAcpCachedModelInfo}
       selectedAcpModel={agentSelection.selectedAcpModel}
       setSelectedAcpModel={setGuidSelectedAcpModel}
-      thoughtLevelOption={isGeminiMode ? null : agentSelection.currentThoughtLevelOption}
+      thoughtLevelOption={guidThoughtLevelOption}
       onThoughtLevelSelect={setGuidSelectedThoughtLevel}
       modeBackend={agentSelection.selectedAssistantBackend}
       selectedMode={agentSelection.selectedMode}

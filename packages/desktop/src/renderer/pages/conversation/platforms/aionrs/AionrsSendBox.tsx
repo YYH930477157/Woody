@@ -33,6 +33,7 @@ import {
   type ConversationCommandQueueItem,
 } from '@/renderer/pages/conversation/platforms/useConversationCommandQueue';
 import { useConversationRuntimeView } from '@/renderer/pages/conversation/runtime/useConversationRuntimeView';
+import { localizeAionrsThoughtLevel } from '@/renderer/components/agent/runtimeSelectorOptions';
 import { getConversationRuntimeWorkspaceErrorMessage } from '@/renderer/pages/conversation/utils/conversationCreateError';
 import { getChatSurfaceWidthClass } from '@/renderer/pages/conversation/utils/chatSurfaceWidth';
 import { ensureConversationRuntime } from '@/renderer/pages/conversation/utils/ensureConversationRuntime';
@@ -196,7 +197,10 @@ const AionrsSendBox: React.FC<{
     enabled: Boolean(conversation_id),
   });
   const runtimeMode = runtimeConfig.mode;
-  const runtimeThoughtLevel = runtimeConfig.thoughtLevel;
+  const runtimeThoughtLevel = useMemo(
+    () => localizeAionrsThoughtLevel(runtimeConfig.thoughtLevel, t),
+    [runtimeConfig.thoughtLevel, t]
+  );
 
   useEffect(() => {
     if (!runtimeMode?.currentValue) return;

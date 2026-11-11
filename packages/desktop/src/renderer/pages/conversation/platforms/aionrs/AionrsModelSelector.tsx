@@ -8,6 +8,7 @@ import type { AionrsModelSelection } from './useAionrsModelSelection';
 import type { AcpConfigSetStatus, AcpDerivedOption } from '@/renderer/hooks/agent/useAcpConfigOptions';
 import {
   composeRuntimeSelectorLabel,
+  localizeAionrsThoughtLevel,
   getCurrentThoughtLevelLabel,
   RUNTIME_SUBMENU_TRIGGER_PROPS,
   RuntimeSelectorCheckedItem,
@@ -35,8 +36,9 @@ const AionrsModelSelector: React.FC<{
   /** Kept for call-site compatibility; the two-level submenu no longer gates on set status here. */
   setStatus?: AcpConfigSetStatus;
   onSetThoughtLevel?: (optionId: string, value: string) => Promise<unknown>;
-}> = ({ selection, disabled = false, thoughtLevel = null, onSetThoughtLevel }) => {
+}> = ({ selection, disabled = false, thoughtLevel: rawThoughtLevel = null, onSetThoughtLevel }) => {
   const { t } = useTranslation();
+  const thoughtLevel = localizeAionrsThoughtLevel(rawThoughtLevel, t);
   const { isOpen: isPreviewOpen } = usePreviewContext();
   const layout = useLayoutContext();
   const compact = isPreviewOpen || layout?.isMobile;

@@ -188,7 +188,8 @@ describe('GuidModelSelector', () => {
     expect(onThoughtLevelSelect).toHaveBeenCalledWith('high');
   });
 
-  it('does not add thought level options to the Aion CLI provider model menu', () => {
+  it('selects thought strength before creating a provider-backed conversation', () => {
+    const onThoughtLevelSelect = vi.fn();
     render(
       <GuidModelSelector
         isGeminiMode
@@ -199,12 +200,14 @@ describe('GuidModelSelector', () => {
         selectedAcpModel={null}
         setSelectedAcpModel={vi.fn()}
         thoughtLevelOption={thoughtLevelOption}
-        onThoughtLevelSelect={vi.fn()}
+        onThoughtLevelSelect={onThoughtLevelSelect}
       />
     );
 
     expect(screen.getAllByText('gpt-5.3-codex').length).toBeGreaterThan(0);
-    expect(screen.queryByText('Thinking Level')).not.toBeInTheDocument();
-    expect(screen.queryByText('Medium')).not.toBeInTheDocument();
+    expect(screen.getByTestId('guid-model-selector')).toHaveTextContent('gpt-5.3-codex · Medium');
+    expect(screen.getByText('Thinking Level')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('High'));
+    expect(onThoughtLevelSelect).toHaveBeenCalledWith('high');
   });
 });

@@ -41,6 +41,10 @@
     "failed": "Error al aplicar la configuración. Se muestra el estado anterior."
   },
   "thoughtLevel": {
+    "omit": "Omitir parámetro",
+    "providerNone": "none (valor del proveedor)",
+    "auto": "Automático",
+    "defaultLabel": "Nivel de razonamiento predeterminado",
     "label": "Nivel de razonamiento",
     "switchSuccess": "Nivel de razonamiento cambiado",
     "switchFailed": "Error al cambiar el nivel de razonamiento"

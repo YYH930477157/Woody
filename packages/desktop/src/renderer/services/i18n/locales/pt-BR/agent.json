@@ -41,6 +41,10 @@
     "failed": "Falha ao aplicar a configuração. O estado anterior continua sendo exibido."
   },
   "thoughtLevel": {
+    "omit": "Omitir parâmetro",
+    "providerNone": "none (valor do provedor)",
+    "auto": "Automático",
+    "defaultLabel": "Nível de raciocínio padrão",
     "label": "Nível de raciocínio",
     "switchSuccess": "Nível de raciocínio alterado",
     "switchFailed": "Falha ao alterar o nível de raciocínio"

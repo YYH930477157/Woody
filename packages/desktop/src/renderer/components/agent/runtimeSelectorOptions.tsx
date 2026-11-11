@@ -9,6 +9,23 @@ import AionInlineSearchInput from '@/renderer/components/base/AionInlineSearchIn
 import { Menu, Tooltip } from '@arco-design/web-react';
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
+import { reasoningEffortLabelKey } from '@/common/utils/modelCapabilities';
+
+/** Only Woody's own runtime uses these sentinel values; ACP labels stay untouched. */
+export const localizeAionrsThoughtLevel = (
+  option: AcpDerivedOption | null | undefined,
+  t: TFunction
+): AcpDerivedOption | null =>
+  option
+    ? {
+        ...option,
+        options: option.options.map((item) => {
+          const key = reasoningEffortLabelKey(item.value);
+          return key ? { ...item, label: t(key) } : item;
+        }),
+      }
+    : null;
 
 /** Above this option count a dropdown list gains a search box. Shared by every searchable dropdown. */
 export const DROPDOWN_SEARCH_THRESHOLD = 5;

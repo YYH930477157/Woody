@@ -1,11 +1,15 @@
 import type { IProvider } from '@/common/config/storage';
 import {
   MAX_MODEL_CONTEXT_LIMIT,
+  modelReasoningChoices,
+  reasoningEffortLabelKey,
   MIN_MODEL_CONTEXT_LIMIT,
   type ModelImageInputChoice,
   type ModelOpenAiApiModeChoice,
+  type ModelReasoningEffortChoice,
   pickContextLimits,
   supportsOpenAiApiMode,
+  supportsModelReasoningEffort,
   updateModelSettings,
 } from '@/common/utils/modelCapabilities';
 import ModalHOC from '@/renderer/utils/ui/ModalHOC';
@@ -30,13 +34,31 @@ const AddModelModal = ModalHOC<{ data?: IProvider; model?: string; onSubmit: (mo
     const [imageInput, setImageInput] = useState<ModelImageInputChoice>('auto');
     const [openAiApiMode, setOpenAiApiMode] = useState<ModelOpenAiApiModeChoice>('auto');
     const [contextLimit, setContextLimit] = useState<number | undefined>();
+    const [reasoningEffort, setReasoningEffort] = useState<ModelReasoningEffortChoice>('auto');
     const isNewApi = isNewApiPlatform(data?.platform ?? '');
     const isEditing = Boolean(editingModel);
     const { data: modelList, isLoading } = useModeModeList(data?.platform, data?.base_url, data?.api_key);
     const existingModels = data?.models || [];
     const showOpenAiApiMode = supportsOpenAiApiMode(data?.platform ?? '', modelProtocol);
+    const showReasoningEffort = supportsModelReasoningEffort(data?.platform ?? '', modelProtocol);
     const reportedContextLimits = Array.isArray(modelList) ? undefined : modelList?.context_limits;
     const targetModels = useMemo(() => (editingModel ? [editingModel] : models), [editingModel, models]);
+    const reportedCapabilities = Array.isArray(modelList) ? undefined : modelList?.reported_reasoning_capabilities;
+    const resolvedCapabilities = Array.isArray(modelList) ? undefined : modelList?.reasoning_capabilities;
+    const effortChoices = useMemo(() => {
+      const choices = targetModels.map((model) =>
+        modelReasoningChoices(
+          resolvedCapabilities?.[model] ??
+            data?.reasoning_capabilities?.[model] ??
+            data?.model_settings?.[model]?.reasoning_capability
+        )
+      );
+      return choices.length
+        ? choices[0].filter((value) => choices.every((list) => list.includes(value)))
+        : modelReasoningChoices();
+    }, [targetModels, resolvedCapabilities, data]);
+    const validReasoningEffort =
+      reasoningEffort === 'auto' || effortChoices.includes(reasoningEffort) ? reasoningEffort : 'none';
     const reportedContextLimit = targetModels.length === 1 ? reportedContextLimits?.[targetModels[0]] : undefined;
     const optionsList = useMemo(() => {
       // 处理新的数据格式，可能包含 fix_base_url
@@ -55,6 +77,7 @@ const AddModelModal = ModalHOC<{ data?: IProvider; model?: string; onSubmit: (mo
       setImageInput(settings?.image_input ?? 'auto');
       setOpenAiApiMode(settings?.openai_api_mode ?? 'auto');
       setContextLimit(settings?.context_limit);
+      setReasoningEffort(settings?.reasoning_effort ?? 'auto');
       setModelProtocol(editingModel ? (data?.model_protocols?.[editingModel] ?? 'openai') : 'openai');
     }, [data, editingModel, modalProps.visible]);
 
@@ -68,7 +91,9 @@ const AddModelModal = ModalHOC<{ data?: IProvider; model?: string; onSubmit: (mo
           targetModels,
           imageInput,
           showOpenAiApiMode ? openAiApiMode : 'auto',
-          pickContextLimits(targetModels, contextLimit, reportedContextLimits)
+          pickContextLimits(targetModels, contextLimit, reportedContextLimits),
+          showReasoningEffort ? validReasoningEffort : 'auto',
+          reportedCapabilities
         ),
       };
 
@@ -95,6 +120,9 @@ const AddModelModal = ModalHOC<{ data?: IProvider; model?: string; onSubmit: (mo
       openAiApiMode,
       modalCtrl,
       reportedContextLimits,
+      validReasoningEffort,
+      reportedCapabilities,
+      showReasoningEffort,
       showOpenAiApiMode,
       targetModels,
     ]);
@@ -180,6 +208,24 @@ const AddModelModal = ModalHOC<{ data?: IProvider; model?: string; onSubmit: (mo
                 ]}
               />
               <div className='text-11px text-t-secondary leading-4'>{t('settings.openAiApiModeTip')}</div>
+            </div>
+          )}
+
+          {showReasoningEffort && (
+            <div className='space-y-8px'>
+              <div className='text-13px font-500 text-t-secondary'>{t('agent.thoughtLevel.defaultLabel')}</div>
+              <Select
+                aria-label={t('agent.thoughtLevel.defaultLabel')}
+                value={validReasoningEffort}
+                onChange={(value) => setReasoningEffort(value as ModelReasoningEffortChoice)}
+                options={[
+                  { label: t('agent.thoughtLevel.auto'), value: 'auto' },
+                  ...effortChoices.map((value) => {
+                    const key = reasoningEffortLabelKey(value);
+                    return { label: key ? t(key) : value, value };
+                  }),
+                ]}
+              />
             </div>
           )}
 
