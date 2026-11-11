@@ -36,9 +36,9 @@ beforeEach(() => {
     `const fs=require('node:fs'); const path=require('node:path'); const marker=path.join(process.cwd(),'behavior'); const b=fs.existsSync(marker)?fs.readFileSync(marker,'utf8'):''; if(process.argv.includes('check_index_coverage')&&fs.existsSync('coverage.json'))console.log(JSON.stringify({isError:false,structuredContent:JSON.parse(fs.readFileSync('coverage.json','utf8'))})); else if(b==='hang')setInterval(()=>{},1000); else if(b==='invalid')console.log('oops'); else if(b==='exit'){console.error('fixture error');process.exit(3)} else if(b==='error')console.log(JSON.stringify({isError:true,content:[{type:'text',text:'native refused'}]})); else { console.error('index diagnostic');console.log(JSON.stringify({isError:false,structuredContent:{nodes:13,args:process.argv.slice(2),cache:process.env.CBM_CACHE_DIR,runtime:process.env.CBM_RUNTIME_DIR}})); }`
   );
 });
-afterEach(() => {
+afterEach(async () => {
   for (const value of disposables.splice(0)) value.dispose();
-  fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+  await fs.promises.rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
 });
 // Polling observes state transitions and must remain sequential.
 /* eslint-disable no-await-in-loop */
