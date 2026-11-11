@@ -1467,7 +1467,7 @@ function createRuntime(options) {
     }
     let overlay;
     try {
-      overlay = prepareSourceOnlyOverlay(project.root);
+      overlay = prepareSourceOnlyOverlay(project.root, { indexLock: project.lock, indexToken: owner.token });
       state.indexFilter = {
         gitTrackedOnly: overlay.gitTrackedOnly,
         files: overlay.files,

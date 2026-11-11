@@ -91,13 +91,24 @@ disabling unsupported capabilities.
 
 During index initialization Woody applies a temporary source-only filter. In a
 Git worktree it adds `*` to a marked block in `.git/info/exclude`, so only
-tracked files are visible to the indexer. It also adds marked rules to the
-project's `.cbmignore` for test, build, generated, vendored, script, and
-temporary directories plus common test-file names. The original bytes,
-including line endings, are restored after both successful and failed indexes;
+tracked files are visible to the indexer. It also prepends marked defaults to
+the project's `.cbmignore` for test, build, generated, vendored, script, and
+temporary directories plus common test-file names. Explicit user rules such as
+`!/app/obj/` follow these defaults and can include product sources again.
+The original bytes, including GBK comments, BOMs and mixed line endings, are
+restored after both successful and failed indexes;
 an external edit is left in place and reported as a cleanup conflict. When
 Git is unavailable, the same `.cbmignore` rules provide the directory and
 filename filtering without excluding untracked files.
+
+A cross-process lock beside Git's shared `info/exclude` prevents overlapping
+projects or linked worktrees from replacing an active filter. A second index
+in that repository is rejected before changing either ignore file; independent
+repositories can index concurrently. The lock journals the original bytes so
+a later attempt can restore an interrupted index, after both its adapter and
+recorded index process have stopped. With PowerShell, that recorded process is
+the launcher. Unreadable owner records are treated as busy; an interruption
+during recovery itself can leave a recovery lock requiring manual inspection.
 
 The indexer prefixes every qualified name with the project name, so the name is
 short: the folder name in lowercase ASCII plus 8 hex characters of the path hash
