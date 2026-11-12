@@ -12,17 +12,19 @@ On Windows, install the Rust MSVC toolchain. If Rust compilation fails because n
 
 ## Repository Layout
 
-AionUi development uses two repositories:
+Woody development uses three repositories:
 
-- **AionCore** (`https://github.com/YYH930477157/AionCore.git`, `woody` branch) builds the local backend binary: `aioncore` on macOS/Linux and `aioncore.exe` on Windows. The `woody` branch is an upstream release plus Woody's engine changes; see `patches/README.md`.
-- **AionUi** (`https://github.com/iOfficeAI/AionUi.git`) starts the Electron desktop app and launches the backend binary automatically.
+- **AionCore** (`https://github.com/YYH930477157/AionCore.git`) builds the local backend binary: `aioncore` on macOS/Linux and `aioncore.exe` on Windows. It is a fork of `iOfficeAI/AionCore` and **`woody` is its only branch** — there is no `main`. The branch carries an upstream release plus Woody's engine changes; see `patches/README.md`.
+- **aionrs** (`https://github.com/YYH930477157/aionrs.git`) is the agent engine that AionCore depends on by pinned commit. It is a fork of `iOfficeAI/aionrs` and also has **only `woody`**.
+- **Woody** (this repository) starts the Electron desktop app and launches the backend binary automatically. Its default branch is `main`.
 
 Keep the repositories side by side when possible:
 
 ```text
 workspace/
 |-- AionCore/
-`-- AionUi/
+|-- aionrs/
+`-- Woody/
 ```
 
 `bun run start` first checks `resources/bundled-aioncore` against `aioncoreRepo` and `aioncoreVersion` in `package.json` and downloads the pinned release when it is missing or outdated; if that fails it keeps the previous bundle and only warns. The development server uses that bundle, then falls back to the `PATH` inherited by `bun run start`. To run a backend you built yourself, set `AIONUI_BACKEND_BIN` to its path; the check is skipped then.
@@ -33,10 +35,16 @@ workspace/
 
 ```bash
 git clone --branch woody https://github.com/YYH930477157/AionCore.git
-git clone https://github.com/iOfficeAI/AionUi.git
+git clone --branch woody https://github.com/YYH930477157/aionrs.git
+git clone --branch main  https://github.com/YYH930477157/Woody.git
 ```
 
-Use the `woody` branch of AionCore and the `main` branch of AionUi unless a maintainer asks you to test another branch.
+Both forks have a single branch, `woody`, and no `main`: plain `git clone` may report that the remote HEAD is not set, so always pass `--branch woody`. To compare with upstream, add it as a remote rather than creating a local `main`:
+
+```bash
+git remote add upstream https://github.com/iOfficeAI/AionCore.git  # or iOfficeAI/aionrs
+git fetch upstream
+```
 
 ### 2. Build and Install AionCore
 
