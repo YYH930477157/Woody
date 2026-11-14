@@ -17,6 +17,54 @@ vi.mock('@/common', () => ({
 }));
 
 describe('MessageToolGroupSummary', () => {
+  it('collapses the step list when the running tool finishes', () => {
+    const { rerender } = render(
+      <MessageToolGroupSummary
+        messages={[
+          {
+            id: 'message-1',
+            conversation_id: 'conversation-1',
+            type: 'acp_tool_call',
+            content: {
+              update: {
+                session_update: 'tool_call',
+                tool_call_id: 'tool-1',
+                status: 'in_progress',
+                title: 'rg',
+                kind: 'search',
+              },
+            },
+          } as unknown as ToolMessage,
+        ]}
+      />
+    );
+
+    expect(screen.getByText('rg')).toBeInTheDocument();
+
+    rerender(
+      <MessageToolGroupSummary
+        messages={[
+          {
+            id: 'message-1',
+            conversation_id: 'conversation-1',
+            type: 'acp_tool_call',
+            content: {
+              update: {
+                session_update: 'tool_call',
+                tool_call_id: 'tool-1',
+                status: 'completed',
+                title: 'rg',
+                kind: 'search',
+              },
+            },
+          } as unknown as ToolMessage,
+        ]}
+      />
+    );
+
+    expect(screen.queryByText('rg')).not.toBeInTheDocument();
+  });
+
   it('loads full tool content when expanding a compact history item', async () => {
     const invoke = vi.mocked(ipcBridge.database.getConversationMessage.invoke);
     invoke.mockResolvedValue({

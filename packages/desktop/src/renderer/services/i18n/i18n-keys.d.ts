@@ -1654,6 +1654,7 @@ export type I18nKey =
   | 'messages.slash.hint'
   | 'messages.slash.title'
   | 'messages.unknownMessageType'
+  | 'messages.viewSteps'
   | 'pet.confirmBubble'
   | 'pet.confirmBubbleDescription'
   | 'pet.desktopOnly'

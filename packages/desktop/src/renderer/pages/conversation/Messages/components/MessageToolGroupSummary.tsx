@@ -145,7 +145,10 @@ const MessageToolGroupSummary: React.FC<{ messages: ToolMessage[] }> = ({ messag
   const [showMore, setShowMore] = useState(hasRunning);
 
   useEffect(() => {
-    if (hasRunning) setShowMore(true);
+    // Keep the active tool group visible while commands are running, then
+    // collapse it as soon as the group finishes so the next thinking turn
+    // starts with a compact history. Users can still expand completed steps.
+    setShowMore(hasRunning);
   }, [hasRunning]);
 
   const tools = useMemo(() => normalizeToolMessages(messages), [messages]);
