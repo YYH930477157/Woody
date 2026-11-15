@@ -62,8 +62,29 @@ function detectGit(root) {
   };
 }
 
+const LEGACY_DECODERS = ['gb18030'].flatMap((label) => {
+  try {
+    return [new TextDecoder(label)];
+  } catch {
+    return [];
+  }
+});
+const ratio = (text, pattern) => (text.length ? (text.match(pattern) || []).length / text.length : 0);
+const REPLACEMENT = /\uFFFD/g;
+const CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g;
+
 function isUtf16(bytes) {
   return bytes.length >= 2 && ((bytes[0] === 0xff && bytes[1] === 0xfe) || (bytes[0] === 0xfe && bytes[1] === 0xff));
+}
+
+function looksLikeText(buffer) {
+  if (!buffer || buffer.length === 0) return true;
+  const text = buffer.toString('utf8');
+  if (ratio(text, CONTROL) >= 0.02) return false;
+  return (
+    ratio(text, REPLACEMENT) < 0.02 ||
+    LEGACY_DECODERS.some((decoder) => ratio(decoder.decode(buffer), REPLACEMENT) < 0.02)
+  );
 }
 
 function readTextFile(filename) {
@@ -71,10 +92,10 @@ function readTextFile(filename) {
     if (fs.lstatSync(filename).isSymbolicLink()) throw new Error(`${filename} must not be a symbolic link`);
     const bytes = fs.readFileSync(filename);
     if (isUtf16(bytes)) throw new Error(`${filename} is UTF-16`);
-    if (bytes.includes(0)) throw new Error(`${filename} is not readable as text`);
-    return { exists: true, bytes };
+    if (bytes.includes(0) || !looksLikeText(bytes)) return { exists: true, bytes, writable: false };
+    return { exists: true, bytes, writable: true };
   } catch (error) {
-    if (error.code === 'ENOENT') return { exists: false, bytes: Buffer.alloc(0) };
+    if (error.code === 'ENOENT') return { exists: false, bytes: Buffer.alloc(0), writable: true };
     throw error;
   }
 }
@@ -98,6 +119,7 @@ function markerBlock(token, rules) {
 
 function createLayer(filename, block, prepend) {
   const original = readTextFile(filename);
+  if (!original.writable) return null;
   const restore = removeMarkerBlocks(original.bytes);
   const eol = restore.includes(Buffer.from('\r\n')) ? '\r\n' : '\n';
   const marker = Buffer.from(`${block.replace(/\n/g, eol)}${eol}`, 'ascii');
@@ -271,6 +293,7 @@ function prepareSourceOnlyOverlay(root, indexOwner = {}) {
   const layers = [];
   const install = (filename, rules, prepend) => {
     const layer = createLayer(filename, markerBlock(token, rules), prepend);
+    if (!layer) return;
     layers.push(layer);
     // Journal original bytes before mutating either file for crash recovery.
     lock.save(layers);

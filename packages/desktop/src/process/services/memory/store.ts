@@ -71,7 +71,7 @@ export function slugFor(name: string, fallback = `memory-${Date.now().toString(3
     .replace(/^-+|-+$/g, '')
     .slice(0, 60)
     .replace(/-+$/g, '');
-  return slug.length >= 3 ? slug : fallback;
+  return slug.length >= 3 && `${slug}.md` !== INDEX_FILE.toLowerCase() ? slug : fallback;
 }
 
 /** Only a plain `.md` file inside the folder, never MEMORY.md itself. */
@@ -169,6 +169,7 @@ export async function saveMemory(directory: string, input: MemoryInput, slug?: s
     // eslint-disable-next-line no-await-in-loop
     for (let suffix = 2; (await readText(path.join(directory, file))) !== undefined; suffix++)
       file = `${base}-${suffix}.md`;
+    file = checkFileName(file);
   }
   const entry = { name, description: input.description.trim(), type: input.type, body };
   await fs.writeFile(path.join(directory, file), serializeMemory(entry), 'utf8');

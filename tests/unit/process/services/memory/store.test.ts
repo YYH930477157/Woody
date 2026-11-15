@@ -67,6 +67,11 @@ describe('memory files', () => {
     expect((await saveMemory(directory, { name: '中文名', description: '', body: 'y' })).file).toMatch(
       /^memory-.+\.md$/
     );
+    // A name or slug that normalizes to "memory" must never collide with MEMORY.md on case-insensitive disks.
+    const namedMemory = await saveMemory(directory, { name: 'Memory', description: 'safe', body: 'kept' }, 'MEMORY');
+    expect(namedMemory.file.toLowerCase()).not.toBe('memory.md');
+    expect(parseMemory(read(namedMemory.file))).toMatchObject({ name: 'Memory', body: 'kept' });
+    expect(read('MEMORY.md')).toContain(`[Memory](${namedMemory.file})`);
   });
 
   it('update a memory in place and replace its line', async () => {

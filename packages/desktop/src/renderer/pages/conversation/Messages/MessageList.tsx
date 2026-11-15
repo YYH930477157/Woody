@@ -550,10 +550,18 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
     const ids = new Set<string>();
     let seenAnchor = false;
     for (const item of processedList) {
-      if (
-        'type' in item &&
-        (item.type === 'file_summary' || item.type === 'tool_summary' || item.type === 'artifact')
-      ) {
+      if ('type' in item && item.type === 'turn_activity_summary') {
+        for (const activity of item.activities) {
+          if (activity.type === 'thinking' && activity.message.backend_turn_id) seenAnchor = true;
+          else if (activity.type === 'tools' && activity.messages.some((msg) => msg.backend_turn_id)) seenAnchor = true;
+        }
+        continue;
+      }
+      if ('type' in item && item.type === 'tool_summary') {
+        if (item.messages.some((msg) => msg.backend_turn_id)) seenAnchor = true;
+        continue;
+      }
+      if ('type' in item && (item.type === 'file_summary' || item.type === 'artifact')) {
         continue;
       }
       const message = item as TMessage;

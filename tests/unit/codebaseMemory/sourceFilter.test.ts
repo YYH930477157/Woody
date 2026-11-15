@@ -297,6 +297,18 @@ describe('source-only index overlay', () => {
     expect(prepareSourceOnlyOverlay(root).cleanup()).toEqual({ restored: true });
   });
 
+  it('leaves a ciphertext .cbmignore without null bytes untouched instead of corrupting it', () => {
+    const root = makeRoot();
+    const cbmignore = path.join(root, '.cbmignore');
+    const ciphertext = Buffer.from(Array.from({ length: 64 }, (_, index) => ((index * 73 + 19) % 250) + 1));
+    fs.writeFileSync(cbmignore, ciphertext);
+
+    const overlay = prepareSourceOnlyOverlay(root);
+    expect(fs.readFileSync(cbmignore)).toEqual(ciphertext);
+    expect(overlay.cleanup()).toEqual({ restored: true });
+    expect(fs.readFileSync(cbmignore)).toEqual(ciphertext);
+  });
+
   it('allows independent repositories to index at the same time', () => {
     const firstRoot = makeRoot();
     const secondRoot = makeRoot();

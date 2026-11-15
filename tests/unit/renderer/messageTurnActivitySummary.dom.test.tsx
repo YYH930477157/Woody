@@ -64,4 +64,26 @@ describe('MessageTurnActivitySummary', () => {
 
     expect(screen.getByTestId('thinking-thinking-1')).toBeInTheDocument();
   });
+
+  it('shows the active thinking subject when an earlier thinking block in the same turn is already done', () => {
+    const first = {
+      ...thinking('thinking-1', 'done'),
+      content: { content: 'first', status: 'done' as const, duration: 1000, subject: 'First step' },
+    };
+    const second = {
+      ...thinking('thinking-2', 'thinking'),
+      content: { content: 'second', status: 'thinking' as const, duration: 500, subject: 'Second step' },
+    };
+    render(
+      <MessageTurnActivitySummary
+        activities={[
+          { type: 'thinking', message: first },
+          { type: 'thinking', message: second },
+        ]}
+      />
+    );
+
+    expect(screen.getByText('Second step')).toBeInTheDocument();
+    expect(screen.queryByText('First step')).not.toBeInTheDocument();
+  });
 });

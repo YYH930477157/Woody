@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
 
 const createTeamInvokeMock = vi.fn();
+const deleteAssistantInvokeMock = vi.fn();
 const resolveDefaultTeamAgentModelMock = vi.fn();
 const messageErrorMock = vi.fn();
 const prepareWorkflowMock = vi.fn();
@@ -105,6 +106,9 @@ vi.mock('@renderer/components/workspace', () => ({
 
 vi.mock('@/common', () => ({
   ipcBridge: {
+    assistants: {
+      delete: { invoke: (...args: unknown[]) => deleteAssistantInvokeMock(...args) },
+    },
     team: {
       create: { invoke: (...args: unknown[]) => createTeamInvokeMock(...args) },
     },
@@ -131,6 +135,8 @@ describe('TeamCreateModal', () => {
   beforeEach(() => {
     createTeamInvokeMock.mockReset();
     createTeamInvokeMock.mockResolvedValue({ id: 'team-1', assistants: [], agents: [] });
+    deleteAssistantInvokeMock.mockReset();
+    deleteAssistantInvokeMock.mockResolvedValue(true);
     resolveDefaultTeamAgentModelMock.mockReset();
     resolveDefaultTeamAgentModelMock.mockResolvedValue(undefined);
     messageErrorMock.mockReset();
@@ -185,6 +191,24 @@ describe('TeamCreateModal', () => {
     expect(createTeamInvokeMock.mock.calls[1][0].agents).toEqual([
       { role: 'leader', assistant_id: 'workflow-leader', assistant_name: 'Requirements', model: 'configured-model' },
     ]);
+    expect(deleteAssistantInvokeMock).not.toHaveBeenCalled();
+  });
+
+  it('deletes prepared workflow roles when cancelling after team creation fails', async () => {
+    createTeamInvokeMock.mockRejectedValueOnce(new Error('offline'));
+    const onClose = vi.fn();
+    render(<TeamCreateModal visible onClose={onClose} onCreated={vi.fn()} />);
+    fireEvent.click(screen.getByLabelText('team.workflow.label'));
+    fireEvent.click(await screen.findByText('team.workflow.feature'));
+    fireEvent.click(screen.getByLabelText('team.workflow.baseAssistant'));
+    fireEvent.click(await screen.findByText('Aion 命令行'));
+    fireEvent.change(screen.getByTestId('team-create-name-input'), { target: { value: 'Feature team' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Create' }));
+    await waitFor(() => expect(messageErrorMock).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(deleteAssistantInvokeMock).toHaveBeenCalledWith({ id: 'workflow-leader' }));
+    expect(onClose).toHaveBeenCalledOnce();
   });
 
   it('does not create a team if role preparation fails', async () => {
@@ -426,6 +450,8 @@ describe('TeamCreateModal · mobile (narrow screen)', () => {
   beforeEach(() => {
     createTeamInvokeMock.mockReset();
     createTeamInvokeMock.mockResolvedValue({ id: 'team-1', assistants: [], agents: [] });
+    deleteAssistantInvokeMock.mockReset();
+    deleteAssistantInvokeMock.mockResolvedValue(true);
     resolveDefaultTeamAgentModelMock.mockReset();
     resolveDefaultTeamAgentModelMock.mockResolvedValue(undefined);
     messageErrorMock.mockReset();

@@ -115,7 +115,11 @@ const hasPathOutsideSelection = (changedPaths: string[], selectedPaths: string[]
 
 export type CommitWorkflowOptions = {
   run?: <T>(root: string, operation: () => Promise<T>) => Promise<T>;
+  maxCompletedSessions?: number;
 };
+
+const isTerminalWorkflowState = (state: GitWorkflowState): boolean =>
+  state === 'completed' || state === 'failed' || state === 'blocked';
 
 export const createCommitWorkflowService = (
   git: CommitWorkflowGit,
@@ -123,21 +127,42 @@ export const createCommitWorkflowService = (
 ): CommitWorkflowService => {
   // Production injects the common-directory coordinator; unit ports need no real repository.
   const run = options.run ?? (async <T>(_root: string, operation: () => Promise<T>): Promise<T> => operation());
+  const retention = Math.max(1, Math.min(options.maxCompletedSessions ?? 40, 100));
   const activeOperations = new Map<string, Promise<CommitWorkflowSession>>();
+  const sessions = new Map<
+    string,
+    { session: CommitWorkflowSession; input: CommitWorkflowInput; snapshot?: GitCommitSnapshot }
+  >();
+  const trimSessions = (keepId?: string): void => {
+    if (keepId) {
+      const current = sessions.get(keepId);
+      if (current) {
+        sessions.delete(keepId);
+        sessions.set(keepId, current);
+      }
+    }
+    const completedIds = [...sessions.entries()]
+      .filter(([id, entry]) => !activeOperations.has(id) && isTerminalWorkflowState(entry.session.state))
+      .map(([id]) => id);
+    for (const id of completedIds.slice(0, Math.max(0, completedIds.length - retention))) {
+      if (id !== keepId) {
+        sessions.delete(id);
+      }
+    }
+  };
   const runOnce = (
     sessionId: string,
     operation: () => Promise<CommitWorkflowSession>
   ): Promise<CommitWorkflowSession> => {
     const active = activeOperations.get(sessionId);
     if (active) return active;
-    const pending = operation().finally(() => activeOperations.delete(sessionId));
+    const pending = operation().finally(() => {
+      activeOperations.delete(sessionId);
+      trimSessions(sessionId);
+    });
     activeOperations.set(sessionId, pending);
     return pending;
   };
-  const sessions = new Map<
-    string,
-    { session: CommitWorkflowSession; input: CommitWorkflowInput; snapshot?: GitCommitSnapshot }
-  >();
 
   const prepare = async (input: CommitWorkflowInput): Promise<CommitWorkflowSession> => {
     input = { ...input, ...(input.mode ? { mode: { ...input.mode } } : {}) };
@@ -400,13 +425,16 @@ export const createCommitWorkflowService = (
   return {
     prepare: async (input) => {
       try {
-        return await run(input.repoPath, () => prepare(input));
+        const prepared = await run(input.repoPath, () => prepare(input));
+        trimSessions(prepared.id);
+        return prepared;
       } catch (error) {
         const session = createSession(input);
         session.state = error instanceof WorkflowBlockedError ? 'blocked' : 'failed';
         session.reason = error instanceof Error ? error.message : String(error);
         if (error instanceof WorkflowBlockedError) session.reasonCode = error.reasonCode;
         input.onStateChange?.(session.state, session);
+        trimSessions(session.id);
         return session;
       }
     },

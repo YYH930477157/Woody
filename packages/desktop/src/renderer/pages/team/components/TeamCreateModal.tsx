@@ -67,7 +67,18 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
     [leaderSelectionId, selectedMembers]
   );
 
-  const handleClose = () => {
+  const discardPreparedWorkflow = (agents: TeamAssistantInput[] | undefined) => {
+    if (!agents?.length) return;
+    void Promise.allSettled(
+      agents.map((agent) =>
+        agent.assistant_id ? ipcBridge.assistants.delete.invoke({ id: agent.assistant_id }) : Promise.resolve()
+      )
+    ).then(() =>
+      mutate('assistants.list').catch((error: unknown) => console.warn('Failed to refresh workflow roles', error))
+    );
+  };
+
+  const resetModalState = () => {
     setName('');
     setSelectedMembers([]);
     setLeaderSelectionId(undefined);
@@ -77,6 +88,11 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
     setWorkflowBaseId(undefined);
     setPreparedWorkflow(undefined);
     onClose();
+  };
+
+  const handleClose = () => {
+    discardPreparedWorkflow(preparedWorkflow);
+    resetModalState();
   };
 
   const handleSelectAssistant = (assistant: TeamAssistantOption) => {
@@ -174,7 +190,7 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
       }
 
       onCreated(team);
-      handleClose();
+      resetModalState();
     } catch (error) {
       Message.error(
         error instanceof WorkflowPreparationError

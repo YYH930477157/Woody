@@ -549,4 +549,24 @@ describe('commit workflow service', () => {
     expect(session.state).toBe('blocked');
     expect(session.reasonCode).toBe('snapshotChanged');
   });
+
+  it('evicts the oldest terminal sessions beyond maxCompletedSessions while keeping pending sessions intact', async () => {
+    const createCommit = vi.fn().mockResolvedValue({ ok: true, commit: 'abc123' });
+    const service = createCommitWorkflowService(
+      { getCommitSnapshot: getCommitSnapshot(), createCommit, push: vi.fn() },
+      { maxCompletedSessions: 2 }
+    );
+    const pendingConfirmation = await prepareChecked(service);
+    const firstCompleted = await prepareChecked(service);
+    await service.commit(firstCompleted.id, fields);
+    const secondCompleted = await prepareChecked(service);
+    await service.commit(secondCompleted.id, fields);
+    const thirdCompleted = await prepareChecked(service);
+    await service.commit(thirdCompleted.id, fields);
+
+    await expect(service.commit(firstCompleted.id, fields)).rejects.toThrow('Unknown workflow session');
+    await expect(service.commit(secondCompleted.id, fields)).resolves.toMatchObject({ state: 'completed' });
+    await expect(service.commit(thirdCompleted.id, fields)).resolves.toMatchObject({ state: 'completed' });
+    await expect(service.commit(pendingConfirmation.id, fields)).resolves.toMatchObject({ state: 'completed' });
+  });
 });

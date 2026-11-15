@@ -27,13 +27,12 @@ const MessageTurnActivitySummary: React.FC<{ activities: TurnActivity[] }> = ({ 
     setExpanded(hasRunning);
   }, [hasRunning]);
 
-  const thinking = useMemo(
-    () =>
-      activities.find(
-        (activity): activity is Extract<TurnActivity, { type: 'thinking' }> => activity.type === 'thinking'
-      ),
-    [activities]
-  );
+  const thinking = useMemo(() => {
+    const items = activities.filter(
+      (activity): activity is Extract<TurnActivity, { type: 'thinking' }> => activity.type === 'thinking'
+    );
+    return items.find((activity) => activity.message.content.status !== 'done') ?? items.at(-1);
+  }, [activities]);
   const duration = activities.reduce(
     (total, activity) => (activity.type === 'thinking' ? total + (activity.message.content.duration ?? 0) : total),
     0

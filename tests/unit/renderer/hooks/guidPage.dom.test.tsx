@@ -327,6 +327,7 @@ describe('GuidPage', () => {
     modelSelectionMock.resetCurrentModel.mockReset();
     agentSelectionMock.currentAgentModeOptions = [];
     agentSelectionMock.currentAcpCachedModelInfo = null;
+    agentSelectionMock.selectedAssistantId = 'bare-aionrs';
     agentSelectionMock.selectedAssistantBackend = 'aionrs';
     agentSelectionMock.setSelectedAcpModel.mockReset();
     agentSelectionMock.setSelectedMode.mockReset();
@@ -528,6 +529,27 @@ describe('GuidPage', () => {
     render(<GuidPage />);
     expect(capturedGuidActionRowProps.at(-1)?.thoughtLevelOption).toMatchObject({ currentValue: 'none' });
     expect(capturedGuidSendDeps.at(-1)?.selectedThoughtLevelValue).toBe('none');
+  });
+
+  it('exposes the model reasoning effort selector even when no assistant is selected', () => {
+    const provider: IProvider = {
+      id: 'test-provider',
+      name: 'Test',
+      platform: 'openai',
+      api_key: 'local-test',
+      base_url: 'http://localhost/v1',
+      models: ['model'],
+      model_settings: { model: { reasoning_effort: 'medium' } },
+    };
+    agentSelectionMock.selectedAssistantId = null as unknown as string;
+    swrMock.useSWRMock.mockReturnValue({ data: undefined });
+    modelSelectionMock.modelList = [provider];
+    modelSelectionMock.current_model = { ...provider, use_model: 'model' };
+
+    render(<GuidPage />);
+
+    expect(capturedGuidActionRowProps.at(-1)?.thoughtLevelOption).toMatchObject({ currentValue: 'medium' });
+    expect(capturedGuidSendDeps.at(-1)?.selectedThoughtLevelValue).toBe('medium');
   });
 
   it('keeps the existing replace contract for ordinary Guid prefills', () => {

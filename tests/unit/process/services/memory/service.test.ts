@@ -225,6 +225,36 @@ describe('recalling memories before a message is sent', () => {
     expect((await service(api).recall('chat', '过流报警阈值')).block).toBe('');
   });
 
+  it('recalls an updated memory again in the same conversation and serializes concurrent state saves', async () => {
+    const api = backend(() => ANSWER);
+    const memory = service(api);
+    api.rows.set('chat', aionrs('chat', clock));
+    const saved = await memory.save(workspace, {
+      name: '报警阈值',
+      description: '过流阈值存在 EEPROM',
+      type: 'project',
+      body: '初版阈值 10A。',
+    });
+
+    expect((await memory.recall('chat', '过流报警阈值')).block).toContain('初版阈值 10A。');
+    expect((await memory.recall('chat', '过流报警阈值')).block).toBe('');
+
+    await memory.save(workspace, {
+      file: saved.file,
+      name: '报警阈值',
+      description: '过流阈值存在 EEPROM',
+      type: 'project',
+      body: '更新后阈值 15A。',
+    });
+    expect((await memory.recall('chat', '过流报警阈值')).block).toContain('更新后阈值 15A。');
+
+    await Promise.all([
+      memory.setSettings({ autoDistill: false, autoRecall: true }),
+      memory.setSettings({ autoDistill: true, autoRecall: true }),
+    ]);
+    expect(await service(api).getSettings()).toEqual({ autoDistill: true, autoRecall: true });
+  });
+
   it('stops a distill running in the conversation before the user message goes out', async () => {
     const api = backend(() => ANSWER);
     api.slowTurns(1000);

@@ -73,8 +73,20 @@ vi.mock('@/renderer/pages/conversation/Messages/useAutoScroll', () => ({
 }));
 
 vi.mock('@/renderer/pages/conversation/Messages/components/MessageText', () => ({
-  default: ({ message, showCopyRow }: { message: IMessageText; showCopyRow?: boolean }) => (
-    <div data-testid={`msgtext-${message.id}`} data-copy-row={String(showCopyRow ?? true)}>
+  default: ({
+    message,
+    showCopyRow,
+    hasForkAnchor,
+  }: {
+    message: IMessageText;
+    showCopyRow?: boolean;
+    hasForkAnchor?: boolean;
+  }) => (
+    <div
+      data-testid={`msgtext-${message.id}`}
+      data-copy-row={String(showCopyRow ?? true)}
+      data-fork-anchor={String(hasForkAnchor ?? false)}
+    >
       {message.content.content}
     </div>
   ),
@@ -393,6 +405,28 @@ describe('MessageList', () => {
     expect(screen.getByTestId('msgtext-user-1').getAttribute('data-copy-row')).toBe('true');
     // Turn 2's only/last text keeps the row.
     expect(screen.getByTestId('msgtext-text-c').getAttribute('data-copy-row')).toBe('true');
+  });
+
+  it('propagates fork anchors carried by thinking messages inside merged turn activity summaries', () => {
+    const messages = [
+      { id: 'text-before', type: 'text', position: 'left', content: { content: 'legacy' }, created_at: 1 },
+      {
+        id: 'think-anchor',
+        type: 'thinking',
+        position: 'left',
+        backend_turn_id: 'turn-1',
+        content: { content: 'thinking', status: 'done' },
+        created_at: 2,
+      },
+      { id: 'text-after', type: 'text', position: 'left', content: { content: 'anchored' }, created_at: 3 },
+    ] as unknown as IMessageText[];
+
+    render(<MessageList />, {
+      wrapper: ({ children }) => <Wrapper messages={messages}>{children}</Wrapper>,
+    });
+
+    expect(screen.getByTestId('msgtext-text-before')).toHaveAttribute('data-fork-anchor', 'false');
+    expect(screen.getByTestId('msgtext-text-after')).toHaveAttribute('data-fork-anchor', 'true');
   });
 
   it('withholds the streaming turn copy row but keeps earlier finished turns', () => {

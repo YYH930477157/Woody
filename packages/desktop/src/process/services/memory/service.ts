@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type {
@@ -76,13 +77,23 @@ export function createMemoryService(options: MemoryServiceOptions) {
   const workspaces = new Map<string, string | null>();
   let timer: ReturnType<typeof setInterval> | undefined;
   let ticking = false;
+  let savingState: Promise<void> = Promise.resolve();
 
-  async function saveState(): Promise<void> {
-    if (!state) return;
-    await fs.mkdir(path.dirname(statePath), { recursive: true });
-    const temp = `${statePath}.${process.pid}.tmp`;
-    await fs.writeFile(temp, JSON.stringify(state, null, 2), 'utf8');
-    await fs.rename(temp, statePath);
+  function forgetFile(file: string): void {
+    for (const seen of given.values()) seen.delete(file);
+  }
+
+  function saveState(): Promise<void> {
+    const write = async (): Promise<void> => {
+      if (!state) return;
+      await fs.mkdir(path.dirname(statePath), { recursive: true });
+      const temp = `${statePath}.${process.pid}.${randomUUID()}.tmp`;
+      await fs.writeFile(temp, JSON.stringify(state, null, 2), 'utf8');
+      await fs.rename(temp, statePath);
+    };
+    const next = savingState.then(write);
+    savingState = next.catch((): void => {});
+    return next;
   }
   async function loadState(): Promise<State> {
     if (state) return state;
@@ -122,8 +133,15 @@ export function createMemoryService(options: MemoryServiceOptions) {
     return query.trim() ? rank(entries, query).map((item) => item.entry) : entries;
   }
 
-  const save = (workspace: string, input: MemoryInput) => saveMemory(directoryFor(workspace), input);
-  const remove = (workspace: string, file: string) => removeMemory(directoryFor(workspace), file, trash);
+  const save = async (workspace: string, input: MemoryInput): Promise<MemoryEntry> => {
+    const saved = await saveMemory(directoryFor(workspace), input);
+    forgetFile(saved.file);
+    return saved;
+  };
+  const remove = async (workspace: string, file: string): Promise<void> => {
+    await removeMemory(directoryFor(workspace), file, trash);
+    forgetFile(file);
+  };
 
   async function distill(conversationId: string): Promise<MemoryDistillResult> {
     const current = await loadState();
@@ -143,7 +161,8 @@ export function createMemoryService(options: MemoryServiceOptions) {
         const { action, slug, ...input } = item;
         // One at a time: every save rewrites MEMORY.md.
         // eslint-disable-next-line no-await-in-loop
-        await saveMemory(directory, input, slug);
+        const saved = await saveMemory(directory, input, slug);
+        forgetFile(saved.file);
         result[action === 'add' ? 'added' : 'updated']++;
       }
       return result;

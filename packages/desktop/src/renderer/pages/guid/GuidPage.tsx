@@ -202,7 +202,9 @@ const GuidPage: React.FC = () => {
       agentSelection.selectedAssistantBackend !== 'aionrs' ||
       !provider ||
       !model ||
-      (selectedAssistantDetail == null && providerThoughtSelection?.scope !== providerThoughtScope) ||
+      (hasSelectedAssistant &&
+        selectedAssistantDetail == null &&
+        providerThoughtSelection?.scope !== providerThoughtScope) ||
       !supportsModelReasoningEffort(provider.platform, provider.model_protocols?.[model])
     ) {
       return null;

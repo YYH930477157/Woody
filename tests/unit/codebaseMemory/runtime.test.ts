@@ -924,13 +924,14 @@ describe.runIf(fs.existsSync(installedPowerShell))('native commands started thro
 
       expect((await service.include(repo, 'app/proto/obj')).phase).toBe('running');
       const rule = '# Folders with source code that the indexer skips by name\n!/app/proto/obj/\n';
-      expect(fs.readFileSync(path.join(repo, '.cbmignore'), 'utf8')).toBe(rule);
+      expect(fs.readFileSync(path.join(repo, '.cbmignore'), 'utf8')).toContain(rule);
       // The fixture still reports the folder, as the indexer does when .gitignore excludes it.
       expect((await finished(service)).skippedSources?.[0]).toEqual({
         path: 'app/proto/obj',
         files: 2,
         requested: true,
       });
+      expect(fs.readFileSync(path.join(repo, '.cbmignore'), 'utf8')).toBe(rule);
       await service.include(repo, 'app/proto/obj');
       await finished(service);
       expect(fs.readFileSync(path.join(repo, '.cbmignore'), 'utf8')).toBe(rule);
