@@ -3,6 +3,7 @@ import { Button, Input, Message } from '@arco-design/web-react';
 import type { RefInputType } from '@arco-design/web-react/es/Input/interface';
 import { Plus } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
+import { mutate } from 'swr';
 import { ipcBridge } from '@/common';
 import type { TTeam } from '@/common/types/team/teamTypes';
 import type { TeamAssistantInput } from '@/common/adapter/teamMapper';
@@ -17,6 +18,13 @@ import { resolveDefaultTeamAgentModel } from './teamCreateModelResolver';
 import TeamAssistantPicker from './memberPicker/TeamAssistantPicker';
 import TeamAssistantPickerDropdown from './memberPicker/TeamAssistantPickerDropdown';
 import TeamMemberDraftList, { type TeamMemberDraft } from './memberPicker/TeamMemberDraftList';
+import WorkflowPresets, {
+  prepareWorkflow,
+  WorkflowPreparationError,
+  WORKFLOW_ROLES,
+  type WorkflowPresetId,
+  type WorkflowRole,
+} from '../WorkflowPresets';
 
 // [E2E SYNC] 修改此组件的 DOM 结构（class、标题、关闭按钮等）时，
 // 必须同步更新 tests/e2e/cases/teams/team-create.e2e.ts、team-whitelist.e2e.ts、
@@ -43,9 +51,16 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
   const [leaderSelectionId, setLeaderSelectionId] = useState<string | undefined>(undefined);
   const [workspace, setWorkspace] = useState('');
   const [loading, setLoading] = useState(false);
+  const [workflowPreset, setWorkflowPreset] = useState<WorkflowPresetId>();
+  const [workflowBaseId, setWorkflowBaseId] = useState<string>();
+  const [preparedWorkflow, setPreparedWorkflow] = useState<TeamAssistantInput[]>();
+  const workflowBase = allAssistants.find(
+    (assistant) => assistant.id === workflowBaseId && assistant.team_selectable !== false
+  );
   // 窄屏专用：助手选择器以下拉列表形式，锚在“添加成员”按钮上按需唤出。
   const [assistantDropdownOpen, setAssistantDropdownOpen] = useState(false);
   const nameInputRef = useRef<RefInputType | null>(null);
+  const creatingRef = useRef(false);
 
   const hasOneLeader = useMemo(
     () => Boolean(leaderSelectionId && selectedMembers.some((member) => member.selectionId === leaderSelectionId)),
@@ -58,6 +73,9 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
     setLeaderSelectionId(undefined);
     setWorkspace('');
     setAssistantDropdownOpen(false);
+    setWorkflowPreset(undefined);
+    setWorkflowBaseId(undefined);
+    setPreparedWorkflow(undefined);
     onClose();
   };
 
@@ -79,44 +97,66 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
   };
 
   const handleCreate = async () => {
+    if (creatingRef.current) return;
     if (!name.trim()) {
       Message.warning(t('team.create.nameRequired', { defaultValue: 'Please enter a team name' }));
       nameInputRef.current?.focus();
       return;
     }
-    if (selectedMembers.length === 0) {
+    if (workflowPreset ? !workflowBase && !preparedWorkflow : selectedMembers.length === 0) {
       Message.warning(t('team.create.selectAtLeastOneMember', { defaultValue: 'Select at least one team member' }));
       return;
     }
-    if (!hasOneLeader) {
+    if (!workflowPreset && !hasOneLeader) {
       Message.warning(t('team.create.selectOneLeader', { defaultValue: 'Select one Team Leader' }));
       return;
     }
     const user_id = user?.id ?? 'system_default_user';
+    creatingRef.current = true;
     setLoading(true);
     try {
-      const resolvedModels = await Promise.all(
-        selectedMembers.map(async (member) => {
-          try {
-            const model = await resolveDefaultTeamAgentModel({
-              assistant_id: member.assistant.id,
-              assistant_backend: member.assistant.backend,
-            });
-            return [member.selectionId, model] as const;
-          } catch (error) {
-            throw new Error(`${member.assistant.name}: ${getConversationCreateErrorMessage(error, t)}`, {
-              cause: error,
-            });
-          }
-        })
-      );
-      const modelBySelectionId = new Map(resolvedModels);
-      const agents: TeamAssistantInput[] = selectedMembers.map((member) => ({
-        role: member.selectionId === leaderSelectionId ? 'leader' : 'teammate',
-        assistant_name: member.assistant.name,
-        assistant_id: member.assistant.id,
-        model: modelBySelectionId.get(member.selectionId),
-      }));
+      let agents: TeamAssistantInput[];
+      if (workflowPreset) {
+        if (preparedWorkflow) {
+          agents = preparedWorkflow;
+        } else {
+          if (!workflowBase) throw new Error(t('team.workflow.baseAssistant'));
+          const labels = Object.fromEntries(
+            WORKFLOW_ROLES.map((role) => [role, t(`team.workflow.roles.${role}`)])
+          ) as Record<WorkflowRole, string>;
+          agents = await prepareWorkflow({
+            preset: workflowPreset,
+            base: workflowBase,
+            teamName: name,
+            locale: i18n.language,
+            labels,
+          });
+          setPreparedWorkflow(agents);
+        }
+      } else {
+        const resolvedModels = await Promise.all(
+          selectedMembers.map(async (member) => {
+            try {
+              const model = await resolveDefaultTeamAgentModel({
+                assistant_id: member.assistant.id,
+                assistant_backend: member.assistant.backend,
+              });
+              return [member.selectionId, model] as const;
+            } catch (error) {
+              throw new Error(`${member.assistant.name}: ${getConversationCreateErrorMessage(error, t)}`, {
+                cause: error,
+              });
+            }
+          })
+        );
+        const modelBySelectionId = new Map(resolvedModels);
+        agents = selectedMembers.map((member) => ({
+          role: member.selectionId === leaderSelectionId ? 'leader' : 'teammate',
+          assistant_name: member.assistant.name,
+          assistant_id: member.assistant.id,
+          model: modelBySelectionId.get(member.selectionId),
+        }));
+      }
 
       const team = await ipcBridge.team.create.invoke({
         user_id,
@@ -136,8 +176,18 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
       onCreated(team);
       handleClose();
     } catch (error) {
-      Message.error(getConversationCreateErrorMessage(error, t));
+      Message.error(
+        error instanceof WorkflowPreparationError
+          ? t('team.workflow.prepareFailed', { ids: error.remainingAssistantIds.join(', ') || '—' })
+          : getConversationCreateErrorMessage(error, t)
+      );
     } finally {
+      creatingRef.current = false;
+      if (workflowPreset) {
+        void mutate('assistants.list').catch((error: unknown) =>
+          console.warn('Failed to refresh workflow roles', error)
+        );
+      }
       setLoading(false);
     }
   };
@@ -171,6 +221,7 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
           ref={nameInputRef}
           placeholder={t('team.create.namePlaceholder', { defaultValue: 'Team name' })}
           value={name}
+          disabled={loading || Boolean(preparedWorkflow)}
           onChange={setName}
           data-testid='team-create-name-input'
           className='!h-38px !rounded-8px !text-13px'
@@ -278,7 +329,9 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
     <AionModal
       variant='standard'
       visible={visible}
-      onCancel={handleClose}
+      onCancel={() => {
+        if (!loading) handleClose();
+      }}
       className='team-create-modal'
       style={{
         width: isMobile ? 'calc(100vw - 32px)' : 900,
@@ -302,14 +355,22 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
       footer={{
         render: () => (
           <div className='flex justify-end gap-10px'>
-            <Button onClick={handleClose} className='!h-38px min-w-84px !rounded-8px !px-18px !text-13px'>
+            <Button
+              onClick={handleClose}
+              disabled={loading}
+              className='!h-38px min-w-84px !rounded-8px !px-18px !text-13px'
+            >
               {t('common.cancel', { defaultValue: 'Cancel' })}
             </Button>
             <Button
               type='primary'
               onClick={handleCreate}
               loading={loading}
-              disabled={!name.trim() || selectedMembers.length === 0 || !hasOneLeader}
+              disabled={
+                loading ||
+                !name.trim() ||
+                (workflowPreset ? !workflowBase && !preparedWorkflow : selectedMembers.length === 0 || !hasOneLeader)
+              }
               className='!h-38px min-w-100px !rounded-8px !px-18px !text-13px'
             >
               {t('team.create.confirm', { defaultValue: 'Confirm Create' })}
@@ -318,7 +379,15 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
         ),
       }}
     >
-      {isMobile ? mobileBody : desktopBody}
+      <WorkflowPresets
+        preset={workflowPreset}
+        baseId={workflowBaseId}
+        assistants={allAssistants}
+        disabled={loading || Boolean(preparedWorkflow)}
+        onPresetChange={setWorkflowPreset}
+        onBaseChange={setWorkflowBaseId}
+      />
+      {workflowPreset ? <div className='px-20px py-16px'>{teamFields}</div> : isMobile ? mobileBody : desktopBody}
     </AionModal>
   );
 };

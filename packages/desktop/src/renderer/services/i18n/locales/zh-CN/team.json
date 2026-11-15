@@ -189,5 +189,23 @@
       "idle_notification": "空闲通知",
       "shutdown_request": "关闭请求"
     }
+  },
+  "workflow": {
+    "label": "工作流模板",
+    "custom": "自定义团队",
+    "feature": "新功能开发",
+    "bugfix": "缺陷修复",
+    "review": "代码审查",
+    "baseAssistant": "使用此助手的配置",
+    "roles": {
+      "requirements": "需求分析",
+      "design": "方案设计",
+      "implementation": "代码实施",
+      "testing": "测试验证",
+      "review": "代码审查",
+      "delivery": "交付汇总"
+    },
+    "hint": "基于所选助手的引擎、模型、能力和规则创建可编辑角色，首个环节担任队长。按角色指令推进，阶段门禁尚未由引擎强制执行。副本保留在助手设置中，重试会复用已准备的角色。",
+    "prepareFailed": "角色准备失败，未创建团队，可重试。未能删除的副本：{{ids}}。可在助手设置中管理。"
   }
 }

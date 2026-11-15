@@ -189,5 +189,23 @@
       "idle_notification": "Aviso de inactividad",
       "shutdown_request": "Solicitud de cierre"
     }
+  },
+  "workflow": {
+    "label": "Plantilla de flujo de trabajo",
+    "custom": "Equipo personalizado",
+    "feature": "Nueva función",
+    "bugfix": "Corrección de errores",
+    "review": "Revisión de código",
+    "baseAssistant": "Asistente del que copiar la configuración",
+    "roles": {
+      "requirements": "Requisitos",
+      "design": "Diseño",
+      "implementation": "Implementación",
+      "testing": "Pruebas",
+      "review": "Revisión",
+      "delivery": "Entrega"
+    },
+    "hint": "Crea roles editables con motor, modelo, capacidades y reglas del asistente. La primera etapa lidera mediante instrucciones; el motor no impone transiciones. Las copias quedan en ajustes y se reutilizan al reintentar.",
+    "prepareFailed": "Error al preparar roles; equipo no creado. Reintenta. Copias no eliminadas: {{ids}}. Adminístralas en los ajustes de asistentes."
   }
 }

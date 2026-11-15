@@ -189,5 +189,23 @@
       "idle_notification": "Idle notice",
       "shutdown_request": "Shutdown request"
     }
+  },
+  "workflow": {
+    "label": "Workflow template",
+    "custom": "Custom team",
+    "feature": "New feature",
+    "bugfix": "Bug fix",
+    "review": "Code review",
+    "baseAssistant": "Use configuration from assistant",
+    "roles": {
+      "requirements": "Requirements",
+      "design": "Design",
+      "implementation": "Implementation",
+      "testing": "Testing",
+      "review": "Review",
+      "delivery": "Delivery"
+    },
+    "hint": "Creates editable roles using the selected assistant’s engine, model, capabilities and rules. The first stage leads. Instructions guide stages without engine enforcement. Copies remain in assistant settings; retries reuse prepared roles.",
+    "prepareFailed": "Role preparation failed; no team created. Retry to prepare again. Copies not removed: {{ids}}. Manage them in assistant settings."
   }
 }

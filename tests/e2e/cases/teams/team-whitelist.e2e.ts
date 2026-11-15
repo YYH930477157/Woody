@@ -146,7 +146,7 @@ test.describe('Team Assistant Leader Options', () => {
       await option.click();
       await modal.locator('[data-testid="team-create-name-input"]').fill(`E2E Team Selectable ${suffix}`);
 
-      const confirmBtn = modal.getByRole('button', { name: /create team|创建团队/i });
+      const confirmBtn = modal.getByRole('button', { name: /Confirm Create|确认创建|create team|创建团队/i });
       await expect(confirmBtn).toBeEnabled({ timeout: 5_000 });
     } finally {
       if (customAgentId) {

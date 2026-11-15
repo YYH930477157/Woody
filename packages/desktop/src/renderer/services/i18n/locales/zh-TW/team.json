@@ -189,5 +189,23 @@
       "idle_notification": "閒置通知",
       "shutdown_request": "關閉請求"
     }
+  },
+  "workflow": {
+    "label": "工作流程範本",
+    "custom": "自訂團隊",
+    "feature": "新功能開發",
+    "bugfix": "缺陷修復",
+    "review": "程式碼審查",
+    "baseAssistant": "使用此助手的設定",
+    "roles": {
+      "requirements": "需求分析",
+      "design": "方案設計",
+      "implementation": "程式實作",
+      "testing": "測試驗證",
+      "review": "程式碼審查",
+      "delivery": "交付彙整"
+    },
+    "hint": "依所選助手的引擎、模型、能力和規則建立可編輯角色，首個環節擔任隊長。依角色指令推進，階段關卡尚未由引擎強制執行。副本保留於助手設定中，重試會沿用已準備的角色。",
+    "prepareFailed": "角色準備失敗，未建立團隊，可重試。未能刪除的副本：{{ids}}。可在助手設定中管理。"
   }
 }

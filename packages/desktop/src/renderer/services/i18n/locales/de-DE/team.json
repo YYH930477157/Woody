@@ -189,5 +189,23 @@
       "idle_notification": "Leerlaufhinweis",
       "shutdown_request": "Stopp-Anfrage"
     }
+  },
+  "workflow": {
+    "label": "Workflow-Vorlage",
+    "custom": "Eigenes Team",
+    "feature": "Neue Funktion",
+    "bugfix": "Fehlerbehebung",
+    "review": "Code-Review",
+    "baseAssistant": "Assistent als Konfigurationsquelle",
+    "roles": {
+      "requirements": "Anforderungen",
+      "design": "Entwurf",
+      "implementation": "Implementierung",
+      "testing": "Tests",
+      "review": "Review",
+      "delivery": "Übergabe"
+    },
+    "hint": "Erstellt bearbeitbare Rollen mit Engine, Modell, Fähigkeiten und Regeln des Assistenten. Die erste Phase leitet per Anweisungen; Übergänge werden nicht technisch erzwungen. Kopien bleiben in den Einstellungen und werden bei Wiederholung verwendet.",
+    "prepareFailed": "Rollenvorbereitung fehlgeschlagen; kein Team erstellt. Erneut versuchen. Nicht entfernte Kopien: {{ids}}. In den Assistenteneinstellungen verwalten."
   }
 }

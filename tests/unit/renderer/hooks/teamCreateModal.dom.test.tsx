@@ -12,6 +12,12 @@ import type { Assistant } from '@/common/types/agent/assistantTypes';
 const createTeamInvokeMock = vi.fn();
 const resolveDefaultTeamAgentModelMock = vi.fn();
 const messageErrorMock = vi.fn();
+const prepareWorkflowMock = vi.fn();
+
+vi.mock('@renderer/pages/team/WorkflowPresets/prepareWorkflow', () => ({
+  prepareWorkflow: (...args: unknown[]) => prepareWorkflowMock(...args),
+  WorkflowPreparationError: class extends Error {},
+}));
 
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
@@ -128,6 +134,10 @@ describe('TeamCreateModal', () => {
     resolveDefaultTeamAgentModelMock.mockReset();
     resolveDefaultTeamAgentModelMock.mockResolvedValue(undefined);
     messageErrorMock.mockReset();
+    prepareWorkflowMock.mockReset();
+    prepareWorkflowMock.mockResolvedValue([
+      { role: 'leader', assistant_id: 'workflow-leader', assistant_name: 'Requirements', model: 'configured-model' },
+    ]);
   });
 
   it('keeps blocked assistants visible and prevents selecting them', () => {
@@ -147,6 +157,47 @@ describe('TeamCreateModal', () => {
     fireEvent.click(screen.getByTestId('team-create-agent-option-blocked-reviewer'));
 
     expect(createButton).toBeDisabled();
+  });
+
+  it('previews stages without creating roles and requires a source assistant', async () => {
+    render(<TeamCreateModal visible onClose={vi.fn()} onCreated={vi.fn()} />);
+    fireEvent.click(screen.getByLabelText('team.workflow.label'));
+    fireEvent.click(await screen.findByText('team.workflow.feature'));
+    fireEvent.change(screen.getByTestId('team-create-name-input'), { target: { value: 'Feature team' } });
+    expect(screen.getByTestId('team-workflow-stages')).toHaveTextContent('team.workflow.roles.testing');
+    expect(prepareWorkflowMock).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Confirm Create' })).toBeDisabled();
+  });
+
+  it('reuses prepared roles when team creation fails and is retried', async () => {
+    createTeamInvokeMock.mockRejectedValueOnce(new Error('offline'));
+    render(<TeamCreateModal visible onClose={vi.fn()} onCreated={vi.fn()} />);
+    fireEvent.click(screen.getByLabelText('team.workflow.label'));
+    fireEvent.click(await screen.findByText('team.workflow.feature'));
+    fireEvent.click(screen.getByLabelText('team.workflow.baseAssistant'));
+    fireEvent.click(await screen.findByText('Aion 命令行'));
+    fireEvent.change(screen.getByTestId('team-create-name-input'), { target: { value: 'Feature team' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Create' }));
+    await waitFor(() => expect(messageErrorMock).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Create' }));
+    await waitFor(() => expect(createTeamInvokeMock).toHaveBeenCalledTimes(2));
+    expect(prepareWorkflowMock).toHaveBeenCalledTimes(1);
+    expect(createTeamInvokeMock.mock.calls[1][0].agents).toEqual([
+      { role: 'leader', assistant_id: 'workflow-leader', assistant_name: 'Requirements', model: 'configured-model' },
+    ]);
+  });
+
+  it('does not create a team if role preparation fails', async () => {
+    prepareWorkflowMock.mockRejectedValueOnce(new Error('rule save failed'));
+    render(<TeamCreateModal visible onClose={vi.fn()} onCreated={vi.fn()} />);
+    fireEvent.click(screen.getByLabelText('team.workflow.label'));
+    fireEvent.click(await screen.findByText('team.workflow.feature'));
+    fireEvent.click(screen.getByLabelText('team.workflow.baseAssistant'));
+    fireEvent.click(await screen.findByText('Aion 命令行'));
+    fireEvent.change(screen.getByTestId('team-create-name-input'), { target: { value: 'Feature team' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Create' }));
+    await waitFor(() => expect(messageErrorMock).toHaveBeenCalled());
+    expect(createTeamInvokeMock).not.toHaveBeenCalled();
   });
 
   it('keeps blocked assistant rows single-line while the reason stays out of the row', () => {
@@ -396,6 +447,15 @@ describe('TeamCreateModal · mobile (narrow screen)', () => {
     // The add-member trigger is present; the assistant dropdown is closed until opened.
     expect(screen.getByTestId('team-create-add-member-btn')).toBeInTheDocument();
     expect(screen.queryByTestId('team-create-agent-search')).not.toBeInTheDocument();
+  });
+
+  it('shows template stages and team fields on mobile without the custom member picker', async () => {
+    renderMobile(<TeamCreateModal visible onClose={vi.fn()} onCreated={vi.fn()} />);
+    fireEvent.click(screen.getByLabelText('team.workflow.label'));
+    fireEvent.click(await screen.findByText('team.workflow.review'));
+    expect(screen.getByTestId('team-workflow-stages')).toHaveTextContent('team.workflow.roles.review');
+    expect(screen.getByTestId('team-create-name-input')).toBeInTheDocument();
+    expect(screen.queryByTestId('team-create-add-member-btn')).not.toBeInTheDocument();
   });
 
   it('opens the assistant dropdown, adds a member, and closes on select', async () => {

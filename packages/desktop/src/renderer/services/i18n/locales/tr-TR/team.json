@@ -189,5 +189,23 @@
       "idle_notification": "Boşta bildirimi",
       "shutdown_request": "Kapatma isteği"
     }
+  },
+  "workflow": {
+    "label": "İş akışı şablonu",
+    "custom": "Özel ekip",
+    "feature": "Yeni özellik",
+    "bugfix": "Hata düzeltme",
+    "review": "Kod inceleme",
+    "baseAssistant": "Ayarları alınacak asistan",
+    "roles": {
+      "requirements": "Gereksinimler",
+      "design": "Tasarım",
+      "implementation": "Uygulama",
+      "testing": "Test",
+      "review": "İnceleme",
+      "delivery": "Teslimat"
+    },
+    "hint": "Asistanın motoru, modeli, yetenekleri ve kurallarıyla düzenlenebilir roller oluşturur. İlk aşama liderdir. Geçişler talimatlarla yönetilir, motor tarafından zorlanmaz. Kopyalar ayarlarda kalır ve tekrar denemede kullanılır.",
+    "prepareFailed": "Rol hazırlığı başarısız; ekip oluşturulmadı. Yeniden deneyin. Silinemeyen kopyalar: {{ids}}. Asistan ayarlarından yönetin."
   }
 }

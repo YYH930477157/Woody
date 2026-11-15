@@ -189,5 +189,23 @@
       "idle_notification": "Aviso de inatividade",
       "shutdown_request": "Pedido de encerramento"
     }
+  },
+  "workflow": {
+    "label": "Modelo de fluxo de trabalho",
+    "custom": "Equipe personalizada",
+    "feature": "Nova funcionalidade",
+    "bugfix": "Correção de bug",
+    "review": "Revisão de código",
+    "baseAssistant": "Assistente de origem das configurações",
+    "roles": {
+      "requirements": "Requisitos",
+      "design": "Projeto",
+      "implementation": "Implementação",
+      "testing": "Testes",
+      "review": "Revisão",
+      "delivery": "Entrega"
+    },
+    "hint": "Cria papéis editáveis com mecanismo, modelo, recursos e regras do assistente. A primeira etapa lidera por instruções, sem transições impostas pelo mecanismo. Cópias ficam nos ajustes e são reutilizadas ao tentar novamente.",
+    "prepareFailed": "Falha ao preparar papéis; equipe não criada. Tente novamente. Cópias não removidas: {{ids}}. Gerencie-as nos ajustes dos assistentes."
   }
 }

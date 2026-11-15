@@ -40,12 +40,12 @@ test.describe('Team Create', () => {
     await page.screenshot({ path: 'tests/e2e/results/team-02-modal.png' });
 
     // Verify Modal is visible with "Create Team" title
-    const modalTitle = page.locator('.arco-modal h3').filter({ hasText: /Create Team|创建团队/ });
+    const modalTitle = page.locator('.arco-modal h3').filter({ hasText: /New Team|新建团队|Create Team|创建团队/ });
     await expect(modalTitle).toBeVisible({ timeout: 5000 });
 
     // Verify Team name input exists
     const modal = page.locator('.arco-modal');
-    const nameInput = modal.getByRole('textbox').first();
+    const nameInput = modal.getByTestId('team-create-name-input');
     await expect(nameInput).toBeVisible();
 
     // Verify assistant leader choices render, or the empty-state appears.
@@ -74,12 +74,12 @@ test.describe('Team Create', () => {
     await createBtn.click();
 
     // Wait for modal to appear
-    const modalTitle = page.locator('.arco-modal h3').filter({ hasText: /Create Team|创建团队/ });
+    const modalTitle = page.locator('.arco-modal h3').filter({ hasText: /New Team|新建团队|Create Team|创建团队/ });
     await expect(modalTitle).toBeVisible({ timeout: 5000 });
 
     // Fill team name
     const modal = page.locator('.arco-modal');
-    const nameInput = modal.getByRole('textbox').first();
+    const nameInput = modal.getByTestId('team-create-name-input');
     await nameInput.fill('E2E Test Team');
 
     const firstOption = modal.locator('[data-testid^="team-create-agent-option-"]').first();
@@ -137,12 +137,12 @@ async function createTeamWithAgent(
   await createBtn.click();
 
   // Wait for modal to appear
-  const modalTitle = page.locator('.arco-modal h3').filter({ hasText: /Create Team|创建团队/ });
+  const modalTitle = page.locator('.arco-modal h3').filter({ hasText: /New Team|新建团队|Create Team|创建团队/ });
   await expect(modalTitle).toBeVisible({ timeout: 5000 });
 
   // Fill team name
   const modal = page.locator('.arco-modal');
-  const nameInput = modal.getByRole('textbox').first();
+  const nameInput = modal.getByTestId('team-create-name-input');
   await nameInput.fill(teamName);
 
   await page.screenshot({ path: `tests/e2e/results/${screenshotPrefix}-assistant-list.png` });

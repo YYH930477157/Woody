@@ -189,5 +189,23 @@
       "idle_notification": "Notif. d’inactivité",
       "shutdown_request": "Demande d’arrêt"
     }
+  },
+  "workflow": {
+    "label": "Modèle de workflow",
+    "custom": "Équipe personnalisée",
+    "feature": "Nouvelle fonctionnalité",
+    "bugfix": "Correction de bug",
+    "review": "Revue de code",
+    "baseAssistant": "Assistant source de la configuration",
+    "roles": {
+      "requirements": "Exigences",
+      "design": "Conception",
+      "implementation": "Implémentation",
+      "testing": "Tests",
+      "review": "Revue",
+      "delivery": "Livraison"
+    },
+    "hint": "Crée des rôles modifiables avec moteur, modèle, capacités et règles de l’assistant. La première étape dirige par instructions ; le moteur n’impose pas les transitions. Les copies restent dans les paramètres et sont réutilisées en cas de nouvel essai.",
+    "prepareFailed": "Échec de préparation des rôles ; équipe non créée. Réessayez. Copies non supprimées : {{ids}}. Gérez-les dans les paramètres des assistants."
   }
 }
