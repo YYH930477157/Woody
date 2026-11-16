@@ -73,7 +73,17 @@
     "selectedMembersTitleWithCount": "Selected members {{count}}",
     "leaderLegend": "= Leader",
     "membersHelper": "Choose team members and assign one Leader. The same assistant can be selected multiple times.",
-    "memberHint": "No suitable assistant as a member? After creation, let the Leader create temporary team members in chat."
+    "memberHint": "No suitable assistant as a member? After creation, let the Leader create temporary team members in chat.",
+    "isolated": {
+      "label": "Ayrı çalışma alanı",
+      "hint": "{{branch}} dalından yeni bir dal ve deponun yanında yeni bir klasör oluşturur; ekip kodu yalnızca orada değiştirir",
+      "dirty": "Geçerli klasörde commit edilmemiş değişiklikler var; bunlar yeni çalışma alanına taşınmaz",
+      "detached": "Etkin bir dal yok, bu yüzden ayrı çalışma alanı oluşturulamaz",
+      "noCommits": "Depoda henüz commit yok, bu yüzden ayrı çalışma alanı oluşturulamaz",
+      "notRepository": "Seçilen klasör bir Git deposunda değil",
+      "prepared": "Hazırlandı: {{path}} (dal {{branch}})",
+      "failed": "Ayrı çalışma alanı oluşturulamadı: {{message}}"
+    }
   },
   "removeAgent": {
     "confirmTitle": "Takım Üyesini Kaldır",

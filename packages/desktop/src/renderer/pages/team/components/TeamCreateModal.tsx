@@ -25,6 +25,10 @@ import WorkflowPresets, {
   type WorkflowPresetId,
   type WorkflowRole,
 } from '../WorkflowPresets';
+import IsolatedWorkspaceOption, { IsolatedWorkspaceError, useIsolatedWorkspace } from '../IsolatedWorkspace';
+
+/** Reasons the main process reports for a folder that cannot get a separate workspace. */
+const ISOLATED_REASONS = new Set(['notRepository', 'detached', 'noCommits']);
 
 // [E2E SYNC] 修改此组件的 DOM 结构（class、标题、关闭按钮等）时，
 // 必须同步更新 tests/e2e/cases/teams/team-create.e2e.ts、team-whitelist.e2e.ts、
@@ -54,6 +58,7 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
   const [workflowPreset, setWorkflowPreset] = useState<WorkflowPresetId>();
   const [workflowBaseId, setWorkflowBaseId] = useState<string>();
   const [preparedWorkflow, setPreparedWorkflow] = useState<TeamAssistantInput[]>();
+  const isolated = useIsolatedWorkspace(workspace);
   const workflowBase = allAssistants.find(
     (assistant) => assistant.id === workflowBaseId && assistant.team_selectable !== false
   );
@@ -87,11 +92,13 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
     setWorkflowPreset(undefined);
     setWorkflowBaseId(undefined);
     setPreparedWorkflow(undefined);
+    isolated.reset();
     onClose();
   };
 
   const handleClose = () => {
     discardPreparedWorkflow(preparedWorkflow);
+    isolated.discard();
     resetModalState();
   };
 
@@ -131,6 +138,8 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
     creatingRef.current = true;
     setLoading(true);
     try {
+      // The worktree comes first: it fails fast and costs nothing to retry, unlike role copies.
+      const teamWorkspace = isolated.enabled ? (await isolated.prepare(name)).workspace : workspace;
       let agents: TeamAssistantInput[];
       if (workflowPreset) {
         if (preparedWorkflow) {
@@ -177,8 +186,8 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
       const team = await ipcBridge.team.create.invoke({
         user_id,
         name,
-        workspace,
-        workspace_mode: 'shared',
+        workspace: teamWorkspace,
+        workspace_mode: isolated.enabled ? 'isolated' : 'shared',
         agents,
       });
 
@@ -195,7 +204,14 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
       Message.error(
         error instanceof WorkflowPreparationError
           ? t('team.workflow.prepareFailed', { ids: error.remainingAssistantIds.join(', ') || '—' })
-          : getConversationCreateErrorMessage(error, t)
+          : error instanceof IsolatedWorkspaceError
+            ? t('team.create.isolated.failed', {
+                message:
+                  error.reason && ISOLATED_REASONS.has(error.reason)
+                    ? t(`team.create.isolated.${error.reason}`)
+                    : error.message,
+              })
+            : getConversationCreateErrorMessage(error, t)
       );
     } finally {
       creatingRef.current = false;
@@ -260,6 +276,7 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
           menuTestId='team-create-workspace-menu'
         />
       </div>
+      <IsolatedWorkspaceOption state={isolated} disabled={loading} />
     </div>
   );
 

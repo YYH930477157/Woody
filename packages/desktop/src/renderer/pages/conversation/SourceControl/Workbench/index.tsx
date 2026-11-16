@@ -11,6 +11,7 @@ import { initScmRuntime } from '../scmTransport';
 import { setScmSelectedRepo, useScmUi } from '../scmUiStore';
 import { HistoryView } from './History';
 import { Operations } from './Operations';
+import { TeamWorktreeBar } from './Operations/TeamWorktreeBar';
 import { Merge } from './Merge';
 import { Shelves } from './Storage/Shelves';
 import { LocalHistory } from './Storage/LocalHistory';
@@ -64,6 +65,9 @@ export const Workbench: React.FC<ScmPanelProps> = (props) => {
           </Button>
         )}
       </div>
+      {desktop && scope && repository?.provider_id === 'git' && (
+        <TeamWorktreeBar scope={scope} revision={view.statuses[repository.repo_id]} />
+      )}
       <div className='flex-1 min-h-0'>
         <ScmPanel {...props} changelists={desktop} />
       </div>

@@ -40,6 +40,8 @@ const dependencies = vi.hoisted(() => {
     createGitOperationService: vi.fn(() => operations),
     createGitMergeService: vi.fn(() => merge),
     createProjectRootResolver: vi.fn(() => vi.fn()),
+    createWorkbenchRootResolver: vi.fn(() => vi.fn()),
+    createTeamWorktreeService: vi.fn(() => ({})),
   };
 });
 
@@ -63,6 +65,12 @@ vi.mock('@/common', () => ({
         'fileHistory',
         'readRevision',
         'blame',
+        'teamWorktreeInspect',
+        'teamWorktreeCreate',
+        'teamWorktreeDiscard',
+        'teamWorktreeDescribe',
+        'teamWorktreeMerge',
+        'teamWorktreeRemove',
       ].map((name) => [name, { provider: dependencies.provider }])
     ),
     sourceControl: Object.fromEntries(
@@ -90,6 +98,10 @@ vi.mock('@process/services/sourceControl/commitWorkflowService', () => ({
 }));
 vi.mock('@process/services/sourceControl/workbench/service', () => ({
   createGitWorkbenchService: dependencies.createGitWorkbenchService,
+  createWorkbenchRootResolver: dependencies.createWorkbenchRootResolver,
+}));
+vi.mock('@process/services/sourceControl/workbench/operations/teamWorktree', () => ({
+  createTeamWorktreeService: dependencies.createTeamWorktreeService,
 }));
 vi.mock('@process/services/sourceControl/workbench/operations', () => ({
   createGitOperationService: dependencies.createGitOperationService,
@@ -155,5 +167,8 @@ describe('source control bridge runtime sharing', () => {
       })
     );
     expect(dependencies.createGitMergeService).toHaveBeenCalledWith(expect.objectContaining({ git, run }));
+    expect(dependencies.createTeamWorktreeService).toHaveBeenCalledWith(
+      expect.objectContaining({ git: operationsGit, run, capabilities: { updateRefs: true, memoryHistoryEdit: true } })
+    );
   });
 });

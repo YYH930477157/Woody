@@ -73,7 +73,17 @@
     "selectedMembersTitleWithCount": "Selected members {{count}}",
     "leaderLegend": "= Leader",
     "membersHelper": "Choose team members and assign one Leader. The same assistant can be selected multiple times.",
-    "memberHint": "No suitable assistant as a member? After creation, let the Leader create temporary team members in chat."
+    "memberHint": "No suitable assistant as a member? After creation, let the Leader create temporary team members in chat.",
+    "isolated": {
+      "label": "Espacio de trabajo separado",
+      "hint": "Crea una rama nueva desde {{branch}} y una carpeta nueva junto al repositorio; el equipo solo cambia código allí",
+      "dirty": "La carpeta actual tiene cambios sin confirmar; no se trasladan al nuevo espacio de trabajo",
+      "detached": "No hay ninguna rama activa, así que no se puede crear un espacio de trabajo separado",
+      "noCommits": "El repositorio aún no tiene commits, así que no se puede crear un espacio de trabajo separado",
+      "notRepository": "La carpeta seleccionada no está en un repositorio Git",
+      "prepared": "Preparado: {{path}} (rama {{branch}})",
+      "failed": "No se pudo crear el espacio de trabajo separado: {{message}}"
+    }
   },
   "removeAgent": {
     "confirmTitle": "Quitar miembro del equipo",

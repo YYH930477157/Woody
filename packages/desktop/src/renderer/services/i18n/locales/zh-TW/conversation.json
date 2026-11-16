@@ -1204,6 +1204,31 @@
       "blame": "逐行追溯",
       "missing": "所选版本中不存在此文件",
       "uncommitted": "未提交"
+    },
+    "teamWorktree": {
+      "summary": "團隊工作區：{{branch}} → {{base}}",
+      "counts": "領先 {{ahead}} · 落後 {{behind}}",
+      "merge": "合併到 {{base}}",
+      "remove": "刪除工作區",
+      "dirty": "有未提交的變更，提交後才能合併或刪除",
+      "resolving": "正在合併 {{base}}，解決衝突並提交後再按合併",
+      "merged": "已合併到 {{base}}",
+      "upToDate": "{{base}} 已包含團隊分支的所有提交",
+      "conflict": "將 {{base}} 合入團隊分支時發生衝突：{{files}}。請在「Git 歷史」→「Resolve conflicts」中處理並提交，然後再按一次合併。",
+      "dirtyWorktree": "請先提交或捨棄團隊工作區的變更",
+      "baseLocalChanges": "{{base}} 所在資料夾中未提交的變更會被覆蓋：{{files}}。請先提交或暫存（stash），再合併。",
+      "baseBusy": "{{base}} 所在資料夾有進行中的合併或重定基底，請先完成或中止",
+      "operationInProgress": "團隊工作區有進行中的合併或未解決的衝突，請先處理並提交",
+      "baseMissing": "分支 {{base}} 已不存在",
+      "unmerged": "分支還有未合併的提交",
+      "failed": "操作失敗：{{message}}",
+      "removeTitle": "刪除團隊工作區？",
+      "removeContent": "將刪除資料夾 {{path}} 和分支 {{branch}}。使用這個工作區的團隊將無法繼續工作，請先停止團隊成員。",
+      "removeUnmerged": "分支還有 {{count}} 個提交沒有合併到 {{base}}，刪除後會遺失。",
+      "removeConfirm": "刪除",
+      "removed": "已刪除工作區和分支 {{branch}}",
+      "removeFailed": "刪除失敗：{{message}}。如果有檔案被占用，請先停止團隊成員，並關閉開啟這個資料夾的程式。",
+      "branchKept": "資料夾已刪除，但分支 {{branch}} 未能刪除：{{message}}"
     }
   },
   "sessionFiles": {

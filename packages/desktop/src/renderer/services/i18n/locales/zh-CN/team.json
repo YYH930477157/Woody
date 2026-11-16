@@ -73,7 +73,17 @@
     "selectedMembersTitleWithCount": "已选成员 {{count}}",
     "leaderLegend": "= Leader",
     "membersHelper": "选择团队成员并指定一个 Leader。同一个助手可被多次选择。",
-    "memberHint": "没有合适的助手当队员？创建后可让 Leader 在对话中创建临时队员。"
+    "memberHint": "没有合适的助手当队员？创建后可让 Leader 在对话中创建临时队员。",
+    "isolated": {
+      "label": "独立工作区",
+      "hint": "从 {{branch}} 新建分支，并在仓库旁边新建一个文件夹，团队只在那里改代码",
+      "dirty": "当前目录有未提交的改动，这些改动不会带到新工作区",
+      "detached": "当前不在任何分支上，无法新建独立工作区",
+      "noCommits": "仓库还没有提交，无法新建独立工作区",
+      "notRepository": "所选文件夹不在 Git 仓库里",
+      "prepared": "已准备好：{{path}}（分支 {{branch}}）",
+      "failed": "新建独立工作区失败：{{message}}"
+    }
   },
   "removeAgent": {
     "confirmTitle": "移除团队成员",

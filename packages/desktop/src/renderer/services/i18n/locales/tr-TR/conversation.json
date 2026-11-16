@@ -1206,6 +1206,31 @@
       "blame": "Blame",
       "missing": "This file did not exist in the selected version",
       "uncommitted": "Uncommitted"
+    },
+    "teamWorktree": {
+      "summary": "Ekip çalışma alanı: {{branch}} → {{base}}",
+      "counts": "{{ahead}} önde · {{behind}} geride",
+      "merge": "{{base}} dalına birleştir",
+      "remove": "Çalışma alanını sil",
+      "dirty": "Commit edilmemiş değişiklikler var; birleştirmeden veya silmeden önce commit edin",
+      "resolving": "{{base}} birleştiriliyor: çakışmaları çözüp commit edin, sonra yeniden birleştirin",
+      "merged": "{{base}} dalına birleştirildi",
+      "upToDate": "{{base}} ekip dalının tüm commit'lerini zaten içeriyor",
+      "conflict": "{{base}} ekip dalına birleştirilirken çakışmalar oldu: {{files}}. Bunları \"Git history\" → \"Resolve conflicts\" içinde çözüp commit edin, sonra yeniden birleştirin.",
+      "dirtyWorktree": "Önce ekip çalışma alanındaki değişiklikleri commit edin veya atın",
+      "baseLocalChanges": "{{base}} klasöründeki commit edilmemiş değişikliklerin üzerine yazılacaktı: {{files}}. Bunları commit edin veya stash'e alın, sonra yeniden birleştirin.",
+      "baseBusy": "{{base}} klasöründe süren bir birleştirme veya rebase var; önce bitirin veya iptal edin",
+      "operationInProgress": "Ekip çalışma alanında süren bir birleştirme veya çözülmemiş çakışmalar var; önce çözüp commit edin",
+      "baseMissing": "{{base}} dalı artık yok",
+      "unmerged": "Dalda birleştirilmemiş commit'ler var",
+      "failed": "İşlem başarısız: {{message}}",
+      "removeTitle": "Ekip çalışma alanı silinsin mi?",
+      "removeContent": "{{path}} klasörü ve {{branch}} dalı silinecek. Bu çalışma alanını kullanan ekip artık burada çalışamaz; önce üyelerini durdurun.",
+      "removeUnmerged": "Dalda {{base}} dalına birleştirilmemiş {{count}} commit var; kaybolacaklar.",
+      "removeConfirm": "Sil",
+      "removed": "Çalışma alanı ve {{branch}} dalı silindi",
+      "removeFailed": "Silinemedi: {{message}}. Dosyalar kullanımdaysa ekip üyelerini durdurun ve bu klasörü açık tutan programları kapatın.",
+      "branchKept": "Klasör silindi ama {{branch}} dalı silinemedi: {{message}}"
     }
   },
   "sessionFiles": {

@@ -73,7 +73,17 @@
     "selectedMembersTitleWithCount": "Selected members {{count}}",
     "leaderLegend": "= Leader",
     "membersHelper": "Choose team members and assign one Leader. The same assistant can be selected multiple times.",
-    "memberHint": "No suitable assistant as a member? After creation, let the Leader create temporary team members in chat."
+    "memberHint": "No suitable assistant as a member? After creation, let the Leader create temporary team members in chat.",
+    "isolated": {
+      "label": "Окрема робоча тека",
+      "hint": "Створює нову гілку від {{branch}} і нову теку поруч із репозиторієм; команда змінює код лише там",
+      "dirty": "У поточній теці є незакомічені зміни; вони не переносяться до нової робочої теки",
+      "detached": "Не вибрано жодної гілки, тому створити окрему робочу теку не можна",
+      "noCommits": "У репозиторії ще немає комітів, тому створити окрему робочу теку не можна",
+      "notRepository": "Вибрана тека не перебуває в Git-репозиторії",
+      "prepared": "Підготовлено: {{path}} (гілка {{branch}})",
+      "failed": "Не вдалося створити окрему робочу теку: {{message}}"
+    }
   },
   "removeAgent": {
     "confirmTitle": "Видалити учасника команди",

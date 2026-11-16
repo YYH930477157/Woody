@@ -1204,6 +1204,31 @@
       "blame": "Blame",
       "missing": "This file did not exist in the selected version",
       "uncommitted": "Uncommitted"
+    },
+    "teamWorktree": {
+      "summary": "Espace de l’équipe : {{branch}} → {{base}}",
+      "counts": "{{ahead}} en avance · {{behind}} en retard",
+      "merge": "Fusionner dans {{base}}",
+      "remove": "Supprimer l’espace",
+      "dirty": "Des modifications ne sont pas validées ; validez-les avant de fusionner ou de supprimer",
+      "resolving": "Fusion de {{base}} en cours : résolvez les conflits et validez, puis fusionnez à nouveau",
+      "merged": "Fusionné dans {{base}}",
+      "upToDate": "{{base}} contient déjà tous les commits de la branche de l’équipe",
+      "conflict": "La fusion de {{base}} dans la branche de l’équipe a créé des conflits : {{files}}. Résolvez-les dans « Git history » → « Resolve conflicts » et validez, puis fusionnez à nouveau.",
+      "dirtyWorktree": "Validez ou abandonnez d’abord les modifications de l’espace de l’équipe",
+      "baseLocalChanges": "Des modifications non validées dans le dossier de {{base}} seraient écrasées : {{files}}. Validez-les ou remisez-les (stash), puis fusionnez à nouveau.",
+      "baseBusy": "Une fusion ou un rebase est en cours dans le dossier de {{base}} ; terminez-le ou annulez-le d’abord",
+      "operationInProgress": "L’espace de l’équipe a une fusion en cours ou des conflits non résolus ; résolvez-les et validez d’abord",
+      "baseMissing": "La branche {{base}} n’existe plus",
+      "unmerged": "La branche contient des commits non fusionnés",
+      "failed": "Échec de l’opération : {{message}}",
+      "removeTitle": "Supprimer l’espace de travail de l’équipe ?",
+      "removeContent": "Le dossier {{path}} et la branche {{branch}} seront supprimés. Une équipe qui utilise cet espace ne pourra plus y travailler ; arrêtez d’abord ses membres.",
+      "removeUnmerged": "La branche a {{count}} commit(s) non fusionné(s) dans {{base}} ; ils seront perdus.",
+      "removeConfirm": "Supprimer",
+      "removed": "Espace de travail et branche {{branch}} supprimés",
+      "removeFailed": "Suppression impossible : {{message}}. Si des fichiers sont utilisés, arrêtez les membres de l’équipe et fermez les programmes qui ont ouvert ce dossier.",
+      "branchKept": "Le dossier a été supprimé, mais pas la branche {{branch}} : {{message}}"
     }
   },
   "sessionFiles": {

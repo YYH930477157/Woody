@@ -73,7 +73,17 @@
     "selectedMembersTitleWithCount": "Selected members {{count}}",
     "leaderLegend": "= Leader",
     "membersHelper": "Choose team members and assign one Leader. The same assistant can be selected multiple times.",
-    "memberHint": "No suitable assistant as a member? After creation, let the Leader create temporary team members in chat."
+    "memberHint": "No suitable assistant as a member? After creation, let the Leader create temporary team members in chat.",
+    "isolated": {
+      "label": "Отдельная рабочая папка",
+      "hint": "Создаёт новую ветку от {{branch}} и новую папку рядом с репозиторием; команда меняет код только там",
+      "dirty": "В текущей папке есть незакоммиченные изменения; они не переносятся в новую рабочую папку",
+      "detached": "Не выбрана ни одна ветка, поэтому создать отдельную рабочую папку нельзя",
+      "noCommits": "В репозитории ещё нет коммитов, поэтому создать отдельную рабочую папку нельзя",
+      "notRepository": "Выбранная папка не находится в Git-репозитории",
+      "prepared": "Подготовлено: {{path}} (ветка {{branch}})",
+      "failed": "Не удалось создать отдельную рабочую папку: {{message}}"
+    }
   },
   "removeAgent": {
     "confirmTitle": "Удалить участника команды",

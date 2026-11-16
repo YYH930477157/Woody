@@ -73,7 +73,17 @@
     "selectedMembersTitleWithCount": "Selected members {{count}}",
     "leaderLegend": "= Leader",
     "membersHelper": "Choose team members and assign one Leader. The same assistant can be selected multiple times.",
-    "memberHint": "No suitable assistant as a member? After creation, let the Leader create temporary team members in chat."
+    "memberHint": "No suitable assistant as a member? After creation, let the Leader create temporary team members in chat.",
+    "isolated": {
+      "label": "فضای کاری جداگانه",
+      "hint": "یک شاخهٔ تازه از {{branch}} و یک پوشهٔ تازه کنار مخزن می‌سازد؛ تیم فقط همان‌جا کد را تغییر می‌دهد",
+      "dirty": "پوشهٔ فعلی تغییرات ثبت‌نشده دارد؛ این تغییرات به فضای کاری تازه منتقل نمی‌شوند",
+      "detached": "هیچ شاخه‌ای فعال نیست، پس نمی‌توان فضای کاری جداگانه ساخت",
+      "noCommits": "مخزن هنوز هیچ کامیتی ندارد، پس نمی‌توان فضای کاری جداگانه ساخت",
+      "notRepository": "پوشهٔ انتخاب‌شده در هیچ مخزن Git نیست",
+      "prepared": "آماده شد: {{path}} (شاخهٔ {{branch}})",
+      "failed": "ساخت فضای کاری جداگانه ناموفق بود: {{message}}"
+    }
   },
   "removeAgent": {
     "confirmTitle": "حذف عضو تیم",

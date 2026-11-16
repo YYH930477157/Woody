@@ -73,7 +73,17 @@
     "selectedMembersTitleWithCount": "已選成員 {{count}}",
     "leaderLegend": "= Leader",
     "membersHelper": "選擇團隊成員並指定一個 Leader。同一個助手可被多次選擇。",
-    "memberHint": "沒有合適的助手當隊員？建立後可讓 Leader 在對話中建立臨時隊員。"
+    "memberHint": "沒有合適的助手當隊員？建立後可讓 Leader 在對話中建立臨時隊員。",
+    "isolated": {
+      "label": "獨立工作區",
+      "hint": "從 {{branch}} 建立新分支，並在儲存庫旁建立一個資料夾，團隊只在那裡修改程式碼",
+      "dirty": "目前資料夾有未提交的變更，這些變更不會帶到新工作區",
+      "detached": "目前不在任何分支上，無法建立獨立工作區",
+      "noCommits": "儲存庫還沒有提交，無法建立獨立工作區",
+      "notRepository": "所選資料夾不在 Git 儲存庫中",
+      "prepared": "已準備好：{{path}}（分支 {{branch}}）",
+      "failed": "建立獨立工作區失敗：{{message}}"
+    }
   },
   "removeAgent": {
     "confirmTitle": "移除團隊成員",

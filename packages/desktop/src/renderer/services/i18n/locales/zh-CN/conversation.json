@@ -1204,6 +1204,31 @@
       "blame": "逐行追溯",
       "missing": "所选版本中不存在此文件",
       "uncommitted": "未提交"
+    },
+    "teamWorktree": {
+      "summary": "团队工作区：{{branch}} → {{base}}",
+      "counts": "领先 {{ahead}} · 落后 {{behind}}",
+      "merge": "合并到 {{base}}",
+      "remove": "删除工作区",
+      "dirty": "有未提交的改动，提交后才能合并或删除",
+      "resolving": "正在合并 {{base}}，解决冲突并提交后再点合并",
+      "merged": "已合并到 {{base}}",
+      "upToDate": "{{base}} 已包含团队分支的全部提交",
+      "conflict": "把 {{base}} 合入团队分支时有冲突：{{files}}。请在“Git 历史”→“解决冲突”中处理并提交，然后再点一次合并。",
+      "dirtyWorktree": "请先提交或丢弃团队工作区的改动",
+      "baseLocalChanges": "{{base}} 所在文件夹里有未提交的改动会被覆盖：{{files}}。请先提交或贮藏，再合并。",
+      "baseBusy": "{{base}} 所在文件夹有进行中的合并或变基，请先完成或中止",
+      "operationInProgress": "团队工作区有进行中的合并或未解决的冲突，请先处理并提交",
+      "baseMissing": "分支 {{base}} 已不存在",
+      "unmerged": "分支还有没合并的提交",
+      "failed": "操作失败：{{message}}",
+      "removeTitle": "删除团队工作区？",
+      "removeContent": "将删除文件夹 {{path}} 和分支 {{branch}}。用这个工作区的团队将无法继续工作，请先停止团队成员。",
+      "removeUnmerged": "分支还有 {{count}} 个提交没有合并到 {{base}}，删除后会丢失。",
+      "removeConfirm": "删除",
+      "removed": "已删除工作区和分支 {{branch}}",
+      "removeFailed": "删除失败：{{message}}。如果有文件被占用，请先停止团队成员，并关闭打开这个文件夹的程序。",
+      "branchKept": "文件夹已删除，但分支 {{branch}} 没能删除：{{message}}"
     }
   },
   "sessionFiles": {

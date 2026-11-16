@@ -1205,6 +1205,31 @@
       "blame": "Blame",
       "missing": "This file did not exist in the selected version",
       "uncommitted": "Uncommitted"
+    },
+    "teamWorktree": {
+      "summary": "Espacio del equipo: {{branch}} → {{base}}",
+      "counts": "{{ahead}} por delante · {{behind}} por detrás",
+      "merge": "Fusionar en {{base}}",
+      "remove": "Eliminar espacio de trabajo",
+      "dirty": "Hay cambios sin confirmar; confírmalos antes de fusionar o eliminar",
+      "resolving": "Fusionando {{base}}: resuelve los conflictos y confirma, luego vuelve a fusionar",
+      "merged": "Fusionado en {{base}}",
+      "upToDate": "{{base}} ya contiene todos los commits de la rama del equipo",
+      "conflict": "Al fusionar {{base}} en la rama del equipo hubo conflictos: {{files}}. Resuélvelos en «Git history» → «Resolve conflicts» y confirma; luego vuelve a fusionar.",
+      "dirtyWorktree": "Primero confirma o descarta los cambios del espacio de trabajo del equipo",
+      "baseLocalChanges": "Se sobrescribirían cambios sin confirmar en la carpeta de {{base}}: {{files}}. Confírmalos o guárdalos con stash y vuelve a fusionar.",
+      "baseBusy": "La carpeta de {{base}} tiene una fusión o un rebase en curso; termínalo o cancélalo primero",
+      "operationInProgress": "El espacio de trabajo del equipo tiene una fusión en curso o conflictos sin resolver; resuélvelos y confirma primero",
+      "baseMissing": "La rama {{base}} ya no existe",
+      "unmerged": "La rama tiene commits sin fusionar",
+      "failed": "La operación falló: {{message}}",
+      "removeTitle": "¿Eliminar el espacio de trabajo del equipo?",
+      "removeContent": "Se eliminarán la carpeta {{path}} y la rama {{branch}}. Un equipo que use este espacio ya no podrá trabajar en él; detén antes a sus miembros.",
+      "removeUnmerged": "La rama tiene {{count}} commit(s) sin fusionar en {{base}}; se perderán.",
+      "removeConfirm": "Eliminar",
+      "removed": "Se eliminaron el espacio de trabajo y la rama {{branch}}",
+      "removeFailed": "No se pudo eliminar: {{message}}. Si hay archivos en uso, detén a los miembros del equipo y cierra los programas que tengan abierta esta carpeta.",
+      "branchKept": "Se eliminó la carpeta, pero no la rama {{branch}}: {{message}}"
     }
   },
   "sessionFiles": {

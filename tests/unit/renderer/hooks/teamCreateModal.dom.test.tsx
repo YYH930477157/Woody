@@ -101,8 +101,13 @@ vi.mock('@renderer/components/base/AionModal', () => {
 });
 
 vi.mock('@renderer/components/workspace', () => ({
-  WorkspaceFolderSelect: () => <div data-testid='workspace-folder-select' />,
+  WorkspaceFolderSelect: ({ onChange }: { onChange: (value: string) => void }) => (
+    <div data-testid='workspace-folder-select' onClick={() => onChange('D:\\work\\project')} />
+  ),
 }));
+
+const worktreeMocks = vi.hoisted(() => ({ inspect: vi.fn(), create: vi.fn(), discard: vi.fn() }));
+vi.mock('@renderer/utils/platform', () => ({ isElectronDesktop: () => true }));
 
 vi.mock('@/common', () => ({
   ipcBridge: {
@@ -111,6 +116,11 @@ vi.mock('@/common', () => ({
     },
     team: {
       create: { invoke: (...args: unknown[]) => createTeamInvokeMock(...args) },
+    },
+    gitWorkbench: {
+      teamWorktreeInspect: { invoke: worktreeMocks.inspect },
+      teamWorktreeCreate: { invoke: worktreeMocks.create },
+      teamWorktreeDiscard: { invoke: worktreeMocks.discard },
     },
   },
 }));
@@ -144,6 +154,65 @@ describe('TeamCreateModal', () => {
     prepareWorkflowMock.mockResolvedValue([
       { role: 'leader', assistant_id: 'workflow-leader', assistant_name: 'Requirements', model: 'configured-model' },
     ]);
+    worktreeMocks.inspect.mockReset();
+    worktreeMocks.inspect.mockResolvedValue({ root: 'D:\\work\\project', branch: 'main', head: 'abc', dirty: false });
+    worktreeMocks.create.mockReset();
+    worktreeMocks.create.mockResolvedValue({
+      state: 'complete',
+      worktree: {
+        workspace: 'D:\\work\\project-feature',
+        worktree: 'D:\\work\\project-feature',
+        branch: 'team/feature',
+        base: 'main',
+      },
+    });
+    worktreeMocks.discard.mockReset();
+    worktreeMocks.discard.mockResolvedValue(true);
+  });
+
+  it('creates the team in a separate worktree and reuses it on retry', async () => {
+    createTeamInvokeMock.mockRejectedValueOnce(new Error('offline'));
+    render(<TeamCreateModal visible onClose={vi.fn()} onCreated={vi.fn()} />);
+    fireEvent.click(screen.getByTestId('team-create-agent-option-bare-aionrs'));
+    fireEvent.change(screen.getByTestId('team-create-name-input'), { target: { value: 'Feature' } });
+    fireEvent.click(screen.getByTestId('workspace-folder-select'));
+    fireEvent.click(await screen.findByRole('switch', { name: 'team.create.isolated.label' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Create' }));
+    await waitFor(() => expect(messageErrorMock).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Create' }));
+    await waitFor(() => expect(createTeamInvokeMock).toHaveBeenCalledTimes(2));
+    expect(worktreeMocks.create).toHaveBeenCalledExactlyOnceWith({ path: 'D:\\work\\project', name: 'Feature' });
+    expect(createTeamInvokeMock.mock.calls[1][0]).toMatchObject({
+      workspace: 'D:\\work\\project-feature',
+      workspace_mode: 'isolated',
+    });
+    expect(worktreeMocks.discard).not.toHaveBeenCalled();
+  });
+
+  it('removes an unused worktree when cancelling, and keeps the folder without the option', async () => {
+    createTeamInvokeMock.mockRejectedValueOnce(new Error('offline'));
+    render(<TeamCreateModal visible onClose={vi.fn()} onCreated={vi.fn()} />);
+    fireEvent.click(screen.getByTestId('team-create-agent-option-bare-aionrs'));
+    fireEvent.change(screen.getByTestId('team-create-name-input'), { target: { value: 'Feature' } });
+    fireEvent.click(screen.getByTestId('workspace-folder-select'));
+    fireEvent.click(await screen.findByRole('switch', { name: 'team.create.isolated.label' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Create' }));
+    await waitFor(() => expect(messageErrorMock).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(worktreeMocks.discard).toHaveBeenCalledWith({ path: 'D:\\work\\project-feature' }));
+
+    render(<TeamCreateModal visible onClose={vi.fn()} onCreated={vi.fn()} />);
+    fireEvent.click(screen.getAllByTestId('team-create-agent-option-bare-aionrs').at(-1)!);
+    fireEvent.change(screen.getAllByTestId('team-create-name-input').at(-1)!, { target: { value: 'Plain' } });
+    fireEvent.click(screen.getAllByTestId('workspace-folder-select').at(-1)!);
+    await screen.findAllByRole('switch', { name: 'team.create.isolated.label' });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Confirm Create' }).at(-1)!);
+    await waitFor(() => expect(createTeamInvokeMock).toHaveBeenCalledTimes(2));
+    expect(createTeamInvokeMock.mock.calls[1][0]).toMatchObject({
+      workspace: 'D:\\work\\project',
+      workspace_mode: 'shared',
+    });
+    expect(worktreeMocks.create).toHaveBeenCalledTimes(1);
   });
 
   it('keeps blocked assistants visible and prevents selecting them', () => {

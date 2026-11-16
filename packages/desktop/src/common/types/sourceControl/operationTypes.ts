@@ -71,6 +71,43 @@ export type GitWorktree = {
   prunable: boolean;
   main: boolean;
 };
+/** The repository around a folder chosen for a new team, before a team worktree is made from it. */
+export type TeamWorktreeSource = {
+  root: string;
+  /** Null on a detached HEAD, which leaves no branch to merge back into. */
+  branch: string | null;
+  /** Null in a repository without commits. */
+  head: string | null;
+  /** Uncommitted or untracked changes, which a new worktree does not carry over. */
+  dirty: boolean;
+};
+
+export type TeamWorktreeCreated = {
+  /** The team's workspace: the worktree, or the same subfolder inside it. */
+  workspace: string;
+  worktree: string;
+  branch: string;
+  base: string;
+};
+
+export type TeamWorktreeCreateResult =
+  | { state: 'complete'; worktree: TeamWorktreeCreated }
+  | { state: 'blocked' | 'error'; reason?: string; output: string };
+
+/** A team worktree as Woody made it: its own branch, and the branch it merges back into. */
+export type TeamWorktreeInfo = {
+  worktree: string;
+  branch: string;
+  base: string;
+  baseExists: boolean;
+  /** Commits on the team branch that the base branch does not have. */
+  ahead: number;
+  /** Commits on the base branch that the team branch does not have. */
+  behind: number;
+  dirty: boolean;
+  operation: 'merge' | 'rebase' | 'cherry-pick' | 'revert' | 'bisect' | null;
+};
+
 export type GitOperationProgress = {
   phase: 'counting' | 'compressing' | 'receiving' | 'resolving' | 'writing';
   percent: number;

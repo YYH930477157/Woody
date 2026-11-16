@@ -73,7 +73,17 @@
     "selectedMembersTitleWithCount": "Selected members {{count}}",
     "leaderLegend": "= Leader",
     "membersHelper": "Choose team members and assign one Leader. The same assistant can be selected multiple times.",
-    "memberHint": "No suitable assistant as a member? After creation, let the Leader create temporary team members in chat."
+    "memberHint": "No suitable assistant as a member? After creation, let the Leader create temporary team members in chat.",
+    "isolated": {
+      "label": "별도 작업 폴더",
+      "hint": "{{branch}}에서 새 브랜치를 만들고 저장소 옆에 새 폴더를 만듭니다. 팀은 그곳에서만 코드를 수정합니다",
+      "dirty": "현재 폴더에 커밋하지 않은 변경 사항이 있습니다. 새 작업 폴더로 옮겨지지 않습니다",
+      "detached": "어떤 브랜치에도 있지 않아 별도 작업 폴더를 만들 수 없습니다",
+      "noCommits": "저장소에 아직 커밋이 없어 별도 작업 폴더를 만들 수 없습니다",
+      "notRepository": "선택한 폴더가 Git 저장소에 있지 않습니다",
+      "prepared": "준비됨: {{path}} (브랜치 {{branch}})",
+      "failed": "별도 작업 폴더를 만들지 못했습니다: {{message}}"
+    }
   },
   "removeAgent": {
     "confirmTitle": "팀 멤버 제거",

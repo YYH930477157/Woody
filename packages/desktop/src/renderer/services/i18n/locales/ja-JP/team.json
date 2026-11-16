@@ -73,7 +73,17 @@
     "selectedMembersTitleWithCount": "Selected members {{count}}",
     "leaderLegend": "= Leader",
     "membersHelper": "Choose team members and assign one Leader. The same assistant can be selected multiple times.",
-    "memberHint": "No suitable assistant as a member? After creation, let the Leader create temporary team members in chat."
+    "memberHint": "No suitable assistant as a member? After creation, let the Leader create temporary team members in chat.",
+    "isolated": {
+      "label": "独立した作業フォルダー",
+      "hint": "{{branch}} から新しいブランチを作り、リポジトリの隣に新しいフォルダーを作成します。チームはそこでだけコードを変更します",
+      "dirty": "現在のフォルダーに未コミットの変更があります。新しい作業フォルダーには引き継がれません",
+      "detached": "どのブランチにもいないため、独立した作業フォルダーを作れません",
+      "noCommits": "リポジトリにまだコミットがないため、独立した作業フォルダーを作れません",
+      "notRepository": "選択したフォルダーは Git リポジトリ内にありません",
+      "prepared": "準備済み：{{path}}（ブランチ {{branch}}）",
+      "failed": "独立した作業フォルダーを作成できませんでした：{{message}}"
+    }
   },
   "removeAgent": {
     "confirmTitle": "チームメンバーを削除",

@@ -22,8 +22,12 @@ import type { StaticScanDiagnostic } from '@/common/types/sourceControl/staticSc
 import { createProjectBuildService } from '@process/services/sourceControl/projectBuildService';
 import { createWorkflowAgentService } from '@process/services/sourceControl/workflowAgentService';
 import { WorkflowBlockedError } from '@process/services/sourceControl/gitWorkflowModel';
-import { createGitWorkbenchService } from '@process/services/sourceControl/workbench/service';
+import {
+  createGitWorkbenchService,
+  createWorkbenchRootResolver,
+} from '@process/services/sourceControl/workbench/service';
 import { createGitOperationService, type RepositoryRun } from '@process/services/sourceControl/workbench/operations';
+import { createTeamWorktreeService } from '@process/services/sourceControl/workbench/operations/teamWorktree';
 import { repositoryCoordinator } from '@process/services/sourceControl/workbench/coordinator';
 import { safeOutput } from '@process/services/sourceControl/workbench/operations/engine';
 import { createProjectRootResolver } from '@process/services/sourceControl/workbench/workspace';
@@ -57,7 +61,34 @@ export function initGitWorkbenchBridge(runtimePromise: Promise<GitBridgeRuntime>
       run: runtime.coordinator.run,
       storeDir: path.join(app.getPath('userData'), 'git-merge-recovery'),
     });
-    return { service, operations, merge };
+    const teamWorktree = createTeamWorktreeService({
+      git: runtime.operationsGit,
+      run: runtime.coordinator.run,
+      capabilities: runtime.runtime.capabilities,
+    });
+    const rootFor = createWorkbenchRootResolver(options, runtime.git);
+    return { service, operations, merge, teamWorktree, rootFor };
+  });
+  ipcBridge.gitWorkbench.teamWorktreeInspect.provider(async ({ path: folder }) =>
+    (await servicesPromise).teamWorktree.inspect(folder)
+  );
+  ipcBridge.gitWorkbench.teamWorktreeCreate.provider(async ({ path: folder, name }) =>
+    (await servicesPromise).teamWorktree.create(folder, name)
+  );
+  ipcBridge.gitWorkbench.teamWorktreeDiscard.provider(async ({ path: folder }) =>
+    (await servicesPromise).teamWorktree.discard(folder)
+  );
+  ipcBridge.gitWorkbench.teamWorktreeDescribe.provider(async ({ scope }) => {
+    const { teamWorktree, rootFor } = await servicesPromise;
+    return teamWorktree.describe(await rootFor(scope));
+  });
+  ipcBridge.gitWorkbench.teamWorktreeMerge.provider(async ({ scope }) => {
+    const { teamWorktree, rootFor } = await servicesPromise;
+    return teamWorktree.merge(await rootFor(scope));
+  });
+  ipcBridge.gitWorkbench.teamWorktreeRemove.provider(async ({ scope, discard }) => {
+    const { teamWorktree, rootFor } = await servicesPromise;
+    return teamWorktree.remove(await rootFor(scope), discard === true);
   });
   ipcBridge.gitWorkbench.runtime.provider(() => getGitRuntimeStatus());
   ipcBridge.gitWorkbench.mergeList.provider(async ({ scope }) => (await servicesPromise).merge.list(scope));

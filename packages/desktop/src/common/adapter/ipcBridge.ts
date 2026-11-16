@@ -21,6 +21,9 @@ import type {
   GitOperationOutcome,
   GitOperationProgress,
   GitOperationRequest,
+  TeamWorktreeCreateResult,
+  TeamWorktreeInfo,
+  TeamWorktreeSource,
 } from '@/common/types/sourceControl/operationTypes';
 import type {
   GitMergeDocument,
@@ -1892,6 +1895,24 @@ export const gitWorkbench = {
     'git-workbench.read-revision'
   ),
   blame: replyProvider<GitBlameLine[], { scope: GitWorkbenchScope; file: string }>('git-workbench.blame'),
+  /** The repository around a folder chosen for a new team; null outside a repository. */
+  teamWorktreeInspect: replyProvider<TeamWorktreeSource | null, { path: string }>(
+    'git-workbench.team-worktree-inspect'
+  ),
+  teamWorktreeCreate: replyProvider<TeamWorktreeCreateResult, { path: string; name: string }>(
+    'git-workbench.team-worktree-create'
+  ),
+  /** Removes a prepared team worktree only while it has no commits or changes of its own. */
+  teamWorktreeDiscard: replyProvider<boolean, { path: string }>('git-workbench.team-worktree-discard'),
+  teamWorktreeDescribe: replyProvider<TeamWorktreeInfo | null, { scope: GitWorkbenchScope }>(
+    'git-workbench.team-worktree-describe'
+  ),
+  teamWorktreeMerge: replyProvider<GitOperationOutcome, { scope: GitWorkbenchScope }>(
+    'git-workbench.team-worktree-merge'
+  ),
+  teamWorktreeRemove: replyProvider<GitOperationOutcome, { scope: GitWorkbenchScope; discard: boolean }>(
+    'git-workbench.team-worktree-remove'
+  ),
 };
 
 export const sourceControl = {

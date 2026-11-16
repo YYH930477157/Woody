@@ -1204,6 +1204,31 @@
       "blame": "Blame",
       "missing": "This file did not exist in the selected version",
       "uncommitted": "Uncommitted"
+    },
+    "teamWorktree": {
+      "summary": "Team workspace: {{branch}} → {{base}}",
+      "counts": "{{ahead}} ahead · {{behind}} behind",
+      "merge": "Merge into {{base}}",
+      "remove": "Delete workspace",
+      "dirty": "There are uncommitted changes; commit them before merging or deleting",
+      "resolving": "Merging {{base}}: resolve the conflicts and commit, then merge again",
+      "merged": "Merged into {{base}}",
+      "upToDate": "{{base}} already has every commit of the team branch",
+      "conflict": "Merging {{base}} into the team branch hit conflicts: {{files}}. Resolve them in Git history → Resolve conflicts and commit, then merge again.",
+      "dirtyWorktree": "Commit or discard the changes in the team workspace first",
+      "baseLocalChanges": "Uncommitted changes in the folder of {{base}} would be overwritten: {{files}}. Commit or stash them, then merge again.",
+      "baseBusy": "The folder of {{base}} has a merge or rebase in progress; finish or abort it first",
+      "operationInProgress": "The team workspace has a merge in progress or unresolved conflicts; resolve and commit them first",
+      "baseMissing": "Branch {{base}} no longer exists",
+      "unmerged": "The branch has commits that are not merged",
+      "failed": "Operation failed: {{message}}",
+      "removeTitle": "Delete the team workspace?",
+      "removeContent": "This deletes the folder {{path}} and the branch {{branch}}. A team using this workspace can no longer work in it; stop its members first.",
+      "removeUnmerged": "The branch has {{count}} commit(s) not merged into {{base}}; they will be lost.",
+      "removeConfirm": "Delete",
+      "removed": "Deleted the workspace and branch {{branch}}",
+      "removeFailed": "Could not delete: {{message}}. If files are in use, stop the team members and close programs that have this folder open.",
+      "branchKept": "The folder was deleted, but branch {{branch}} could not be: {{message}}"
     }
   },
   "sessionFiles": {

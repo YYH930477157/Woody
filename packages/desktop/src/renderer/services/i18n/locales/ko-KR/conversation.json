@@ -1204,6 +1204,31 @@
       "blame": "Blame",
       "missing": "This file did not exist in the selected version",
       "uncommitted": "Uncommitted"
+    },
+    "teamWorktree": {
+      "summary": "팀 작업 폴더: {{branch}} → {{base}}",
+      "counts": "{{ahead}}개 앞섬 · {{behind}}개 뒤처짐",
+      "merge": "{{base}}에 병합",
+      "remove": "작업 폴더 삭제",
+      "dirty": "커밋하지 않은 변경 사항이 있습니다. 병합하거나 삭제하기 전에 커밋하세요",
+      "resolving": "{{base}} 병합 중입니다. 충돌을 해결하고 커밋한 뒤 다시 병합하세요",
+      "merged": "{{base}}에 병합했습니다",
+      "upToDate": "{{base}}에 팀 브랜치의 커밋이 모두 들어 있습니다",
+      "conflict": "{{base}}를 팀 브랜치에 병합하는 중 충돌이 발생했습니다: {{files}}. 'Git history' → 'Resolve conflicts'에서 해결하고 커밋한 뒤 다시 병합하세요.",
+      "dirtyWorktree": "먼저 팀 작업 폴더의 변경 사항을 커밋하거나 취소하세요",
+      "baseLocalChanges": "{{base}} 폴더의 커밋하지 않은 변경 사항을 덮어쓰게 됩니다: {{files}}. 커밋하거나 stash한 뒤 다시 병합하세요.",
+      "baseBusy": "{{base}} 폴더에서 병합이나 리베이스가 진행 중입니다. 먼저 완료하거나 중단하세요",
+      "operationInProgress": "팀 작업 폴더에 진행 중인 병합이나 해결되지 않은 충돌이 있습니다. 먼저 해결하고 커밋하세요",
+      "baseMissing": "브랜치 {{base}}가 더 이상 없습니다",
+      "unmerged": "브랜치에 병합되지 않은 커밋이 있습니다",
+      "failed": "작업 실패: {{message}}",
+      "removeTitle": "팀 작업 폴더를 삭제할까요?",
+      "removeContent": "폴더 {{path}}와 브랜치 {{branch}}를 삭제합니다. 이 작업 폴더를 쓰는 팀은 더 이상 여기서 작업할 수 없습니다. 먼저 팀원을 중지하세요.",
+      "removeUnmerged": "브랜치에 {{base}}로 병합되지 않은 커밋이 {{count}}개 있으며, 삭제하면 사라집니다.",
+      "removeConfirm": "삭제",
+      "removed": "작업 폴더와 브랜치 {{branch}}를 삭제했습니다",
+      "removeFailed": "삭제하지 못했습니다: {{message}}. 파일이 사용 중이면 팀원을 중지하고 이 폴더를 연 프로그램을 닫으세요.",
+      "branchKept": "폴더는 삭제했지만 브랜치 {{branch}}는 삭제하지 못했습니다: {{message}}"
     }
   },
   "sessionFiles": {

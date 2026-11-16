@@ -1204,6 +1204,31 @@
       "blame": "Blame",
       "missing": "This file did not exist in the selected version",
       "uncommitted": "Uncommitted"
+    },
+    "teamWorktree": {
+      "summary": "チームの作業フォルダー：{{branch}} → {{base}}",
+      "counts": "{{ahead}} 件先行 · {{behind}} 件遅れ",
+      "merge": "{{base}} にマージ",
+      "remove": "作業フォルダーを削除",
+      "dirty": "未コミットの変更があります。マージや削除の前にコミットしてください",
+      "resolving": "{{base}} をマージ中です。競合を解決してコミットしてから、もう一度マージしてください",
+      "merged": "{{base}} にマージしました",
+      "upToDate": "{{base}} にはチームブランチのコミットがすべて含まれています",
+      "conflict": "{{base}} をチームブランチにマージする際に競合が発生しました：{{files}}。「Git history」→「Resolve conflicts」で解決してコミットし、もう一度マージしてください。",
+      "dirtyWorktree": "先にチームの作業フォルダーの変更をコミットするか破棄してください",
+      "baseLocalChanges": "{{base}} のフォルダーにある未コミットの変更が上書きされます：{{files}}。コミットまたはスタッシュしてから、もう一度マージしてください。",
+      "baseBusy": "{{base}} のフォルダーでマージまたはリベースが進行中です。先に完了するか中止してください",
+      "operationInProgress": "チームの作業フォルダーでマージが進行中か、未解決の競合があります。先に解決してコミットしてください",
+      "baseMissing": "ブランチ {{base}} はもう存在しません",
+      "unmerged": "ブランチにマージされていないコミットがあります",
+      "failed": "操作に失敗しました：{{message}}",
+      "removeTitle": "チームの作業フォルダーを削除しますか？",
+      "removeContent": "フォルダー {{path}} とブランチ {{branch}} を削除します。この作業フォルダーを使うチームはここで作業できなくなります。先にメンバーを停止してください。",
+      "removeUnmerged": "ブランチには {{base}} にマージされていないコミットが {{count}} 件あり、削除すると失われます。",
+      "removeConfirm": "削除",
+      "removed": "作業フォルダーとブランチ {{branch}} を削除しました",
+      "removeFailed": "削除できませんでした：{{message}}。ファイルが使用中の場合は、チームメンバーを停止し、このフォルダーを開いているプログラムを閉じてください。",
+      "branchKept": "フォルダーは削除しましたが、ブランチ {{branch}} は削除できませんでした：{{message}}"
     }
   },
   "sessionFiles": {

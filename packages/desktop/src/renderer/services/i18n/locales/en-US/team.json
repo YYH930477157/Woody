@@ -73,7 +73,17 @@
     "selectedMembersTitleWithCount": "Selected members {{count}}",
     "leaderLegend": "= Leader",
     "membersHelper": "Choose team members and assign one Leader. The same assistant can be selected multiple times.",
-    "memberHint": "No suitable assistant as a member? After creation, let the Leader create temporary team members in chat."
+    "memberHint": "No suitable assistant as a member? After creation, let the Leader create temporary team members in chat.",
+    "isolated": {
+      "label": "Separate workspace",
+      "hint": "Creates a new branch from {{branch}} and a new folder next to the repository; the team changes code only there",
+      "dirty": "The current folder has uncommitted changes; they are not carried over to the new workspace",
+      "detached": "Not on any branch, so a separate workspace cannot be created",
+      "noCommits": "The repository has no commits yet, so a separate workspace cannot be created",
+      "notRepository": "The selected folder is not in a Git repository",
+      "prepared": "Prepared: {{path}} (branch {{branch}})",
+      "failed": "Could not create the separate workspace: {{message}}"
+    }
   },
   "removeAgent": {
     "confirmTitle": "Remove Team Member",

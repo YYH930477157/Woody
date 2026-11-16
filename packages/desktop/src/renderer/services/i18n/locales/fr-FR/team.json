@@ -73,7 +73,17 @@
     "selectedMembersTitleWithCount": "Membres sélectionnés {{count}}",
     "leaderLegend": "= Chef",
     "membersHelper": "Choisissez les membres et désignez un chef. Le même assistant peut être sélectionné plusieurs fois.",
-    "memberHint": "Aucun assistant adapté comme membre ? Après la création, laissez le chef créer des membres temporaires dans la discussion."
+    "memberHint": "Aucun assistant adapté comme membre ? Après la création, laissez le chef créer des membres temporaires dans la discussion.",
+    "isolated": {
+      "label": "Espace de travail séparé",
+      "hint": "Crée une nouvelle branche depuis {{branch}} et un nouveau dossier à côté du dépôt ; l’équipe ne modifie le code que là",
+      "dirty": "Le dossier actuel contient des modifications non validées ; elles ne sont pas reprises dans le nouvel espace",
+      "detached": "Aucune branche n’est active : impossible de créer un espace de travail séparé",
+      "noCommits": "Le dépôt n’a encore aucun commit : impossible de créer un espace de travail séparé",
+      "notRepository": "Le dossier choisi n’est pas dans un dépôt Git",
+      "prepared": "Préparé : {{path}} (branche {{branch}})",
+      "failed": "Impossible de créer l’espace de travail séparé : {{message}}"
+    }
   },
   "removeAgent": {
     "confirmTitle": "Retirer un membre de l'équipe",

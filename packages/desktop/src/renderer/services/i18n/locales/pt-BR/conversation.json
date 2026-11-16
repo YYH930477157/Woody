@@ -1210,6 +1210,31 @@
       "blame": "Blame",
       "missing": "This file did not exist in the selected version",
       "uncommitted": "Uncommitted"
+    },
+    "teamWorktree": {
+      "summary": "Espaço da equipe: {{branch}} → {{base}}",
+      "counts": "{{ahead}} à frente · {{behind}} atrás",
+      "merge": "Mesclar em {{base}}",
+      "remove": "Excluir espaço de trabalho",
+      "dirty": "Há alterações não commitadas; faça commit antes de mesclar ou excluir",
+      "resolving": "Mesclando {{base}}: resolva os conflitos e faça commit, depois mescle de novo",
+      "merged": "Mesclado em {{base}}",
+      "upToDate": "{{base}} já tem todos os commits do branch da equipe",
+      "conflict": "Ao mesclar {{base}} no branch da equipe houve conflitos: {{files}}. Resolva-os em “Git history” → “Resolve conflicts” e faça commit; depois mescle de novo.",
+      "dirtyWorktree": "Primeiro faça commit ou descarte as alterações do espaço da equipe",
+      "baseLocalChanges": "Alterações não commitadas na pasta de {{base}} seriam sobrescritas: {{files}}. Faça commit ou stash delas e mescle de novo.",
+      "baseBusy": "A pasta de {{base}} tem um merge ou rebase em andamento; conclua ou cancele primeiro",
+      "operationInProgress": "O espaço da equipe tem um merge em andamento ou conflitos não resolvidos; resolva e faça commit primeiro",
+      "baseMissing": "O branch {{base}} não existe mais",
+      "unmerged": "O branch tem commits não mesclados",
+      "failed": "A operação falhou: {{message}}",
+      "removeTitle": "Excluir o espaço de trabalho da equipe?",
+      "removeContent": "A pasta {{path}} e o branch {{branch}} serão excluídos. Uma equipe que usa este espaço não poderá mais trabalhar nele; pare os membros antes.",
+      "removeUnmerged": "O branch tem {{count}} commit(s) não mesclado(s) em {{base}}; eles serão perdidos.",
+      "removeConfirm": "Excluir",
+      "removed": "Espaço de trabalho e branch {{branch}} excluídos",
+      "removeFailed": "Não foi possível excluir: {{message}}. Se houver arquivos em uso, pare os membros da equipe e feche os programas com esta pasta aberta.",
+      "branchKept": "A pasta foi excluída, mas o branch {{branch}} não: {{message}}"
     }
   },
   "sessionFiles": {

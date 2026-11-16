@@ -1205,6 +1205,31 @@
       "blame": "Blame",
       "missing": "This file did not exist in the selected version",
       "uncommitted": "Uncommitted"
+    },
+    "teamWorktree": {
+      "summary": "Team-Arbeitsbereich: {{branch}} → {{base}}",
+      "counts": "{{ahead}} voraus · {{behind}} zurück",
+      "merge": "In {{base}} mergen",
+      "remove": "Arbeitsbereich löschen",
+      "dirty": "Es gibt nicht committete Änderungen; committen Sie sie vor dem Mergen oder Löschen",
+      "resolving": "{{base}} wird gemergt: Konflikte lösen und committen, dann erneut mergen",
+      "merged": "In {{base}} gemergt",
+      "upToDate": "{{base}} enthält bereits alle Commits des Team-Branches",
+      "conflict": "Beim Mergen von {{base}} in den Team-Branch gab es Konflikte: {{files}}. Lösen Sie sie unter „Git history“ → „Resolve conflicts“ und committen Sie, dann erneut mergen.",
+      "dirtyWorktree": "Committen oder verwerfen Sie zuerst die Änderungen im Team-Arbeitsbereich",
+      "baseLocalChanges": "Nicht committete Änderungen im Ordner von {{base}} würden überschrieben: {{files}}. Committen oder stashen Sie sie und mergen Sie dann erneut.",
+      "baseBusy": "Im Ordner von {{base}} läuft ein Merge oder Rebase; schließen Sie ihn zuerst ab oder brechen Sie ihn ab",
+      "operationInProgress": "Im Team-Arbeitsbereich läuft ein Merge oder es gibt ungelöste Konflikte; lösen und committen Sie sie zuerst",
+      "baseMissing": "Branch {{base}} existiert nicht mehr",
+      "unmerged": "Der Branch hat Commits, die nicht gemergt sind",
+      "failed": "Vorgang fehlgeschlagen: {{message}}",
+      "removeTitle": "Team-Arbeitsbereich löschen?",
+      "removeContent": "Dadurch werden der Ordner {{path}} und der Branch {{branch}} gelöscht. Ein Team, das diesen Arbeitsbereich nutzt, kann dort nicht mehr arbeiten; stoppen Sie zuerst seine Mitglieder.",
+      "removeUnmerged": "Der Branch hat {{count}} Commit(s), die nicht in {{base}} gemergt sind; sie gehen verloren.",
+      "removeConfirm": "Löschen",
+      "removed": "Arbeitsbereich und Branch {{branch}} gelöscht",
+      "removeFailed": "Löschen fehlgeschlagen: {{message}}. Wenn Dateien belegt sind, stoppen Sie die Teammitglieder und schließen Sie Programme, die diesen Ordner geöffnet haben.",
+      "branchKept": "Der Ordner wurde gelöscht, Branch {{branch}} jedoch nicht: {{message}}"
     }
   },
   "sessionFiles": {
