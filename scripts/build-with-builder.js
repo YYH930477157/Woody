@@ -840,6 +840,10 @@ try {
   // 6. Prepare hub resources (index.json + extension zips for offline fallback)
   execSync('node scripts/prepareHubResources.js', { stdio: 'inherit', env: process.env });
 
+  // The in-app browser MCP must start offline: install the pinned, verified chrome-devtools-mcp
+  // build, which stays out of Git. A failure stops packaging rather than shipping without it.
+  execSync('node scripts/bundled-mcp/prepareChromeDevtoolsMcp.js', { stdio: 'inherit', env: process.env });
+
   // 6. 运行 electron-builder 生成分发包（DMG/ZIP/EXE等）
   // Run electron-builder to create distributables (DMG/ZIP/EXE, etc.)
   // Always disable auto-publish to avoid electron-builder's implicit tag-based publishing

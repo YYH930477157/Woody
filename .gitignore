@@ -206,6 +206,8 @@ resources/bundled-bun
 resources/bundled-aioncore
 resources/bundled-aioncore-previous
 resources/bundled-mcp/codebase-memory/bin/
+# Fetched and verified at build time by scripts/bundled-mcp/prepareChromeDevtoolsMcp.js
+resources/bundled-mcp/chrome-devtools-mcp/build/
 resources/hub
 /resources/windows/support/_sentry-dsn.generated.nsh
 
