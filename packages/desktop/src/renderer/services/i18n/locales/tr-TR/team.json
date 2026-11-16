@@ -205,7 +205,7 @@
       "review": "İnceleme",
       "delivery": "Teslimat"
     },
-    "hint": "Asistanın motoru, modeli, yetenekleri ve kurallarıyla düzenlenebilir roller oluşturur. İlk aşama liderdir. Geçişler talimatlarla yönetilir, motor tarafından zorlanmaz. Kopyalar ayarlarda kalır ve tekrar denemede kullanılır.",
+    "hint": "Seçilen asistandan her aşama için bir rol oluşturur; modelini, araçlarını, becerilerini ve kurallarını korur. İlk aşama ekibe liderlik eder: önce gereksinimleri sizinle netleştirir, ardından işi aşama aşama devreder. Rolleri daha sonra asistan ayarlarından düzenleyebilirsiniz.",
     "prepareFailed": "Rol hazırlığı başarısız; ekip oluşturulmadı. Yeniden deneyin. Silinemeyen kopyalar: {{ids}}. Asistan ayarlarından yönetin."
   }
 }

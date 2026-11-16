@@ -205,7 +205,7 @@
       "review": "Review",
       "delivery": "Delivery"
     },
-    "hint": "Creates editable roles using the selected assistant’s engine, model, capabilities and rules. The first stage leads. Instructions guide stages without engine enforcement. Copies remain in assistant settings; retries reuse prepared roles.",
+    "hint": "Creates one role per stage from the selected assistant, keeping its model, tools, skills and rules. The first stage also leads the team: it confirms the requirements with you, then hands the work on one stage at a time. You can edit the roles in assistant settings afterwards.",
     "prepareFailed": "Role preparation failed; no team created. Retry to prepare again. Copies not removed: {{ids}}. Manage them in assistant settings."
   }
 }

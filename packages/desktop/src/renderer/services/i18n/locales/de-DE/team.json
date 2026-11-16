@@ -205,7 +205,7 @@
       "review": "Review",
       "delivery": "Übergabe"
     },
-    "hint": "Erstellt bearbeitbare Rollen mit Engine, Modell, Fähigkeiten und Regeln des Assistenten. Die erste Phase leitet per Anweisungen; Übergänge werden nicht technisch erzwungen. Kopien bleiben in den Einstellungen und werden bei Wiederholung verwendet.",
+    "hint": "Erstellt aus dem gewählten Assistenten eine Rolle pro Phase, mit seinem Modell, seinen Tools, Skills und Regeln. Die erste Phase leitet das Team: Sie klärt die Anforderungen mit Ihnen und übergibt die Arbeit dann Phase für Phase. Die Rollen lassen sich danach in den Assistenten-Einstellungen bearbeiten.",
     "prepareFailed": "Rollenvorbereitung fehlgeschlagen; kein Team erstellt. Erneut versuchen. Nicht entfernte Kopien: {{ids}}. In den Assistenteneinstellungen verwalten."
   }
 }

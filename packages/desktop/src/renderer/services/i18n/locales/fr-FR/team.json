@@ -205,7 +205,7 @@
       "review": "Revue",
       "delivery": "Livraison"
     },
-    "hint": "Crée des rôles modifiables avec moteur, modèle, capacités et règles de l’assistant. La première étape dirige par instructions ; le moteur n’impose pas les transitions. Les copies restent dans les paramètres et sont réutilisées en cas de nouvel essai.",
+    "hint": "Crée un rôle par étape à partir de l’assistant choisi, avec son modèle, ses outils, ses compétences et ses règles. La première étape dirige l’équipe : elle valide les besoins avec vous, puis transmet le travail d’une étape à l’autre. Vous pourrez ensuite modifier les rôles dans les paramètres des assistants.",
     "prepareFailed": "Échec de préparation des rôles ; équipe non créée. Réessayez. Copies non supprimées : {{ids}}. Gérez-les dans les paramètres des assistants."
   }
 }

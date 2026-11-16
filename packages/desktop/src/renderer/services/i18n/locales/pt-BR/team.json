@@ -205,7 +205,7 @@
       "review": "Revisão",
       "delivery": "Entrega"
     },
-    "hint": "Cria papéis editáveis com mecanismo, modelo, recursos e regras do assistente. A primeira etapa lidera por instruções, sem transições impostas pelo mecanismo. Cópias ficam nos ajustes e são reutilizadas ao tentar novamente.",
+    "hint": "Cria um papel por etapa a partir do assistente escolhido, com o modelo, as ferramentas, as habilidades e as regras dele. A primeira etapa lidera a equipe: confirma os requisitos com você e depois passa o trabalho de etapa em etapa. Depois você pode editar os papéis nas configurações de assistentes.",
     "prepareFailed": "Falha ao preparar papéis; equipe não criada. Tente novamente. Cópias não removidas: {{ids}}. Gerencie-as nos ajustes dos assistentes."
   }
 }

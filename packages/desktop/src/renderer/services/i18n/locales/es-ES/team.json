@@ -205,7 +205,7 @@
       "review": "Revisión",
       "delivery": "Entrega"
     },
-    "hint": "Crea roles editables con motor, modelo, capacidades y reglas del asistente. La primera etapa lidera mediante instrucciones; el motor no impone transiciones. Las copias quedan en ajustes y se reutilizan al reintentar.",
+    "hint": "Crea un rol por etapa a partir del asistente elegido, con su modelo, herramientas, habilidades y reglas. La primera etapa dirige el equipo: confirma contigo los requisitos y luego pasa el trabajo de una etapa a otra. Después puedes editar los roles en los ajustes de asistentes.",
     "prepareFailed": "Error al preparar roles; equipo no creado. Reintenta. Copias no eliminadas: {{ids}}. Adminístralas en los ajustes de asistentes."
   }
 }

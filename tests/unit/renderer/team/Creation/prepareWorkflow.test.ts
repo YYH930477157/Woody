@@ -32,15 +32,21 @@ const detail = {
   rules: { content: 'Keep project conventions.' },
   defaults: {
     model: { mode: 'auto' },
-    permission: { mode: 'fixed', value: 'plan' },
+    permission: { mode: 'fixed', value: 'auto_edit' },
     thought_level: { mode: 'auto' },
-    skills: { mode: 'auto', value: [] },
+    skills: { mode: 'fixed', value: ['test'] },
     mcps: { mode: 'auto', value: [] },
   },
   capabilities: {
     default_skill_ids: ['test'],
-    custom_skill_names: [],
+    custom_skill_names: ['mine'],
     default_disabled_builtin_skill_ids: ['disabled'],
+  },
+  preferences: {
+    last_thought_level_value: 'high',
+    last_skill_ids: ['recent'],
+    last_disabled_builtin_skill_ids: [],
+    last_mcp_ids: ['woody-cmake'],
   },
 } satisfies Partial<AssistantDetail>;
 
@@ -61,18 +67,65 @@ describe('workflow role preparation', () => {
     );
   });
 
-  it('inherits the source engine, capabilities and permission defaults without editing it', async () => {
+  it('gives every copy what the source would bring into a team, fixed, without editing the source', async () => {
     await prepareWorkflow(params);
-    expect(mocks.create.mock.calls[0][0]).toMatchObject({
-      agent_id: 'engine-1',
-      enabled_skills: ['test'],
-      disabled_builtin_skills: ['disabled'],
+    for (const [request] of mocks.create.mock.calls) {
+      expect(request).toMatchObject({
+        agent_id: 'engine-1',
+        custom_skill_names: ['mine'],
+        // Fixed settings keep their values.
+        enabled_skills: ['test'],
+        disabled_builtin_skills: ['disabled'],
+        defaults: {
+          model: { mode: 'fixed', value: 'configured-provider/model' },
+          permission: { mode: 'fixed', value: 'auto_edit' },
+          skills: { mode: 'fixed', value: ['test'] },
+          // Auto settings become the source's last-used values, which a team member uses.
+          thought_level: { mode: 'fixed', value: 'high' },
+          mcps: { mode: 'fixed', value: ['woody-cmake'] },
+        },
+      });
+    }
+    expect(mocks.remove).not.toHaveBeenCalled();
+  });
+
+  it('takes auto skills from the last-used ones and leaves an unused auto setting on auto', async () => {
+    mocks.get.mockResolvedValue({
+      ...detail,
       defaults: {
-        model: { mode: 'fixed', value: 'configured-provider/model' },
-        permission: { mode: 'fixed', value: 'plan' },
+        ...detail.defaults,
+        permission: { mode: 'auto' },
+        skills: { mode: 'auto' },
+        mcps: { mode: 'fixed', value: ['serial'] },
+      },
+      preferences: { last_skill_ids: ['recent'], last_disabled_builtin_skill_ids: ['off'], last_mcp_ids: ['unused'] },
+    });
+    await prepareWorkflow({ ...params, preset: 'review' });
+    expect(mocks.create.mock.calls[0][0]).toMatchObject({
+      enabled_skills: ['recent'],
+      disabled_builtin_skills: ['off'],
+      defaults: {
+        permission: { mode: 'auto' },
+        thought_level: { mode: 'auto' },
+        skills: { mode: 'fixed', value: ['recent'] },
+        mcps: { mode: 'fixed', value: ['serial'] },
       },
     });
-    expect(mocks.remove).not.toHaveBeenCalled();
+  });
+
+  it('treats lists the service leaves out of its JSON as empty', async () => {
+    mocks.get.mockResolvedValue({
+      ...detail,
+      defaults: { ...detail.defaults, skills: { mode: 'auto' }, mcps: { mode: 'auto' } },
+      capabilities: {},
+      preferences: {},
+    });
+    await prepareWorkflow({ ...params, preset: 'review' });
+    expect(mocks.create.mock.calls[0][0]).toMatchObject({
+      enabled_skills: [],
+      disabled_builtin_skills: [],
+      defaults: { skills: { mode: 'fixed', value: [] }, mcps: { mode: 'fixed', value: [] } },
+    });
   });
 
   it('persists source rules and the stage handoff contract before returning members', async () => {
@@ -124,5 +177,34 @@ describe('workflow role preparation', () => {
 
   it('rejects roles outside the selected workflow', () => {
     expect(() => buildWorkflowRules('review', 'implementation', labels)).toThrow('Role is not part');
+  });
+});
+
+describe('workflow role rules', () => {
+  it('make the leader confirm requirements, then dispatch each stage with its handoff', () => {
+    const rules = buildWorkflowRules('feature', 'requirements', labels);
+    expect(rules).toContain('(v2)');
+    expect(rules).toContain('end your turn to wait for confirmation');
+    expect(rules).toContain('put the complete handoff it needs in the task description');
+    // A pre-created dependent task would wake its owner before the handoff exists.
+    expect(rules).toContain('Do not create later-stage tasks in advance');
+    expect(rules).toContain('a task marked completed is not a handoff');
+    expect(rules).toContain('do not propose or create extra teammates');
+    expect(rules).not.toContain('with dependencies when supported');
+  });
+
+  it('only stop a review for confirmation when its target is unclear, and never loop into implementation', () => {
+    const rules = buildWorkflowRules('review', 'requirements', labels);
+    expect(rules).toContain('If the review target or scope is unclear');
+    expect(rules).not.toContain('wait for confirmation');
+    expect(rules).not.toContain('correction cycles');
+    expect(rules).toContain('report findings without starting implementation');
+  });
+
+  it('tell members their task carries the handoff and the leader needs theirs as a message', () => {
+    const rules = buildWorkflowRules('bugfix', 'testing', labels);
+    expect(rules).toContain('Your task description carries the handoff');
+    expect(rules).toContain('Send your complete handoff to the leader');
+    expect(rules).not.toContain('workflow leader');
   });
 });
