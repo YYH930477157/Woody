@@ -32,6 +32,27 @@
       "LIMIT": "Le nombre maximal de comptes est atteint.",
       "IO": "Impossible de lire ou d'enregistrer les comptes de sites web.",
       "FORBIDDEN": "Les comptes de sites web ne sont disponibles que dans l'application de bureau."
+    },
+    "page": {
+      "saved": "Un compte est enregistré pour ce site. Cliquez pour vous connecter avec",
+      "submitted": "Connexion envoyée avec le compte enregistré",
+      "usernameSubmitted": "Identifiant envoyé ; le mot de passe sera rempli à l’étape suivante",
+      "failed": "La connexion automatique n’a pas eu lieu : {{reason}}. Cliquez pour réessayer",
+      "loginNow": "Se connecter avec le compte enregistré",
+      "noAccount": "Aucun compte n’est enregistré pour ce site",
+      "disabled": "La connexion automatique est désactivée. Activez-la dans « Comptes de sites web » des paramètres",
+      "reasons": {
+        "noLoginForm": "aucun formulaire de connexion à remplir n’a été trouvé sur la page",
+        "otherOrigin": "la page n’appartient pas au site enregistré",
+        "filledByUser": "le formulaire contient déjà un autre compte ou un mot de passe saisi",
+        "multiplePasswords": "la page contient plusieurs champs de mot de passe, comme une inscription ou un changement de mot de passe",
+        "registration": "c’est un formulaire d’inscription, de récupération ou de changement de mot de passe",
+        "verification": "il faut aussi un code de vérification ou un autre champ impossible à remplir automatiquement",
+        "noButton": "aucun bouton de connexion trouvé",
+        "ambiguousButton": "plusieurs boutons pourraient envoyer le formulaire",
+        "unsafeDestination": "le formulaire enverrait le mot de passe à un autre site",
+        "alreadyTried": "le compte enregistré a déjà été envoyé sur cette page"
+      }
     }
   },
   "title": "Paramètres",

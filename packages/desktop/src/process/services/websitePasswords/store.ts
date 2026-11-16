@@ -210,6 +210,17 @@ export class WebsitePasswordStore {
     });
   }
 
+  /** Whether the page's site has a default account, without returning it. */
+  lookup(url: string): Promise<'saved' | 'none' | 'disabled'> {
+    return this.serial(async () => {
+      const origin = websiteOrigin(url);
+      if (!origin) return 'none';
+      const vault = await this.load();
+      if (!vault.enabled) return 'disabled';
+      return vault.accounts.some((account) => account.origin === origin && account.isDefault) ? 'saved' : 'none';
+    });
+  }
+
   /** Main-process-only lookup; never expose this through IPC, MCP, or logging. */
   find(url: string): Promise<Credential | undefined> {
     return this.serial(async () => {

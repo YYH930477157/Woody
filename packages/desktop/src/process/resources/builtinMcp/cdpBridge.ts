@@ -32,9 +32,16 @@ import {
   tokensMatch,
   type CdpRequest,
 } from './cdpTargetProtocol';
+import { SAVED_LOGIN_PATH } from './savedLoginTools';
 
 const HOST = '127.0.0.1';
 const WS_PATH = '/aionui-cdp';
+const MAX_SAVED_LOGIN_BODY = 1024;
+
+export type CdpBridgeOptions = {
+  /** Answers the agent's saved-login tools for the attached page; never returns credentials. */
+  savedLogin?: (action: 'status' | 'login') => Promise<unknown>;
+};
 
 export type CdpBridgeHandle = {
   port: number;
@@ -288,10 +295,53 @@ const handleSocketMessage = async (ws: WebSocket, raw: string, announcedSessions
   }
 };
 
-const writeJson = (res: ServerResponse, body: unknown) => {
+const writeJson = (res: ServerResponse, body: unknown, status = 200) => {
   const text = JSON.stringify(body);
-  res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8', 'Content-Length': Buffer.byteLength(text) });
+  res.writeHead(status, {
+    'Content-Type': 'application/json; charset=UTF-8',
+    'Content-Length': Buffer.byteLength(text),
+  });
   res.end(text);
+};
+
+/**
+ * The saved-login route. Unlike discovery it requires the token in a header, so it is
+ * as protected as the WebSocket that controls the page; it adds no new capability,
+ * since that page logs in automatically whenever it shows the saved site's form.
+ */
+const handleSavedLogin = (
+  req: IncomingMessage,
+  res: ServerResponse,
+  token: string,
+  savedLogin: NonNullable<CdpBridgeOptions['savedLogin']>
+): void => {
+  const header = req.headers.authorization ?? '';
+  if (req.method !== 'POST' || !tokensMatch(`Bearer ${token}`, header)) {
+    writeJson(res, { error: 'forbidden' }, 403);
+    return;
+  }
+  let body = '';
+  req.setEncoding('utf8');
+  req.on('data', (chunk: string) => {
+    body += chunk;
+    if (body.length > MAX_SAVED_LOGIN_BODY) req.destroy();
+  });
+  req.on('end', () => {
+    let action: unknown;
+    try {
+      action = (JSON.parse(body) as { action?: unknown }).action;
+    } catch {
+      action = undefined;
+    }
+    if (action !== 'status' && action !== 'login') {
+      writeJson(res, { error: 'invalid action' }, 400);
+      return;
+    }
+    savedLogin(action).then(
+      (result) => writeJson(res, result),
+      () => writeJson(res, { error: 'unavailable' }, 500)
+    );
+  });
 };
 
 /**
@@ -337,11 +387,15 @@ const writeJson = (res: ServerResponse, body: unknown) => {
  * main window never is (see the getType() check in attachInternal). Treating same-user local
  * processes as inside the trust boundary is an explicit assumption here.
  */
-export const startCdpBridge = async (): Promise<CdpBridgeHandle> => {
+export const startCdpBridge = async (options: CdpBridgeOptions = {}): Promise<CdpBridgeHandle> => {
   const token = randomBytes(24).toString('hex');
 
   const httpServer: Server = createServer((req: IncomingMessage, res: ServerResponse) => {
     const url = new URL(req.url ?? '/', `http://${HOST}`);
+    if (url.pathname === SAVED_LOGIN_PATH && options.savedLogin) {
+      handleSavedLogin(req, res, token, options.savedLogin);
+      return;
+    }
     const wsUrl = `ws://${HOST}:${port}${WS_PATH}?token=${token}`;
     const info = currentTargetInfo();
 

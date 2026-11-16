@@ -1,13 +1,38 @@
 import React from 'react';
-import { act, cleanup, render } from '@testing-library/react';
+import { act, cleanup, fireEvent, render } from '@testing-library/react';
+import { Message } from '@arco-design/web-react';
+import SavedLoginButton from '@/renderer/pages/conversation/Preview/browser/SavedLoginButton';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import BrowserTabLayer from '@/renderer/pages/conversation/Preview/browser/BrowserTabLayer';
 import WebviewHost from '@/renderer/components/media/WebviewHost';
 import type { PreviewTab } from '@/renderer/pages/conversation/Preview/context/PreviewContext';
 
-const { report } = vi.hoisted(() => ({ report: vi.fn(async () => ({ success: true })) }));
+const { report, saved } = vi.hoisted(() => ({
+  report: vi.fn(async () => ({ success: true })),
+  saved: {
+    status: vi.fn(),
+    loginNow: vi.fn(),
+    listeners: new Set<(status: unknown) => void>(),
+  },
+}));
 vi.mock('@/common', () => ({ ipcBridge: { application: { reportBrowserWebContentsId: { invoke: report } } } }));
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+vi.mock('@/common/adapter/ipcBridge', () => ({
+  websitePasswords: {
+    pageStatus: { invoke: saved.status },
+    loginNow: { invoke: saved.loginNow },
+    pageStatusChanged: {
+      on: (listener: (status: unknown) => void) => {
+        saved.listeners.add(listener);
+        return () => saved.listeners.delete(listener);
+      },
+    },
+  },
+}));
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string, options?: Record<string, unknown>) => (options ? `${key} ${JSON.stringify(options)}` : key),
+  }),
+}));
 
 const tabs: PreviewTab[] = [
   { id: 'first', content: 'https://first.test', content_type: 'browser', title: 'First' },
@@ -26,7 +51,10 @@ function ready(webview: Element, id: number) {
     webview.dispatchEvent(new Event('dom-ready'));
   });
 }
-beforeEach(() => report.mockClear());
+beforeEach(() => {
+  report.mockClear();
+  saved.status.mockResolvedValue({ site: null, account: 'none' });
+});
 afterEach(cleanup);
 
 describe('visible browser password target lifecycle', () => {
@@ -74,5 +102,51 @@ describe('visible browser password target lifecycle', () => {
     const view = render(<WebviewHost url='https://settings.test' />);
     ready(view.container.querySelector('webview')!, 33);
     expect(report).not.toHaveBeenCalled();
+  });
+});
+
+describe('saved account button in the address bar', () => {
+  beforeEach(() => {
+    saved.loginNow.mockReset();
+    saved.listeners.clear();
+  });
+  const emit = (status: unknown) =>
+    act(() => {
+      for (const listener of saved.listeners) listener(status);
+    });
+
+  it('appears only for the open site when it has a saved account, and explains a failed attempt', async () => {
+    saved.status.mockResolvedValue({ site: 'https://login.test', account: 'none' });
+    const view = render(<SavedLoginButton url='https://login.test/login' />);
+    await act(async () => {});
+    expect(view.queryByTestId('saved-login-button')).toBeNull();
+    emit({ site: 'https://other.test', account: 'saved' });
+    expect(view.queryByTestId('saved-login-button')).toBeNull();
+    emit({ site: 'https://login.test', account: 'saved', result: 'skipped', reason: 'noLoginForm' });
+    expect(view.getByTestId('saved-login-button').className).not.toContain('warning');
+    emit({ site: 'https://login.test', account: 'saved', result: 'skipped', reason: 'verification' });
+    expect(view.getByTestId('saved-login-button').className).toContain('warning');
+  });
+
+  it('logs in when clicked and reports the outcome', async () => {
+    const success = vi.spyOn(Message, 'success').mockImplementation(() => () => {});
+    const warning = vi.spyOn(Message, 'warning').mockImplementation(() => () => {});
+    saved.status.mockResolvedValue({ site: 'https://login.test', account: 'saved' });
+    saved.loginNow
+      .mockResolvedValueOnce({ site: 'https://login.test', account: 'saved', result: 'password-submitted' })
+      .mockResolvedValueOnce({ site: 'https://login.test', account: 'saved', result: 'skipped', reason: 'noButton' });
+    const view = render(<SavedLoginButton url='https://login.test/login' />);
+    const button = await view.findByTestId('saved-login-button');
+    await act(async () => {
+      fireEvent.click(button);
+    });
+    expect(success).toHaveBeenCalledWith('settings.websitePasswords.page.submitted');
+    await act(async () => {
+      fireEvent.click(view.getByTestId('saved-login-button'));
+    });
+    expect(warning).toHaveBeenCalledWith(expect.stringContaining('settings.websitePasswords.page.reasons.noButton'));
+    expect(saved.loginNow).toHaveBeenCalledTimes(2);
+    success.mockRestore();
+    warning.mockRestore();
   });
 });

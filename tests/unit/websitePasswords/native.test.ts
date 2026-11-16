@@ -16,14 +16,19 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock('@/common/adapter/main', () => ({ getNativeBridgeSender: mocks.sender }));
 vi.mock('@/common/adapter/websitePasswords', () => ({
-  websitePasswords: Object.fromEntries(
-    ['list', 'importChrome', 'remove', 'setDefault', 'setEnabled', 'updatePassword'].map((name) => [
-      name,
-      {
-        provider: (handler: (params?: unknown) => Promise<unknown>) => mocks.handlers.set(name, handler),
-      },
-    ])
-  ),
+  websitePasswords: {
+    ...Object.fromEntries(
+      ['list', 'importChrome', 'remove', 'setDefault', 'setEnabled', 'updatePassword', 'pageStatus', 'loginNow'].map(
+        (name) => [
+          name,
+          {
+            provider: (handler: (params?: unknown) => Promise<unknown>) => mocks.handlers.set(name, handler),
+          },
+        ]
+      )
+    ),
+    pageStatusChanged: { emit: vi.fn() },
+  },
 }));
 vi.mock('electron', () => ({
   app: { getPath: mocks.getPath },

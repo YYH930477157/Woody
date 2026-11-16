@@ -817,7 +817,11 @@ const handleAppReady = async (): Promise<void> => {
     try {
       const { startCdpBridge } = await import('./process/resources/builtinMcp/cdpBridge');
       const { setCdpBridgeHandle } = await import('./process/utils/cdpBridgeRegistry');
-      const bridge = await startCdpBridge();
+      const bridge = await startCdpBridge({
+        // The browser MCP's saved-login tools; loaded on first use, after the app is ready.
+        savedLogin: async (action) =>
+          (await import('./process/services/websitePasswords/runtime')).savedLoginForAgent(action),
+      });
       setCdpBridgeHandle(bridge);
       /**
        * 回填真实端口，让设置页显示的是「连得上的地址」。

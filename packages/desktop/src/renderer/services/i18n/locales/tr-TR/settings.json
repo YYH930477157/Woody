@@ -32,6 +32,27 @@
       "LIMIT": "Hesap sınırına ulaşıldı.",
       "IO": "Web sitesi hesapları okunamıyor veya kaydedilemiyor.",
       "FORBIDDEN": "Web sitesi hesapları yalnızca masaüstü uygulamasında kullanılabilir."
+    },
+    "page": {
+      "saved": "Bu site için kayıtlı bir hesap var. Onunla giriş yapmak için tıklayın",
+      "submitted": "Kayıtlı hesapla giriş gönderildi",
+      "usernameSubmitted": "Kullanıcı adı gönderildi; şifre sonraki adımda doldurulur",
+      "failed": "Otomatik giriş yapılmadı: {{reason}}. Yeniden denemek için tıklayın",
+      "loginNow": "Kayıtlı hesapla giriş yap",
+      "noAccount": "Bu site için kayıtlı hesap yok",
+      "disabled": "Otomatik giriş kapalı. Ayarlardaki \"Web sitesi hesapları\" bölümünden açın",
+      "reasons": {
+        "noLoginForm": "sayfada doldurulabilecek bir giriş formu bulunamadı",
+        "otherOrigin": "sayfa kayıtlı siteye ait değil",
+        "filledByUser": "formda zaten başka bir hesap veya yazılmış bir şifre var",
+        "multiplePasswords": "sayfada kayıt veya şifre değiştirme gibi birden çok şifre alanı var",
+        "registration": "bu bir kayıt, kurtarma veya şifre değiştirme formu",
+        "verification": "ayrıca doğrulama kodu veya otomatik doldurulamayan başka bir alan gerekiyor",
+        "noButton": "giriş düğmesi bulunamadı",
+        "ambiguousButton": "formu birden çok düğme gönderebilir",
+        "unsafeDestination": "form şifreyi başka bir siteye gönderirdi",
+        "alreadyTried": "kayıtlı hesap bu sayfada zaten gönderildi"
+      }
     }
   },
   "title": "Ayarlar",

@@ -32,6 +32,27 @@
       "LIMIT": "帳戶數量已達上限。",
       "IO": "無法讀取或儲存網站帳戶。",
       "FORBIDDEN": "網站帳戶僅能在桌面應用程式中使用。"
+    },
+    "page": {
+      "saved": "此網站有已儲存的帳戶，點擊用它登入",
+      "submitted": "已用儲存的帳戶送出登入",
+      "usernameSubmitted": "已送出使用者名稱，下一步會自動填入密碼",
+      "failed": "未能自動登入：{{reason}}。點擊可重試",
+      "loginNow": "用已儲存的帳戶登入",
+      "noAccount": "這個網站沒有已儲存的帳戶",
+      "disabled": "自動登入已關閉，可在設定的「網站帳戶」中開啟",
+      "reasons": {
+        "noLoginForm": "頁面上找不到可填寫的登入表單",
+        "otherOrigin": "目前頁面不在儲存帳戶的網站上",
+        "filledByUser": "表單裡已有其他帳戶或手動輸入的密碼",
+        "multiplePasswords": "頁面上有多個密碼欄位，像是註冊或變更密碼",
+        "registration": "這是註冊、找回或變更密碼的表單",
+        "verification": "還需要驗證碼或其他無法自動填入的內容",
+        "noButton": "找不到登入按鈕",
+        "ambiguousButton": "有多個可能的登入按鈕，無法確定要按哪個",
+        "unsafeDestination": "表單會把密碼送到其他網站",
+        "alreadyTried": "這個頁面已用儲存的帳戶送出過"
+      }
     }
   },
   "title": "Settings",

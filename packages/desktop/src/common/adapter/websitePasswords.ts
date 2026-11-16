@@ -1,5 +1,10 @@
+import { bridge } from '@/common/platform/bridge';
 import { replyProvider } from '@/common/platform/replyProvider';
-import type { WebsitePasswordImportResult, WebsitePasswordStatus } from '@/common/types/websitePasswords';
+import type {
+  SavedLoginPageStatus,
+  WebsitePasswordImportResult,
+  WebsitePasswordStatus,
+} from '@/common/types/websitePasswords';
 
 /** Password editing is write-only; no provider returns a plaintext password. */
 export const websitePasswords = {
@@ -9,4 +14,9 @@ export const websitePasswords = {
   setDefault: replyProvider<WebsitePasswordStatus, { id: string }>('website-passwords.set-default'),
   setEnabled: replyProvider<WebsitePasswordStatus, { enabled: boolean }>('website-passwords.set-enabled'),
   updatePassword: replyProvider<WebsitePasswordStatus, { id: string; password: string }>('website-passwords.update'),
+  /** The saved-login state of the page in the active in-app browser tab. */
+  pageStatus: replyProvider<SavedLoginPageStatus, void>('website-passwords.page-status'),
+  pageStatusChanged: bridge.buildEmitter<SavedLoginPageStatus>('website-passwords.page-status-changed'),
+  /** Log in on the active in-app browser page with its saved account. */
+  loginNow: replyProvider<SavedLoginPageStatus, void>('website-passwords.login-now'),
 };

@@ -32,6 +32,27 @@
       "LIMIT": "账户数量已达到上限。",
       "IO": "无法读取或保存网站账户。",
       "FORBIDDEN": "网站账户仅在桌面应用中可用。"
+    },
+    "page": {
+      "saved": "此网站有已保存的账号，点击用它登录",
+      "submitted": "已用保存的账号提交登录",
+      "usernameSubmitted": "已提交用户名，下一步会自动填写密码",
+      "failed": "未能自动登录：{{reason}}。点击可重试",
+      "loginNow": "用已保存的账号登录",
+      "noAccount": "这个网站没有已保存的账号",
+      "disabled": "自动登录已关闭，可在设置的“网站账户”中开启",
+      "reasons": {
+        "noLoginForm": "页面上没有找到可填写的登录表单",
+        "otherOrigin": "当前页面不在保存账号的网站上",
+        "filledByUser": "表单里已经有其他账号或手动输入的密码",
+        "multiplePasswords": "页面上有多个密码框，像是注册或修改密码",
+        "registration": "这是注册、找回或修改密码的表单",
+        "verification": "还需要验证码或其他无法自动填写的内容",
+        "noButton": "没有找到登录按钮",
+        "ambiguousButton": "有多个可能的登录按钮，无法确定点哪个",
+        "unsafeDestination": "表单会把密码发到其他网站",
+        "alreadyTried": "这个页面已经用保存的账号提交过"
+      }
     }
   },
   "title": "设置",

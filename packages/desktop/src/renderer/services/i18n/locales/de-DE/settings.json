@@ -32,6 +32,27 @@
       "LIMIT": "Die maximale Anzahl an Konten ist erreicht.",
       "IO": "Website-Konten konnten nicht gelesen oder gespeichert werden.",
       "FORBIDDEN": "Website-Konten sind nur in der Desktop-App verfügbar."
+    },
+    "page": {
+      "saved": "Für diese Website ist ein Konto gespeichert. Klicken, um sich damit anzumelden",
+      "submitted": "Anmeldung mit dem gespeicherten Konto gesendet",
+      "usernameSubmitted": "Benutzername gesendet; das Passwort wird im nächsten Schritt eingetragen",
+      "failed": "Automatische Anmeldung nicht ausgeführt: {{reason}}. Klicken, um es erneut zu versuchen",
+      "loginNow": "Mit gespeichertem Konto anmelden",
+      "noAccount": "Für diese Website ist kein Konto gespeichert",
+      "disabled": "Automatische Anmeldung ist aus. Unter „Website-Konten“ in den Einstellungen einschalten",
+      "reasons": {
+        "noLoginForm": "auf der Seite wurde kein ausfüllbares Anmeldeformular gefunden",
+        "otherOrigin": "die Seite gehört nicht zur gespeicherten Website",
+        "filledByUser": "im Formular steht bereits ein anderes Konto oder ein eingetipptes Passwort",
+        "multiplePasswords": "die Seite hat mehrere Passwortfelder, wie bei Registrierung oder Passwortänderung",
+        "registration": "das ist ein Formular zur Registrierung, Wiederherstellung oder Passwortänderung",
+        "verification": "es wird zusätzlich ein Bestätigungscode oder ein anderes Feld benötigt, das nicht automatisch ausgefüllt werden kann",
+        "noButton": "keine Anmeldeschaltfläche gefunden",
+        "ambiguousButton": "mehrere Schaltflächen könnten das Formular senden",
+        "unsafeDestination": "das Formular würde das Passwort an eine andere Website senden",
+        "alreadyTried": "das gespeicherte Konto wurde auf dieser Seite bereits gesendet"
+      }
     }
   },
   "title": "Einstellungen",

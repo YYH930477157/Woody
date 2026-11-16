@@ -32,6 +32,27 @@
       "LIMIT": "Se alcanzó el límite de cuentas.",
       "IO": "No se pudieron leer ni guardar las cuentas de sitios web.",
       "FORBIDDEN": "Las cuentas de sitios web solo están disponibles en la aplicación de escritorio."
+    },
+    "page": {
+      "saved": "Este sitio tiene una cuenta guardada. Haz clic para iniciar sesión con ella",
+      "submitted": "Se envió el inicio de sesión con la cuenta guardada",
+      "usernameSubmitted": "Se envió el usuario; la contraseña se rellena en el siguiente paso",
+      "failed": "El inicio de sesión automático no se realizó: {{reason}}. Haz clic para reintentar",
+      "loginNow": "Iniciar sesión con la cuenta guardada",
+      "noAccount": "No hay ninguna cuenta guardada para este sitio",
+      "disabled": "El inicio de sesión automático está desactivado. Actívalo en «Cuentas de sitios web» en Ajustes",
+      "reasons": {
+        "noLoginForm": "no se encontró en la página un formulario de inicio de sesión que rellenar",
+        "otherOrigin": "la página no pertenece al sitio guardado",
+        "filledByUser": "el formulario ya tiene otra cuenta o una contraseña escrita",
+        "multiplePasswords": "la página tiene varios campos de contraseña, como un registro o un cambio de contraseña",
+        "registration": "es un formulario de registro, recuperación o cambio de contraseña",
+        "verification": "también pide un código de verificación u otro campo que no se puede rellenar automáticamente",
+        "noButton": "no se encontró el botón de inicio de sesión",
+        "ambiguousButton": "varios botones podrían enviar el formulario",
+        "unsafeDestination": "el formulario enviaría la contraseña a otro sitio",
+        "alreadyTried": "la cuenta guardada ya se envió en esta página"
+      }
     }
   },
   "title": "Configuración",

@@ -22,6 +22,8 @@ export interface WebviewHostProps {
   partition?: string;
   /** True only for the currently visible built-in browser tab. */
   isActiveBrowser?: boolean;
+  /** Extra controls at the end of the navigation bar. */
+  navExtra?: React.ReactNode;
   /** Extra class names for root container */
   className?: string;
   /** Extra styles for root container */
@@ -66,6 +68,7 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
   showNavBar = false,
   partition,
   isActiveBrowser = false,
+  navExtra,
   className,
   style,
   onDidFinishLoad,
@@ -732,6 +735,7 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
               placeholder={t('preview.browser.addressPlaceholder')}
             />
           </form>
+          {navExtra}
         </div>
       )}
 

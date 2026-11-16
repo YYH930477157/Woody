@@ -32,7 +32,9 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { createInterface } from 'node:readline';
 import { buildMcpSpawnCommand, resolveBridgeToken, resolveBrowserUrl } from './browserServerPort';
+import { createSavedLoginProxy, requestSavedLogin } from './savedLoginTools';
 
 /**
  * 安装包内置的 chrome-devtools-mcp 副本（离线优先）。
@@ -184,10 +186,12 @@ const spawnPlan = buildMcpSpawnCommand({
 });
 
 const child = spawn(spawnPlan.command, spawnPlan.args, {
-  // stdio 直通：这个进程只是转发者，MCP 协议流不能被中间层缓冲或改写
-  // Pass stdio straight through: this process is a forwarder, and the MCP
-  // protocol stream must not be buffered or rewritten in between.
-  stdio: 'inherit',
+  // 协议流逐行转发，只在工具列表里追加两个“已保存账号登录”工具，并由本进程回答它们的调用；
+  // 其余每一行原样转发。stderr 直通。
+  // The protocol stream is forwarded line by line. Only the tool list gains the two
+  // saved-login tools, whose calls this process answers; every other line passes through
+  // unchanged. stderr stays inherited.
+  stdio: ['pipe', 'pipe', 'inherit'],
   env: {
     ...process.env,
     // 离线保险：官方文档明确的遥测关闭开关，无网时避免 Google 上报吃满 TCP 超时。
@@ -196,6 +200,22 @@ const child = spawn(spawnPlan.command, spawnPlan.args, {
     CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: '1',
   },
 });
+
+const proxy = createSavedLoginProxy({
+  call: (action) => requestSavedLogin(browserUrl, bridgeToken, action),
+  toClient: (line) => {
+    process.stdout.write(`${line}\n`);
+  },
+  toServer: (line) => {
+    if (!child.stdin.destroyed) child.stdin.write(`${line}\n`);
+  },
+});
+// A child that exits mid-write must not crash the forwarder; its exit ends this process.
+child.stdin.on('error', () => {});
+createInterface({ input: process.stdin, crlfDelay: Infinity })
+  .on('line', proxy.fromClient)
+  .on('close', () => child.stdin.end());
+createInterface({ input: child.stdout, crlfDelay: Infinity }).on('line', proxy.fromServer);
 
 child.on('error', (error) => {
   logDiagnostic(`Failed to spawn chrome-devtools-mcp: ${error instanceof Error ? error.message : String(error)}`);

@@ -6,6 +6,7 @@
 
 import React, { useCallback } from 'react';
 import WebviewHost from '@/renderer/components/media/WebviewHost';
+import SavedLoginButton from './SavedLoginButton';
 import {
   BROWSER_BLANK_URL,
   BROWSER_SESSION_PARTITION,
@@ -79,6 +80,7 @@ const BrowserViewer: React.FC<BrowserViewerProps> = ({
       url={url || BROWSER_BLANK_URL}
       partition={BROWSER_SESSION_PARTITION}
       isActiveBrowser={isActive}
+      navExtra={isActive ? <SavedLoginButton url={url} /> : undefined}
       showNavBar
       className='bg-bg-1'
       resolveUrlInput={resolveAddressBarInput}

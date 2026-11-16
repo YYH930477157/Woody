@@ -212,6 +212,81 @@ describe('active browser automatic login controller', () => {
     expect(vi.getTimerCount()).toBe(0);
     controller.dispose();
   });
+  it('publishes the outcome and why a login did not run, without the account', async () => {
+    const target = new Target();
+    target.executeJavaScriptInIsolatedWorld.mockResolvedValue(['none', 'verification'] as never);
+    const statuses: unknown[] = [];
+    const controller = new BrowserPasswordController({ find: async () => credential }, undefined, (status) =>
+      statuses.push(status)
+    );
+    controller.attach(target);
+    await settle();
+    expect(statuses.at(-1)).toEqual({
+      site: 'https://login.test',
+      account: 'saved',
+      result: 'skipped',
+      reason: 'verification',
+    });
+    expect(JSON.stringify(statuses)).not.toContain('alice');
+    const code = (
+      target.executeJavaScriptInIsolatedWorld.mock.calls[0] as unknown as [number, { code: string }[]]
+    )[1][0].code;
+    expect(code).toContain('woodyLoginWatch');
+    controller.dispose();
+    expect(statuses.at(-1)).toEqual({ site: null, account: 'none' });
+  });
+  it('keeps a submitted login reported until the page changes', async () => {
+    const target = new Target();
+    target.executeJavaScriptInIsolatedWorld
+      .mockResolvedValueOnce(['password-submitted', undefined] as never)
+      .mockResolvedValue(['none', 'alreadyTried'] as never);
+    const controller = new BrowserPasswordController({ find: async () => credential });
+    controller.attach(target);
+    await settle();
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(await controller.describe()).toMatchObject({ result: 'password-submitted' });
+    controller.dispose();
+  });
+  it('says whether a site without an account has none or automatic login is off', async () => {
+    const target = new Target();
+    const lookup = vi.fn(async () => 'disabled' as const);
+    const controller = new BrowserPasswordController({ find: async () => undefined, lookup });
+    controller.attach(target);
+    await settle();
+    expect(await controller.describe()).toEqual({ site: 'https://login.test', account: 'disabled' });
+    expect(target.executeJavaScriptInIsolatedWorld).not.toHaveBeenCalled();
+    controller.dispose();
+    expect(await controller.describe()).toEqual({ site: null, account: 'none' });
+  });
+  it('gives a requested login one fresh attempt after the automatic one was used', async () => {
+    const target = new Target();
+    const controller = new BrowserPasswordController({ find: async () => credential });
+    controller.attach(target);
+    await settle();
+    target.executeJavaScriptInIsolatedWorld.mockResolvedValueOnce(['password-submitted', undefined] as never);
+    expect(await controller.loginNow()).toMatchObject({ account: 'saved', result: 'password-submitted' });
+    const calls = target.executeJavaScriptInIsolatedWorld.mock.calls as unknown as [number, { code: string }[]][];
+    expect(calls.at(-1)![1][0].code).toContain('"username":true,"password":true');
+    // Automatic polling keeps respecting the limit afterwards.
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(calls.at(-1)![1][0].code).toContain('"password":false');
+    controller.dispose();
+    expect(await controller.loginNow()).toEqual({ site: null, account: 'none' });
+  });
+  it('looks again when the page reports a login form, at most once per interval', async () => {
+    const target = new Target();
+    const controller = new BrowserPasswordController({ find: async () => credential });
+    controller.attach(target);
+    await vi.advanceTimersByTimeAsync(70_000);
+    const before = target.executeJavaScriptInIsolatedWorld.mock.calls.length;
+    target.emit('ipc-message', { sender: target }, 'woody:website-login-form');
+    target.emit('ipc-message', { sender: target }, 'woody:website-login-form');
+    target.emit('ipc-message', { sender: {} }, 'woody:website-login-form');
+    target.emit('ipc-message', { sender: target }, 'other-channel');
+    await settle();
+    expect(target.executeJavaScriptInIsolatedWorld.mock.calls.length).toBe(before + 1);
+    controller.dispose();
+  });
   it('stops bounded polling and tolerates lookup failures without unhandled rejections', async () => {
     const target = new Target();
     const find = vi.fn(async () => {

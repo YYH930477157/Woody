@@ -32,6 +32,27 @@
       "LIMIT": "O limite de contas foi atingido.",
       "IO": "Não foi possível ler ou salvar as contas de sites.",
       "FORBIDDEN": "As contas de sites só estão disponíveis no aplicativo para desktop."
+    },
+    "page": {
+      "saved": "Este site tem uma conta salva. Clique para entrar com ela",
+      "submitted": "Login enviado com a conta salva",
+      "usernameSubmitted": "Usuário enviado; a senha é preenchida na próxima etapa",
+      "failed": "O login automático não foi feito: {{reason}}. Clique para tentar de novo",
+      "loginNow": "Entrar com a conta salva",
+      "noAccount": "Nenhuma conta salva para este site",
+      "disabled": "O login automático está desligado. Ative em “Contas de sites” nas configurações",
+      "reasons": {
+        "noLoginForm": "nenhum formulário de login para preencher foi encontrado na página",
+        "otherOrigin": "a página não é do site salvo",
+        "filledByUser": "o formulário já tem outra conta ou uma senha digitada",
+        "multiplePasswords": "a página tem vários campos de senha, como cadastro ou troca de senha",
+        "registration": "é um formulário de cadastro, recuperação ou troca de senha",
+        "verification": "também pede um código de verificação ou outro campo que não pode ser preenchido automaticamente",
+        "noButton": "nenhum botão de login foi encontrado",
+        "ambiguousButton": "vários botões poderiam enviar o formulário",
+        "unsafeDestination": "o formulário enviaria a senha para outro site",
+        "alreadyTried": "a conta salva já foi enviada nesta página"
+      }
     }
   },
   "title": "Configurações",

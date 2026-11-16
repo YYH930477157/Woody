@@ -32,6 +32,27 @@
       "LIMIT": "The account limit has been reached.",
       "IO": "Unable to read or save website accounts.",
       "FORBIDDEN": "Website accounts are available only in the desktop app."
+    },
+    "page": {
+      "saved": "This site has a saved account. Click to sign in with it",
+      "submitted": "Submitted the login with the saved account",
+      "usernameSubmitted": "Submitted the username; the password is filled in on the next step",
+      "failed": "Automatic login did not run: {{reason}}. Click to try again",
+      "loginNow": "Sign in with the saved account",
+      "noAccount": "No account is saved for this site",
+      "disabled": "Automatic login is off. Turn it on under “Website accounts” in Settings",
+      "reasons": {
+        "noLoginForm": "no login form to fill was found on the page",
+        "otherOrigin": "the page is not on the saved site",
+        "filledByUser": "the form already holds another account or a typed password",
+        "multiplePasswords": "the page has several password fields, like a sign-up or password change",
+        "registration": "this is a sign-up, recovery or password change form",
+        "verification": "it also needs a verification code or another field that cannot be filled automatically",
+        "noButton": "no login button was found",
+        "ambiguousButton": "several buttons could submit the form",
+        "unsafeDestination": "the form would send the password to another site",
+        "alreadyTried": "the saved account was already submitted on this page"
+      }
     }
   },
   "title": "Settings",

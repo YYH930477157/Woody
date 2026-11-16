@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { autofillWebsiteLogin } from '@/common/utils/browser/autofill';
+import { watchLoginForms } from '@/common/utils/browser/loginWatch';
 
 const credential = { origin: 'https://login.test', username: 'alice', password: 's3cret' };
 const permissions = { username: true, password: true };
@@ -152,5 +153,140 @@ describe('isolated website login autofill', () => {
   it('works as a serialized standalone function in the isolated world', () => {
     const standalone = window.eval(`(${autofillWebsiteLogin.toString()})`);
     expect(standalone(credential, permissions)).toBe('password-submitted');
+  });
+});
+
+describe('common login page shapes', () => {
+  const run = (html: string) => {
+    document.body.innerHTML = html;
+    const reasons: string[] = [];
+    const result = autofillWebsiteLogin(credential, permissions, (reason) => reasons.push(reason));
+    const password = document.querySelector<HTMLInputElement>('input[type=password]');
+    return { result, reason: reasons[0], filled: password?.value === credential.password };
+  };
+  const click = vi.fn();
+  beforeEach(() => {
+    click.mockClear();
+    HTMLElement.prototype.click = click;
+  });
+
+  it.each([
+    [
+      'a button spelled with a space, as component libraries render it',
+      '<form><input name="username"><input name="password" type="password"><button type="button"><span>登 录</span></button></form>',
+    ],
+    [
+      'a field name outside the usual list',
+      '<form><input name="loginName"><input name="pwd" type="password"><button type="submit">登录</button></form>',
+    ],
+    [
+      'no form, a div button, and a search box elsewhere on the page',
+      '<header><input placeholder="搜索"></header><div class="login"><input placeholder="用户名"><input type="password"><div class="login-btn">登录</div></div>',
+    ],
+    [
+      'no form, a button, and a search box elsewhere on the page',
+      '<header><input placeholder="搜索"></header><div class="login"><input placeholder="请输入账号"><input type="password"><button>登录</button></div>',
+    ],
+    [
+      'password and SMS tabs next to the login button',
+      '<form><button type="button">密码登录</button><button type="button">短信登录</button><input name="username"><input name="password" type="password"><button type="submit">登录</button></form>',
+    ],
+    [
+      'a link styled as the login button',
+      '<form><input name="username"><input name="password" type="password"><a href="javascript:void(0)" class="submit">登录</a></form>',
+    ],
+    [
+      'remember-me and forgot-password next to "登 录"',
+      '<form><input name="username"><input name="password" type="password"><input type="checkbox" name="remember"><a href="/forgot">忘记密码</a><button type="submit">登 录</button></form>',
+    ],
+    [
+      'a third-party sign-in button next to "Log In"',
+      '<form><input name="email" type="email"><input name="password" type="password"><button type="submit">Log In</button><button type="button">Sign in with Google</button></form>',
+    ],
+    [
+      'a hidden sign-up dialog with its own password fields',
+      '<form><input name="username"><input name="password" type="password"><button type="submit">登录</button></form><div style="display:none"><input type="password"><input type="password"></div>',
+    ],
+  ])('logs in with %s', (_name, html) => {
+    expect(run(html)).toMatchObject({ result: 'password-submitted', filled: true });
+    expect(submit.mock.calls.length + click.mock.calls.length).toBe(1);
+  });
+
+  it.each([
+    [
+      'verification',
+      'an image code field it cannot fill',
+      '<form><input name="username"><input name="password" type="password"><input name="verifyCode"><img src="/code.png"><button type="submit">登录</button></form>',
+    ],
+    [
+      'ambiguousButton',
+      'two equally likely buttons',
+      '<div><input name="username"><input name="password" type="password"><div class="btn">登录</div><div class="btn">登录</div></div>',
+    ],
+    [
+      'noButton',
+      'a login link that only navigates',
+      '<div class="box"><input name="username"><input name="password" type="password"><a href="/account/login">登录</a></div>',
+    ],
+    [
+      'registration',
+      'a sign-up page',
+      '<form action="/register"><input name="username"><input name="password" type="password"><button type="submit">提交</button></form>',
+    ],
+    [
+      'multiplePasswords',
+      'two visible password fields',
+      '<form><input name="username"><input name="password" type="password"><input name="again" type="password"><button type="submit">登录</button></form>',
+    ],
+  ])('reports %s and fills nothing for %s', (reason, _name, html) => {
+    expect(run(html)).toEqual({ result: 'none', reason, filled: false });
+    expect(submit).not.toHaveBeenCalled();
+    expect(click).not.toHaveBeenCalled();
+  });
+
+  it('clicks the innermost plain button rather than the area that holds the fields', () => {
+    run(
+      '<div class="login-panel"><input placeholder="用户名"><input type="password"><div class="btn-wrap"><span class="btn">登录</span></div></div>'
+    );
+    expect(click.mock.contexts[0]).toBe(document.querySelector('span.btn'));
+  });
+});
+
+/** Longer than the watcher's 400 ms debounce. */
+const settleWatcher = () => new Promise((resolve) => setTimeout(resolve, 450));
+
+describe('login form watcher', () => {
+  const loginForm = vi.fn();
+  beforeEach(() => {
+    loginForm.mockClear();
+    document.body.innerHTML = '<main></main>';
+    vi.mocked(HTMLElement.prototype.getBoundingClientRect).mockImplementation(function (this: HTMLElement) {
+      return (this.style.display === 'none' ? { width: 0, height: 0 } : { width: 100, height: 20 }) as DOMRect;
+    });
+    Object.assign(window, { woodyPasswordCapture: { loginForm }, woodyLoginWatch: undefined });
+  });
+
+  it('reports a password field that appears, once, and again after it was hidden', async () => {
+    watchLoginForms();
+    watchLoginForms();
+    document.querySelector('main')!.innerHTML = '<input id="p" type="password">';
+    await settleWatcher();
+    expect(loginForm).toHaveBeenCalledOnce();
+    document.querySelector('main')!.insertAdjacentHTML('beforeend', '<input type="password">');
+    await settleWatcher();
+    expect(loginForm).toHaveBeenCalledOnce();
+    document.querySelector('main')!.innerHTML = '<input id="p" type="password" style="display:none">';
+    await settleWatcher();
+    document.querySelector<HTMLInputElement>('#p')!.style.display = '';
+    await settleWatcher();
+    expect(loginForm).toHaveBeenCalledTimes(2);
+  });
+
+  it('does nothing without the isolated-world channel', async () => {
+    Object.assign(window, { woodyPasswordCapture: undefined });
+    watchLoginForms();
+    document.querySelector('main')!.innerHTML = '<input type="password">';
+    await settleWatcher();
+    expect(loginForm).not.toHaveBeenCalled();
   });
 });

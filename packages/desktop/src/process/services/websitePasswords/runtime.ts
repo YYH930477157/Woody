@@ -2,7 +2,9 @@ import { app, BrowserWindow, dialog, safeStorage, session, webContents } from 'e
 import type { BrowserWindow as NativeWindow } from 'electron';
 import path from 'node:path';
 import { getNativeBridgeSender } from '@/common/adapter/main';
+import { websitePasswords } from '@/common/adapter/websitePasswords';
 import { BROWSER_SESSION_PARTITION } from '@/common/config/constants';
+import type { SavedLoginPageStatus } from '@/common/types/websitePasswords';
 import { onConfirmedQuit } from '@process/startup/quitCleanup';
 import { BrowserPasswordController } from './controller';
 import { WebsitePasswordStore } from './store';
@@ -93,9 +95,21 @@ export function getWebsitePasswordRuntime() {
       decrypt: (value) => safeStorage.decryptString(value),
     });
     const updates = new BrowserPasswordUpdates(store, confirmUpdate, updateFailed);
-    runtime = { store, controller: new BrowserPasswordController(store, updates) };
+    const controller = new BrowserPasswordController(store, updates, (status) =>
+      websitePasswords.pageStatusChanged.emit(status)
+    );
+    runtime = { store, controller };
   }
   return runtime;
+}
+
+/**
+ * The agent's way in, through the in-app browser's CDP bridge: the page's saved-login
+ * state, or a login with the saved account. Results name the site and the outcome only.
+ */
+export async function savedLoginForAgent(action: 'status' | 'login'): Promise<SavedLoginPageStatus> {
+  const { controller } = getWebsitePasswordRuntime();
+  return action === 'login' ? controller.loginNow() : controller.describe();
 }
 
 /** Attach only the reported active webview owned by the trusted application window. */

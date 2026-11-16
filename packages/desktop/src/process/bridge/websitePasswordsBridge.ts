@@ -83,6 +83,8 @@ export function initWebsitePasswordsBridge(): void {
       return getWebsitePasswordRuntime().store.setEnabled(params.enabled);
     })
   );
+  websitePasswords.pageStatus.provider(provide(async () => getWebsitePasswordRuntime().controller.describe()));
+  websitePasswords.loginNow.provider(provide(async () => getWebsitePasswordRuntime().controller.loginNow()));
   websitePasswords.updatePassword.provider(
     provide(async (params: { id: string; password: string }) => {
       const id = accountId(params);
