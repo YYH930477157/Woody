@@ -155,39 +155,38 @@ const getProcessedItemCreatedAt = (item: IProcessedItem): number => {
 
 export const mergeTurnActivities = (items: Array<IMessageVO>): Array<IMessageVO> => {
   const merged: Array<IMessageVO> = [];
-  let activities: TurnActivity[] = [];
-  let sourceMessageIds: string[] = [];
-  let createdAt = 0;
+  let activeSummary: Extract<IMessageVO, { type: 'turn_activity_summary' }> | undefined;
 
-  const flush = () => {
-    if (!activities.length) return;
-    merged.push({
+  const ensureSummary = (id: string, createdAt: number) => {
+    if (activeSummary) return activeSummary;
+
+    activeSummary = {
       type: 'turn_activity_summary',
-      id: 'turn-activity-' + sourceMessageIds[0],
-      activities,
-      sourceMessageIds,
+      id: 'turn-activity-' + id,
+      activities: [],
+      sourceMessageIds: [],
       created_at: createdAt,
-    });
-    activities = [];
-    sourceMessageIds = [];
-    createdAt = 0;
+    };
+    merged.push(activeSummary);
+    return activeSummary;
   };
 
   for (const item of items) {
     if (item.type === 'thinking') {
-      if (!activities.length) createdAt = item.created_at ?? 0;
-      activities.push({ type: 'thinking', message: item });
-      sourceMessageIds.push(item.id);
+      const summary = ensureSummary(item.id, item.created_at ?? 0);
+      summary.activities.push({ type: 'thinking', message: item });
+      summary.sourceMessageIds.push(item.id);
     } else if (item.type === 'tool_summary') {
-      if (!activities.length) createdAt = item.created_at;
-      activities.push({ type: 'tools', messages: item.messages });
-      sourceMessageIds.push(...item.sourceMessageIds);
+      const summary = ensureSummary(item.sourceMessageIds[0] ?? item.id, item.created_at);
+      summary.activities.push({ type: 'tools', messages: item.messages });
+      summary.sourceMessageIds.push(...item.sourceMessageIds);
     } else {
-      flush();
       merged.push(item);
+      if ('position' in item && item.position === 'right') {
+        activeSummary = undefined;
+      }
     }
   }
-  flush();
   return merged;
 };
 

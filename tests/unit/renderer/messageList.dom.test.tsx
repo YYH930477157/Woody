@@ -15,7 +15,7 @@ import {
   MessagePaginationProvider,
   useUpdateMessageList,
 } from '@/renderer/pages/conversation/Messages/hooks';
-import MessageList from '@/renderer/pages/conversation/Messages/MessageList';
+import MessageList, { mergeTurnActivities } from '@/renderer/pages/conversation/Messages/MessageList';
 
 const { parseDiffMock, useTeamPermissionMock } = vi.hoisted(() => ({
   parseDiffMock: vi.fn(),
@@ -274,6 +274,98 @@ describe('MessageList', () => {
       diff: 'diff',
     });
     useTeamPermissionMock.mockReturnValue(null);
+  });
+
+  it('keeps one activity summary across intermediate messages within an assistant turn', () => {
+    const thinkingOne = {
+      id: 'thinking-1',
+      type: 'thinking',
+      position: 'left',
+      content: { content: 'first thought', status: 'done' },
+      created_at: 1,
+    };
+    const permission = {
+      id: 'permission-1',
+      type: 'permission',
+      position: 'left',
+      content: { call_id: 'call-1', description: 'Allow command', options: [] },
+      created_at: 2,
+    };
+    const toolSummary = {
+      type: 'tool_summary',
+      id: 'tool-summary-1',
+      messages: [
+        {
+          id: 'tool-1',
+          type: 'tool_call',
+          position: 'left',
+          content: { call_id: 'call-1', name: 'rg', args: {}, status: 'completed' },
+          created_at: 3,
+        },
+      ],
+      sourceMessageIds: ['tool-1'],
+      created_at: 3,
+    };
+    const agentStatus = {
+      id: 'status-1',
+      type: 'agent_status',
+      position: 'center',
+      content: { backend: 'test', status: 'session_active' },
+      created_at: 4,
+    };
+    const thinkingTwo = {
+      id: 'thinking-2',
+      type: 'thinking',
+      position: 'left',
+      content: { content: 'second thought', status: 'thinking' },
+      created_at: 5,
+    };
+    const userMessage = {
+      id: 'user-1',
+      type: 'text',
+      position: 'right',
+      content: { content: 'continue' },
+      created_at: 6,
+    };
+    const thinkingAfterUser = {
+      id: 'thinking-3',
+      type: 'thinking',
+      position: 'left',
+      content: { content: 'new turn', status: 'thinking' },
+      created_at: 7,
+    };
+
+    const merged = mergeTurnActivities([
+      thinkingOne,
+      permission,
+      toolSummary,
+      agentStatus,
+      thinkingTwo,
+      userMessage,
+      thinkingAfterUser,
+    ] as unknown as Parameters<typeof mergeTurnActivities>[0]);
+
+    expect(merged.map((item) => item.type)).toEqual([
+      'turn_activity_summary',
+      'permission',
+      'agent_status',
+      'text',
+      'turn_activity_summary',
+    ]);
+
+    const firstSummary = merged[0];
+    expect(firstSummary.type).toBe('turn_activity_summary');
+    if (firstSummary.type === 'turn_activity_summary') {
+      expect(firstSummary.activities.map((activity) => activity.type)).toEqual(['thinking', 'tools', 'thinking']);
+      expect(firstSummary.sourceMessageIds).toEqual(['thinking-1', 'tool-1', 'thinking-2']);
+    }
+
+    const finalSummary = merged[4];
+    expect(finalSummary.type).toBe('turn_activity_summary');
+    if (finalSummary.type === 'turn_activity_summary') {
+      expect(finalSummary.activities.map((activity) => activity.type)).toEqual(['thinking']);
+      expect(finalSummary.sourceMessageIds).toEqual(['thinking-3']);
+    }
   });
 
   it('never renders a plan as a stream row (it belongs to ConversationPlanBar)', () => {
