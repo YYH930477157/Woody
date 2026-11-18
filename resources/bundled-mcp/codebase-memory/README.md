@@ -101,6 +101,19 @@ an external edit is left in place and reported as a cleanup conflict. When
 Git is unavailable, the same `.cbmignore` rules provide the directory and
 filename filtering without excluding untracked files.
 
+In a C or C++ project (most sampled code files are C or C++, the same test
+that starts it in full mode) the block also keeps only C and C++ sources and
+headers (`.c`, `.h`, `.cc`, `.cpp`, `.cxx`, `.hh`, `.hpp`, `.hxx`). Scripts,
+CMake files, Makefiles, assembly, linker and config files stay out of the
+graph; the indexer would otherwise also take extensionless files and `#!`
+scripts. The allow list starts with `*` and `!*/`, and `!*/` would also bring
+back the folders the indexer skips by name, so the block lists those folders
+again for the current mode (the names come from codebase-memory-mcp v0.12.1;
+check them when the binary is updated). A user line such as `!*.py` brings a
+file type back. The one name left out is `obj`: in a C project an `obj` folder
+can hold sources, and a build's `obj` holds object files the allow list already
+keeps out.
+
 A cross-process lock beside Git's shared `info/exclude` prevents overlapping
 projects or linked worktrees from replacing an active filter. A second index
 in that repository is rejected before changing either ignore file; independent

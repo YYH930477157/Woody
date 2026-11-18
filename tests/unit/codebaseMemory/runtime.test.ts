@@ -132,6 +132,35 @@ describe('project runtime', () => {
     expect(fs.readFileSync(excludePath)).toEqual(excludeBefore);
     expect(fs.readFileSync(cbmignorePath)).toEqual(cbmignoreBefore);
   });
+  it('indexes only C and C++ sources in a C project, and every file type elsewhere', async () => {
+    fs.writeFileSync(
+      path.join(root, 'fixture.cjs'),
+      `const fs=require('node:fs'); const path=require('node:path'); if(process.argv.includes('index_repository')) fs.writeFileSync(path.join(process.cwd(),'cbm-seen'),fs.readFileSync(path.join(process.cwd(),'.cbmignore'),'utf8')); console.log(JSON.stringify({isError:false,structuredContent:{nodes:13,folders:[]}}));`
+    );
+    const firmware = path.join(root, 'firmware');
+    fs.mkdirSync(path.join(firmware, 'drv'), { recursive: true });
+    for (const name of ['main.c', 'drv/uart.c', 'drv/uart.h', 'flash.py'])
+      fs.writeFileSync(path.join(firmware, name), '');
+    const web = path.join(root, 'web');
+    fs.mkdirSync(web);
+    for (const name of ['app.ts', 'view.tsx', 'tool.py']) fs.writeFileSync(path.join(web, name), '');
+    const service = runtime();
+    const seen = async (project: string) => {
+      await service.save(project, { version: 1, enabled: true, mode: 'full' });
+      await service.start(project);
+      let result = await service.get(project);
+      for (let i = 0; i < 100 && result.phase === 'running'; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        result = await service.get(project);
+      }
+      expect(result.phase).toBe('succeeded');
+      return fs.readFileSync(path.join(project, 'cbm-seen'), 'utf8');
+    };
+    expect(await seen(firmware)).toMatch(/^\*\r?\n!\*\/\r?\n!\*\.c\r?\n!\*\.h\r?\n/m);
+    expect(await seen(web)).not.toContain('!*.c');
+    // The temporary rules are gone once indexing is done.
+    expect(fs.existsSync(path.join(firmware, '.cbmignore'))).toBe(false);
+  });
   it('restores source-only overlays after native indexing fails', async () => {
     execFileSync('git', ['-C', repo, 'init', '-q'], { windowsHide: true });
     const excludePath = path.join(repo, '.git', 'info', 'exclude');

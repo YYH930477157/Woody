@@ -9,9 +9,11 @@ const { detectGit, prepareSourceOnlyOverlay } =
     detectGit(root: string): { topLevel: string; infoExclude: string } | null;
     prepareSourceOnlyOverlay(
       root: string,
-      owner?: { indexLock: string; indexToken: string }
+      owner?: { indexLock?: string; indexToken?: string },
+      options?: { cFamily?: boolean; mode?: 'fast' | 'moderate' | 'full' }
     ): {
       gitTrackedOnly: boolean;
+      cSourcesOnly: boolean;
       files: string[];
       cleanup(): { restored: boolean; conflict?: string };
     };
@@ -128,6 +130,75 @@ describe('source-only index overlay', () => {
     } finally {
       overlay.cleanup();
     }
+  });
+
+  describe('in a C or C++ project', () => {
+    /** Paths the generated rules (plus the user's own lines) ignore, judged by Git's matcher. */
+    function ignored(userRules: string, mode: 'fast' | 'full', paths: string[], cFamily = true): string[] {
+      const root = makeRoot();
+      if (userRules) fs.writeFileSync(path.join(root, '.cbmignore'), userRules);
+      const overlay = prepareSourceOnlyOverlay(root, {}, { cFamily, mode });
+      try {
+        expect(overlay.cSourcesOnly).toBe(cFamily);
+        git(root, 'init', '-q');
+        const args = ['-c', `core.excludesFile=${path.join(root, '.cbmignore')}`, 'check-ignore', '--no-index'];
+        return paths.filter((file) => {
+          try {
+            git(root, ...args, file);
+            return true;
+          } catch {
+            return false;
+          }
+        });
+      } finally {
+        overlay.cleanup();
+      }
+    }
+    const sources = ['app/main.c', 'app/main.h', 'app/ui/widget.cpp', 'app/ui/widget.hpp', 'lib-1.2.3/l.c'];
+    const others = [
+      'app/gen.py',
+      'app/build.bat',
+      'app/run.ps1',
+      'app/CMakeLists.txt',
+      'app/Makefile',
+      'app/startup.s',
+      'app/link.ld',
+      'app/cfg.json',
+      'app/notes.md',
+      'tools/flash',
+      '.woody/codebase-memory.json',
+    ];
+
+    it('indexes only C and C++ sources and headers', () => {
+      expect(ignored('', 'full', [...sources, ...others])).toEqual(others);
+    });
+
+    it("keeps the indexer's own folder skips, which re-including every folder would undo", () => {
+      const skippedInEveryMode = ['.vs/v.c', 'venv/Include/py.h', 'node_modules/n/n.c', 'build/b.c'];
+      expect(ignored('', 'full', [...skippedInEveryMode, 'docs/d.c', 'examples/e.c'])).toEqual(skippedInEveryMode);
+      expect(ignored('', 'fast', ['docs/d.c', 'examples/e.c', 'app/main.c'])).toEqual(['docs/d.c', 'examples/e.c']);
+    });
+
+    it('indexes the sources in an obj folder, whose object files the allow list keeps out', () => {
+      expect(ignored('', 'full', ['app/proto/obj/codec.c', 'app/proto/obj/codec.h', 'out/obj/main.o'])).toEqual([
+        'out/obj/main.o',
+      ]);
+      expect(ignored('', 'fast', ['app/proto/obj/codec.c'])).toEqual([]);
+      // Other projects still skip obj folders.
+      expect(ignored('', 'full', ['app/proto/obj/codec.py'], false)).toEqual(['app/proto/obj/codec.py']);
+    });
+
+    it("lets the user's .cbmignore bring back a folder or a file type", () => {
+      const user = '# user rules\r\n!/tools/\r\n!*.py\r\n';
+      expect(ignored(user, 'full', ['tools/gen.c', 'tools/readme.md', 'app/gen.py', 'app/run.ps1'])).toEqual([
+        'tools/readme.md',
+        'app/run.ps1',
+      ]);
+    });
+
+    it('leaves the file types of other projects alone', () => {
+      expect(ignored('', 'full', ['src/app.py', 'src/view.ts', 'src/native.h'], false)).toEqual([]);
+    });
   });
 
   it.each([

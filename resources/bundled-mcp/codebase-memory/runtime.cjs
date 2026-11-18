@@ -7,7 +7,7 @@ const crypto = require('node:crypto');
 const { execFile, spawn, spawnSync } = require('node:child_process');
 const TOOL_SCHEMAS = new Map(require('./tools.json').map((tool) => [tool.name, tool.inputSchema]));
 const architecture = require('./architecture.cjs');
-const { prepareSourceOnlyOverlay } = require('./sourceFilter.cjs');
+const { C_FAMILY_EXTENSIONS, prepareSourceOnlyOverlay } = require('./sourceFilter.cjs');
 const ARCHITECTURE_LABELS = require('./architecture-labels.json');
 const DEFAULT_CONFIG = { version: 1, enabled: false, mode: 'fast' };
 const TOOLS = new Set([
@@ -412,15 +412,22 @@ function validateConfig(config) {
     throw new Error('Invalid codebase-memory configuration');
   return { version: 1, enabled: config.enabled, mode: config.mode };
 }
-const C_FAMILY = new Set(['.c', '.cc', '.cpp', '.cxx', '.h', '.hh', '.hpp', '.hxx']);
-const defaultModes = new Map();
+const C_FAMILY = new Set(C_FAMILY_EXTENSIONS.map((extension) => `.${extension}`));
+const cFamilyProjects = new Map();
 /**
  * The mode a project starts with before it is saved. C and C++ lean on macros, and
  * only the full mode indexes them; on a 670-file firmware project full took 5.3 s
- * against 4.2 s for fast. Other projects start fast. Cached: the panel polls this.
+ * against 4.2 s for fast. Other projects start fast.
  */
 function defaultMode(root) {
-  if (defaultModes.has(root)) return defaultModes.get(root);
+  return cFamilyProject(root) ? 'full' : 'fast';
+}
+/**
+ * Whether most sampled code files are C or C++. Such a project indexes only its C and C++
+ * sources and headers. Cached: the panel polls the default mode.
+ */
+function cFamilyProject(root) {
+  if (cFamilyProjects.has(root)) return cFamilyProjects.get(root);
   let cFamily = 0;
   let other = 0;
   const pending = [root];
@@ -443,9 +450,9 @@ function defaultMode(root) {
       }
     }
   }
-  const mode = cFamily > 0 && cFamily >= other ? 'full' : 'fast';
-  defaultModes.set(root, mode);
-  return mode;
+  const result = cFamily > 0 && cFamily >= other;
+  cFamilyProjects.set(root, result);
+  return result;
 }
 /**
  * `throughPowerShell(filename)` returns the plain bytes when this process reads the file
@@ -1467,9 +1474,14 @@ function createRuntime(options) {
     }
     let overlay;
     try {
-      overlay = prepareSourceOnlyOverlay(project.root, { indexLock: project.lock, indexToken: owner.token });
+      overlay = prepareSourceOnlyOverlay(
+        project.root,
+        { indexLock: project.lock, indexToken: owner.token },
+        { cFamily: cFamilyProject(project.root), mode: config.mode }
+      );
       state.indexFilter = {
         gitTrackedOnly: overlay.gitTrackedOnly,
+        cSourcesOnly: overlay.cSourcesOnly,
         files: overlay.files,
         restored: false,
       };

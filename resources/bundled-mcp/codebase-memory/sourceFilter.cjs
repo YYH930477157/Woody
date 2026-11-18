@@ -38,6 +38,152 @@ const SOURCE_ONLY_RULES = [
   '**/*.spec.*',
   '**/conftest.py',
 ];
+
+// A C or C++ project indexes only its sources and headers. Build scripts, CMake, Makefiles,
+// assembly and config files otherwise fill searches and the graph; the indexer also picks up
+// extensionless files and `#!` scripts, so only an allow list keeps them out.
+const C_FAMILY_EXTENSIONS = ['c', 'h', 'cc', 'cpp', 'cxx', 'hh', 'hpp', 'hxx'];
+// Folders codebase-memory-mcp v0.12.1 skips by name, from its binary. The allow list has to
+// re-include every folder (`!*/`), which also overrides these, so they are listed again.
+const INDEXER_SKIPPED_ALWAYS = [
+  '.git',
+  'node_modules',
+  '.worktrees',
+  '.claude-worktrees',
+  'storage/framework/views',
+  '.hg',
+  '.svn',
+  '.idea',
+  '.vs',
+  '.vscode',
+  '.eclipse',
+  '.claude',
+  'Antigravity',
+  '.cache',
+  '.eggs',
+  '.env',
+  '.mypy_cache',
+  '.nox',
+  '.pytest_cache',
+  '.ruff_cache',
+  '.tox',
+  '.venv',
+  '__pycache__',
+  'env',
+  'htmlcov',
+  'site-packages',
+  'venv',
+  '.npm',
+  '.nyc_output',
+  '.pnpm-store',
+  '.yarn',
+  'bower_components',
+  'coverage',
+  '.next',
+  '.nuxt',
+  '.svelte-kit',
+  '.angular',
+  '.turbo',
+  '.parcel-cache',
+  '.docusaurus',
+  '.expo',
+  'dist',
+  'obj',
+  'Pods',
+  'target',
+  'temp',
+  'tmp',
+  '.terraform',
+  '.serverless',
+  'bazel-bin',
+  'bazel-out',
+  'bazel-testlogs',
+  '.cargo',
+  '.stack-work',
+  '.dart_tool',
+  'zig-cache',
+  'zig-out',
+  '.metals',
+  '.bloop',
+  '.bsp',
+  '.ccls-cache',
+  '.clangd',
+  'elm-stuff',
+  '_opam',
+  '.cpcache',
+  '.shadow-cljs',
+  '.vercel',
+  '.netlify',
+  'deploy',
+  'deployed',
+  '.codebase-memory',
+  '.qdrant_code_embeddings',
+  '.tmp',
+];
+// Skipped by name in the fast and moderate modes only.
+const INDEXER_SKIPPED_FILTERED = [
+  'vendor',
+  'vendored',
+  'generated',
+  'gen',
+  'auto-generated',
+  'fixtures',
+  'testdata',
+  'test_data',
+  '__tests__',
+  '__mocks__',
+  '__snapshots__',
+  '__fixtures__',
+  '__test__',
+  'docs',
+  'doc',
+  'documentation',
+  'examples',
+  'example',
+  'samples',
+  'sample',
+  'assets',
+  'static',
+  'public',
+  'media',
+  'third_party',
+  'thirdparty',
+  '3rdparty',
+  'external',
+  'migrations',
+  'seeds',
+  'e2e',
+  'integration',
+  'locale',
+  'locales',
+  'i18n',
+  'l10n',
+  'scripts',
+  'tools',
+  'hack',
+  'bin',
+  'build',
+  'out',
+];
+
+// Skipped folder names a C or C++ project indexes after all. An `obj` folder there can hold
+// sources (protocol objects, for one); a build's `obj` holds object files, which the allow
+// list keeps out anyway.
+const C_FAMILY_INDEXED = new Set(['obj']);
+
+/** Rules that keep only C and C++ sources and headers, with the indexer's folder skips for `mode`. */
+function cFamilyRules(mode) {
+  const skipped = (
+    mode === 'full' ? INDEXER_SKIPPED_ALWAYS : [...INDEXER_SKIPPED_ALWAYS, ...INDEXER_SKIPPED_FILTERED]
+  ).filter((name) => !C_FAMILY_INDEXED.has(name));
+  return [
+    '*',
+    '!*/',
+    ...C_FAMILY_EXTENSIONS.map((extension) => `!*.${extension}`),
+    ...skipped.map((name) => `**/${name}/`),
+  ];
+}
+
 function runGit(root, args) {
   try {
     return execFileSync('git', ['-C', root, ...args], {
@@ -286,7 +432,11 @@ function acquireFilterLock(filename, indexOwner) {
   throw busy();
 }
 
-function prepareSourceOnlyOverlay(root, indexOwner = {}) {
+/**
+ * Install the temporary index filters. `options.cFamily` restricts the index to C and C++
+ * sources and headers; `options.mode` is the index mode, whose folder skips that rule keeps.
+ */
+function prepareSourceOnlyOverlay(root, indexOwner = {}, options = {}) {
   const git = detectGit(root);
   const token = `${process.pid}-${crypto.randomUUID()}`;
   const lock = acquireFilterLock(git ? git.infoExclude : path.join(root, '.cbmignore'), indexOwner);
@@ -301,7 +451,14 @@ function prepareSourceOnlyOverlay(root, indexOwner = {}) {
   };
   try {
     if (git) install(git.infoExclude, ['*'], false);
-    install(path.join(root, '.cbmignore'), SOURCE_ONLY_RULES, true);
+    // Prepended: the user's own lines come after and can still include a folder or a file type.
+    const rules = options.cFamily
+      ? [
+          ...cFamilyRules(options.mode),
+          ...SOURCE_ONLY_RULES.filter((rule) => !C_FAMILY_INDEXED.has(rule.replace(/^\*\*\/|\/$/g, ''))),
+        ]
+      : SOURCE_ONLY_RULES;
+    install(path.join(root, '.cbmignore'), rules, true);
   } catch (error) {
     for (const layer of [...layers].reverse()) restoreLayer(layer);
     lock.release();
@@ -310,6 +467,7 @@ function prepareSourceOnlyOverlay(root, indexOwner = {}) {
 
   return {
     gitTrackedOnly: Boolean(git),
+    cSourcesOnly: Boolean(options.cFamily),
     files: layers.map((layer) => layer.filename),
     cleanup() {
       const conflicts = [];
@@ -324,9 +482,11 @@ function prepareSourceOnlyOverlay(root, indexOwner = {}) {
 }
 
 module.exports = {
+  C_FAMILY_EXTENSIONS,
   MARKER_END,
   MARKER_START,
   SOURCE_ONLY_RULES,
+  cFamilyRules,
   detectGit,
   prepareSourceOnlyOverlay,
 };
