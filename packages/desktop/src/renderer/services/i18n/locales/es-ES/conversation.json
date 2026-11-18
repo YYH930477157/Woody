@@ -939,11 +939,31 @@
     },
     "architecture": {
       "title": "Archivo de arquitectura",
-      "hint": "Woody genera .woody/architecture.md a partir del índice y del código fuente: las tareas, las tablas de despacho en orden, las restricciones de orden y en qué tablas se registra cada módulo. Una vez creado, cada indexación lo actualiza y conserva la sección Reglas de cambio que escribe tu equipo. El modelo lo lee antes de cambiar el código.",
+      "hint": "Tras cada indexación, Woody escribe .woody/architecture.md a partir del índice y del fuente: las tareas, las tablas de despacho en orden, las restricciones de orden y los módulos encontrados en esas tablas. Se conserva vuestra sección de reglas de cambio. El modelo la lee antes de cambiar el código.",
       "generate": "Generar",
       "update": "Actualizar ahora",
       "summary": "Última generación {{time}}: {{tasks}} tareas, {{tables}} tablas de despacho.",
       "failed": "No se pudo actualizar el archivo de arquitectura: {{error}}"
+    },
+    "modules": {
+      "title": "Módulos y expertos",
+      "hint": "Los módulos salen de las tablas de despacho. Tras cada indexación, Woody también escribe la parte de hechos de la ficha de cada experto de módulo en .woody/features. Elige módulos para crear un experto o añadirlos a uno existente.",
+      "refresh": "Actualizar fichas",
+      "empty": "Aún no se ha encontrado ningún módulo. Aparecerán aquí cuando la indexación encuentre tablas de despacho.",
+      "noExpert": "Sin experto",
+      "newExpert": "Nuevo experto",
+      "chooseExpert": "Elige un experto",
+      "addToExpert": "Añadir al experto",
+      "nameDraft": "Experto {{id}}",
+      "summaryDraft": "Módulo {{modules}}: se registra en {{tables}}; puntos de entrada {{functions}}.",
+      "expertsUnreadable": "No se pudo leer la lista de expertos: {{error}}",
+      "states": {
+        "nobrief": "Sin generar",
+        "missing": "Sin estudiar",
+        "stale": "Revisar de nuevo",
+        "ready": "Estudiado",
+        "error": "Error"
+      }
     }
   },
   "managedWorkspace": {

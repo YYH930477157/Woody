@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CodebaseMemoryStatus } from '@/common/types/codebaseMemory/types';
 import CodebaseMemoryPanel from '@/renderer/pages/conversation/CodebaseMemory';
@@ -12,6 +12,9 @@ const api = vi.hoisted(() => ({
   architecture: vi.fn(),
   cancel: vi.fn(),
   openLens: vi.fn(),
+  experts: vi.fn(),
+  saveExperts: vi.fn(),
+  moduleCards: vi.fn(),
 }));
 vi.mock('@/common', () => ({
   ipcBridge: { codebaseMemory: Object.fromEntries(Object.entries(api).map(([key, invoke]) => [key, { invoke }])) },
@@ -43,6 +46,8 @@ beforeEach(() => {
     status('D:/one', { phase: 'running', config: { version: 1, enabled: true, mode: 'fast' } })
   );
   api.cancel.mockResolvedValue(status('D:/one', { phase: 'cancelled' }));
+  api.experts.mockResolvedValue({ file: 'D:/one/.woody/experts.json', saved: null, cards: [] });
+  api.moduleCards.mockResolvedValue({ modules: [], experts: [] });
 });
 afterEach(() => {
   cleanup();
@@ -322,12 +327,18 @@ describe('project architecture panel', () => {
     const anyway = screen.getByRole('button', { name: key('indexAnyway') });
     await waitFor(() => expect(anyway).not.toBeDisabled());
     fireEvent.click(screen.getByRole('button', { name: key('start') }));
-    await waitFor(() => expect(api.start).toHaveBeenCalledExactlyOnceWith({ repoPath: 'D:/one' }));
+    await waitFor(() =>
+      expect(api.start).toHaveBeenCalledExactlyOnceWith({
+        repoPath: 'D:/one',
+        bypassPrecheck: false,
+        language: 'zh-CN',
+      })
+    );
     api.start.mockClear();
     await waitFor(() => expect(screen.getByRole('button', { name: key('indexAnyway') })).not.toBeDisabled());
     fireEvent.click(screen.getByRole('button', { name: key('indexAnyway') }));
     await waitFor(() =>
-      expect(api.start).toHaveBeenCalledExactlyOnceWith({ repoPath: 'D:/one', bypassPrecheck: true })
+      expect(api.start).toHaveBeenCalledExactlyOnceWith({ repoPath: 'D:/one', bypassPrecheck: true, language: 'zh-CN' })
     );
   });
   it('offers no way around the pre-check after other failures', async () => {
@@ -445,5 +456,108 @@ describe('project architecture panel', () => {
       await vi.advanceTimersByTimeAsync(2100);
     });
     expect(api.get.mock.calls.filter(([arg]) => arg.repoPath === 'D:/one').length).toBeGreaterThan(previous);
+  });
+});
+
+describe('modules and experts in the architecture panel', () => {
+  const config = { version: 1, enabled: true, mode: 'full' } as const;
+  const modules = [
+    {
+      id: 'sensor',
+      files: ['app/sensor.c', 'app/sensor.h'],
+      tables: ['secondList'],
+      functions: ['SENSOR_Second'],
+      experts: [],
+    },
+    { id: 'filter', files: ['app/filter.c'], tables: ['initList'], functions: ['FILTER_Init'], experts: [] },
+    { id: 'ui', files: ['app/ui.c'], tables: ['secondList'], functions: ['UI_Second'], experts: ['ui'] },
+  ];
+  const uiExpert = { id: 'ui', name: 'UI expert', summary: 'Shows values.', paths: ['app/ui.c'] };
+  beforeEach(() => {
+    api.get.mockResolvedValue(
+      status('D:/one', { phase: 'succeeded', config, updatedAt: 1, architecture: { generatedAt: 1, modules } })
+    );
+    api.experts.mockResolvedValue({
+      file: 'D:/one/.woody/experts.json',
+      saved: { version: 1, experts: [uiExpert], shared: ['app/task.c'] },
+      cards: [],
+    });
+    api.moduleCards.mockResolvedValue({
+      modules,
+      experts: [{ id: 'ui', card: '.woody/features/ui.md', state: 'stale' }],
+    });
+    api.saveExperts.mockImplementation(async ({ file }) => ({
+      file: 'D:/one/.woody/experts.json',
+      saved: file,
+      cards: [],
+    }));
+  });
+
+  it('lists the detected modules and the state of each expert card', async () => {
+    render(<CodebaseMemoryPanel repoPaths={{ one: 'D:/one' }} />);
+    const list = await screen.findByTestId('codebase-modules');
+    expect(list).toHaveTextContent('app/sensor.c, app/sensor.h');
+    expect(await screen.findByText(key('modules.states.stale'))).toBeInTheDocument();
+    expect(screen.getAllByText(key('modules.noExpert'))).toHaveLength(2);
+    expect(api.moduleCards).toHaveBeenCalledWith({ repoPath: 'D:/one' });
+  });
+
+  it('makes one new expert from the chosen modules and writes its card', async () => {
+    render(<CodebaseMemoryPanel repoPaths={{ one: 'D:/one' }} />);
+    await screen.findByText(key('modules.states.stale'));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'sensor' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'filter' }));
+    fireEvent.click(screen.getByRole('button', { name: key('modules.newExpert') }));
+    const draft = screen.getByTestId('codebase-module-draft');
+    const [name, id] = draft.querySelectorAll('input');
+    expect(id).toHaveValue('sensor-filter');
+    fireEvent.change(name, { target: { value: 'Sensor expert' } });
+    fireEvent.click(within(screen.getByTestId('codebase-module-draft')).getByRole('button', { name: 'common.save' }));
+    await waitFor(() =>
+      expect(api.saveExperts).toHaveBeenCalledExactlyOnceWith({
+        repoPath: 'D:/one',
+        file: {
+          version: 1,
+          experts: [
+            uiExpert,
+            {
+              id: 'sensor-filter',
+              name: 'Sensor expert',
+              summary: key('modules.summaryDraft'),
+              paths: ['app/sensor.c', 'app/sensor.h', 'app/filter.c'],
+            },
+          ],
+          shared: ['app/task.c'],
+        },
+      })
+    );
+    await waitFor(() =>
+      expect(api.moduleCards).toHaveBeenCalledWith({
+        repoPath: 'D:/one',
+        refresh: true,
+        ids: ['sensor-filter'],
+        language: 'zh-CN',
+      })
+    );
+    await waitFor(() => expect(screen.queryByTestId('codebase-module-draft')).toBeNull());
+  });
+
+  it('refuses an expert whose name is taken, and keeps the draft when saving fails', async () => {
+    api.saveExperts.mockRejectedValue(new Error('disk full'));
+    render(<CodebaseMemoryPanel repoPaths={{ one: 'D:/one' }} />);
+    await screen.findByText(key('modules.states.stale'));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'sensor' }));
+    fireEvent.click(screen.getByRole('button', { name: key('modules.newExpert') }));
+    const [name] = screen.getByTestId('codebase-module-draft').querySelectorAll('input');
+    fireEvent.change(name, { target: { value: 'UI expert' } });
+    expect(screen.getByText('team.experts.issues.nameTaken')).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('codebase-module-draft')).getByRole('button', { name: 'common.save' })
+    ).toBeDisabled();
+    fireEvent.change(name, { target: { value: 'Sensor expert' } });
+    fireEvent.click(within(screen.getByTestId('codebase-module-draft')).getByRole('button', { name: 'common.save' }));
+    expect(await screen.findByText('disk full')).toBeInTheDocument();
+    expect(screen.getByTestId('codebase-module-draft')).toBeInTheDocument();
+    expect(api.moduleCards).not.toHaveBeenCalledWith(expect.objectContaining({ refresh: true }));
   });
 });

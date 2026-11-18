@@ -1023,4 +1023,21 @@ function languageOf(existing) {
   return /<!-- woody:architecture version=\d+ language=([A-Za-z-]+) -->/.exec(existing || '')?.[1];
 }
 
-module.exports = { analyze, render, merge, languageOf, labelsFor, scan, guardLines, prepare, parseTables, MARK };
+module.exports = {
+  analyze,
+  render,
+  merge,
+  languageOf,
+  labelsFor,
+  scan,
+  guardLines,
+  prepare,
+  parseTables,
+  lineOf,
+  matchClose,
+  splitTopLevel,
+  fill,
+  FOREIGN_SEGMENTS,
+  KEYWORDS,
+  MARK,
+};

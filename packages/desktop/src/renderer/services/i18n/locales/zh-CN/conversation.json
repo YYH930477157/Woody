@@ -938,11 +938,31 @@
     },
     "architecture": {
       "title": "架构文件",
-      "hint": "Woody 根据索引和源码生成 .woody/architecture.md：任务、按执行顺序列出的调度表、顺序约束，以及各模块登记在哪些表里。生成后，每次索引都会自动更新，你们写的“改动规范”一节会保留。模型改代码前会先读它。",
+      "hint": "每次索引后，Woody 根据索引和源码写 .woody/architecture.md：任务、按执行顺序列出的调度表、顺序约束，以及从调度表识别出的模块。你们写的“改动规范”一节会保留。模型改代码前会先读它。",
       "generate": "生成",
       "update": "立即更新",
       "summary": "上次生成：{{time}}，{{tasks}} 个任务，{{tables}} 张调度表。",
       "failed": "架构文件没能更新：{{error}}"
+    },
+    "modules": {
+      "title": "模块与专家",
+      "hint": "模块从调度表识别。每次索引后，Woody 还会为每位模块专家写好 .woody/features 里功能卡片的事实部分。勾选模块，可以设为一位新专家，或并入已有专家。",
+      "refresh": "更新卡片",
+      "empty": "还没有识别出模块。索引找到调度表后，模块会出现在这里。",
+      "noExpert": "无专家",
+      "newExpert": "设为新专家",
+      "chooseExpert": "选择专家",
+      "addToExpert": "并入专家",
+      "nameDraft": "{{id}} 专家",
+      "summaryDraft": "模块 {{modules}}：登记在 {{tables}}；入口 {{functions}}。",
+      "expertsUnreadable": "无法读取专家清单：{{error}}",
+      "states": {
+        "nobrief": "未生成",
+        "missing": "未熟悉",
+        "stale": "需重新核对",
+        "ready": "已熟悉",
+        "error": "出错"
+      }
     }
   },
   "managedWorkspace": {

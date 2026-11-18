@@ -938,11 +938,31 @@
     },
     "architecture": {
       "title": "아키텍처 파일",
-      "hint": "Woody는 인덱스와 소스 코드로 .woody/architecture.md를 생성합니다. 태스크, 실행 순서대로 정리한 디스패치 테이블, 순서 제약, 각 모듈이 등록된 테이블을 담습니다. 파일이 생기면 인덱싱할 때마다 갱신되며, 팀이 작성한 \"변경 규칙\" 섹션은 유지됩니다. 모델은 코드를 변경하기 전에 이 파일을 읽습니다.",
+      "hint": "인덱스할 때마다 Woody가 인덱스와 소스로 .woody/architecture.md를 씁니다. 태스크, 실행 순서대로의 디스패치 테이블, 순서 제약, 테이블에서 찾은 모듈이 들어 있습니다. 팀이 쓴 변경 규칙 섹션은 유지됩니다. 모델은 코드를 바꾸기 전에 이 파일을 읽습니다.",
       "generate": "생성",
       "update": "지금 업데이트",
       "summary": "마지막 생성: {{time}}, 태스크 {{tasks}}개, 디스패치 테이블 {{tables}}개.",
       "failed": "아키텍처 파일을 업데이트하지 못했습니다: {{error}}"
+    },
+    "modules": {
+      "title": "모듈과 전문가",
+      "hint": "모듈은 디스패치 테이블에서 찾습니다. 인덱스할 때마다 Woody는 각 모듈 전문가의 기능 카드(.woody/features)에서 사실 부분도 씁니다. 모듈을 선택해 새 전문가로 만들거나 기존 전문가에 추가하세요.",
+      "refresh": "카드 업데이트",
+      "empty": "아직 찾은 모듈이 없습니다. 인덱스가 디스패치 테이블을 찾으면 여기에 표시됩니다.",
+      "noExpert": "전문가 없음",
+      "newExpert": "새 전문가",
+      "chooseExpert": "전문가 선택",
+      "addToExpert": "전문가에 추가",
+      "nameDraft": "{{id}} 전문가",
+      "summaryDraft": "모듈 {{modules}}: {{tables}}에 등록, 진입점 {{functions}}.",
+      "expertsUnreadable": "전문가 목록을 읽을 수 없습니다: {{error}}",
+      "states": {
+        "nobrief": "작성 전",
+        "missing": "학습 전",
+        "stale": "재확인 필요",
+        "ready": "학습됨",
+        "error": "실패"
+      }
     }
   },
   "managedWorkspace": {

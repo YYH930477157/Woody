@@ -938,11 +938,31 @@
     },
     "architecture": {
       "title": "Architecture file",
-      "hint": "Woody writes .woody/architecture.md from the index and the source: the tasks, the dispatch tables in order, the order constraints, and which tables each module registers in. Once the file exists, every index updates it and keeps your Change rules section. The model reads it before changing code.",
+      "hint": "After every index Woody writes .woody/architecture.md from the index and the source: the tasks, the dispatch tables in order, the order constraints, and the modules found in those tables. Your Change rules section is kept. The model reads it before changing code.",
       "generate": "Generate",
       "update": "Update now",
       "summary": "Last generated {{time}}: {{tasks}} tasks, {{tables}} dispatch tables.",
       "failed": "The architecture file could not be updated: {{error}}"
+    },
+    "modules": {
+      "title": "Modules and experts",
+      "hint": "Modules come from the dispatch tables. After every index Woody also writes the facts part of each module expert's feature card in .woody/features. Choose modules to make a new expert or to add them to an existing one.",
+      "refresh": "Update cards",
+      "empty": "No module found yet. Modules appear here after an index finds dispatch tables.",
+      "noExpert": "No expert",
+      "newExpert": "New expert",
+      "chooseExpert": "Choose an expert",
+      "addToExpert": "Add to expert",
+      "nameDraft": "{{id}} expert",
+      "summaryDraft": "Module {{modules}}: registers in {{tables}}; entry points {{functions}}.",
+      "expertsUnreadable": "The experts file could not be read: {{error}}",
+      "states": {
+        "nobrief": "Not written",
+        "missing": "Not learned",
+        "stale": "Check again",
+        "ready": "Learned",
+        "error": "Failed"
+      }
     }
   },
   "managedWorkspace": {

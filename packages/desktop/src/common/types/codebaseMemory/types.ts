@@ -46,6 +46,75 @@ export type CodebaseMemoryArchitecture = {
   language?: string;
   /** The last update failed; the file keeps its earlier content. */
   error?: string;
+  /** Modules found from the dispatch tables, as listed in the file's modules section. */
+  modules?: CodebaseMemoryModule[];
+};
+
+/** A module Woody found: a source file that registers functions in a dispatch table, with its header and same-prefix files. */
+export type CodebaseMemoryModule = {
+  /** Lowercase words joined by `-`, from the file name; usable as an expert id. */
+  id: string;
+  /** Project-relative files. */
+  files: string[];
+  /** Dispatch tables the module registers functions in. */
+  tables: string[];
+  /** The functions it registers there. */
+  functions: string[];
+  /** Ids of the experts that own any of its files. */
+  experts: string[];
+};
+
+/**
+ * State of a module expert's feature card `.woody/features/<id>.md`:
+ * `nobrief` before Woody wrote the expert's brief (or after its paths changed), `missing`
+ * before the expert wrote its own part, `stale` when the module's files changed after the
+ * expert's last update, `ready`, or `error` when the card could not be read or written.
+ */
+export type ModuleCardState = 'nobrief' | 'missing' | 'stale' | 'ready' | 'error';
+
+/** The short form of a brief that the expert's role rules carry. */
+export type ModuleCardDigest = {
+  files: number;
+  /** Tasks, dispatch table entries and struct table fields, e.g. `secondList #1 SENSOR_Second`. */
+  entries: string[];
+  /** Functions called from outside the module, with who calls them (expert names, `shared`, `unowned`). */
+  provides: Array<{ name: string; callers: string[] }>;
+  /** Globals of the module that other files write or take the address of. */
+  writtenOutside: string[];
+  issues: {
+    partial: number;
+    unusable: number;
+    changed: number;
+    missingFunctions: number;
+    missingGlobals: number;
+    unmatched: number;
+  };
+};
+
+export type ModuleCard = {
+  id: string;
+  /** Project-relative path of the card. */
+  card: string;
+  state: ModuleCardState;
+  error?: string;
+  generatedAt?: number;
+  digest?: ModuleCardDigest;
+};
+
+export type ModuleCards = {
+  modules: CodebaseMemoryModule[];
+  /** One entry per expert in `.woody/experts.json`, in its order. */
+  experts: ModuleCard[];
+  /** The experts file could not be read when the cards were last written. */
+  error?: string;
+};
+
+export type ModuleCardsRequest = {
+  /** Write the briefs of `ids` (all experts when omitted) and of every expert whose brief is missing or outdated. */
+  refresh?: boolean;
+  ids?: string[];
+  /** Language for a new architecture file and new cards. */
+  language?: string;
 };
 
 export type CodebaseMemoryStatus = {

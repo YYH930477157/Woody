@@ -44,7 +44,7 @@ afterEach(async () => {
 /* eslint-disable no-await-in-loop */
 async function finished(service: ReturnType<typeof runtime>) {
   let result = await service.get(repo);
-  for (let i = 0; i < 100 && result.phase === 'running'; i++) {
+  for (let i = 0; i < 400 && result.phase === 'running'; i++) {
     await new Promise((resolve) => setTimeout(resolve, 20));
     result = await service.get(repo);
   }

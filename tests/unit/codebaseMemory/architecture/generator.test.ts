@@ -3,8 +3,8 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const require = createRequire(import.meta.url);
-const architecture = require(path.resolve('resources/bundled-mcp/codebase-memory/architecture.cjs'));
-const labels = require(path.resolve('resources/bundled-mcp/codebase-memory/architecture-labels.json'));
+const architecture = require(path.resolve('resources/bundled-mcp/codebase-memory/lib/architecture.cjs'));
+const labels = require(path.resolve('resources/bundled-mcp/codebase-memory/lib/architecture-labels.json'));
 
 type Row = [string, string, number, number];
 

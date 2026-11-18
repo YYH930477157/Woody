@@ -5,7 +5,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 const { detectGit, prepareSourceOnlyOverlay } =
-  require('../../../resources/bundled-mcp/codebase-memory/sourceFilter.cjs') as {
+  require('../../../resources/bundled-mcp/codebase-memory/lib/sourceFilter.cjs') as {
     detectGit(root: string): { topLevel: string; infoExclude: string } | null;
     prepareSourceOnlyOverlay(
       root: string,
@@ -238,7 +238,7 @@ describe('source-only index overlay', () => {
     const nested = path.join(root, 'subproject');
     fs.mkdirSync(nested);
     const overlay = prepareSourceOnlyOverlay(root);
-    const modulePath = path.resolve('resources/bundled-mcp/codebase-memory/sourceFilter.cjs');
+    const modulePath = path.resolve('resources/bundled-mcp/codebase-memory/lib/sourceFilter.cjs');
     try {
       const output = execFileSync(
         process.execPath,
@@ -260,7 +260,7 @@ describe('source-only index overlay', () => {
     git(root, 'init', '-q');
     const exclude = detectGit(root)!.infoExclude;
     const original = fs.readFileSync(exclude);
-    const modulePath = path.resolve('resources/bundled-mcp/codebase-memory/sourceFilter.cjs');
+    const modulePath = path.resolve('resources/bundled-mcp/codebase-memory/lib/sourceFilter.cjs');
     execFileSync(
       process.execPath,
       ['-e', `require(${JSON.stringify(modulePath)}).prepareSourceOnlyOverlay(process.argv[1]);`, root],
@@ -277,7 +277,7 @@ describe('source-only index overlay', () => {
     const indexLock = path.join(root, 'index.lock');
     fs.mkdirSync(indexLock);
     fs.writeFileSync(path.join(indexLock, 'owner.json'), JSON.stringify({ token: 'test', childPid: process.pid }));
-    const modulePath = path.resolve('resources/bundled-mcp/codebase-memory/sourceFilter.cjs');
+    const modulePath = path.resolve('resources/bundled-mcp/codebase-memory/lib/sourceFilter.cjs');
     execFileSync(
       process.execPath,
       [
@@ -300,7 +300,7 @@ describe('source-only index overlay', () => {
     const root = makeRoot();
     const indexLock = path.join(root, 'index.lock');
     fs.mkdirSync(indexLock);
-    const modulePath = path.resolve('resources/bundled-mcp/codebase-memory/sourceFilter.cjs');
+    const modulePath = path.resolve('resources/bundled-mcp/codebase-memory/lib/sourceFilter.cjs');
     execFileSync(
       process.execPath,
       [
@@ -319,7 +319,7 @@ describe('source-only index overlay', () => {
 
   it('recovers when a dead writer left a journal temporary file', () => {
     const root = makeRoot();
-    const modulePath = path.resolve('resources/bundled-mcp/codebase-memory/sourceFilter.cjs');
+    const modulePath = path.resolve('resources/bundled-mcp/codebase-memory/lib/sourceFilter.cjs');
     execFileSync(
       process.execPath,
       ['-e', `require(${JSON.stringify(modulePath)}).prepareSourceOnlyOverlay(process.argv[1]);`, root],
@@ -336,7 +336,7 @@ describe('source-only index overlay', () => {
     const root = makeRoot();
     const outside = path.join(makeRoot(), 'outside.txt');
     fs.writeFileSync(outside, 'original');
-    const modulePath = path.resolve('resources/bundled-mcp/codebase-memory/sourceFilter.cjs');
+    const modulePath = path.resolve('resources/bundled-mcp/codebase-memory/lib/sourceFilter.cjs');
     execFileSync(
       process.execPath,
       ['-e', `require(${JSON.stringify(modulePath)}).prepareSourceOnlyOverlay(process.argv[1]);`, root],

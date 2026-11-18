@@ -3,8 +3,10 @@ import { Alert, Button, Collapse, Select, Spin, Switch } from '@arco-design/web-
 import { useTranslation } from 'react-i18next';
 import type { CodebaseMemoryDiagnosis } from '@/common/types/codebaseMemory/types';
 import ArchitectureFile from './ArchitectureFile';
+import ModuleList from './ModuleList';
 import SkippedFolders from './SkippedFolders';
 import { useCodebaseMemory } from './useCodebaseMemory';
+import { useModuleList } from './useModuleList';
 
 /** Localized one-line cause for the report the runtime just wrote. */
 const CAUSE_KEYS: Record<CodebaseMemoryDiagnosis, string> = {
@@ -32,6 +34,9 @@ function FolderMemory({
   const { t } = useTranslation();
   const state = useCodebaseMemory(repoPath, visible, refreshToken);
   const { status, draft, dirty, loading, busy, error, readFailed, updateDraft, run } = state;
+  const indexed = Boolean(status?.config.enabled && status.phase === 'succeeded');
+  // Follows every index and generation: both rewrite the status.
+  const moduleList = useModuleList(repoPath, visible && indexed, status?.updatedAt);
   const refused = status?.phase === 'failed' && status.precheckRefused === true;
   const activeError =
     error ||
@@ -138,6 +143,13 @@ function FolderMemory({
         generating={busy === 'architecture'}
         onGenerate={() => void run('architecture')}
       />
+      {indexed && (
+        <ModuleList
+          modules={status?.architecture?.modules ?? []}
+          state={moduleList}
+          disabled={locked || running || dirty}
+        />
+      )}
       {dirty && <div className='text-12px text-t-secondary'>{t('conversation.codebaseMemory.unsaved')}</div>}
       <Alert type='info' content={t('conversation.codebaseMemory.newConversationHint')} />
       {loading && <Spin />}

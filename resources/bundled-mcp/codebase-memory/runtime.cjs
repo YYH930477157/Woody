@@ -6,9 +6,10 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { execFile, spawn, spawnSync } = require('node:child_process');
 const TOOL_SCHEMAS = new Map(require('./tools.json').map((tool) => [tool.name, tool.inputSchema]));
-const architecture = require('./architecture.cjs');
-const { C_FAMILY_EXTENSIONS, prepareSourceOnlyOverlay } = require('./sourceFilter.cjs');
-const ARCHITECTURE_LABELS = require('./architecture-labels.json');
+const architecture = require('./lib/architecture.cjs');
+const modules = require('./lib/modules.cjs');
+const { C_FAMILY_EXTENSIONS, prepareSourceOnlyOverlay } = require('./lib/sourceFilter.cjs');
+const ARCHITECTURE_LABELS = require('./lib/architecture-labels.json');
 const DEFAULT_CONFIG = { version: 1, enabled: false, mode: 'fast' };
 const TOOLS = new Set([
   'index_repository',
@@ -676,22 +677,106 @@ function addIncludeLine(root, folder) {
 }
 
 const ARCHITECTURE_FILE = '.woody/architecture.md';
+const EXPERTS_FILE = '.woody/experts.json';
+const FEATURES_DIR = '.woody/features';
 const FUNCTIONS_QUERY = 'MATCH (f:Function) RETURN f.name, f.file_path, f.start_line, f.end_line';
 const FILES_QUERY = 'MATCH (f:File) RETURN f.file_path';
+const VARIABLES_QUERY = 'MATCH (v:Variable) RETURN v.name, v.file_path';
 const QUERY_PAGE = 10000;
-function architecturePath(root) {
-  const filename = path.join(root, ARCHITECTURE_FILE);
+const EXPERTS_MAX_BYTES = 64 * 1024;
+/** The same rule as the team dialog's: lowercase ASCII words joined by "-". */
+const EXPERT_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const COVERAGE_BATCH = 200;
+/** A file Woody writes under .woody; it must stay inside the project even through links. */
+function woodyPath(root, relative) {
+  const filename = path.join(root, relative);
   for (const candidate of [path.dirname(filename), filename]) {
     try {
-      const relative = path.relative(root, fs.realpathSync.native(candidate));
-      if (relative.startsWith('..') || path.isAbsolute(relative))
-        throw new Error(`${ARCHITECTURE_FILE} points outside the project`);
+      const resolved = path.relative(root, fs.realpathSync.native(candidate));
+      if (resolved.startsWith('..') || path.isAbsolute(resolved))
+        throw new Error(`${relative} points outside the project`);
     } catch (error) {
       if (error.code !== 'ENOENT') throw error;
     }
   }
   return filename;
 }
+const architecturePath = (root) => woodyPath(root, ARCHITECTURE_FILE);
+/**
+ * The project's module experts, or undefined without a file. Read like the configuration:
+ * directly, then through PowerShell 7 on machines that encrypt files for this process.
+ * Entries the team dialog would refuse are left out instead of failing the whole list.
+ */
+function readExperts(root, throughPowerShell) {
+  const filename = woodyPath(root, EXPERTS_FILE);
+  let bytes;
+  try {
+    if (fs.statSync(filename).size > EXPERTS_MAX_BYTES) throw new Error('the file is larger than 64 KB');
+    bytes = fs.readFileSync(filename);
+    if (!looksLikeText(bytes)) {
+      if (!throughPowerShell) throw new Error('the file is not readable as text, and PowerShell 7 was not found');
+      bytes = throughPowerShell(filename);
+      if (!bytes?.length || !looksLikeText(bytes))
+        throw new Error('the file is not readable as text, and PowerShell 7 also reads it as ciphertext');
+    }
+  } catch (error) {
+    if (error.code === 'ENOENT') return undefined;
+    throw new Error(`Cannot read ${EXPERTS_FILE}: ${error.message}`);
+  }
+  let value;
+  try {
+    value = JSON.parse(bytes.toString('utf8').replace(/^﻿/, ''));
+  } catch (error) {
+    throw new Error(`${EXPERTS_FILE} is not valid JSON: ${error.message}`);
+  }
+  const strings = (list) =>
+    Array.isArray(list)
+      ? list
+          .filter((item) => typeof item === 'string')
+          .map((item) => item.trim().replace(/\\/g, '/').replace(/^\.\//, ''))
+      : [];
+  const experts = [];
+  for (const item of Array.isArray(value?.experts) ? value.experts : []) {
+    if (!item || typeof item.id !== 'string' || !EXPERT_ID.test(item.id) || item.id.length > 40) continue;
+    if (experts.some((known) => known.id === item.id)) continue;
+    const name = typeof item.name === 'string' && item.name.trim() ? item.name.trim() : item.id;
+    experts.push({ id: item.id, name, paths: strings(item.paths).filter(Boolean) });
+  }
+  return { experts, shared: strings(value?.shared).filter(Boolean) };
+}
+/** A feature card as UTF-8 text, or undefined when there is none. */
+function readCard(filename) {
+  let bytes;
+  try {
+    bytes = fs.readFileSync(filename);
+  } catch (error) {
+    if (error.code === 'ENOENT') return undefined;
+    throw error;
+  }
+  const text = bytes.toString('utf8');
+  if (!looksLikeText(bytes) || text.includes('�'))
+    throw new Error(
+      'Woody cannot read this feature card as UTF-8 text; it may be encrypted for Woody or saved in another encoding'
+    );
+  return text;
+}
+/** One hash for the contents of several project files, so a later change to any of them shows. */
+function hashFiles(root, files) {
+  const hash = crypto.createHash('sha1');
+  for (const file of [...files].sort()) {
+    hash.update(file).update('\0');
+    try {
+      hash.update(fs.readFileSync(path.join(root, file)));
+    } catch {
+      hash.update('missing');
+    }
+    hash.update('\0');
+  }
+  return hash.digest('hex');
+}
+const sha1 = (text) => crypto.createHash('sha1').update(text).digest('hex');
+/** Cypher list of quoted strings. */
+const cypherList = (list) => list.map((item) => `'${item.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`).join(',');
 /**
  * The current file, or undefined when there is none. Woody only rewrites a file it reads as
  * UTF-8 text with its markers, so an encrypted or hand-written file is never replaced.
@@ -1032,6 +1117,8 @@ function createRuntime(options) {
       indexerReadsPlain,
       skippedSources,
       architecture: architectureStatus,
+      moduleCards,
+      language,
     } = value;
     atomicJson(project.statusFile, {
       phase,
@@ -1047,6 +1134,8 @@ function createRuntime(options) {
       indexerReadsPlain,
       skippedSources,
       architecture: architectureStatus,
+      moduleCards,
+      language,
       projectName: project.name,
       updatedAt: Date.now(),
     });
@@ -1446,11 +1535,8 @@ function createRuntime(options) {
    * Write .woody/architecture.md from the index and the source. Keeps everything outside the
    * generated markers. `requested` is the panel's language; updates keep the file's own.
    */
-  async function writeArchitecture(project, config, requested) {
-    const filename = architecturePath(project.root);
-    const existing = readArchitecture(filename);
-    const wanted = requested && ARCHITECTURE_LABELS[requested] ? requested : architecture.languageOf(existing);
-    const { language, text } = architecture.labelsFor(ARCHITECTURE_LABELS, wanted);
+  /** The index's functions and files, and the architecture analysis of the source. */
+  async function analyzeProject(project) {
     const functions = await queryRows(project, FUNCTIONS_QUERY);
     // Files without functions, such as tables of parameters, can still hold tables.
     const sourceFiles = (await queryRows(project, FILES_QUERY)).map((row) => row[0]);
@@ -1461,26 +1547,217 @@ function createRuntime(options) {
       callersOf: (names) => callersOf(project, names),
     });
     // An index started from a chat runs in a process that may not be on the encryption
-    // whitelist; what it reads would replace a good file with an empty one.
+    // whitelist; what it reads would replace good files with empty ones.
     const unreadable = model.gaps.unreadable.length;
     if (model.files > 0 && unreadable * 2 >= model.files)
       throw new Error(
         `This process reads ${unreadable} of ${model.files} source files as ciphertext; ${ARCHITECTURE_FILE} was left unchanged`
       );
-    const generated = architecture.render(model, text, { language, date: localStamp(), mode: config.mode });
+    return { functions, sourceFiles, model };
+  }
+  /**
+   * Write .woody/architecture.md, with the modules section. Keeps everything outside the
+   * generated markers. `requested` is the panel's language; updates keep the file's own.
+   */
+  function writeArchitecture(project, config, requested, analysis, found) {
+    const filename = architecturePath(project.root);
+    const existing = readArchitecture(filename);
+    const wanted = requested && ARCHITECTURE_LABELS[requested] ? requested : architecture.languageOf(existing);
+    const { language, text } = architecture.labelsFor(ARCHITECTURE_LABELS, wanted);
+    const { model } = analysis;
+    const generated = [
+      architecture.render(model, text, { language, date: localStamp(), mode: config.mode }).trimEnd(),
+      '',
+      modules.renderModules(found, text),
+    ].join('\n');
     atomicWrite(filename, architecture.merge(existing, generated, text));
     return { generatedAt: Date.now(), tasks: model.tasks.length, tables: model.tables.length, language };
   }
-  /** After an index: update an existing file. Never throws; a failure is kept in the status. */
-  async function refreshArchitecture(project, config, previous) {
-    if (!fs.existsSync(path.join(project.root, ARCHITECTURE_FILE))) return previous;
+  /** The detected modules as the panel shows them. */
+  const moduleSummary = (found) =>
+    found.map((item) => ({
+      id: item.id,
+      files: item.files,
+      tables: item.tables.map((entry) => entry.table),
+      functions: item.tables.flatMap((entry) => entry.functions),
+      experts: item.experts,
+    }));
+  /** Index coverage of some files: parse problems and whether each changed after the index. */
+  async function coverageOf(project, config, files) {
+    const coverage = new Map();
     try {
-      return await writeArchitecture(project, config);
+      for (let offset = 0; offset < files.length; offset += COVERAGE_BATCH) {
+        const paths = files.slice(offset, offset + COVERAGE_BATCH);
+        const args = boundArguments(project, 'check_index_coverage', { paths, format: 'json' }, config);
+        const result = await native(project, 'check_index_coverage', args).promise;
+        const value = result.structuredContent || JSON.parse(result.content?.[0]?.text || '{}');
+        for (const item of value.paths || [])
+          if (typeof item?.path === 'string')
+            coverage.set(item.path, {
+              status: item.status,
+              freshness: item.freshness,
+              ranges: (item.coverage || []).flatMap((entry) => entry.ranges || []),
+            });
+      }
+    } catch {
+      // Coverage only adds notes to the brief.
+    }
+    return coverage;
+  }
+  /**
+   * The generated part of each expert's feature card in .woody/features, and the card state
+   * for the team dialog. `only` limits the work to some experts; the others keep their record.
+   * An expert whose card cannot be written gets an error in its record; the others go on.
+   */
+  async function writeModuleCards(project, config, analysis, found, saved, language, previous, only) {
+    const result = { generatedAt: Date.now(), language, experts: {} };
+    if (!saved?.experts.length) return result;
+    const { functions, sourceFiles, model } = analysis;
+    const { text } = architecture.labelsFor(ARCHITECTURE_LABELS, language);
+    const variables = await queryRows(project, VARIABLES_QUERY);
+    const source = modules.sourceCache(sourceReader(project.root));
+    const indexed = [...new Set([...sourceFiles, ...functions.map((row) => row[1])])].filter(
+      (file) => typeof file === 'string' && /^[^<:/\\][^:]*$/.test(file)
+    );
+    const ownedBy = new Map();
+    for (const expert of saved.experts)
+      if (!only || only.includes(expert.id))
+        ownedBy.set(
+          expert.id,
+          indexed.filter((file) => modules.ownerOf(file, saved.experts, saved.shared) === expert.id).sort()
+        );
+    // One pass for every expert: the calls that touch any of their files, and their coverage.
+    const allOwned = [...new Set([...ownedBy.values()].flat())];
+    const list = cypherList(allOwned);
+    const edges = 'MATCH (a:Function)-[:CALLS|CALL_REFERENCE]->(b:Function)';
+    const fields = 'RETURN a.name, a.file_path, a.start_line, b.name, b.file_path';
+    let allCalls = [];
+    try {
+      if (allOwned.length)
+        allCalls = [
+          ...(await queryRows(project, `${edges} WHERE b.file_path IN [${list}] ${fields}`)),
+          ...(await queryRows(project, `${edges} WHERE a.file_path IN [${list}] ${fields}`)),
+        ];
     } catch (error) {
-      return { ...previous, error: error.message };
+      // Without the calls every brief would claim the module has no callers.
+      return { ...previous, generatedAt: result.generatedAt, language, error: error.message };
+    }
+    const coverage = await coverageOf(project, config, allOwned);
+    for (const expert of saved.experts) {
+      const before = previous?.experts?.[expert.id];
+      if (!ownedBy.has(expert.id)) {
+        if (before) result.experts[expert.id] = before;
+        continue;
+      }
+      try {
+        const owned = ownedBy.get(expert.id);
+        const mine = new Set(owned);
+        const calls = allCalls.filter((row) => mine.has(row[1]) || mine.has(row[4]));
+        const data = modules.collect({
+          expert,
+          experts: saved.experts,
+          shared: saved.shared,
+          model,
+          functions,
+          files: sourceFiles,
+          calls,
+          variables,
+          coverage,
+          source,
+          modules: found,
+        });
+        const filename = woodyPath(project.root, `${FEATURES_DIR}/${expert.id}.md`);
+        const existing = readCard(filename);
+        const generated = modules.renderBrief(data, text, { date: localStamp(), mode: config.mode });
+        const next = modules.mergeCard(existing, generated, expert, text, language);
+        if (next !== existing) atomicWrite(filename, next);
+        const own = modules.ownPart(next, expert);
+        const { state, record } = modules.cardState(before, {
+          filesHash: hashFiles(project.root, owned),
+          ownHash: sha1(own),
+          hasOwn: own.length > 0,
+        });
+        result.experts[expert.id] = {
+          ...record,
+          state,
+          paths: expert.paths,
+          owned,
+          generatedAt: Date.now(),
+          digest: modules.digest(data),
+        };
+      } catch (error) {
+        result.experts[expert.id] = { ...(before || {}), state: 'error', error: error.message };
+      }
+    }
+    return result;
+  }
+  /**
+   * Architecture file, modules and expert cards from the current index. `language` is the
+   * panel's, when it asked; otherwise each file keeps its own. Throws when the source cannot
+   * be read (nothing is written then) and when the architecture file was asked for and could
+   * not be written; card failures stay in their records.
+   */
+  async function writeProjectFiles(project, config, options = {}) {
+    const { language, previous = {}, only, strict = false } = options;
+    const analysis = await analyzeProject(project);
+    let saved;
+    let expertsError;
+    try {
+      saved = readExperts(project.root, throughPowerShell);
+    } catch (error) {
+      expertsError = error.message;
+    }
+    const found = modules.classify({
+      model: analysis.model,
+      functions: analysis.functions,
+      files: analysis.sourceFiles,
+      experts: saved?.experts || [],
+      shared: saved?.shared || [],
+    });
+    let architectureStatus;
+    try {
+      architectureStatus = writeArchitecture(project, config, language, analysis, found);
+    } catch (error) {
+      if (strict) throw error;
+      architectureStatus = { ...previous.architecture, error: error.message };
+    }
+    architectureStatus.modules = moduleSummary(found);
+    // Cards follow the architecture file's language; without one, the panel's.
+    const cardLanguage = architecture.labelsFor(
+      ARCHITECTURE_LABELS,
+      architectureStatus.language || language || previous.moduleCards?.language
+    ).language;
+    const cards = await writeModuleCards(
+      project,
+      config,
+      analysis,
+      found,
+      saved,
+      cardLanguage,
+      previous.moduleCards,
+      only
+    );
+    if (expertsError) cards.error = expertsError;
+    return { architecture: architectureStatus, moduleCards: cards };
+  }
+  /** After an index: write or update the files. Never throws; a failure is kept in the status. */
+  async function refreshProjectFiles(project, config, state) {
+    try {
+      const exists = fs.existsSync(path.join(project.root, ARCHITECTURE_FILE));
+      // The map describes C and C++ firmware; other projects get it only when they ask.
+      if (!exists && !fs.existsSync(path.join(project.root, EXPERTS_FILE)) && !cFamilyProject(project.root)) return;
+      const result = await writeProjectFiles(project, config, {
+        // A new file takes the language of the panel that started the index.
+        language: exists ? undefined : state.language,
+        previous: { architecture: state.architecture, moduleCards: state.moduleCards },
+      });
+      state.architecture = result.architecture;
+      state.moduleCards = result.moduleCards;
+    } catch (error) {
+      state.architecture = { ...state.architecture, error: error.message };
     }
   }
-  async function beginIndex(project, config, { bypassPrecheck = false } = {}) {
+  async function beginIndex(project, config, { bypassPrecheck = false, language } = {}) {
     const owner = acquireLock(project);
     const startedAt = Date.now();
     const previous = readJson(project.statusFile) || {};
@@ -1491,6 +1768,9 @@ function createRuntime(options) {
       // Proof from an earlier run that the indexer reads plaintext here outlives later runs.
       indexerReadsPlain: previous.indexerReadsPlain === true ? true : undefined,
       architecture: previous.architecture,
+      moduleCards: previous.moduleCards,
+      // The panel's language, for files the first index creates.
+      language: typeof language === 'string' && ARCHITECTURE_LABELS[language] ? language : previous.language,
     };
     const fail = async (error) => {
       await recordFailure(project, state, error, startedAt, config);
@@ -1563,7 +1843,7 @@ function createRuntime(options) {
       .then(async (result) => {
         if (await assertReadable(project)) state.indexerReadsPlain = true;
         state.skippedSources = await skippedSources(project, config);
-        state.architecture = await refreshArchitecture(project, config, state.architecture);
+        await refreshProjectFiles(project, config, state);
         return result;
       })
       .then(
@@ -1627,7 +1907,10 @@ function createRuntime(options) {
       if (!available()) throw new Error('Bundled codebase-memory executable is unavailable');
       let job;
       try {
-        job = await beginIndex(project, config, { bypassPrecheck: startOptions?.bypassPrecheck === true });
+        job = await beginIndex(project, config, {
+          bypassPrecheck: startOptions?.bypassPrecheck === true,
+          language: startOptions?.language,
+        });
       } catch (error) {
         // A refusal is a recorded outcome the panel explains, like any failed run.
         if (error?.precheck === true) return api.get(repoPath);
@@ -1665,7 +1948,11 @@ function createRuntime(options) {
         const language = typeof architectureOptions.language === 'string' ? architectureOptions.language : undefined;
         let result;
         try {
-          result = await writeArchitecture(project, status.config, language);
+          result = await writeProjectFiles(project, status.config, {
+            language,
+            previous: { architecture: status.architecture, moduleCards: status.moduleCards },
+            strict: true,
+          });
         } catch (error) {
           persist(project, {
             ...(readJson(project.statusFile) || {}),
@@ -1673,11 +1960,105 @@ function createRuntime(options) {
           });
           throw error;
         }
-        persist(project, { ...(readJson(project.statusFile) || {}), architecture: result });
+        persist(project, { ...(readJson(project.statusFile) || {}), ...result });
       } finally {
         releaseLock(project, owner);
       }
       return api.get(repoPath);
+    },
+    /**
+     * The module experts' feature cards: the state of each (`nobrief` before Woody wrote its
+     * brief, `missing` before the expert wrote anything, `stale` when the module's files
+     * changed after the expert's last update, `ready`, or `error`) and the brief's digest.
+     * `refresh` regenerates the briefs of `ids` (all experts when omitted) from the index,
+     * and of every expert whose brief is missing or whose paths changed.
+     */
+    async moduleCards(repoPath, cardOptions = {}) {
+      const project = projectFor(repoPath);
+      const status = await api.get(repoPath);
+      if (!status.config.enabled) throw new Error('Codebase memory is disabled for this project');
+      const saved = readExperts(project.root, throughPowerShell);
+      const experts = saved?.experts || [];
+      const records = status.moduleCards?.experts || {};
+      const samePaths = (record, expert) =>
+        Array.isArray(record?.paths) && record.paths.join('\n') === expert.paths.join('\n');
+      const hasBrief = (expert) => {
+        try {
+          const text = readCard(woodyPath(project.root, `${FEATURES_DIR}/${expert.id}.md`));
+          return text !== undefined && text.includes(architecture.MARK.start);
+        } catch {
+          return false;
+        }
+      };
+      const wanted = Array.isArray(cardOptions.ids) ? cardOptions.ids : experts.map((expert) => expert.id);
+      const outdated = experts
+        .filter(
+          (expert) => !records[expert.id]?.generatedAt || !samePaths(records[expert.id], expert) || !hasBrief(expert)
+        )
+        .map((expert) => expert.id);
+      const regenerate = cardOptions.refresh === true ? [...new Set([...wanted, ...outdated])] : [];
+      let cards = status.moduleCards || {};
+      if (regenerate.length) {
+        if (!available()) throw new Error('Bundled codebase-memory executable is unavailable');
+        if (status.phase === 'running') throw new Error('An index is already running for this project');
+        if (status.phase !== 'succeeded')
+          throw new Error('Index the project successfully before writing feature cards');
+        const owner = acquireLock(project);
+        try {
+          const language = typeof cardOptions.language === 'string' ? cardOptions.language : undefined;
+          const result = await writeProjectFiles(project, status.config, {
+            language: fs.existsSync(path.join(project.root, ARCHITECTURE_FILE)) ? undefined : language,
+            previous: { architecture: status.architecture, moduleCards: status.moduleCards },
+            only: regenerate,
+          });
+          persist(project, { ...(readJson(project.statusFile) || {}), ...result });
+          cards = result.moduleCards;
+        } finally {
+          releaseLock(project, owner);
+        }
+      } else {
+        // No index work: only see whether an expert has written its card since, or the
+        // module's files changed.
+        const next = { ...cards, experts: { ...records } };
+        let changed = false;
+        for (const expert of experts) {
+          const record = records[expert.id];
+          if (!record?.generatedAt || !samePaths(record, expert) || record.state === 'error') continue;
+          try {
+            const text = readCard(woodyPath(project.root, `${FEATURES_DIR}/${expert.id}.md`));
+            const own = modules.ownPart(text, expert);
+            const { state, record: updated } = modules.cardState(record, {
+              filesHash: hashFiles(project.root, record.owned || []),
+              ownHash: sha1(own),
+              hasOwn: own.length > 0,
+            });
+            if (state !== record.state || updated.reviewedFilesHash !== record.reviewedFilesHash) changed = true;
+            next.experts[expert.id] = { ...record, ...updated, state };
+          } catch (error) {
+            next.experts[expert.id] = { ...record, state: 'error', error: error.message };
+            changed = true;
+          }
+        }
+        if (changed && status.phase !== 'running')
+          persist(project, { ...(readJson(project.statusFile) || {}), moduleCards: next });
+        cards = next;
+      }
+      const current = cards.experts || {};
+      return {
+        modules: status.architecture?.modules || [],
+        error: cards.error,
+        experts: experts.map((expert) => {
+          const record = current[expert.id];
+          const fresh = record?.generatedAt && samePaths(record, expert);
+          return {
+            id: expert.id,
+            card: `${FEATURES_DIR}/${expert.id}.md`,
+            state: fresh ? record.state : 'nobrief',
+            ...(fresh && record.error ? { error: record.error } : {}),
+            ...(fresh ? { generatedAt: record.generatedAt, digest: record.digest } : {}),
+          };
+        }),
+      };
     },
     async cancel(repoPath) {
       const project = projectFor(repoPath);

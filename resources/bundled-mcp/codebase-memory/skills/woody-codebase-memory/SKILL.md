@@ -68,6 +68,8 @@ A feature card records one traced feature, so later conversations start from it 
 
 Mark each fact as read in the source, from the graph, or inferred. When a card is used again, compare its commit with the current one; if files it cites changed, re-check those facts and update the card and its basis line.
 
+A module expert's card (`.woody/features/<expert id>.md`) starts with a part between `woody:generated` markers that Woody rewrites after every index: the expert's files and their index state, where the module is scheduled, the calls into and out of it, its globals and who writes them, its address macros, its build switches, and an index check. Never edit that part, and keep your sections after it. Use it as the starting point of a trace, not as the answer: its calls come from the index, and its globals and their users from a text search of the source. Before relying on the index for that module, work through its index check: read partly parsed ranges and unparsed files in the source, re-read files changed after the index, and use `search_code` for globals and functions missing from the graph.
+
 ## Architecture file
 
 Woody writes `.woody/architecture.md` from the index and keeps it up to date after every index. It lists the RTOS tasks and what they wait on, the dispatch tables each task runs (in order, with `#if` conditions and comments), the functions held in struct fields and where those fields are called through a pointer, the order constraints from those comments, and which tables each module registers in. Its last section, the Change rules, is written by the team.

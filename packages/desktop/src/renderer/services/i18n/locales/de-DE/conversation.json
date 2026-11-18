@@ -939,11 +939,31 @@
     },
     "architecture": {
       "title": "Architekturdatei",
-      "hint": "Woody erstellt .woody/architecture.md aus dem Index und dem Quellcode: die Tasks, die Dispatch-Tabellen in Ausführungsreihenfolge, die Reihenfolgeregeln und in welchen Tabellen sich jedes Modul registriert. Sobald die Datei existiert, wird sie bei jeder Indexierung aktualisiert; der von Ihrem Team geschriebene Abschnitt „Änderungsregeln“ bleibt erhalten. Das Modell liest sie, bevor es Code ändert.",
+      "hint": "Nach jeder Indizierung schreibt Woody .woody/architecture.md aus dem Index und dem Quellcode: die Tasks, die Dispatch-Tabellen in Reihenfolge, die Reihenfolgeregeln und die in diesen Tabellen gefundenen Module. Ihr Abschnitt mit den Änderungsregeln bleibt erhalten. Das Modell liest die Datei, bevor es Code ändert.",
       "generate": "Erstellen",
       "update": "Jetzt aktualisieren",
       "summary": "Zuletzt erstellt {{time}}: {{tasks}} Tasks, {{tables}} Dispatch-Tabellen.",
       "failed": "Die Architekturdatei konnte nicht aktualisiert werden: {{error}}"
+    },
+    "modules": {
+      "title": "Module und Experten",
+      "hint": "Module werden aus den Dispatch-Tabellen ermittelt. Nach jeder Indizierung schreibt Woody außerdem den Faktenteil der Funktionskarte jedes Modulexperten in .woody/features. Wählen Sie Module, um einen neuen Experten anzulegen oder sie einem bestehenden hinzuzufügen.",
+      "refresh": "Karten aktualisieren",
+      "empty": "Noch keine Module gefunden. Sie erscheinen hier, sobald eine Indizierung Dispatch-Tabellen findet.",
+      "noExpert": "Kein Experte",
+      "newExpert": "Neuer Experte",
+      "chooseExpert": "Experten wählen",
+      "addToExpert": "Zum Experten hinzufügen",
+      "nameDraft": "{{id}}-Experte",
+      "summaryDraft": "Modul {{modules}}: registriert in {{tables}}; Einstiegspunkte {{functions}}.",
+      "expertsUnreadable": "Die Expertenliste konnte nicht gelesen werden: {{error}}",
+      "states": {
+        "nobrief": "Nicht erstellt",
+        "missing": "Nicht eingearbeitet",
+        "stale": "Erneut prüfen",
+        "ready": "Eingearbeitet",
+        "error": "Fehler"
+      }
     }
   },
   "managedWorkspace": {

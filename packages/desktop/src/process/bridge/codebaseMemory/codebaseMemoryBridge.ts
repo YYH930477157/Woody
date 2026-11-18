@@ -16,8 +16,8 @@ export function initCodebaseMemoryBridge(): void {
   });
   codebaseMemory.get.provider(({ repoPath }) => service.get(repoPath));
   codebaseMemory.save.provider(({ repoPath, config }) => service.save(repoPath, config));
-  codebaseMemory.start.provider(({ repoPath, bypassPrecheck }) =>
-    service.start(repoPath, { bypassPrecheck: bypassPrecheck === true })
+  codebaseMemory.start.provider(({ repoPath, bypassPrecheck, language }) =>
+    service.start(repoPath, { bypassPrecheck: bypassPrecheck === true, language })
   );
   codebaseMemory.include.provider(({ repoPath, folder }) => service.include(repoPath, folder));
   codebaseMemory.architecture.provider(({ repoPath, language }) => service.architecture(repoPath, { language }));
@@ -26,6 +26,9 @@ export function initCodebaseMemoryBridge(): void {
   codebaseMemory.openLens.provider(({ repoPath }) => service.openLens(repoPath));
   codebaseMemory.experts.provider(({ repoPath }) => service.experts(repoPath));
   codebaseMemory.saveExperts.provider(({ repoPath, file }) => service.saveExperts(repoPath, file));
+  codebaseMemory.moduleCards.provider(({ repoPath, refresh, ids, language }) =>
+    service.moduleCards(repoPath, { refresh: refresh === true, ids, language })
+  );
   onConfirmedQuit(() =>
     service.dispose().catch((error: unknown) => {
       console.error('[CodebaseMemory] Lens shutdown failed', error);

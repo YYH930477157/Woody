@@ -176,8 +176,11 @@ its encoding and line endings, and indexes again. A `.cbmignore` rule cannot ove
 `.cbmignore` as text, for example because it is encrypted for Woody, the folder is
 marked `manual` and the panel shows the line to add by hand.
 
-The panel's architecture file button writes `.woody/architecture.md` without a model
-(`architecture.cjs`, headings from `architecture-labels.json` in the panel's language).
+Every successful index of a C or C++ project, or of one that already has the file or a
+`.woody/experts.json`, writes `.woody/architecture.md` without a model
+(`lib/architecture.cjs`, headings from `lib/architecture-labels.json` in the language of
+the panel that started the first index; later updates keep the file's language). The
+panel's architecture file button writes it again on request, in the panel's language.
 One `query_graph` call reads every function with its file and lines; `query_graph` is
 used only inside Woody and is not offered to the model. Woody then reads the source
 itself and finds the FreeRTOS tasks (`xTaskCreate`, `xTaskCreateStatic`,
@@ -191,11 +194,37 @@ those functions and with the calls through that field (`p->field(...)`), which t
 index cannot follow. A call links to a table when its pointer's declared type is the
 table's type (a `typedef struct tag` counts as the same type); when the type is not
 found, only when one struct type alone has that field. Source files without any
-function, such as a file of parameter tables, are read for tables too. Once the
-file exists, every successful index updates it. Only the part between the
-`woody:generated` markers is rewritten, so the team's Change rules section is kept.
-A file Woody cannot read as UTF-8, or one without the markers, is never overwritten.
-The skill's description tells the model to read the file before changing code.
+function, such as a file of parameter tables, are read for tables too. Only the part
+between the `woody:generated` markers is rewritten, so the team's Change rules section
+is kept. A file Woody cannot read as UTF-8, or one without the markers, is never
+overwritten. The skill's description tells the model to read the file before changing
+code.
+
+The same run classifies modules (`lib/modules.cjs`) and lists them in the file: each
+source file that registers functions in a dispatch table leads a module, with its
+same-named header and the other source files whose functions mostly share its name
+prefix (not when the prefix is common to more than three such files, which marks a
+layer, and never files in library or demo folders). The panel lists these modules and
+turns chosen ones into a module expert in `.woody/experts.json`.
+
+For every expert in `.woody/experts.json`, the run then writes the generated part of
+its feature card `.woody/features/<id>.md`, between the same markers, and leaves the
+rest of the card to the expert and the user. The expert's files follow the team
+rule: an equal path, a folder entry ending in `/`, or a `*` pattern within one path
+segment, the longest entry winning. The brief lists the files with their index
+coverage (`check_index_coverage`: partly parsed line ranges, files the index could not
+parse, files changed after the index), the task and dispatch or struct table entries
+of the module, the calls into it from other files (with the caller's owner: another
+expert, a shared file, or the detected module of an unowned file) and out of it, the
+globals it defines (read from the source, since the index misses many) with the places
+other files write, take the address of or read them (text search), the address macros
+it uses (names containing `ADDR`) with their definitions, the build switches in its
+`#if` lines, and an index check: what to read directly in the source. Two
+`query_graph` calls read the call edges for all experts at once. The runtime status
+keeps, per expert, a hash of its files and of the card outside the markers: the card
+is `missing` while nobody wrote there, `ready` after a change to that part, and
+`stale` once the files change again. `moduleCards` reports these states and writes
+missing or outdated briefs on request (the team dialog does before a team starts).
 
 ## Provenance and redistribution
 

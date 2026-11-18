@@ -938,11 +938,31 @@
     },
     "architecture": {
       "title": "Fichier d’architecture",
-      "hint": "Woody génère .woody/architecture.md à partir de l’index et du code source : les tâches, les tables de répartition dans l’ordre, les contraintes d’ordre et les tables dans lesquelles chaque module s’enregistre. Une fois le fichier créé, chaque indexation le met à jour et conserve la section Règles de modification rédigée par votre équipe. Le modèle le lit avant de modifier le code.",
+      "hint": "Après chaque indexation, Woody écrit .woody/architecture.md à partir de l'index et des sources : les tâches, les tables de dispatch dans l'ordre, les contraintes d'ordre et les modules trouvés dans ces tables. Votre section de règles de modification est conservée. Le modèle la lit avant de modifier le code.",
       "generate": "Générer",
       "update": "Mettre à jour",
       "summary": "Dernière génération {{time}} : {{tasks}} tâches, {{tables}} tables de répartition.",
       "failed": "Impossible de mettre à jour le fichier d’architecture : {{error}}"
+    },
+    "modules": {
+      "title": "Modules et experts",
+      "hint": "Les modules viennent des tables de dispatch. Après chaque indexation, Woody écrit aussi la partie factuelle de la fiche de chaque expert de module dans .woody/features. Choisissez des modules pour créer un expert ou les ajouter à un expert existant.",
+      "refresh": "Mettre à jour les fiches",
+      "empty": "Aucun module trouvé pour l'instant. Ils apparaîtront ici quand l'indexation trouvera des tables de dispatch.",
+      "noExpert": "Aucun expert",
+      "newExpert": "Nouvel expert",
+      "chooseExpert": "Choisir un expert",
+      "addToExpert": "Ajouter à l'expert",
+      "nameDraft": "Expert {{id}}",
+      "summaryDraft": "Module {{modules}} : enregistré dans {{tables}} ; points d'entrée {{functions}}.",
+      "expertsUnreadable": "Impossible de lire la liste des experts : {{error}}",
+      "states": {
+        "nobrief": "Non générée",
+        "missing": "Non étudié",
+        "stale": "À revérifier",
+        "ready": "Étudié",
+        "error": "Échec"
+      }
     }
   },
   "managedWorkspace": {

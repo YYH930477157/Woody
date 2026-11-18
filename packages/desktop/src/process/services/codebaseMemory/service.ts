@@ -1,6 +1,11 @@
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import type { CodebaseMemoryConfig, CodebaseMemoryStatus } from '@/common/types/codebaseMemory/types';
+import type {
+  CodebaseMemoryConfig,
+  CodebaseMemoryStatus,
+  ModuleCards,
+  ModuleCardsRequest,
+} from '@/common/types/codebaseMemory/types';
 import type { ModuleExpertsFile, ModuleExpertsState } from '@/common/types/team/moduleExperts';
 import { createExpertsStore } from './experts';
 import { createLensManager, type LensProject } from './lens';
@@ -23,10 +28,11 @@ export type CodebaseMemorySession = {
 export type CodebaseMemoryService = {
   get(repoPath: string): Promise<CodebaseMemoryStatus>;
   save(repoPath: string, config: CodebaseMemoryConfig): Promise<CodebaseMemoryStatus>;
-  start(repoPath: string, options?: { bypassPrecheck?: boolean }): Promise<CodebaseMemoryStatus>;
+  /** `language` is the panel's: files the first index creates use it. */
+  start(repoPath: string, options?: { bypassPrecheck?: boolean; language?: string }): Promise<CodebaseMemoryStatus>;
   /** Add a folder the last index skipped by name to the project's .cbmignore, then index again. */
   include(repoPath: string, folder: string): Promise<CodebaseMemoryStatus>;
-  /** Write .woody/architecture.md from the index, with headings in `language`. */
+  /** Write .woody/architecture.md and the expert cards from the index, with headings in `language`. */
   architecture(repoPath: string, options?: { language?: string }): Promise<CodebaseMemoryStatus>;
   cancel(repoPath: string): Promise<CodebaseMemoryStatus>;
   session(repoPath: string): Promise<CodebaseMemorySession>;
@@ -34,6 +40,8 @@ export type CodebaseMemoryService = {
   /** The module experts saved in the project's `.woody/experts.json`, and its feature card ids. */
   experts(repoPath: string): Promise<ModuleExpertsState>;
   saveExperts(repoPath: string, file: ModuleExpertsFile): Promise<ModuleExpertsState>;
+  /** State of each expert's feature card, and the detected modules; can write missing briefs first. */
+  moduleCards(repoPath: string, options?: ModuleCardsRequest): Promise<ModuleCards>;
   dispose(): Promise<void>;
 };
 

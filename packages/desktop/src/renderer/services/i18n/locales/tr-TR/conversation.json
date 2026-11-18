@@ -940,11 +940,31 @@
     },
     "architecture": {
       "title": "Mimari dosyası",
-      "hint": "Woody, .woody/architecture.md dosyasını indeks ve kaynak koddan oluşturur: görevler, sırasıyla dağıtım tabloları, sıra kısıtları ve her modülün hangi tablolara kayıtlı olduğu. Dosya oluştuktan sonra her indekslemede güncellenir ve ekibinizin yazdığı Değişiklik kuralları bölümü korunur. Model, kodu değiştirmeden önce bu dosyayı okur.",
+      "hint": "Woody her indekslemeden sonra indeksten ve kaynaktan .woody/architecture.md dosyasını yazar: görevler, sırasıyla dağıtım tabloları, sıra kısıtları ve bu tablolardan bulunan modüller. Değişiklik kuralları bölümünüz korunur. Model kodu değiştirmeden önce bu dosyayı okur.",
       "generate": "Oluştur",
       "update": "Şimdi güncelle",
       "summary": "Son oluşturma {{time}}: {{tasks}} görev, {{tables}} dağıtım tablosu.",
       "failed": "Mimari dosyası güncellenemedi: {{error}}"
+    },
+    "modules": {
+      "title": "Modüller ve uzmanlar",
+      "hint": "Modüller dağıtım tablolarından bulunur. Woody her indekslemeden sonra her modül uzmanının .woody/features içindeki özellik kartının bilgi bölümünü de yazar. Yeni bir uzman yapmak ya da mevcut bir uzmana eklemek için modülleri seçin.",
+      "refresh": "Kartları güncelle",
+      "empty": "Henüz modül bulunmadı. İndeksleme dağıtım tablolarını bulduğunda modüller burada görünür.",
+      "noExpert": "Uzman yok",
+      "newExpert": "Yeni uzman",
+      "chooseExpert": "Uzman seçin",
+      "addToExpert": "Uzmana ekle",
+      "nameDraft": "{{id}} uzmanı",
+      "summaryDraft": "{{modules}} modülü: {{tables}} içinde kayıtlı; giriş noktaları {{functions}}.",
+      "expertsUnreadable": "Uzman listesi okunamadı: {{error}}",
+      "states": {
+        "nobrief": "Yazılmadı",
+        "missing": "Öğrenilmedi",
+        "stale": "Yeniden kontrol",
+        "ready": "Öğrenildi",
+        "error": "Başarısız"
+      }
     }
   },
   "managedWorkspace": {

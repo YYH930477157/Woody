@@ -944,11 +944,31 @@
     },
     "architecture": {
       "title": "Arquivo de arquitetura",
-      "hint": "O Woody gera .woody/architecture.md a partir do índice e do código-fonte: as tarefas, as tabelas de despacho em ordem, as restrições de ordem e em quais tabelas cada módulo se registra. Depois que o arquivo existe, cada indexação o atualiza e mantém a seção Regras de alteração escrita pela sua equipe. O modelo o lê antes de alterar o código.",
+      "hint": "Após cada indexação, o Woody escreve .woody/architecture.md a partir do índice e do fonte: as tarefas, as tabelas de despacho em ordem, as restrições de ordem e os módulos encontrados nessas tabelas. Sua seção de regras de alteração é mantida. O modelo a lê antes de alterar o código.",
       "generate": "Gerar",
       "update": "Atualizar agora",
       "summary": "Última geração {{time}}: {{tasks}} tarefas, {{tables}} tabelas de despacho.",
       "failed": "Não foi possível atualizar o arquivo de arquitetura: {{error}}"
+    },
+    "modules": {
+      "title": "Módulos e especialistas",
+      "hint": "Os módulos vêm das tabelas de despacho. Após cada indexação, o Woody também escreve a parte de fatos do cartão de cada especialista de módulo em .woody/features. Escolha módulos para criar um especialista ou adicioná-los a um existente.",
+      "refresh": "Atualizar cartões",
+      "empty": "Nenhum módulo encontrado ainda. Eles aparecem aqui quando a indexação encontra tabelas de despacho.",
+      "noExpert": "Sem especialista",
+      "newExpert": "Novo especialista",
+      "chooseExpert": "Escolha um especialista",
+      "addToExpert": "Adicionar ao especialista",
+      "nameDraft": "Especialista {{id}}",
+      "summaryDraft": "Módulo {{modules}}: registra em {{tables}}; pontos de entrada {{functions}}.",
+      "expertsUnreadable": "Não foi possível ler a lista de especialistas: {{error}}",
+      "states": {
+        "nobrief": "Não gerado",
+        "missing": "Não estudado",
+        "stale": "Verificar de novo",
+        "ready": "Estudado",
+        "error": "Falhou"
+      }
     }
   },
   "managedWorkspace": {

@@ -87,8 +87,13 @@ export function useCodebaseMemory(repoPath: string, visible: boolean, refreshTok
       const result =
         action === 'save'
           ? await ipcBridge.codebaseMemory.save.invoke({ repoPath, config: draft })
-          : action === 'startAnyway'
-            ? await ipcBridge.codebaseMemory.start.invoke({ repoPath, bypassPrecheck: true })
+          : action === 'startAnyway' || action === 'start'
+            ? // Files the first index creates take the interface language.
+              await ipcBridge.codebaseMemory.start.invoke({
+                repoPath,
+                bypassPrecheck: action === 'startAnyway',
+                language: i18n?.language,
+              })
             : action === 'include'
               ? await ipcBridge.codebaseMemory.include.invoke({ repoPath, folder: folder ?? '' })
               : action === 'architecture'

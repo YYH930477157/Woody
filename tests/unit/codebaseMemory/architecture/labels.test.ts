@@ -4,8 +4,8 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const require = createRequire(import.meta.url);
-const architecture = require(path.resolve('resources/bundled-mcp/codebase-memory/architecture.cjs'));
-const labels = require(path.resolve('resources/bundled-mcp/codebase-memory/architecture-labels.json')) as Record<
+const architecture = require(path.resolve('resources/bundled-mcp/codebase-memory/lib/architecture.cjs'));
+const labels = require(path.resolve('resources/bundled-mcp/codebase-memory/lib/architecture-labels.json')) as Record<
   string,
   Record<string, string>
 >;
