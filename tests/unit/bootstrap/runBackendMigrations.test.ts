@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
+import * as path from 'path';
 vi.mock('fs', async (importOriginal) => ({ ...(await importOriginal<typeof import('fs')>()) }));
 
 import { IMAGE_GEN_ENV_KEYS } from '@/common/config/imageGenerationMcpEnv';
@@ -33,7 +34,7 @@ vi.mock('@/common/adapter/httpBridge', () => ({
 }));
 
 vi.mock('electron', () => ({
-  app: { isPackaged: false, getAppPath: () => process.cwd() },
+  app: { isPackaged: false, getAppPath: () => process.cwd(), getPath: () => 'C:/user-data' },
 }));
 
 vi.mock('@/process/bridge/todoBridge', () => ({
@@ -176,6 +177,11 @@ describe('runBackendMigrations', () => {
           enabled: true,
           builtin: true,
           transport: { type: 'stdio', command: 'node' },
+        });
+        // Team members use this row as is: it must point at the app's own index cache.
+        expect(registered.transport.env).toEqual({
+          WOODY_CBM_BINARY: expect.stringMatching(/codebase-memory-mcp\.exe$/),
+          WOODY_CBM_CACHE_ROOT: path.join(process.env.LOCALAPPDATA ?? '', 'AionUi', 'codebase-memory'),
         });
         batchImportServersMock.mockClear();
         listServersMock.mockResolvedValue([

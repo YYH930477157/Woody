@@ -1,4 +1,6 @@
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -40,5 +42,42 @@ describe('project MCP adapter', () => {
       content: [{ type: 'text', text: expect.stringMatching(/bound project/) }],
     });
     expect(stderr).toBe('');
+  });
+
+  it('binds to the conversation workspace when no project is named', async () => {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'woody-cbm-workspace-'));
+    try {
+      const child = spawn(process.execPath, [path.resolve('resources/bundled-mcp/codebase-memory/index.cjs')], {
+        env: {
+          ...process.env,
+          WOODY_CBM_REPO: '',
+          AIONUI_WORKSPACE: workspace,
+          WOODY_CBM_BINARY: 'must-not-launch.exe',
+        },
+        stdio: 'pipe',
+        windowsHide: true,
+      });
+      let stdout = '';
+      child.stdout.on('data', (chunk) => {
+        stdout += chunk.toString();
+      });
+      const exited = new Promise<number | null>((resolve) => child.on('close', resolve));
+      child.stdin.end(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: { name: 'search_graph', arguments: { query: 'main' } },
+        }) + '\n'
+      );
+      expect(await exited).toBe(0);
+      // The folder was found and read: it has no enabled configuration.
+      expect(JSON.parse(stdout.trim()).result).toMatchObject({
+        isError: true,
+        content: [{ type: 'text', text: expect.stringMatching(/disabled for this project/) }],
+      });
+    } finally {
+      fs.rmSync(workspace, { recursive: true, force: true });
+    }
   });
 });

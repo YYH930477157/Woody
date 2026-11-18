@@ -5,7 +5,9 @@ const os = require('node:os');
 const { createRuntime } = require('./runtime.cjs');
 // Curated v0.12.1 upstream schemas; see bundled THIRD_PARTY_NOTICES.
 const tools = require('./tools.json');
-const repo = process.env.WOODY_CBM_REPO || '';
+// A new chat binds the project explicitly. Team members get the shared catalog entry,
+// which names no project; AionCore puts the conversation's workspace in AIONUI_WORKSPACE.
+const repo = process.env.WOODY_CBM_REPO || process.env.AIONUI_WORKSPACE || '';
 const runtime = createRuntime({
   binaryPath: process.env.WOODY_CBM_BINARY || path.join(__dirname, 'bin', 'win32-x64', 'codebase-memory-mcp.exe'),
   adapterPath: __filename,

@@ -23,6 +23,7 @@ import { getBuiltinMcpScriptPath, type ProcessConfig as ProcessConfigType } from
 import { migrateAssistantsToBackend } from './migrateAssistants';
 import { TODO_SCAN_JOB_NAME } from '@process/bridge/todoBridge';
 import { CODEBASE_MEMORY_MCP_NAME } from '@/common/types/codebaseMemory/constants';
+import { resolveCodebaseMemoryResources } from '@process/services/codebaseMemory/resources';
 
 type ConfigFile = typeof ProcessConfigType;
 type MigrationStepResult = boolean;
@@ -344,7 +345,19 @@ function buildDefaultMcpServers(): McpImportServer[] {
     fs.existsSync(memoryEntry) &&
     fs.existsSync(memoryBinary)
   ) {
-    const config = { command: 'node', args: [memoryEntry] };
+    // A new chat replaces this row with a project-bound copy. Team members use the row
+    // itself and find the project from AionCore's AIONUI_WORKSPACE, so it must name the
+    // same index cache as the app does, or every query misses the project's index.
+    const { cacheRoot } = resolveCodebaseMemoryResources({
+      resourceRoot: path.dirname(path.dirname(memoryDir)),
+      localAppData: process.env.LOCALAPPDATA,
+      userData: app.getPath('userData'),
+    });
+    const config = {
+      command: 'node',
+      args: [memoryEntry],
+      env: { WOODY_CBM_BINARY: memoryBinary, WOODY_CBM_CACHE_ROOT: cacheRoot },
+    };
     servers.push({
       name: CODEBASE_MEMORY_MCP_NAME,
       description:
