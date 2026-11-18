@@ -94,7 +94,61 @@ static void handle(void *m)
   'app/tick.c': 'void TICK_Second(void)\n{\n}\nvoid TICK_Start(void)\n{\n}\nvoid TICK_Save(void)\n{\n}\n',
   'app/view.c': 'void VIEW_Idle(void)\n{\n}\nvoid VIEW_Start(void)\n{\n}\nvoid VIEW_Save(void)\n{\n}\n',
   'app/bill.c': 'void BILL_Second(void)\n{\n}\n',
+  // Handlers kept in struct fields and called through a pointer.
+  'app/ops.c': `typedef struct SensorOps { int id; int (*read)(int ch); void (*reset)(void); } tSensorOps;
+typedef struct { int (*read)(int ch); } tLogOps;
+int tempRead(int ch)
+{
+    return ch;
+}
+void tempReset(void)
+{
+}
+int humRead(int ch)
+{
+    return ch + 1;
+}
+int deadRead(int ch)
+{
+    return 0;
+}
+int logRead(int ch)
+{
+    return 0;
+}
+const tSensorOps sensorOps[] =
+{
+    { .id = 1, .read = tempRead, .reset = tempReset },
+#if 0
+    { .id = 9, .read = deadRead },
+#endif
+    { .id = 2, .read = &humRead, .reset = NULL },
+};
+static const tLogOps logOps = { .read = logRead };
+int SENSOR_Value(const tSensorOps *ops, int ch)
+{
+    return ops->read(ch);
+}
+void SENSOR_ResetAll(struct SensorOps *s)
+{
+    (*s->reset)();
+}
+int LOG_Read(const tLogOps *log)
+{
+    return log->read(0);
+}
+void runReset(void)
+{
+    current->reset();
+}
+int anyRead(void)
+{
+    return other->read(1);
+}
+`,
   'app/history.c': 'void HIST_Second(void)\n{\n}\n',
+  // Tables only, no functions: the index lists the file but no function in it.
+  'app/boards.c': '#include "ops.h"\n\nconst tSensorOps boardOps = { .id = 7, .read = tempRead };\n',
   'app/dead.c':
     'void unusedStart(void)\n{\n    xTaskCreate(vDeadTask, "dead", 64, NULL, 1, NULL);\n}\nvoid vDeadTask(void *p)\n{\n}\n',
   'lib/wrapper.c': 'void osCreate(TaskFunction_t code)\n{\n    xTaskCreate(code, "x", 64, NULL, 1, NULL);\n}\n',
@@ -129,6 +183,7 @@ async function analyzed() {
   const asked: string[][] = [];
   const model = await architecture.analyze({
     functions: functionRows(),
+    sourceFiles: [...Object.keys(sources), '<python-builtins>', 'docs/readme.md'],
     readSource: (file: string) => sources[file] ?? null,
     callersOf: async (names: string[]) => {
       asked.push(names);
@@ -218,6 +273,86 @@ describe('architecture map', () => {
     expect(second.dispatchers[0].paths.map((p: Array<{ name: string }>) => p.map((def) => def.name))).toEqual([
       ['vMainTask', 'RunSecond'],
     ]);
+  });
+
+  it('lists functions held in struct fields and where those fields are called through a pointer', async () => {
+    const { model } = await analyzed();
+    const lineOf = (text: string) => sources['app/ops.c'].split('\n').findIndex((line) => line.includes(text)) + 1;
+    const summary = model.structTables.map(
+      (table: {
+        name: string;
+        type: string;
+        line: number;
+        fields: Array<{
+          field: string;
+          defs: Array<{ name: string }>;
+          calls: Array<{ def: { name: string }; line: number }>;
+        }>;
+      }) => ({
+        name: table.name,
+        type: table.type,
+        line: table.line,
+        fields: table.fields.map((item) => ({
+          field: item.field,
+          functions: item.defs.map((def) => def.name),
+          calls: item.calls.map((call) => [call.def.name, call.line]),
+        })),
+      })
+    );
+    expect(summary).toEqual([
+      // From a file with no functions, which the index lists among its files.
+      {
+        name: 'boardOps',
+        type: 'tSensorOps',
+        line: 3,
+        fields: [{ field: 'read', functions: ['tempRead'], calls: [['SENSOR_Value', lineOf('ops->read(ch)')]] }],
+      },
+      {
+        name: 'sensorOps',
+        type: 'tSensorOps',
+        line: lineOf('const tSensorOps sensorOps[]'),
+        fields: [
+          // The #if 0 entry is left out; `&humRead` counts. `other->read` has no known type and
+          // two struct types have a `read` field, so it links to neither.
+          { field: 'read', functions: ['tempRead', 'humRead'], calls: [['SENSOR_Value', lineOf('ops->read(ch)')]] },
+          {
+            field: 'reset',
+            functions: ['tempReset'],
+            // `struct SensorOps *s` is the same type; `current` has no known type, but only
+            // one struct type has a `reset` field.
+            calls: [
+              ['SENSOR_ResetAll', lineOf('(*s->reset)()')],
+              ['runReset', lineOf('current->reset()')],
+            ],
+          },
+        ],
+      },
+      {
+        name: 'logOps',
+        type: 'tLogOps',
+        line: lineOf('static const tLogOps logOps'),
+        fields: [{ field: 'read', functions: ['logRead'], calls: [['LOG_Read', lineOf('log->read(0)')]] }],
+      },
+    ]);
+    // initList is a dispatch table already, so it is not repeated here.
+    expect(model.structTables.map((table: { name: string }) => table.name)).not.toContain('initList');
+
+    const { language, text } = architecture.labelsFor(labels, 'en-US');
+    const generated = architecture.render(model, text, { language, date: '2026-11-07 20:00', mode: 'full' });
+    expect(generated).toContain('## Functions held in struct fields');
+    // One heading per struct type, with the calls through its fields listed once.
+    expect(generated).toContain(
+      [
+        '### `tLogOps`',
+        '',
+        `- \`.read\`: called in \`LOG_Read\` (app/ops.c:${lineOf('log->read(0)')})`,
+        '',
+        `- \`logOps\` (app/ops.c:${lineOf('static const tLogOps logOps')}): \`.read\` → \`logRead\``,
+      ].join('\n')
+    );
+    expect(generated).toContain(
+      `- \`.reset\`: called in \`SENSOR_ResetAll\` (app/ops.c:${lineOf('(*s->reset)()')}), \`runReset\` (app/ops.c:${lineOf('current->reset()')})`
+    );
   });
 
   it('shows which tables most modules register in and which modules differ', async () => {

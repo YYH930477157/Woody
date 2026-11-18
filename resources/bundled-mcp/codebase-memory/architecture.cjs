@@ -2,7 +2,8 @@
 /**
  * Architecture map of a FreeRTOS C project, built without a model: the tasks and what they
  * wait on and call, the function tables their loops call one by one (in order, with #if
- * conditions and comments), and which tables each module registers in.
+ * conditions and comments), which tables each module registers in, and the functions held
+ * in struct fields with the places that call those fields through a pointer.
  *
  * Pure functions: the runtime supplies the index's function list, a source reader and a
  * callers lookup, and writes the result. Nothing here reads files or starts processes.
@@ -54,6 +55,22 @@ const inFolders = (file, names) => file.split('/').some((segment) => names.has(s
 const ROOT_DEPTH = 3;
 const MAX_CALLS_SHOWN = 12;
 const MAX_OTHER_TABLES = 40;
+const MAX_STRUCT_TABLES = 40;
+const MAX_FIELD_FUNCTIONS = 6;
+const MAX_FIELD_SITES = 4;
+const MAX_TABLE_FIELDS = 10;
+/** `Type name = {` or `Type name[N] = {`: a struct or an array of structs with an initializer. */
+const STRUCT_DEFINITION = /\b([A-Za-z_]\w*)\s+(?:const\s+)?([A-Za-z_]\w*)\s*(?:\[[^\];{}]*\]\s*)?=\s*\{/g;
+/** `.field = function`, also `.field = &function` and `.field = (cast)function`. */
+const DESIGNATED_FUNCTION =
+  /\.\s*([A-Za-z_]\w*)\s*=\s*(?:\(\s*[A-Za-z_][\w\s*]*\)\s*)?&?\s*([A-Za-z_]\w*)\b(?!\s*(?:[([.]|->))/g;
+/** Calls through a struct field: `p->field(`, `s.field(`, `list[i].field(` and `(*p->field)(`. */
+const FIELD_CALLS = [
+  /\b([A-Za-z_]\w*)\s*(?:\[[^[\]]*\]\s*)?(?:->|\.)\s*([A-Za-z_]\w*)\s*\(/g,
+  /\(\s*\*\s*([A-Za-z_]\w*)\s*(?:\[[^[\]]*\]\s*)?(?:->|\.)\s*([A-Za-z_]\w*)\s*\)\s*\(/g,
+];
+/** Words that can stand before a variable name but are not its type. */
+const NOT_TYPES = new Set([...KEYWORDS, 'const', 'static', 'struct', 'union', 'enum', 'volatile', 'extern', 'goto']);
 const MARK = {
   start: '<!-- woody:generated:start -->',
   end: '<!-- woody:generated:end -->',
@@ -269,11 +286,13 @@ function prepare(file, text) {
 /**
  * @param {object} input
  * @param {Array<[string, string, string|number, string|number]>} input.functions name, file, start and end line from the index
+ * @param {string[]} [input.sourceFiles] every indexed file; C and C++ files without functions, such
+ *   as a file of parameter tables, are scanned for tables too
  * @param {(file: string) => string | null} input.readSource text of a project file, or null when it cannot be read as text
  * @param {(names: string[]) => Promise<Map<string, string[]>>} input.callersOf functions that call or
  *   reference each name, keyed `name|file` so that same-named functions in other files do not count
  */
-async function analyze({ functions, readSource, callersOf }) {
+async function analyze({ functions, sourceFiles = [], readSource, callersOf }) {
   const byName = new Map();
   const byFile = new Map();
   for (const [name, file, start, end] of functions) {
@@ -298,9 +317,17 @@ async function analyze({ functions, readSource, callersOf }) {
   const sites = [];
   const arrayFiles = new Map();
   const unreadable = [];
+  // Struct tables whose fields hold functions, the calls through struct fields, and
+  // `typedef struct tag {...} Name;` so that `struct tag *p` and `Name *p` compare equal.
+  const found = [];
+  const fieldCalls = [];
+  const tags = new Map();
   const createPattern = new RegExp(`\\b(${CREATE_APIS.join('|')})\\s*\\(`, 'g');
   const waitPattern = new RegExp(`\\b(${WAIT_APIS.join('|')})\\s*\\(`, 'g');
-  const files = [...byFile.keys()].sort();
+  const dataFiles = sourceFiles.filter(
+    (file) => typeof file === 'string' && /^[^<:/\\][^:]*\.(c|h|cc|cpp|cxx|hh|hpp|hxx)$/i.test(file)
+  );
+  const files = [...new Set([...byFile.keys(), ...dataFiles])].sort();
   for (const file of files) {
     const text = readSource(file);
     if (text === null || text === undefined) {
@@ -310,13 +337,11 @@ async function analyze({ functions, readSource, callersOf }) {
     const source = prepare(file, text);
     const { plain, literals, starts, guards } = source;
     const offsetOfLine = (line) => (line - 1 < starts.length ? starts[line - 1] : plain.length);
-    const defs = byFile
-      .get(file)
-      .slice()
-      .sort((a, b) => a.start - b.start);
+    const defs = (byFile.get(file) || []).slice().sort((a, b) => a.start - b.start);
     const enclosing = (line) =>
       defs.filter((def) => def.start <= line && line <= def.end).sort((a, b) => a.end - a.start - (b.end - b.start))[0];
     const live = (offset) => !guards[lineOf(starts, offset) - 1]?.dead;
+    const fileTypes = new Map();
 
     for (const def of defs) {
       const from = offsetOfLine(def.start);
@@ -350,7 +375,23 @@ async function analyze({ functions, readSource, callersOf }) {
           if (entry.dispatches.some((item) => item.table === match[1])) continue;
           entry.dispatches.push({ table: match[1], line: lineOf(starts, from + match.index) });
         }
+      for (const pattern of FIELD_CALLS)
+        for (const match of body.matchAll(pattern)) {
+          if (!live(from + match.index)) continue;
+          const [, base, field] = match;
+          const line = lineOf(starts, from + match.index);
+          if (fieldCalls.some((call) => call.def === def && call.field === field && call.base === base)) continue;
+          if (!fileTypes.has(base)) fileTypes.set(base, declaredType(base, plain));
+          fieldCalls.push({ def, field, base, line, type: declaredType(base, body) || fileTypes.get(base) });
+        }
       info.set(def.key, entry);
+    }
+
+    for (const table of structTables(source, resolve)) found.push(table);
+    for (const match of plain.matchAll(/\btypedef\s+(?:struct|union)\s+([A-Za-z_]\w*)\s*\{/g)) {
+      const close = matchClose(plain, match.index + match[0].length - 1);
+      const alias = close < 0 ? undefined : /^\s*([A-Za-z_]\w*)\s*[;,[]/.exec(plain.slice(close + 1))?.[1];
+      if (alias) tags.set(match[1], alias);
     }
 
     for (const match of plain.matchAll(createPattern)) {
@@ -547,7 +588,128 @@ async function analyze({ functions, readSource, callersOf }) {
       for (const entry of variant.entries)
         if (!entry.def && !gaps.entriesNotIndexed.includes(entry.names[0])) gaps.entriesNotIndexed.push(entry.names[0]);
 
-  return { tasks, tables, otherTables, gaps, modules: modules(tables), files: files.length };
+  const listed = new Set([
+    ...tables.flatMap((table) => table.variants.map((variant) => `${variant.file}|${table.name}`)),
+    ...otherTables.map((table) => `${table.variants[0].file}|${table.name}`),
+  ]);
+  return {
+    tasks,
+    tables,
+    otherTables,
+    structTables: linkFieldCalls(
+      found.filter((table) => !listed.has(`${table.file}|${table.name}`)),
+      fieldCalls,
+      (type) => tags.get(type) || type
+    ),
+    gaps,
+    modules: modules(tables),
+    files: files.length,
+  };
+}
+
+/**
+ * Type of the variable `name` as declared in `text`: `tType *name`, `const tType *name`,
+ * `struct tag name` or `tType name[N]`. Undefined when no declaration is found.
+ */
+function declaredType(name, text) {
+  const pattern = new RegExp(
+    String.raw`\b([A-Za-z_]\w*)\s*(?:const\s*)?\**\s*(?:const\s+)?\b${name}\s*(?:\[[^\]]*\]\s*)?[,;=)]`,
+    'g'
+  );
+  for (const match of text.matchAll(pattern)) if (!NOT_TYPES.has(match[1])) return match[1];
+  return undefined;
+}
+
+/** Structs and arrays of structs in a file whose designated fields name indexed functions. */
+function structTables(source, resolve) {
+  const { file, plain, starts, guards } = source;
+  const result = [];
+  for (const match of plain.matchAll(STRUCT_DEFINITION)) {
+    const [, type, name] = match;
+    if (NOT_TYPES.has(type)) continue;
+    const line = lineOf(starts, match.index);
+    if (guards[line - 1]?.dead) continue;
+    const open = match.index + match[0].length - 1;
+    const close = matchClose(plain, open);
+    if (close < 0) continue;
+    // Fields of the declared type sit one brace deep in a struct, two in an array of them;
+    // deeper ones belong to a nested struct whose type is not declared here.
+    const own = match[0].includes('[') ? 2 : 1;
+    const body = plain.slice(open, close);
+    const fields = new Map();
+    let depth = 0;
+    let scanned = 0;
+    for (const item of body.matchAll(DESIGNATED_FUNCTION)) {
+      for (; scanned < item.index; scanned++)
+        if (body[scanned] === '{') depth++;
+        else if (body[scanned] === '}') depth--;
+      const [, field, target] = item;
+      if (NOT_NAMES.has(target) || guards[lineOf(starts, open + item.index) - 1]?.dead) continue;
+      const def = resolve(target, file);
+      if (!def) continue;
+      if (!fields.has(field)) fields.set(field, { defs: [], nested: true });
+      const entry = fields.get(field);
+      if (depth <= own) entry.nested = false;
+      if (!entry.defs.some((known) => known.key === def.key)) entry.defs.push(def);
+    }
+    if (fields.size) result.push({ name, type, file, line, fields });
+  }
+  return result;
+}
+
+/**
+ * Attach to each struct table field the functions that call through a field of that name.
+ * A call whose pointer type is known links only to tables of that type; one whose type is
+ * unknown links only when a single struct type has that field, so a common name such as
+ * `read` never joins unrelated structs. A field of a nested struct takes the one type the
+ * other tables give that field, and links to nothing when they give several.
+ */
+function linkFieldCalls(found, fieldCalls, canonical) {
+  const typesByField = new Map();
+  for (const table of found)
+    for (const [field, entry] of table.fields) {
+      if (entry.nested) continue;
+      if (!typesByField.has(field)) typesByField.set(field, new Set());
+      typesByField.get(field).add(canonical(table.type));
+    }
+  const ownerOf = (table, field, entry) => {
+    if (!entry.nested) return canonical(table.type);
+    const types = typesByField.get(field);
+    return types?.size === 1 ? [...types][0] : undefined;
+  };
+  const tables = [];
+  const seen = new Map();
+  for (const table of found) {
+    const id = `${table.file}|${table.name}`;
+    // #if / #else variants of one table: merge their fields.
+    const known = seen.get(id);
+    const target = known || { name: table.name, type: table.type, file: table.file, line: table.line, fields: [] };
+    for (const [field, entry] of table.fields) {
+      let item = target.fields.find((known) => known.field === field);
+      if (!item) {
+        const type = ownerOf(table, field, entry);
+        const calls = type
+          ? fieldCalls.filter(
+              (call) =>
+                call.field === field &&
+                (call.type ? canonical(call.type) === type : typesByField.get(field)?.size === 1)
+            )
+          : [];
+        item = { field, defs: [], calls: calls.map(({ def, line }) => ({ def, line })) };
+        target.fields.push(item);
+      }
+      for (const def of entry.defs) if (!item.defs.some((other) => other.key === def.key)) item.defs.push(def);
+    }
+    if (!known) {
+      seen.set(id, target);
+      tables.push(target);
+    }
+  }
+  const called = (table) => table.fields.some((field) => field.calls.length);
+  // Tables whose fields are called somewhere come first: those are the calls the index misses.
+  return tables.sort(
+    (a, b) => Number(called(b)) - Number(called(a)) || a.file.localeCompare(b.file) || a.line - b.line
+  );
 }
 
 /** Every definition of `name` in a file, with its entries in order. */
@@ -735,6 +897,51 @@ function render(model, labels, { language, date, mode }) {
     }
     if (model.otherTables.length > MAX_OTHER_TABLES) out.push(`- … (${model.otherTables.length - MAX_OTHER_TABLES})`);
     out.push('');
+  }
+
+  const structs = (model.structTables || []).slice(0, MAX_STRUCT_TABLES);
+  if (structs.length) {
+    out.push(`## ${t.structTables}`, '', t.structTablesIntro, '');
+    const more = (list, max) => (list.length > max ? `, … (${list.length - max})` : '');
+    // One heading per struct type: where its fields are called, once, then each table's functions.
+    const groups = new Map();
+    for (const table of structs) {
+      if (!groups.has(table.type)) groups.set(table.type, []);
+      groups.get(table.type).push(table);
+    }
+    for (const [type, members] of groups) {
+      out.push(`### ${code(type)}`, '');
+      const calls = new Map();
+      for (const table of members)
+        for (const item of table.fields) {
+          if (!calls.has(item.field)) calls.set(item.field, []);
+          for (const call of item.calls)
+            if (!calls.get(item.field).some((known) => known.def === call.def && known.line === call.line))
+              calls.get(item.field).push(call);
+        }
+      const called = [...calls].filter(([, list]) => list.length);
+      for (const [field, list] of called) {
+        const sites = list
+          .slice(0, MAX_FIELD_SITES)
+          .map((call) => `${code(call.def.name)} (${at(call.def.file, call.line)})`)
+          .join(', ');
+        out.push(`- ${code(`.${field}`)}: ${fill(t.calledIn, { sites: sites + more(list, MAX_FIELD_SITES) })}`);
+      }
+      if (called.length) out.push('');
+      for (const table of members) {
+        const fields = table.fields.slice(0, MAX_TABLE_FIELDS).map((item) => {
+          const functions = item.defs.slice(0, MAX_FIELD_FUNCTIONS).map((def) => code(def.name));
+          return `${code(`.${item.field}`)} → ${functions.join(', ')}${more(item.defs, MAX_FIELD_FUNCTIONS)}`;
+        });
+        const hidden = table.fields.length - MAX_TABLE_FIELDS;
+        out.push(
+          `- ${code(table.name)} (${at(table.file, table.line)}): ${fields.join('; ')}${hidden > 0 ? `; … (${hidden})` : ''}`
+        );
+      }
+      out.push('');
+    }
+    const left = (model.structTables || []).length - structs.length;
+    if (left > 0) out.push(`- … (${left})`, '');
   }
 
   const constraints = [];

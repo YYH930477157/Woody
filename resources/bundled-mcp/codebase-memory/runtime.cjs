@@ -677,6 +677,7 @@ function addIncludeLine(root, folder) {
 
 const ARCHITECTURE_FILE = '.woody/architecture.md';
 const FUNCTIONS_QUERY = 'MATCH (f:Function) RETURN f.name, f.file_path, f.start_line, f.end_line';
+const FILES_QUERY = 'MATCH (f:File) RETURN f.file_path';
 const QUERY_PAGE = 10000;
 function architecturePath(root) {
   const filename = path.join(root, ARCHITECTURE_FILE);
@@ -1451,8 +1452,11 @@ function createRuntime(options) {
     const wanted = requested && ARCHITECTURE_LABELS[requested] ? requested : architecture.languageOf(existing);
     const { language, text } = architecture.labelsFor(ARCHITECTURE_LABELS, wanted);
     const functions = await queryRows(project, FUNCTIONS_QUERY);
+    // Files without functions, such as tables of parameters, can still hold tables.
+    const sourceFiles = (await queryRows(project, FILES_QUERY)).map((row) => row[0]);
     const model = await architecture.analyze({
       functions,
+      sourceFiles,
       readSource: sourceReader(project.root),
       callersOf: (names) => callersOf(project, names),
     });

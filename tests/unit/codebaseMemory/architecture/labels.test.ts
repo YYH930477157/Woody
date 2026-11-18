@@ -31,6 +31,21 @@ describe('architecture file headings', () => {
       tasks: [],
       tables: [],
       otherTables: [],
+      structTables: [
+        {
+          name: 'ops',
+          type: 'tOps',
+          file: 'a.c',
+          line: 6,
+          fields: [
+            {
+              field: 'read',
+              defs: [{ name: 'r', file: 'a.c', start: 1 }],
+              calls: [{ def: { name: 'c', file: 'a.c' }, line: 7 }],
+            },
+          ],
+        },
+      ],
       modules: { columns: [], rows: new Map(), common: [], differs: [] },
       gaps: {
         unreadable: ['a.c'],

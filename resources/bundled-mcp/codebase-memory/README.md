@@ -185,7 +185,13 @@ itself and finds the FreeRTOS tasks (`xTaskCreate`, `xTaskCreateStatic`,
 calls one by one, up to three calls deep from each task and from the product's `main`.
 Each table is listed in order with its `#if` conditions and comments. Entries whose
 function is not in the index keep their place and are marked. A module matrix shows
-which tables each module registers in, and which modules differ from most. Once the
+which tables each module registers in, and which modules differ from most. Arrays and
+structs whose designated fields (`.field = function`) hold functions are listed with
+those functions and with the calls through that field (`p->field(...)`), which the
+index cannot follow. A call links to a table when its pointer's declared type is the
+table's type (a `typedef struct tag` counts as the same type); when the type is not
+found, only when one struct type alone has that field. Source files without any
+function, such as a file of parameter tables, are read for tables too. Once the
 file exists, every successful index updates it. Only the part between the
 `woody:generated` markers is rewritten, so the team's Change rules section is kept.
 A file Woody cannot read as UTF-8, or one without the markers, is never overwritten.
