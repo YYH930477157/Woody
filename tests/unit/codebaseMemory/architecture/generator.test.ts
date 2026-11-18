@@ -141,10 +141,7 @@ async function analyzed() {
 describe('architecture map', () => {
   it('finds the tasks, what they wait on and call, and leaves out kernel, demo and dead tasks', async () => {
     const { model, asked } = await analyzed();
-    expect(model.tasks.map((task: { entry: { name: string } }) => task.entry.name)).toEqual([
-      'vMainTask',
-      'vCommTask',
-    ]);
+    expect(model.tasks.map((task: { entry: { name: string } }) => task.entry.name)).toEqual(['vMainTask', 'vCommTask']);
     const [meter, comm] = model.tasks;
     expect(meter).toMatchObject({
       creator: { name: 'appInit' },
