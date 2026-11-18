@@ -31,7 +31,7 @@ async function handle(request) {
         capabilities: { tools: {} },
         serverInfo: { name: 'woody-codebase-memory', version: '1.0.0' },
         instructions:
-          'Tools are bound to one enabled project; project names and filesystem roots are supplied by Woody. Call the tool that answers the question directly, and index_status only when results are empty. Calls through C/C++ macros and function pointers are usually missing from the graph: confirm with search_code before concluding there are no callers. If the project has .woody/architecture.md, read it before changing code and follow its tasks, dispatch table order and Change rules.',
+          'Tools are bound to one enabled project; project names and filesystem roots are supplied by Woody. Call the tool that answers the question directly, and index_status only when results are empty. Calls through C/C++ macros and function pointers are usually missing from the graph: confirm with search_code before concluding there are no callers. C globals inside #if blocks and arrays are not in the graph either: find their readers and writers with search_code. search_graph matches code names; search Chinese words with search_code. If the project has .woody/architecture.md, read it before changing code and follow its tasks, dispatch table order and Change rules.',
       };
       break;
     case 'ping':

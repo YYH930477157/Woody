@@ -402,6 +402,34 @@ function canonical(repoPath) {
   if (!fs.statSync(root).isDirectory()) throw new Error('Project path must be a directory');
   return root;
 }
+/**
+ * search_graph ranks code names with BM25, which has no tokens for Chinese or other words
+ * that are not ASCII: such a query matched nothing, and the indexer then listed every node
+ * in name order, which a model can mistake for an answer.
+ */
+const NON_ASCII_QUERY =
+  'search_graph matches code names, so it cannot search for words that are not English. Find them in comments and strings with search_code({"pattern":"<words>"}), or call search_graph again with English words from the names, such as "uart receive timeout".';
+const NON_ASCII_NOTE =
+  'note: words that are not English were left out of the query, because search_graph matches code names. Find them in comments and strings with search_code.';
+const asciiWords = (query) =>
+  query
+    .replace(/[^\x00-\x7f]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+/** The text of an MCP error envelope printed on stdout, or undefined when there is none. */
+function errorText(stdout) {
+  try {
+    const result = JSON.parse(stdout.replace(/^\uFEFF/, '').trim());
+    if (!result || result.isError !== true) return undefined;
+    const text = (result.content || [])
+      .map((item) => item?.text || '')
+      .join('\n')
+      .trim();
+    return text || (result.structuredContent ? JSON.stringify(result.structuredContent) : undefined);
+  } catch {
+    return undefined;
+  }
+}
 function validateConfig(config) {
   if (
     !config ||
@@ -1201,6 +1229,10 @@ function createRuntime(options) {
         await termination;
         processes.delete(operation);
         if (failure) return reject(failure);
+        // A query the indexer refuses ("function not found" with a hint) exits non-zero with
+        // its answer on stdout, and only start-up warnings on stderr. The model needs the answer.
+        const refusal = code !== 0 && tool !== 'index_repository' ? errorText(stdout) : undefined;
+        if (refusal) return reject(new Error(refusal));
         if (code !== 0) {
           const exitError = new Error(`Native command exited ${code}: ${stderr}`);
           exitError.exitCode = code;
@@ -1694,6 +1726,13 @@ function createRuntime(options) {
       if (!config.enabled) throw new Error('Codebase memory is disabled for this project');
       const bound = boundArguments(project, tool, args, config);
       if (tool === 'index_repository') return (await beginIndex(project, config)).promise;
+      if (tool === 'search_graph' && typeof bound.query === 'string' && /[^\x00-\x7f]/.test(bound.query)) {
+        const query = asciiWords(bound.query);
+        if (!/[A-Za-z0-9_]{2,}/.test(query))
+          return { isError: true, content: [{ type: 'text', text: NON_ASCII_QUERY }] };
+        const result = await native(project, tool, { ...bound, query }).promise;
+        return { ...result, content: [{ type: 'text', text: NON_ASCII_NOTE }, ...(result.content || [])] };
+      }
       return native(project, tool, bound).promise;
     },
     dispose() {

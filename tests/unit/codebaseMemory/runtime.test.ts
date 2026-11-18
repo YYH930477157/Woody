@@ -194,6 +194,33 @@ describe('project runtime', () => {
     expect(result.conclusion).toBeTruthy();
     expect(fs.existsSync(result.diagnosticsPath as string)).toBe(true);
   });
+  it("passes on the indexer's own answer when a query exits non-zero, not its start-up warnings", async () => {
+    fs.writeFileSync(
+      path.join(root, 'fixture.cjs'),
+      `console.error('level=warn msg=mem.allocator.preloading_completed'); console.log(JSON.stringify({isError:true,content:[{type:'text',text:'{"error":"function not found","hint":"Use search_graph(name_pattern=...)"}'}]})); process.exit(1);`
+    );
+    const service = runtime();
+    await service.save(repo, config);
+    const failure = service.callTool(repo, 'trace_path', { function_name: 'Missing' });
+    await expect(failure).rejects.toThrow('{"error":"function not found","hint":"Use search_graph(name_pattern=...)"}');
+    await expect(failure).rejects.not.toThrow(/level=warn|exited 1/);
+  });
+  it('keeps only the English words of a search_graph query, which matches code names', async () => {
+    const service = runtime();
+    await service.save(repo, config);
+    const mixed = await service.callTool(repo, 'search_graph', { query: '告警 uart timeout 阈值', limit: 5 });
+    const sent = JSON.parse(mixed.structuredContent.args[3]);
+    expect(sent).toMatchObject({ query: 'uart timeout', limit: 5 });
+    expect(mixed.content[0].text).toMatch(/left out of the query.*search_code/);
+    // Nothing English is left: the indexer would list every node, so explain instead.
+    const chinese = await service.callTool(repo, 'search_graph', { query: '告警 阈值' });
+    expect(chinese).toMatchObject({ isError: true });
+    expect(chinese.content[0].text).toContain('search_code({"pattern":"<words>"})');
+    // Other tools and English queries are passed on unchanged.
+    const english = await service.callTool(repo, 'search_graph', { query: 'uart' });
+    expect(JSON.parse(english.structuredContent.args[3]).query).toBe('uart');
+    expect(english.content).toBeUndefined();
+  });
   it('refuses to index before spawning when this process reads ciphertext', async () => {
     const service = runtime({
       powerShell: 'pwsh.exe',
@@ -732,9 +759,10 @@ describe.runIf(fs.existsSync(installedPowerShell))('native commands started thro
   it('passes JSON arguments with quotes and spaces unchanged', async () => {
     const service = started();
     await service.save(repo, config);
-    const result = await service.callTool(repo, 'search_graph', { query: 'say "hi" 你好' });
+    // search_code passes text through as is (search_graph keeps only English words).
+    const result = await service.callTool(repo, 'search_code', { pattern: 'say "hi" 你好' });
     const args = result.structuredContent.args as string[];
-    expect(JSON.parse(args.at(-1) as string).query).toBe('say "hi" 你好');
+    expect(JSON.parse(args.at(-1) as string).pattern).toBe('say "hi" 你好');
   }, 20000);
 
   it('keeps the native exit code and its diagnostics', async () => {

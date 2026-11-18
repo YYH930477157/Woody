@@ -123,6 +123,13 @@ recorded index process have stopped. With PowerShell, that recorded process is
 the launcher. Unreadable owner records are treated as busy; an interruption
 during recovery itself can leave a recovery lock requiring manual inspection.
 
+When a query exits non-zero with an MCP error on stdout ("function not found" and
+its hint), the adapter passes that answer on rather than the indexer's start-up
+warnings on stderr. `search_graph` ranks code names, and a `query` with Chinese or
+other non-ASCII words matched nothing, after which the indexer listed every node.
+The adapter drops those words and adds a note, or, when no English word is left,
+answers with a pointer to `search_code` without calling the indexer.
+
 The indexer prefixes every qualified name with the project name, so the name is
 short: the folder name in lowercase ASCII plus 8 hex characters of the path hash
 (`code-affc6c50`). The cache directory keeps the full-hash name `woody-<sha256>`,
