@@ -216,6 +216,44 @@
       "delivery": "Übergabe"
     },
     "hint": "Erstellt aus dem gewählten Assistenten eine Rolle pro Phase, mit seinem Modell, seinen Tools, Skills und Regeln. Die erste Phase leitet das Team: Sie klärt die Anforderungen mit Ihnen und übergibt die Arbeit dann Phase für Phase. Die Rollen lassen sich danach in den Assistenten-Einstellungen bearbeiten.",
-    "prepareFailed": "Rollenvorbereitung fehlgeschlagen; kein Team erstellt. Erneut versuchen. Nicht entfernte Kopien: {{ids}}. In den Assistenteneinstellungen verwalten."
+    "prepareFailed": "Rollenvorbereitung fehlgeschlagen; kein Team erstellt. Erneut versuchen. Nicht entfernte Kopien: {{ids}}. In den Assistenteneinstellungen verwalten.",
+    "experts": "Modulexperten"
+  },
+  "experts": {
+    "title": "Modulexperten",
+    "savedIn": "Gespeichert in {{file}}",
+    "empty": "Noch keine Experten. Fügen Sie einen pro Modul hinzu.",
+    "selectWorkspace": "Wählen Sie zuerst den Projektordner. Die Experten werden in dessen .woody-Ordner gespeichert.",
+    "unavailable": "Modulexperten sind nur in der Desktop-App verfügbar.",
+    "loadFailed": "Die Expertenliste kann nicht gelesen werden: {{message}}",
+    "saveFailed": "Die Expertenliste kann nicht gespeichert werden: {{message}}",
+    "add": "Experte hinzufügen",
+    "pathCount": "Pfade: {{count}}",
+    "shared": "Gemeinsame Dateien",
+    "sharedHint": "Dateien ohne Besitzer, etwa Task-Tabellen und gemeinsame Header. Für jedes Ziel bestimmt der Verteiler einen Experten, der sie ändert.",
+    "hint": "Erstellt aus dem gewählten Assistenten einen Verteiler, die gewählten Experten und einen Prüfer und übernimmt Modell, Werkzeuge, Skills und Regeln. Der Verteiler ermittelt, welchem Experten der Code gehört, stimmt einen Plan mit Ihnen ab und übergibt jeden Teil an diesen Experten; der Prüfer baut das Projekt und prüft die gesamte Änderung. Die Expertenliste wird im .woody-Ordner des Projekts gespeichert.",
+    "noneSelected": "Wählen Sie mindestens einen Experten und füllen Sie die Angaben jedes Experten vollständig aus",
+    "fields": {
+      "name": "Name",
+      "namePlaceholder": "z. B. Sensor-Experte",
+      "id": "ID",
+      "idHint": "Kleinbuchstaben, Ziffern und -. Benennt auch die Funktionskarte .woody/features/<ID>.md.",
+      "summary": "Zuständigkeit",
+      "summaryPlaceholder": "Was das Modul tut und welche Anfragen dazugehören",
+      "paths": "Eigene Dateien",
+      "pathsPlaceholder": "Eine pro Zeile, relativ zum Projektordner. Ein Ordner endet mit /; * passt auf einen Teil eines Namens."
+    },
+    "issues": {
+      "id": "Geben Sie eine ID aus Kleinbuchstaben, Ziffern und - ein.",
+      "idTaken": "Ein anderer Experte verwendet diese ID bereits.",
+      "name": "Geben Sie einen Namen mit höchstens 40 Zeichen ein.",
+      "nameTaken": "Ein anderer Experte verwendet diesen Namen bereits.",
+      "summary": "Beschreiben Sie die Zuständigkeit in höchstens 400 Zeichen.",
+      "paths": "Geben Sie mindestens eine Datei oder einen Ordner relativ zum Projektordner an, ohne .."
+    },
+    "roles": {
+      "dispatcher": "Verteiler",
+      "verifier": "Prüfer"
+    }
   }
 }

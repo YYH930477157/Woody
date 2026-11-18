@@ -14,9 +14,11 @@ const deleteAssistantInvokeMock = vi.fn();
 const resolveDefaultTeamAgentModelMock = vi.fn();
 const messageErrorMock = vi.fn();
 const prepareWorkflowMock = vi.fn();
+const prepareRolesMock = vi.fn();
 
 vi.mock('@renderer/pages/team/WorkflowPresets/prepareWorkflow', () => ({
   prepareWorkflow: (...args: unknown[]) => prepareWorkflowMock(...args),
+  prepareRoles: (...args: unknown[]) => prepareRolesMock(...args),
   WorkflowPreparationError: class extends Error {},
 }));
 
@@ -107,6 +109,7 @@ vi.mock('@renderer/components/workspace', () => ({
 }));
 
 const worktreeMocks = vi.hoisted(() => ({ inspect: vi.fn(), create: vi.fn(), discard: vi.fn() }));
+const expertsMocks = vi.hoisted(() => ({ experts: vi.fn(), save: vi.fn() }));
 vi.mock('@renderer/utils/platform', () => ({ isElectronDesktop: () => true }));
 
 vi.mock('@/common', () => ({
@@ -121,6 +124,10 @@ vi.mock('@/common', () => ({
       teamWorktreeInspect: { invoke: worktreeMocks.inspect },
       teamWorktreeCreate: { invoke: worktreeMocks.create },
       teamWorktreeDiscard: { invoke: worktreeMocks.discard },
+    },
+    codebaseMemory: {
+      experts: { invoke: expertsMocks.experts },
+      saveExperts: { invoke: expertsMocks.save },
     },
   },
 }));
@@ -168,6 +175,109 @@ describe('TeamCreateModal', () => {
     });
     worktreeMocks.discard.mockReset();
     worktreeMocks.discard.mockResolvedValue(true);
+    prepareRolesMock.mockReset();
+    prepareRolesMock.mockResolvedValue([
+      { role: 'leader', assistant_id: 'dispatcher-copy', assistant_name: '总管', model: 'configured-model' },
+    ]);
+    expertsMocks.experts.mockReset();
+    expertsMocks.save.mockReset();
+  });
+
+  const EXPERTS_FILE = 'D:\\work\\project\\.woody\\experts.json';
+  const sensor = { id: 'sensor', name: 'Sensor 专家', summary: 'Sensor sampling', paths: ['src/sensor.c'] };
+  const ui = { id: 'ui', name: 'UI 专家', summary: 'Screens', paths: ['src/ui.c'] };
+  const startExpertTeam = async () => {
+    render(<TeamCreateModal visible onClose={vi.fn()} onCreated={vi.fn()} />);
+    fireEvent.click(screen.getByLabelText('team.workflow.label'));
+    fireEvent.click(await screen.findByText('team.workflow.experts'));
+    expect(screen.getByTestId('team-workflow-experts-hint')).toHaveTextContent('team.experts.hint');
+    fireEvent.click(screen.getByLabelText('team.workflow.baseAssistant'));
+    fireEvent.click(await screen.findByText('Aion 命令行'));
+    fireEvent.change(screen.getByTestId('team-create-name-input'), { target: { value: 'Demo' } });
+    expect(screen.getByTestId('team-experts-notice')).toHaveTextContent('team.experts.selectWorkspace');
+    fireEvent.click(screen.getByTestId('workspace-folder-select'));
+  };
+
+  it('creates a dispatcher, the chosen experts and a verifier from the saved expert list', async () => {
+    expertsMocks.experts.mockResolvedValue({
+      file: EXPERTS_FILE,
+      saved: { version: 1, experts: [sensor, ui], shared: ['src/tasks.c'] },
+      cards: [],
+    });
+    await startExpertTeam();
+    fireEvent.click(within(await screen.findByTestId('team-expert-ui')).getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Create' }));
+    await waitFor(() => expect(createTeamInvokeMock).toHaveBeenCalledTimes(1));
+    expect(expertsMocks.experts).toHaveBeenCalledWith({ repoPath: 'D:\\work\\project' });
+    // Choosing who joins is not a change to the saved list.
+    expect(expertsMocks.save).not.toHaveBeenCalled();
+    const { roles, workspace } = prepareRolesMock.mock.calls[0][0];
+    expect(workspace).toBe('D:\\work\\project');
+    expect(roles.map((role: { name: string }) => role.name)).toEqual([
+      'team.experts.roles.dispatcher',
+      'Sensor 专家',
+      'team.experts.roles.verifier',
+    ]);
+    expect(roles[0].rules).toContain('src/tasks.c');
+    expect(roles[0].rules).not.toContain('UI 专家');
+    expect(roles[1].rules).toContain('.woody/features/sensor.md');
+    expect(createTeamInvokeMock.mock.calls[0][0]).toMatchObject({
+      workspace: 'D:\\work\\project',
+      agents: [{ role: 'leader', assistant_id: 'dispatcher-copy', assistant_name: '总管', model: 'configured-model' }],
+    });
+  });
+
+  it('starts from feature cards, requires every expert to be complete, and saves the list first', async () => {
+    expertsMocks.experts.mockResolvedValue({ file: EXPERTS_FILE, saved: null, cards: ['sensor'] });
+    expertsMocks.save.mockImplementation(async ({ file }: { file: unknown }) => ({
+      file: EXPERTS_FILE,
+      saved: file,
+      cards: ['sensor'],
+    }));
+    await startExpertTeam();
+    const row = await screen.findByTestId('team-expert-sensor');
+    expect(within(row).getByText('team.experts.issues.summary')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Confirm Create' })).toBeDisabled();
+    fireEvent.change(within(row).getByPlaceholderText('team.experts.fields.summaryPlaceholder'), {
+      target: { value: 'Sensor sampling' },
+    });
+    expect(within(row).getByText('team.experts.issues.paths')).toBeInTheDocument();
+    fireEvent.change(within(row).getByPlaceholderText('team.experts.fields.pathsPlaceholder'), {
+      target: { value: 'src\\sensor.c\nsrc/sensor.h\n' },
+    });
+    expect(within(row).queryByText(/team\.experts\.issues/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Create' }));
+    await waitFor(() => expect(createTeamInvokeMock).toHaveBeenCalledTimes(1));
+    expect(expertsMocks.save).toHaveBeenCalledExactlyOnceWith({
+      repoPath: 'D:\\work\\project',
+      file: {
+        version: 1,
+        experts: [
+          { id: 'sensor', name: 'sensor', summary: 'Sensor sampling', paths: ['src/sensor.c', 'src/sensor.h'] },
+        ],
+        shared: [],
+      },
+    });
+    expect(expertsMocks.save.mock.invocationCallOrder[0]).toBeLessThan(prepareRolesMock.mock.invocationCallOrder[0]);
+  });
+
+  it('creates nothing when the expert list cannot be saved', async () => {
+    expertsMocks.experts.mockResolvedValue({
+      file: EXPERTS_FILE,
+      saved: { version: 1, experts: [sensor], shared: [] },
+      cards: [],
+    });
+    expertsMocks.save.mockRejectedValue(new Error('read-only folder'));
+    await startExpertTeam();
+    const row = await screen.findByTestId('team-expert-sensor');
+    fireEvent.click(within(row).getByRole('button', { name: 'common.edit' }));
+    fireEvent.change(within(row).getByPlaceholderText('team.experts.fields.namePlaceholder'), {
+      target: { value: 'Sensor' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Create' }));
+    await waitFor(() => expect(messageErrorMock).toHaveBeenCalledWith('team.experts.saveFailed'));
+    expect(prepareRolesMock).not.toHaveBeenCalled();
+    expect(createTeamInvokeMock).not.toHaveBeenCalled();
   });
 
   it('creates the team in a separate worktree and reuses it on retry', async () => {

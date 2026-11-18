@@ -216,6 +216,44 @@
       "delivery": "Teslimat"
     },
     "hint": "Seçilen asistandan her aşama için bir rol oluşturur; modelini, araçlarını, becerilerini ve kurallarını korur. İlk aşama ekibe liderlik eder: önce gereksinimleri sizinle netleştirir, ardından işi aşama aşama devreder. Rolleri daha sonra asistan ayarlarından düzenleyebilirsiniz.",
-    "prepareFailed": "Rol hazırlığı başarısız; ekip oluşturulmadı. Yeniden deneyin. Silinemeyen kopyalar: {{ids}}. Asistan ayarlarından yönetin."
+    "prepareFailed": "Rol hazırlığı başarısız; ekip oluşturulmadı. Yeniden deneyin. Silinemeyen kopyalar: {{ids}}. Asistan ayarlarından yönetin.",
+    "experts": "Modül uzmanları"
+  },
+  "experts": {
+    "title": "Modül uzmanları",
+    "savedIn": "Kayıt yeri: {{file}}",
+    "empty": "Henüz uzman yok. Her modül için bir uzman ekleyin.",
+    "selectWorkspace": "Önce proje klasörünü seçin. Uzmanlar bu klasörün .woody klasörüne kaydedilir.",
+    "unavailable": "Modül uzmanları yalnızca masaüstü uygulamasında kullanılabilir.",
+    "loadFailed": "Uzman listesi okunamıyor: {{message}}",
+    "saveFailed": "Uzman listesi kaydedilemiyor: {{message}}",
+    "add": "Uzman ekle",
+    "pathCount": "Yollar: {{count}}",
+    "shared": "Ortak dosyalar",
+    "sharedHint": "Hiçbir uzmana ait olmayan dosyalar (görev tabloları, ortak başlık dosyaları gibi). Her hedef için dağıtıcı bunları değiştirecek bir uzman belirler.",
+    "hint": "Seçilen asistandan bir dağıtıcı, seçilen uzmanlar ve bir doğrulayıcı oluşturur; modelini, araçlarını, becerilerini ve kurallarını korur. Dağıtıcı kodun hangi uzmana ait olduğunu belirler, planı sizinle onaylar ve her parçayı ilgili uzmana verir; doğrulayıcı derler ve birleşik değişikliği kontrol eder. Uzman listesi projenin .woody klasörüne kaydedilir.",
+    "noneSelected": "En az bir uzman seçin ve her uzmanın bilgilerini tamamlayın",
+    "fields": {
+      "name": "Ad",
+      "namePlaceholder": "ör. Sensor uzmanı",
+      "id": "Kimlik",
+      "idHint": "Küçük harf, rakam ve -. Özellik kartı .woody/features/<kimlik>.md dosyasının adı da olur.",
+      "summary": "Sorumluluk",
+      "summaryPlaceholder": "Modülün ne yaptığı ve hangi isteklerin ona ait olduğu",
+      "paths": "Sahip olunan dosyalar",
+      "pathsPlaceholder": "Her satıra bir tane, proje klasörüne göre. Klasör / ile biter; * adın bir kısmıyla eşleşir."
+    },
+    "issues": {
+      "id": "Küçük harf, rakam ve - içeren bir kimlik girin.",
+      "idTaken": "Bu kimliği başka bir uzman kullanıyor.",
+      "name": "En fazla 40 karakterlik bir ad girin.",
+      "nameTaken": "Bu adı başka bir uzman kullanıyor.",
+      "summary": "Sorumluluğu en fazla 400 karakterle açıklayın.",
+      "paths": "Proje klasörüne göre en az bir dosya veya klasör girin (.. kullanılamaz)."
+    },
+    "roles": {
+      "dispatcher": "Dağıtıcı",
+      "verifier": "Doğrulayıcı"
+    }
   }
 }

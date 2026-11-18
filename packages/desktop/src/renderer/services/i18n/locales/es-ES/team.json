@@ -216,6 +216,44 @@
       "delivery": "Entrega"
     },
     "hint": "Crea un rol por etapa a partir del asistente elegido, con su modelo, herramientas, habilidades y reglas. La primera etapa dirige el equipo: confirma contigo los requisitos y luego pasa el trabajo de una etapa a otra. Después puedes editar los roles en los ajustes de asistentes.",
-    "prepareFailed": "Error al preparar roles; equipo no creado. Reintenta. Copias no eliminadas: {{ids}}. Adminístralas en los ajustes de asistentes."
+    "prepareFailed": "Error al preparar roles; equipo no creado. Reintenta. Copias no eliminadas: {{ids}}. Adminístralas en los ajustes de asistentes.",
+    "experts": "Expertos por módulo"
+  },
+  "experts": {
+    "title": "Expertos por módulo",
+    "savedIn": "Guardado en {{file}}",
+    "empty": "Todavía no hay expertos. Añade uno por módulo.",
+    "selectWorkspace": "Elige primero la carpeta del proyecto. Los expertos se guardan en su carpeta .woody.",
+    "unavailable": "Los expertos por módulo solo están disponibles en la aplicación de escritorio.",
+    "loadFailed": "No se puede leer la lista de expertos: {{message}}",
+    "saveFailed": "No se puede guardar la lista de expertos: {{message}}",
+    "add": "Añadir experto",
+    "pathCount": "Rutas: {{count}}",
+    "shared": "Archivos compartidos",
+    "sharedHint": "Archivos sin propietario, como tablas de tareas y cabeceras comunes. Para cada objetivo, el coordinador designa a un experto que los modifica.",
+    "hint": "Crea un coordinador, los expertos seleccionados y un verificador a partir del asistente seleccionado, conservando su modelo, herramientas, habilidades y reglas. El coordinador determina qué experto es dueño del código, confirma un plan contigo y entrega cada parte a ese experto; el verificador compila y revisa el cambio conjunto. La lista de expertos se guarda en la carpeta .woody del proyecto.",
+    "noneSelected": "Selecciona al menos un experto y completa los datos de cada uno",
+    "fields": {
+      "name": "Nombre",
+      "namePlaceholder": "p. ej., experto Sensor",
+      "id": "ID",
+      "idHint": "Minúsculas, dígitos y -. También da nombre a la ficha de funcionalidad .woody/features/<ID>.md.",
+      "summary": "Responsabilidad",
+      "summaryPlaceholder": "Qué hace el módulo y qué solicitudes le corresponden",
+      "paths": "Archivos propios",
+      "pathsPlaceholder": "Uno por línea, relativo a la carpeta del proyecto. Una carpeta termina en /; * coincide con parte de un nombre."
+    },
+    "issues": {
+      "id": "Escribe un ID con minúsculas, dígitos y -.",
+      "idTaken": "Otro experto ya usa este ID.",
+      "name": "Escribe un nombre de 40 caracteres como máximo.",
+      "nameTaken": "Otro experto ya usa este nombre.",
+      "summary": "Describe la responsabilidad en 400 caracteres como máximo.",
+      "paths": "Indica al menos un archivo o carpeta relativo a la carpeta del proyecto, sin .."
+    },
+    "roles": {
+      "dispatcher": "Coordinador",
+      "verifier": "Verificador"
+    }
   }
 }

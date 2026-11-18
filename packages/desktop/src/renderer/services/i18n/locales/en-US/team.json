@@ -216,6 +216,44 @@
       "delivery": "Delivery"
     },
     "hint": "Creates one role per stage from the selected assistant, keeping its model, tools, skills and rules. The first stage also leads the team: it confirms the requirements with you, then hands the work on one stage at a time. You can edit the roles in assistant settings afterwards.",
-    "prepareFailed": "Role preparation failed; no team created. Retry to prepare again. Copies not removed: {{ids}}. Manage them in assistant settings."
+    "prepareFailed": "Role preparation failed; no team created. Retry to prepare again. Copies not removed: {{ids}}. Manage them in assistant settings.",
+    "experts": "Module experts"
+  },
+  "experts": {
+    "title": "Module experts",
+    "savedIn": "Saved in {{file}}",
+    "empty": "No experts yet. Add one per module.",
+    "selectWorkspace": "Choose the project folder first. The experts are saved in its .woody folder.",
+    "unavailable": "Module experts are only available in the desktop app.",
+    "loadFailed": "Cannot read the expert list: {{message}}",
+    "saveFailed": "Cannot save the expert list: {{message}}",
+    "add": "Add expert",
+    "pathCount": "Paths: {{count}}",
+    "shared": "Shared files",
+    "sharedHint": "No expert owns these, such as task tables and common headers. For each goal the dispatcher names one expert to change them.",
+    "hint": "Creates a dispatcher, the selected experts and a verifier from the selected assistant, keeping its model, tools, skills and rules. The dispatcher works out which expert owns the code, confirms a plan with you, then hands each part to that expert; the verifier builds and checks the combined change. The expert list is saved in the project's .woody folder.",
+    "noneSelected": "Select at least one expert and complete every expert's details",
+    "fields": {
+      "name": "Name",
+      "namePlaceholder": "e.g. Sensor expert",
+      "id": "ID",
+      "idHint": "Lowercase letters, digits and -. Also names the feature card .woody/features/<ID>.md.",
+      "summary": "Responsibility",
+      "summaryPlaceholder": "What the module does and which requests belong to it",
+      "paths": "Owned files",
+      "pathsPlaceholder": "One per line, relative to the project folder. A folder ends with /; * matches part of a name."
+    },
+    "issues": {
+      "id": "Enter an ID made of lowercase letters, digits and -.",
+      "idTaken": "Another expert already uses this ID.",
+      "name": "Enter a name of at most 40 characters.",
+      "nameTaken": "Another expert already uses this name.",
+      "summary": "Describe the responsibility in at most 400 characters.",
+      "paths": "List at least one owned file or folder, relative to the project folder, without .."
+    },
+    "roles": {
+      "dispatcher": "Dispatcher",
+      "verifier": "Verifier"
+    }
   }
 }

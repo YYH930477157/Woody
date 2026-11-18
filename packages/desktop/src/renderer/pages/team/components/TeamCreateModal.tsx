@@ -19,12 +19,14 @@ import TeamAssistantPicker from './memberPicker/TeamAssistantPicker';
 import TeamAssistantPickerDropdown from './memberPicker/TeamAssistantPickerDropdown';
 import TeamMemberDraftList, { type TeamMemberDraft } from './memberPicker/TeamMemberDraftList';
 import WorkflowPresets, {
+  prepareRoles,
   prepareWorkflow,
   WorkflowPreparationError,
   WORKFLOW_ROLES,
   type WorkflowPresetId,
   type WorkflowRole,
 } from '../WorkflowPresets';
+import ModuleExperts, { buildExpertTeamRoles, useModuleExperts } from '../WorkflowPresets/ModuleExperts';
 import IsolatedWorkspaceOption, { IsolatedWorkspaceError, useIsolatedWorkspace } from '../IsolatedWorkspace';
 
 /** Reasons the main process reports for a folder that cannot get a separate workspace. */
@@ -59,6 +61,8 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
   const [workflowBaseId, setWorkflowBaseId] = useState<string>();
   const [preparedWorkflow, setPreparedWorkflow] = useState<TeamAssistantInput[]>();
   const isolated = useIsolatedWorkspace(workspace);
+  const experts = useModuleExperts(workspace, workflowPreset === 'experts');
+  const expertsMissing = workflowPreset === 'experts' && !preparedWorkflow && !experts.ready;
   const workflowBase = allAssistants.find(
     (assistant) => assistant.id === workflowBaseId && assistant.team_selectable !== false
   );
@@ -134,11 +138,28 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
       Message.warning(t('team.create.selectOneLeader', { defaultValue: 'Select one Team Leader' }));
       return;
     }
+    if (expertsMissing) {
+      Message.warning(t('team.experts.noneSelected'));
+      return;
+    }
     const user_id = user?.id ?? 'system_default_user';
     creatingRef.current = true;
     setLoading(true);
     try {
-      // The worktree comes first: it fails fast and costs nothing to retry, unlike role copies.
+      // The expert list is written first: it is part of the project, and a team must not
+      // start from experts that were not saved. Already prepared roles were built from it.
+      let chosenExperts: Awaited<ReturnType<typeof experts.save>> | undefined;
+      if (workflowPreset === 'experts' && !preparedWorkflow) {
+        try {
+          chosenExperts = await experts.save();
+        } catch (error) {
+          Message.error(
+            t('team.experts.saveFailed', { message: error instanceof Error ? error.message : String(error) })
+          );
+          return;
+        }
+      }
+      // The worktree comes next: it fails fast and costs nothing to retry, unlike role copies.
       const teamWorkspace = isolated.enabled ? (await isolated.prepare(name)).workspace : workspace;
       let agents: TeamAssistantInput[];
       if (workflowPreset) {
@@ -146,16 +167,34 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
           agents = preparedWorkflow;
         } else {
           if (!workflowBase) throw new Error(t('team.workflow.baseAssistant'));
-          const labels = Object.fromEntries(
-            WORKFLOW_ROLES.map((role) => [role, t(`team.workflow.roles.${role}`)])
-          ) as Record<WorkflowRole, string>;
-          agents = await prepareWorkflow({
-            preset: workflowPreset,
-            base: workflowBase,
-            teamName: name,
-            locale: i18n.language,
-            labels,
-          });
+          if (workflowPreset === 'experts') {
+            if (!chosenExperts || !experts.file) throw new Error(t('team.experts.noneSelected'));
+            agents = await prepareRoles({
+              base: workflowBase,
+              teamName: name,
+              locale: i18n.language,
+              workspace: teamWorkspace,
+              roles: buildExpertTeamRoles({
+                ...chosenExperts,
+                labels: { dispatcher: t('team.experts.roles.dispatcher'), verifier: t('team.experts.roles.verifier') },
+                // A separate workspace is a git worktree without the ignored .woody folder:
+                // members keep the knowledge in the chosen folder.
+                knowledge: isolated.enabled ? experts.file.replace(/[\\/][^\\/]+$/, '') : '.woody',
+              }),
+            });
+          } else {
+            const labels = Object.fromEntries(
+              WORKFLOW_ROLES.map((role) => [role, t(`team.workflow.roles.${role}`)])
+            ) as Record<WorkflowRole, string>;
+            agents = await prepareWorkflow({
+              preset: workflowPreset,
+              base: workflowBase,
+              teamName: name,
+              locale: i18n.language,
+              workspace: teamWorkspace,
+              labels,
+            });
+          }
           setPreparedWorkflow(agents);
         }
       } else {
@@ -402,6 +441,7 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
               disabled={
                 loading ||
                 !name.trim() ||
+                expertsMissing ||
                 (workflowPreset ? !workflowBase && !preparedWorkflow : selectedMembers.length === 0 || !hasOneLeader)
               }
               className='!h-38px min-w-100px !rounded-8px !px-18px !text-13px'
@@ -420,7 +460,23 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
         onPresetChange={setWorkflowPreset}
         onBaseChange={setWorkflowBaseId}
       />
-      {workflowPreset ? <div className='px-20px py-16px'>{teamFields}</div> : isMobile ? mobileBody : desktopBody}
+      {workflowPreset ? (
+        <div className='flex flex-col gap-14px px-20px py-16px'>
+          {teamFields}
+          {workflowPreset === 'experts' && (
+            <ModuleExperts
+              key={workspace}
+              workspace={workspace}
+              state={experts}
+              disabled={loading || Boolean(preparedWorkflow)}
+            />
+          )}
+        </div>
+      ) : isMobile ? (
+        mobileBody
+      ) : (
+        desktopBody
+      )}
     </AionModal>
   );
 };

@@ -216,6 +216,44 @@
       "delivery": "Livraison"
     },
     "hint": "Crée un rôle par étape à partir de l’assistant choisi, avec son modèle, ses outils, ses compétences et ses règles. La première étape dirige l’équipe : elle valide les besoins avec vous, puis transmet le travail d’une étape à l’autre. Vous pourrez ensuite modifier les rôles dans les paramètres des assistants.",
-    "prepareFailed": "Échec de préparation des rôles ; équipe non créée. Réessayez. Copies non supprimées : {{ids}}. Gérez-les dans les paramètres des assistants."
+    "prepareFailed": "Échec de préparation des rôles ; équipe non créée. Réessayez. Copies non supprimées : {{ids}}. Gérez-les dans les paramètres des assistants.",
+    "experts": "Experts par module"
+  },
+  "experts": {
+    "title": "Experts par module",
+    "savedIn": "Enregistré dans {{file}}",
+    "empty": "Aucun expert pour l'instant. Ajoutez-en un par module.",
+    "selectWorkspace": "Choisissez d'abord le dossier du projet. Les experts sont enregistrés dans son dossier .woody.",
+    "unavailable": "Les experts par module ne sont disponibles que dans l'application de bureau.",
+    "loadFailed": "Impossible de lire la liste des experts : {{message}}",
+    "saveFailed": "Impossible d'enregistrer la liste des experts : {{message}}",
+    "add": "Ajouter un expert",
+    "pathCount": "Chemins : {{count}}",
+    "shared": "Fichiers partagés",
+    "sharedHint": "Fichiers sans propriétaire, comme les tables de tâches et les en-têtes communs. Pour chaque objectif, le répartiteur désigne un expert qui les modifie.",
+    "hint": "Crée un répartiteur, les experts sélectionnés et un vérificateur à partir de l'assistant choisi, en conservant son modèle, ses outils, ses compétences et ses règles. Le répartiteur détermine quel expert possède le code, valide un plan avec vous, puis confie chaque partie à cet expert ; le vérificateur compile et contrôle la modification d'ensemble. La liste des experts est enregistrée dans le dossier .woody du projet.",
+    "noneSelected": "Sélectionnez au moins un expert et complétez les informations de chaque expert",
+    "fields": {
+      "name": "Nom",
+      "namePlaceholder": "ex. : expert Sensor",
+      "id": "ID",
+      "idHint": "Minuscules, chiffres et -. Nomme aussi la fiche de fonctionnalité .woody/features/<ID>.md.",
+      "summary": "Responsabilité",
+      "summaryPlaceholder": "Ce que fait le module et quelles demandes lui reviennent",
+      "paths": "Fichiers possédés",
+      "pathsPlaceholder": "Un par ligne, relatif au dossier du projet. Un dossier se termine par / ; * correspond à une partie d'un nom."
+    },
+    "issues": {
+      "id": "Saisissez un ID composé de minuscules, de chiffres et de -.",
+      "idTaken": "Un autre expert utilise déjà cet ID.",
+      "name": "Saisissez un nom de 40 caractères au maximum.",
+      "nameTaken": "Un autre expert utilise déjà ce nom.",
+      "summary": "Décrivez la responsabilité en 400 caractères au maximum.",
+      "paths": "Indiquez au moins un fichier ou dossier relatif au dossier du projet, sans .."
+    },
+    "roles": {
+      "dispatcher": "Répartiteur",
+      "verifier": "Vérificateur"
+    }
   }
 }

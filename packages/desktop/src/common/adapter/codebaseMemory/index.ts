@@ -4,6 +4,7 @@ import type {
   CodebaseMemorySession,
   CodebaseMemoryStatus,
 } from '@/common/types/codebaseMemory/types';
+import type { ModuleExpertsFile, ModuleExpertsState } from '@/common/types/team/moduleExperts';
 
 type Reply<T> = { ok: true; value: T } | { ok: false; error: string };
 type ProjectRequest = { repoPath: string };
@@ -38,4 +39,8 @@ export const codebaseMemory = {
   cancel: provider<CodebaseMemoryStatus, ProjectRequest>('codebase-memory.cancel'),
   session: provider<CodebaseMemorySession, ProjectRequest>('codebase-memory.session'),
   openLens: provider<CodebaseMemoryStatus, ProjectRequest>('codebase-memory.open-lens'),
+  experts: provider<ModuleExpertsState, ProjectRequest>('codebase-memory.experts'),
+  saveExperts: provider<ModuleExpertsState, ProjectRequest & { file: ModuleExpertsFile }>(
+    'codebase-memory.save-experts'
+  ),
 };

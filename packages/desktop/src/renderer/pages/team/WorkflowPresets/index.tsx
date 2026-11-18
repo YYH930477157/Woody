@@ -2,10 +2,10 @@ import React from 'react';
 import { Select } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import type { TeamAssistantOption } from '../components/assistantSelectUtils';
-import { WORKFLOW_PRESETS, type WorkflowPresetId } from './presets';
+import { isStagePreset, WORKFLOW_PRESETS, type WorkflowPresetId } from './presets';
 
-export { prepareWorkflow, WorkflowPreparationError } from './prepareWorkflow';
-export { WORKFLOW_ROLES, type WorkflowPresetId, type WorkflowRole } from './presets';
+export { prepareRoles, prepareWorkflow, WorkflowPreparationError } from './prepareWorkflow';
+export { isStagePreset, WORKFLOW_ROLES, type WorkflowPresetId, type WorkflowRole } from './presets';
 
 type Props = {
   preset?: WorkflowPresetId;
@@ -33,7 +33,10 @@ const WorkflowPresets: React.FC<Props> = ({ preset, baseId, assistants, disabled
           onChange={(value: string) => onPresetChange(value === 'custom' ? undefined : (value as WorkflowPresetId))}
           options={[
             { value: 'custom', label: t('team.workflow.custom') },
-            ...(['feature', 'bugfix', 'review'] as const).map((id) => ({ value: id, label: t(`team.workflow.${id}`) })),
+            ...(['feature', 'bugfix', 'review', 'experts'] as const).map((id) => ({
+              value: id,
+              label: t(`team.workflow.${id}`),
+            })),
           ]}
         />
         {preset && (
@@ -50,13 +53,18 @@ const WorkflowPresets: React.FC<Props> = ({ preset, baseId, assistants, disabled
           />
         )}
       </div>
-      {preset && (
+      {preset && isStagePreset(preset) && (
         <>
           <div data-testid='team-workflow-stages' className='text-13px leading-20px text-t-primary'>
             {WORKFLOW_PRESETS[preset].map((role) => t(`team.workflow.roles.${role}`)).join(' → ')}
           </div>
           <div className='text-12px leading-18px text-t-tertiary'>{t('team.workflow.hint')}</div>
         </>
+      )}
+      {preset === 'experts' && (
+        <div data-testid='team-workflow-experts-hint' className='text-12px leading-18px text-t-tertiary'>
+          {t('team.experts.hint')}
+        </div>
       )}
     </section>
   );

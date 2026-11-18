@@ -1,7 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AssistantDetail } from '@/common/types/agent/assistantTypes';
 
-const mocks = vi.hoisted(() => ({ get: vi.fn(), create: vi.fn(), write: vi.fn(), remove: vi.fn(), model: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  get: vi.fn(),
+  create: vi.fn(),
+  write: vi.fn(),
+  remove: vi.fn(),
+  model: vi.fn(),
+  access: vi.fn(),
+}));
 vi.mock('@/common', () => ({
   ipcBridge: {
     assistants: { get: { invoke: mocks.get }, create: { invoke: mocks.create }, delete: { invoke: mocks.remove } },
@@ -11,7 +18,14 @@ vi.mock('@/common', () => ({
 vi.mock('@renderer/pages/team/components/teamCreateModelResolver', () => ({
   resolveDefaultTeamAgentModel: mocks.model,
 }));
-import { prepareWorkflow, WorkflowPreparationError } from '@/renderer/pages/team/WorkflowPresets/prepareWorkflow';
+vi.mock('@/renderer/pages/team/WorkflowPresets/codebaseMemoryAccess', () => ({
+  resolveCodebaseMemoryAccess: mocks.access,
+}));
+import {
+  prepareRoles,
+  prepareWorkflow,
+  WorkflowPreparationError,
+} from '@/renderer/pages/team/WorkflowPresets/prepareWorkflow';
 import { buildWorkflowRules, WORKFLOW_ROLES } from '@/renderer/pages/team/WorkflowPresets/presets';
 
 const labels = Object.fromEntries(WORKFLOW_ROLES.map((role) => [role, role])) as Record<
@@ -23,6 +37,7 @@ const params = {
   base: { id: 'base', name: 'Base', backend: 'aionrs' },
   teamName: 'My task',
   locale: 'zh-CN',
+  workspace: 'D:\\work\\project',
   labels,
 };
 const detail = {
@@ -58,6 +73,7 @@ describe('workflow role preparation', () => {
     mocks.write.mockResolvedValue(true);
     mocks.model.mockResolvedValue('configured-provider/model');
     mocks.remove.mockResolvedValue(undefined);
+    mocks.access.mockResolvedValue(undefined);
   });
 
   it('creates six independent stages with one leader and the configured model', async () => {
@@ -173,6 +189,44 @@ describe('workflow role preparation', () => {
     const members = await prepareWorkflow({ ...params, preset: 'review' });
     expect(members.map((member) => member.assistant_name)).toEqual(['requirements', 'review', 'delivery']);
     expect(mocks.write.mock.calls[0][0].content).toContain('report findings without starting implementation');
+  });
+
+  it('gives every role the codebase memory tools of the team workspace, once', async () => {
+    mocks.access.mockResolvedValue({ mcpId: 'cbm-row', skill: 'woody-codebase-memory' });
+    mocks.get.mockResolvedValue({
+      ...detail,
+      defaults: { ...detail.defaults, mcps: { mode: 'fixed', value: ['woody-cmake', 'cbm-row'] } },
+    });
+    await prepareWorkflow({ ...params, preset: 'review' });
+    expect(mocks.access).toHaveBeenCalledExactlyOnceWith('D:\\work\\project');
+    for (const [request] of mocks.create.mock.calls) {
+      expect(request).toMatchObject({
+        enabled_skills: ['test', 'woody-codebase-memory'],
+        defaults: {
+          skills: { mode: 'fixed', value: ['test', 'woody-codebase-memory'] },
+          mcps: { mode: 'fixed', value: ['woody-cmake', 'cbm-row'] },
+        },
+      });
+    }
+  });
+
+  it('creates any list of roles with the first one leading', async () => {
+    const members = await prepareRoles({
+      base: params.base,
+      teamName: ' Demo ',
+      locale: 'zh-CN',
+      workspace: '',
+      roles: [
+        { name: '总管', rules: 'dispatch' },
+        { name: 'Sensor 专家', rules: 'sensor' },
+      ],
+    });
+    expect(members.map(({ role, assistant_name }) => [role, assistant_name])).toEqual([
+      ['leader', '总管'],
+      ['teammate', 'Sensor 专家'],
+    ]);
+    expect(mocks.create.mock.calls.map(([request]) => request.name)).toEqual(['Demo · 总管', 'Demo · Sensor 专家']);
+    expect(mocks.write.mock.calls[1][0].content).toBe('Keep project conventions.\n\nsensor');
   });
 
   it('rejects roles outside the selected workflow', () => {

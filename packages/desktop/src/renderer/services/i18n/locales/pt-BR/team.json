@@ -216,6 +216,44 @@
       "delivery": "Entrega"
     },
     "hint": "Cria um papel por etapa a partir do assistente escolhido, com o modelo, as ferramentas, as habilidades e as regras dele. A primeira etapa lidera a equipe: confirma os requisitos com você e depois passa o trabalho de etapa em etapa. Depois você pode editar os papéis nas configurações de assistentes.",
-    "prepareFailed": "Falha ao preparar papéis; equipe não criada. Tente novamente. Cópias não removidas: {{ids}}. Gerencie-as nos ajustes dos assistentes."
+    "prepareFailed": "Falha ao preparar papéis; equipe não criada. Tente novamente. Cópias não removidas: {{ids}}. Gerencie-as nos ajustes dos assistentes.",
+    "experts": "Especialistas por módulo"
+  },
+  "experts": {
+    "title": "Especialistas por módulo",
+    "savedIn": "Salvo em {{file}}",
+    "empty": "Ainda não há especialistas. Adicione um por módulo.",
+    "selectWorkspace": "Escolha primeiro a pasta do projeto. Os especialistas são salvos na pasta .woody dela.",
+    "unavailable": "Especialistas por módulo só estão disponíveis no aplicativo para desktop.",
+    "loadFailed": "Não foi possível ler a lista de especialistas: {{message}}",
+    "saveFailed": "Não foi possível salvar a lista de especialistas: {{message}}",
+    "add": "Adicionar especialista",
+    "pathCount": "Caminhos: {{count}}",
+    "shared": "Arquivos compartilhados",
+    "sharedHint": "Arquivos sem dono, como tabelas de tarefas e cabeçalhos comuns. Para cada objetivo, o coordenador indica um especialista para alterá-los.",
+    "hint": "Cria um coordenador, os especialistas selecionados e um verificador a partir do assistente selecionado, mantendo seu modelo, ferramentas, habilidades e regras. O coordenador identifica qual especialista é dono do código, confirma um plano com você e entrega cada parte ao especialista correspondente; o verificador compila e confere a alteração combinada. A lista de especialistas é salva na pasta .woody do projeto.",
+    "noneSelected": "Selecione pelo menos um especialista e preencha os dados de cada um",
+    "fields": {
+      "name": "Nome",
+      "namePlaceholder": "ex.: especialista Sensor",
+      "id": "ID",
+      "idHint": "Letras minúsculas, dígitos e -. Também nomeia o cartão de funcionalidade .woody/features/<ID>.md.",
+      "summary": "Responsabilidade",
+      "summaryPlaceholder": "O que o módulo faz e quais pedidos pertencem a ele",
+      "paths": "Arquivos próprios",
+      "pathsPlaceholder": "Um por linha, relativo à pasta do projeto. Uma pasta termina com /; * corresponde a parte de um nome."
+    },
+    "issues": {
+      "id": "Informe um ID com letras minúsculas, dígitos e -.",
+      "idTaken": "Outro especialista já usa este ID.",
+      "name": "Informe um nome com no máximo 40 caracteres.",
+      "nameTaken": "Outro especialista já usa este nome.",
+      "summary": "Descreva a responsabilidade em no máximo 400 caracteres.",
+      "paths": "Informe pelo menos um arquivo ou pasta relativo à pasta do projeto, sem .."
+    },
+    "roles": {
+      "dispatcher": "Coordenador",
+      "verifier": "Verificador"
+    }
   }
 }

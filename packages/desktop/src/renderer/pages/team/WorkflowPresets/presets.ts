@@ -1,8 +1,13 @@
 export const WORKFLOW_ROLES = ['requirements', 'design', 'implementation', 'testing', 'review', 'delivery'] as const;
 export type WorkflowRole = (typeof WORKFLOW_ROLES)[number];
-export type WorkflowPresetId = 'feature' | 'bugfix' | 'review';
+/** Templates whose members are workflow stages. */
+export type StagePresetId = 'feature' | 'bugfix' | 'review';
+/** `experts`: a dispatcher, one expert per project module and a verifier. */
+export type WorkflowPresetId = StagePresetId | 'experts';
 
-export const WORKFLOW_PRESETS: Record<WorkflowPresetId, readonly WorkflowRole[]> = {
+export const isStagePreset = (preset: WorkflowPresetId): preset is StagePresetId => preset !== 'experts';
+
+export const WORKFLOW_PRESETS: Record<StagePresetId, readonly WorkflowRole[]> = {
   feature: WORKFLOW_ROLES,
   bugfix: ['requirements', 'implementation', 'testing', 'review', 'delivery'],
   review: ['requirements', 'review', 'delivery'],
@@ -29,7 +34,7 @@ const ROLE_INSTRUCTIONS: Record<WorkflowRole, string> = {
  * completed, and members mark completion before they report, so a pre-created chain
  * would start the next stage without the handoff it needs.
  */
-function leaderRules(preset: WorkflowPresetId): string[] {
+function leaderRules(preset: StagePresetId): string[] {
   const reviewOnly = !WORKFLOW_PRESETS[preset].includes('implementation');
   return [
     'You are also the workflow leader. Every stage already has a member; do not propose or create extra teammates unless the user asks.',
@@ -50,7 +55,7 @@ const MEMBER_RULES =
 
 /** Build a stable role contract, shared handoff format, and leader routing policy. */
 export function buildWorkflowRules(
-  preset: WorkflowPresetId,
+  preset: StagePresetId,
   role: WorkflowRole,
   labels: Record<WorkflowRole, string>
 ): string {

@@ -24,6 +24,8 @@ export function initCodebaseMemoryBridge(): void {
   codebaseMemory.cancel.provider(({ repoPath }) => service.cancel(repoPath));
   codebaseMemory.session.provider(({ repoPath }) => service.session(repoPath));
   codebaseMemory.openLens.provider(({ repoPath }) => service.openLens(repoPath));
+  codebaseMemory.experts.provider(({ repoPath }) => service.experts(repoPath));
+  codebaseMemory.saveExperts.provider(({ repoPath, file }) => service.saveExperts(repoPath, file));
   onConfirmedQuit(() =>
     service.dispose().catch((error: unknown) => {
       console.error('[CodebaseMemory] Lens shutdown failed', error);

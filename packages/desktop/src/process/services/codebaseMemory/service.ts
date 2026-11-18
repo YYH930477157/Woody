@@ -1,6 +1,8 @@
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import type { CodebaseMemoryConfig, CodebaseMemoryStatus } from '@/common/types/codebaseMemory/types';
+import type { ModuleExpertsFile, ModuleExpertsState } from '@/common/types/team/moduleExperts';
+import { createExpertsStore } from './experts';
 import { createLensManager, type LensProject } from './lens';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 
@@ -29,6 +31,9 @@ export type CodebaseMemoryService = {
   cancel(repoPath: string): Promise<CodebaseMemoryStatus>;
   session(repoPath: string): Promise<CodebaseMemorySession>;
   openLens(repoPath: string): Promise<CodebaseMemoryStatus>;
+  /** The module experts saved in the project's `.woody/experts.json`, and its feature card ids. */
+  experts(repoPath: string): Promise<ModuleExpertsState>;
+  saveExperts(repoPath: string, file: ModuleExpertsFile): Promise<ModuleExpertsState>;
   dispose(): Promise<void>;
 };
 
@@ -42,8 +47,17 @@ export function createCodebaseMemoryService(options: CodebaseMemoryServiceOption
     canonical(repoPath: string): string;
     identity(root: string, cacheRoot: string): LensProject;
     terminateOwnedProcess(child: ChildProcessWithoutNullStreams): Promise<void>;
+    findPowerShell(): string | undefined;
+    looksLikeText(bytes: Buffer): boolean;
+    readFileThroughPowerShellSync(executable: string, file: string): Buffer;
   };
   const runtime = shared.createRuntime(options);
+  const powerShell = shared.findPowerShell();
+  const experts = createExpertsStore({
+    canonical: shared.canonical,
+    looksLikeText: shared.looksLikeText,
+    plainReader: powerShell ? (file) => shared.readFileThroughPowerShellSync(powerShell, file) : undefined,
+  });
   const lenses = createLensManager({
     binaryPath: options.binaryPath,
     terminateProcess: shared.terminateOwnedProcess,
@@ -80,6 +94,12 @@ export function createCodebaseMemoryService(options: CodebaseMemoryServiceOption
         throw new Error('Initialize the project index successfully before opening Lens');
       await lenses.open(projectFor(repoPath));
       return runtime.get(repoPath);
+    },
+    async experts(repoPath) {
+      return experts.read(repoPath);
+    },
+    async saveExperts(repoPath, file) {
+      return experts.save(repoPath, file);
     },
     async dispose() {
       runtime.dispose();
