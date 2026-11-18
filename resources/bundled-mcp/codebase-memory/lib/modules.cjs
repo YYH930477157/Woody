@@ -29,6 +29,7 @@ const LIMITS = {
   addresses: 10,
   addressSites: 3,
   structTables: 4,
+  fileFunctions: 40,
   switches: 25,
   missing: 30,
   digestProvides: 8,
@@ -461,6 +462,8 @@ function collect(input) {
     return {
       file,
       functions: (defsByFile.get(file) || []).length,
+      // Names, so an expert compares the index with the source name by name, not by count.
+      names: (defsByFile.get(file) || []).sort((a, b) => a.start - b.start).map((def) => def.name),
       status: info.status,
       changed: info.freshness === 'metadata_changed' || info.freshness === 'missing',
       ranges: info.ranges || [],
@@ -512,7 +515,7 @@ function collect(input) {
       }
     }
   const structs = [...structGroups.values()];
-  for (const table of model.otherTables || [])
+  for (const table of [...(model.otherTables || []), ...(model.smallTables || [])])
     for (const variant of table.variants)
       for (const entry of variant.entries) {
         const defs = entry.defs.filter((def) => ownedSet.has(def.file));
@@ -662,7 +665,9 @@ function collect(input) {
         if (item.definition) continue;
         const line = lineOf(prepared.starts, match.index);
         const raw = prepared.literals.slice(match.index, prepared.literals.indexOf('\n', match.index) >>> 0);
-        item.definition = { file, line, value: collapse(raw.replace(/^\s*#\s*define\s+\w+/, '')).slice(0, 120) };
+        // A function-like macro keeps its parameters with its name: NVM_ADDR(block) = (block).
+        const parts = /^\s*#\s*define\s+\w+(\([^)]*\))?(.*)$/.exec(raw) || [];
+        item.definition = { file, line, params: parts[1] || '', value: collapse(parts[2] || '').slice(0, 120) };
       }
     }
   }
@@ -734,7 +739,9 @@ function renderBrief(data, labels, { date, mode }) {
   out.push(`## ${t.briefFiles}`, '');
   if (!data.fileStates.length) out.push(t.briefNoFiles);
   for (const item of data.fileStates) {
-    const notes = [fill(t.fileFunctions, { count: item.functions })];
+    const names =
+      item.names.slice(0, LIMITS.fileFunctions).map(code).join(', ') + more(item.names, LIMITS.fileFunctions, t);
+    const notes = [`${fill(t.fileFunctions, { count: item.functions })}${item.names.length ? ` (${names})` : ''}`];
     if (item.status === 'unusable') notes.push(t.fileUnusable);
     else if (item.status === 'partial')
       notes.push(
@@ -866,7 +873,7 @@ function renderBrief(data, labels, { date, mode }) {
       .map((site) => at(site.file, site.line))
       .join(', ');
     out.push(
-      `- ${code(item.name)}: ${definition}; ${fill(t.addressUsed, { sites: sites + more(item.sites, LIMITS.addressSites, t) })}`
+      `- ${code(item.name + (item.definition?.params ?? ''))}: ${definition}; ${fill(t.addressUsed, { sites: sites + more(item.sites, LIMITS.addressSites, t) })}`
     );
   }
   out.push('');

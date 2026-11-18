@@ -304,7 +304,7 @@ describe('module expert cards in the project runtime', () => {
     expect((await service.moduleCards(repo, {})).experts[0].state).toBe('nobrief');
     const refreshed = await service.moduleCards(repo, { refresh: true, ids: [] });
     expect(refreshed.experts[0].state).toBe('missing');
-    expect(card()).toContain('app/tick.c: 1 functions in the index');
+    expect(card()).toContain('app/tick.c: 1 functions in the index (`TICK_Second`)');
 
     // A card Woody cannot read is never replaced.
     const ciphertext = Buffer.from(Array.from({ length: 256 }, (_, index) => index));

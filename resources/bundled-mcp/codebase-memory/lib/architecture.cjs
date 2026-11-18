@@ -573,14 +573,19 @@ async function analyze({ functions, sourceFiles = [], readSource, callersOf }) {
     tables.push(table);
   }
   const otherTables = [];
+  // Tables of one entry run outside the tasks, such as a power-down list: too small for the
+  // architecture file's list, but the module that registers there needs to know.
+  const smallTables = [];
   const otherSeen = new Set();
   for (const item of others) {
-    const variants = variantsOf(item).filter((variant) => variant.entries.length >= 2);
-    if (!variants.length) continue;
-    const id = `${variants[0].file}|${item.table}`;
+    const all = variantsOf(item).filter((variant) => variant.entries.length >= 1);
+    if (!all.length) continue;
+    const variants = all.filter((variant) => variant.entries.length >= 2);
+    const id = `${all[0].file}|${item.table}`;
     if (tableIndex.has(id) || otherSeen.has(id)) continue;
     otherSeen.add(id);
-    otherTables.push({ name: item.table, variants, dispatcher: item.dispatcher, line: item.line });
+    if (variants.length) otherTables.push({ name: item.table, variants, dispatcher: item.dispatcher, line: item.line });
+    else smallTables.push({ name: item.table, variants: all, dispatcher: item.dispatcher, line: item.line });
   }
   otherTables.sort((a, b) => a.variants[0].file.localeCompare(b.variants[0].file) || a.name.localeCompare(b.name));
   for (const table of tables)
@@ -590,12 +595,13 @@ async function analyze({ functions, sourceFiles = [], readSource, callersOf }) {
 
   const listed = new Set([
     ...tables.flatMap((table) => table.variants.map((variant) => `${variant.file}|${table.name}`)),
-    ...otherTables.map((table) => `${table.variants[0].file}|${table.name}`),
+    ...[...otherTables, ...smallTables].map((table) => `${table.variants[0].file}|${table.name}`),
   ]);
   return {
     tasks,
     tables,
     otherTables,
+    smallTables,
     structTables: linkFieldCalls(
       found.filter((table) => !listed.has(`${table.file}|${table.name}`)),
       fieldCalls,

@@ -265,7 +265,7 @@ describe('expert brief', () => {
     const { data, text } = await brief();
     expect(data.owned).toEqual(['app/sensor.c', 'app/sensor.h']);
     expect(text).toContain(
-      '- app/sensor.c: 2 functions in the index; lines 6-8 only partly parsed; changed after the last index'
+      '- app/sensor.c: 2 functions in the index (`SENSOR_Second`, `sensorTick`); lines 6-8 only partly parsed; changed after the last index'
     );
     expect(text).toContain('The path `app/missing/` matches no indexed file.');
     expect(text).toContain('- `secondList` #1: `SENSOR_Second`; run by `vMainTask` (app/task.c:1)');
@@ -293,6 +293,48 @@ describe('expert brief', () => {
       writtenOutside: ['sensorLevel'],
       issues: { partial: 1, unusable: 0, changed: 1, missingFunctions: 0, missingGlobals: 1, unmatched: 1 },
     });
+  });
+
+  it('lists a one-entry table run outside the tasks, and a macro with its parameters', async () => {
+    const extra: Record<string, string> = {
+      ...files,
+      'app/power.c': [
+        'static const tTask pdList[] =',
+        '{',
+        '    TASK(SENSOR_Save),',
+        '};',
+        'void appPowerDown(void)',
+        '{',
+        '    for (int i = 0; i < 1; i++) pdList[i].func();',
+        '}',
+        '',
+      ].join('\n'),
+      'app/sensor.c': `${files['app/sensor.c']}#define BLOCK_ADDR(n) (0x100 * (n))\nvoid SENSOR_Save(void)\n{\n    nvmWrite(BLOCK_ADDR(2), 0);\n}\n`,
+    };
+    const rows: Row[] = [
+      ...functions,
+      ['appPowerDown', 'app/power.c', '5', '8'],
+      ['SENSOR_Save', 'app/sensor.c', '15', '18'],
+    ];
+    const model = await analysis(extra, rows);
+    expect(model.smallTables.map((table: { name: string }) => table.name)).toEqual(['pdList']);
+    // Too small for the architecture file's list of other tables.
+    expect(model.otherTables).toEqual([]);
+    const data = modules.collect({
+      expert: experts[0],
+      experts,
+      shared: [],
+      model,
+      functions: rows,
+      files: Object.keys(extra),
+      calls: [],
+      variables: [],
+      coverage: new Map(),
+      source: source(extra),
+    });
+    const text = modules.renderBrief(data, labels['en-US'], { date: 'd', mode: 'full' });
+    expect(text).toContain('- `pdList` #1: `SENSOR_Save`; run by `appPowerDown` (app/power.c:1)');
+    expect(text).toContain('- `BLOCK_ADDR(n)`: defined as `(0x100 * (n))` at app/sensor.c:13; used at app/sensor.c:16');
   });
 
   it('renders every heading in every language', async () => {

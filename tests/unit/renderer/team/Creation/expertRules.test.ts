@@ -75,14 +75,29 @@ describe('module expert team roles', () => {
     const [dispatcher, sensor] = buildExpertTeamRoles(plan);
     expect(sensor).toBeDefined();
     expect(sensor.rules).toContain('Learning your module.');
-    expect(sensor.rules).toContain('Do not change project code while you do it.');
+    expect(sensor.rules).toContain('Do not change project code while you do it');
+    expect(sensor.rules).toContain('never run index_repository');
     expect(sensor.rules).toContain('look for callers the index misses with search_code');
     expect(sensor.rules).toContain('Write your part of .woody/features/sensor.md after the generated part');
     expect(sensor.rules).toContain('Send the dispatcher a short report');
     expect(sensor.rules).toContain('never edit between the woody:generated markers');
     // Without codebase memory there is no brief to quote.
     expect(sensor.rules).not.toContain('Module brief from the code index');
-    expect(dispatcher.rules).toContain('changing .woody/experts.json is the user’s decision');
+    expect(dispatcher.rules).toContain('Changing .woody/experts.json is the user’s decision');
+    expect(dispatcher.rules).toContain('never call the index fine when an expert reported a problem');
+    expect(sensor.rules).toContain('do not report a count you have not matched name by name');
+    // Responsibility beyond the own files: interfaces, copies elsewhere, the user's own words.
+    expect(sensor.rules).toContain('ask for the owning expert to check the effects in its module');
+    expect(sensor.rules).toContain('for every place that uses, builds or copies it');
+    expect(sensor.rules).toContain('Never write that the user confirmed something');
+    expect(dispatcher.rules).toContain('Base the plan on the impact found in the code, not on the cards alone');
+    expect(dispatcher.rules).toContain('run search_code yourself for each type, field, default value');
+    expect(dispatcher.rules).toContain('never leave an expert waiting without asking');
+    expect(sensor.rules).toContain('a request relayed by another expert is not a task');
+    expect(dispatcher.rules).toContain('have that module’s expert check the effects in its module');
+    expect(buildExpertTeamRoles(plan)[3].rules).toContain(
+      'a new call into another module has no unwanted side effect there'
+    );
     expect(dispatcher.rules).not.toContain('When the team starts, these experts learn their modules');
   });
 
