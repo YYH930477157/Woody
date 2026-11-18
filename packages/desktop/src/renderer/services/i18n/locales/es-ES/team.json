@@ -254,6 +254,11 @@
     "roles": {
       "dispatcher": "Coordinador",
       "verifier": "Verificador"
-    }
+    },
+    "onboard": "Que los expertos estudien sus módulos al crear el equipo",
+    "onboardHint": "Los expertos cuya ficha no está marcada como Estudiado contrastan el resumen de Woody con el fuente, completan su ficha y se reportan al coordinador antes de aceptar tareas que cambien código.",
+    "onboardWithoutMemory": "Este proyecto no tiene memoria de código, así que no hay resumen: los expertos estudian sus módulos leyendo el fuente.",
+    "onboardMessage": "Primero estudia tu módulo: sigue los pasos \"Learning your module\" de tus reglas, contrasta con el fuente el resumen que Woody generó en {{card}}, rastrea el módulo con la memoria de código, completa la ficha y luego repórtate al coordinador. No cambies el código del proyecto mientras tanto.",
+    "onboardFailed": "El equipo se creó, pero no se pudo pedir a estos expertos que estudien sus módulos: {{names}}. Pídeselo en sus propios chats."
   }
 }

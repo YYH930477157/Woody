@@ -254,6 +254,11 @@
     "roles": {
       "dispatcher": "Dispatcher",
       "verifier": "Verifier"
-    }
+    },
+    "onboard": "Have experts learn their modules after the team is created",
+    "onboardHint": "Experts whose card is not marked Learned check Woody's brief against the source, complete their card and report to the dispatcher before taking tasks that change code.",
+    "onboardWithoutMemory": "This project has no codebase memory, so there is no brief: experts learn their modules by reading the source.",
+    "onboardMessage": "Please learn your module first: follow the \"Learning your module\" steps in your rules, check the brief Woody generated in {{card}} against the source, trace the module with codebase memory, complete the card, and then report to the dispatcher. Do not change project code while you do this.",
+    "onboardFailed": "The team was created, but these experts could not be asked to learn their modules: {{names}}. Ask them in their own chats."
   }
 }

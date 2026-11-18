@@ -13,6 +13,8 @@ const createTeamInvokeMock = vi.fn();
 const deleteAssistantInvokeMock = vi.fn();
 const resolveDefaultTeamAgentModelMock = vi.fn();
 const messageErrorMock = vi.fn();
+const messageWarningMock = vi.fn();
+const sendToAgentMock = vi.fn();
 const prepareWorkflowMock = vi.fn();
 const prepareRolesMock = vi.fn();
 
@@ -60,6 +62,7 @@ vi.mock('@arco-design/web-react', async () => {
     Message: {
       ...actual.Message,
       error: (...args: unknown[]) => messageErrorMock(...args),
+      warning: (...args: unknown[]) => messageWarningMock(...args),
     },
   };
 });
@@ -109,7 +112,7 @@ vi.mock('@renderer/components/workspace', () => ({
 }));
 
 const worktreeMocks = vi.hoisted(() => ({ inspect: vi.fn(), create: vi.fn(), discard: vi.fn() }));
-const expertsMocks = vi.hoisted(() => ({ experts: vi.fn(), save: vi.fn() }));
+const expertsMocks = vi.hoisted(() => ({ experts: vi.fn(), save: vi.fn(), cards: vi.fn() }));
 vi.mock('@renderer/utils/platform', () => ({ isElectronDesktop: () => true }));
 
 vi.mock('@/common', () => ({
@@ -119,6 +122,7 @@ vi.mock('@/common', () => ({
     },
     team: {
       create: { invoke: (...args: unknown[]) => createTeamInvokeMock(...args) },
+      sendMessageToAgent: { invoke: (...args: unknown[]) => sendToAgentMock(...args) },
     },
     gitWorkbench: {
       teamWorktreeInspect: { invoke: worktreeMocks.inspect },
@@ -128,6 +132,7 @@ vi.mock('@/common', () => ({
     codebaseMemory: {
       experts: { invoke: expertsMocks.experts },
       saveExperts: { invoke: expertsMocks.save },
+      moduleCards: { invoke: expertsMocks.cards },
     },
   },
 }));
@@ -181,6 +186,12 @@ describe('TeamCreateModal', () => {
     ]);
     expertsMocks.experts.mockReset();
     expertsMocks.save.mockReset();
+    // Without codebase memory the card call fails, like the real one for a project without it.
+    expertsMocks.cards.mockReset();
+    expertsMocks.cards.mockRejectedValue(new Error('Codebase memory is disabled for this project'));
+    messageWarningMock.mockReset();
+    sendToAgentMock.mockReset();
+    sendToAgentMock.mockResolvedValue({ accepted: true });
   });
 
   const EXPERTS_FILE = 'D:\\work\\project\\.woody\\experts.json';
@@ -224,6 +235,111 @@ describe('TeamCreateModal', () => {
     expect(createTeamInvokeMock.mock.calls[0][0]).toMatchObject({
       workspace: 'D:\\work\\project',
       agents: [{ role: 'leader', assistant_id: 'dispatcher-copy', assistant_name: '总管', model: 'configured-model' }],
+    });
+  });
+
+  describe('experts learning their modules', () => {
+    const digest = {
+      files: 2,
+      entries: ['secondList #1 SENSOR_Second'],
+      provides: [{ name: 'SENSOR_Read', callers: ['UI 专家'] }],
+      writtenOutside: ['sensorLevel'],
+      issues: { partial: 1, unusable: 0, changed: 0, missingFunctions: 0, missingGlobals: 2, unmatched: 0 },
+    };
+    const cards = {
+      modules: [],
+      experts: [
+        { id: 'sensor', card: '.woody/features/sensor.md', state: 'missing', digest },
+        { id: 'ui', card: '.woody/features/ui.md', state: 'ready', digest: { ...digest, entries: [] } },
+      ],
+    };
+    beforeEach(() => {
+      expertsMocks.experts.mockResolvedValue({
+        file: EXPERTS_FILE,
+        saved: { version: 1, experts: [sensor, ui], shared: ['src/tasks.c'] },
+        cards: [],
+      });
+      expertsMocks.cards.mockResolvedValue(cards);
+      prepareRolesMock.mockResolvedValue([
+        { role: 'leader', assistant_id: 'dispatcher-copy', assistant_name: '总管' },
+        { role: 'teammate', assistant_id: 'sensor-copy', assistant_name: 'Sensor 专家' },
+        { role: 'teammate', assistant_id: 'ui-copy', assistant_name: 'UI 专家' },
+        { role: 'teammate', assistant_id: 'verifier-copy', assistant_name: '验证员' },
+      ]);
+      createTeamInvokeMock.mockResolvedValue({
+        id: 'team-1',
+        assistants: [
+          { slot_id: 'slot-dispatcher', assistant_id: 'dispatcher-copy' },
+          { slot_id: 'slot-sensor', assistant_id: 'sensor-copy' },
+          { slot_id: 'slot-ui', assistant_id: 'ui-copy' },
+          { slot_id: 'slot-verifier', assistant_id: 'verifier-copy' },
+        ],
+      });
+    });
+
+    it('shows card states, writes missing briefs, puts each digest in its rules and asks only unready experts', async () => {
+      await startExpertTeam();
+      expect(await screen.findByTestId('team-expert-card-sensor')).toHaveTextContent(
+        'conversation.codebaseMemory.modules.states.missing'
+      );
+      expect(screen.getByTestId('team-expert-card-ui')).toHaveTextContent(
+        'conversation.codebaseMemory.modules.states.ready'
+      );
+      expect(screen.getByText('team.experts.onboardHint')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm Create' }));
+      await waitFor(() => expect(sendToAgentMock).toHaveBeenCalledTimes(1));
+      expect(expertsMocks.cards).toHaveBeenCalledWith({
+        repoPath: 'D:\\work\\project',
+        refresh: true,
+        ids: [],
+        language: 'zh-CN',
+      });
+      const { roles } = prepareRolesMock.mock.calls[0][0];
+      expect(roles[0].rules).toContain('these experts learn their modules and then report to you: Sensor 专家.');
+      expect(roles[1].rules).toContain(
+        'Your card .woody/features/sensor.md when the team was created: you have not written your part yet.'
+      );
+      expect(roles[1].rules).toContain('- Scheduled: secondList #1 SENSOR_Second');
+      expect(roles[1].rules).toContain('- Called from outside: SENSOR_Read (by UI 专家)');
+      expect(roles[1].rules).toContain('- Globals other files write: sensorLevel');
+      expect(roles[1].rules).toContain('1 partly parsed files, 2 globals missing from the index graph');
+      expect(roles[2].rules).toContain('up to date with your files');
+      expect(sendToAgentMock).toHaveBeenCalledExactlyOnceWith({
+        team_id: 'team-1',
+        slot_id: 'slot-sensor',
+        input: 'team.experts.onboardMessage',
+      });
+      expect(messageWarningMock).not.toHaveBeenCalled();
+    });
+
+    it('asks nobody when the option is off', async () => {
+      await startExpertTeam();
+      fireEvent.click(await screen.findByTestId('team-experts-onboard'));
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm Create' }));
+      await waitFor(() => expect(createTeamInvokeMock).toHaveBeenCalledTimes(1));
+      const { roles } = prepareRolesMock.mock.calls[0][0];
+      expect(roles[0].rules).not.toContain('When the team starts, these experts learn their modules');
+      await Promise.resolve();
+      expect(sendToAgentMock).not.toHaveBeenCalled();
+    });
+
+    it('asks every expert to learn from the source when the project has no codebase memory, and reports a failed request', async () => {
+      expertsMocks.cards.mockRejectedValue(new Error('Codebase memory is disabled for this project'));
+      sendToAgentMock.mockImplementation(async ({ slot_id }: { slot_id: string }) => {
+        if (slot_id === 'slot-ui') throw new Error('session not ready');
+        return { accepted: true };
+      });
+      await startExpertTeam();
+      expect(await screen.findByText('team.experts.onboardWithoutMemory')).toBeInTheDocument();
+      expect(screen.queryByTestId('team-expert-card-sensor')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm Create' }));
+      await waitFor(() => expect(messageWarningMock).toHaveBeenCalledWith('team.experts.onboardFailed'));
+      expect(sendToAgentMock.mock.calls.map(([call]) => call.slot_id)).toEqual(['slot-sensor', 'slot-ui']);
+      // Only the list read: without memory, nothing asks for briefs.
+      expect(expertsMocks.cards).toHaveBeenCalledTimes(1);
+      const { roles } = prepareRolesMock.mock.calls[0][0];
+      expect(roles[1].rules).not.toContain('Module brief from the code index');
+      expect(roles[1].rules).toContain('Learning your module.');
     });
   });
 

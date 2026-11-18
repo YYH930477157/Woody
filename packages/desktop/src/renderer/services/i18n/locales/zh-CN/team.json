@@ -254,6 +254,11 @@
     "roles": {
       "dispatcher": "总管",
       "verifier": "验证员"
-    }
+    },
+    "onboard": "建团后让专家先熟悉模块",
+    "onboardHint": "卡片不是“已熟悉”的专家，会先对照源码核对 Woody 生成的简报、补全卡片，并向总管报到，之后才接需要改代码的任务。",
+    "onboardWithoutMemory": "这个项目没有开启代码记忆，没有简报：专家会直接读源码熟悉模块。",
+    "onboardMessage": "请先熟悉你负责的模块：按规则里“Learning your module”的步骤，对照源码核对 {{card}} 中 Woody 生成的简报，用代码记忆追踪模块并补全卡片，然后向总管报到。熟悉期间不要修改项目代码。",
+    "onboardFailed": "团队已创建，但没能让这些专家开始熟悉模块：{{names}}。请在他们各自的对话里让他们熟悉。"
   }
 }

@@ -254,6 +254,11 @@
     "roles": {
       "dispatcher": "Verteiler",
       "verifier": "Prüfer"
-    }
+    },
+    "onboard": "Experten nach dem Erstellen des Teams zuerst ihre Module einarbeiten lassen",
+    "onboardHint": "Experten, deren Karte nicht als eingearbeitet markiert ist, gleichen Woodys Kurzfassung mit dem Quellcode ab, vervollständigen ihre Karte und melden sich beim Koordinator, bevor sie Aufgaben mit Codeänderungen übernehmen.",
+    "onboardWithoutMemory": "Dieses Projekt hat kein Code-Gedächtnis und damit keine Kurzfassung: Die Experten arbeiten sich über den Quellcode ein.",
+    "onboardMessage": "Arbeite dich bitte zuerst in dein Modul ein: Folge den Schritten unter \"Learning your module\" in deinen Regeln, gleiche Woodys Kurzfassung in {{card}} mit dem Quellcode ab, verfolge das Modul mit dem Code-Gedächtnis, vervollständige die Karte und melde dich dann beim Koordinator. Ändere dabei keinen Projektcode.",
+    "onboardFailed": "Das Team wurde erstellt, aber diese Experten konnten nicht gebeten werden, sich einzuarbeiten: {{names}}. Bitte sie in ihren eigenen Chats darum."
   }
 }

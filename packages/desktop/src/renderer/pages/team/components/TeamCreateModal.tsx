@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { mutate } from 'swr';
 import { ipcBridge } from '@/common';
 import type { TTeam } from '@/common/types/team/teamTypes';
+import type { ModuleExpert } from '@/common/types/team/moduleExperts';
 import type { TeamAssistantInput } from '@/common/adapter/teamMapper';
 import { useAuth } from '@renderer/hooks/context/AuthContext';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
@@ -26,7 +27,13 @@ import WorkflowPresets, {
   type WorkflowPresetId,
   type WorkflowRole,
 } from '../WorkflowPresets';
-import ModuleExperts, { buildExpertTeamRoles, useModuleExperts } from '../WorkflowPresets/ModuleExperts';
+import ModuleExperts, {
+  buildExpertTeamRoles,
+  loadExpertBriefs,
+  onboardingIds,
+  startOnboarding,
+  useModuleExperts,
+} from '../WorkflowPresets/ModuleExperts';
 import IsolatedWorkspaceOption, { IsolatedWorkspaceError, useIsolatedWorkspace } from '../IsolatedWorkspace';
 
 /** Reasons the main process reports for a folder that cannot get a separate workspace. */
@@ -60,6 +67,8 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
   const [workflowPreset, setWorkflowPreset] = useState<WorkflowPresetId>();
   const [workflowBaseId, setWorkflowBaseId] = useState<string>();
   const [preparedWorkflow, setPreparedWorkflow] = useState<TeamAssistantInput[]>();
+  // Who learns their module once the expert team exists; kept with the prepared roles for a retry.
+  const onboardingRef = useRef<{ experts: ModuleExpert[]; ids: string[]; knowledge: string } | undefined>(undefined);
   const isolated = useIsolatedWorkspace(workspace);
   const experts = useModuleExperts(workspace, workflowPreset === 'experts');
   const expertsMissing = workflowPreset === 'experts' && !preparedWorkflow && !experts.ready;
@@ -96,6 +105,7 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
     setWorkflowPreset(undefined);
     setWorkflowBaseId(undefined);
     setPreparedWorkflow(undefined);
+    onboardingRef.current = undefined;
     isolated.reset();
     onClose();
   };
@@ -169,6 +179,12 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
           if (!workflowBase) throw new Error(t('team.workflow.baseAssistant'));
           if (workflowPreset === 'experts') {
             if (!chosenExperts || !experts.file) throw new Error(t('team.experts.noneSelected'));
+            // A separate workspace is a git worktree without the ignored .woody folder:
+            // members keep the knowledge in the chosen folder.
+            const knowledge = isolated.enabled ? experts.file.replace(/[\\/][^\\/]+$/, '') : '.woody';
+            // Briefs Woody has not written yet, or that no longer match the experts, are written now.
+            const briefs = experts.hasCards ? await loadExpertBriefs(workspace, i18n.language) : undefined;
+            const onboarding = experts.onboard ? onboardingIds(chosenExperts.experts, briefs) : [];
             agents = await prepareRoles({
               base: workflowBase,
               teamName: name,
@@ -177,11 +193,12 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
               roles: buildExpertTeamRoles({
                 ...chosenExperts,
                 labels: { dispatcher: t('team.experts.roles.dispatcher'), verifier: t('team.experts.roles.verifier') },
-                // A separate workspace is a git worktree without the ignored .woody folder:
-                // members keep the knowledge in the chosen folder.
-                knowledge: isolated.enabled ? experts.file.replace(/[\\/][^\\/]+$/, '') : '.woody',
+                knowledge,
+                briefs,
+                onboarding,
               }),
             });
+            onboardingRef.current = { experts: chosenExperts.experts, ids: onboarding, knowledge };
           } else {
             const labels = Object.fromEntries(
               WORKFLOW_ROLES.map((role) => [role, t(`team.workflow.roles.${role}`)])
@@ -237,8 +254,19 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
         return;
       }
 
+      const learning = workflowPreset === 'experts' ? onboardingRef.current : undefined;
       onCreated(team);
       resetModalState();
+      // The team exists whatever happens here: a failed request is reported, not undone.
+      if (learning?.ids.length)
+        void startOnboarding({
+          team,
+          agents,
+          ...learning,
+          message: (card) => t('team.experts.onboardMessage', { card }),
+        }).then((failed) => {
+          if (failed.length) Message.warning(t('team.experts.onboardFailed', { names: failed.join(', ') }));
+        });
     } catch (error) {
       Message.error(
         error instanceof WorkflowPreparationError

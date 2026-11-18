@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { Button, Checkbox, Input } from '@arco-design/web-react';
+import { Button, Checkbox, Input, Tag } from '@arco-design/web-react';
 import { Delete, Edit, Plus } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { parseExpertPaths } from '@/common/types/team/moduleExperts';
 import ExpertEditor from './ExpertEditor';
 import type { ModuleExpertsState } from './useModuleExperts';
 
-export { buildExpertTeamRoles, type ExpertTeamLabels } from './expertRules';
+export { buildExpertTeamRoles, type ExpertBrief, type ExpertTeamLabels } from './expertRules';
+export { loadExpertBriefs, onboardingIds, startOnboarding } from './onboarding';
 export { useModuleExperts, type ModuleExpertsState } from './useModuleExperts';
 
 type Props = {
@@ -88,6 +89,15 @@ const ModuleExperts: React.FC<Props> = ({ workspace, state, disabled }) => {
                   <div className='flex items-baseline gap-8px'>
                     <span className='truncate text-13px font-500 text-t-primary'>{draft.name || '—'}</span>
                     {draft.id && <span className='text-12px text-t-tertiary'>{draft.id}</span>}
+                    {state.hasCards && draft.id && (
+                      <Tag
+                        size='small'
+                        color={state.cardOf(draft.id)?.state === 'ready' ? 'green' : undefined}
+                        data-testid={`team-expert-card-${draft.id}`}
+                      >
+                        {t(`conversation.codebaseMemory.modules.states.${state.cardOf(draft.id)?.state ?? 'nobrief'}`)}
+                      </Tag>
+                    )}
                   </div>
                   {!editing && (
                     <div className='text-12px leading-18px text-t-secondary'>
@@ -123,6 +133,21 @@ const ModuleExperts: React.FC<Props> = ({ workspace, state, disabled }) => {
           );
         })}
       </div>
+      {state.drafts.length > 0 && (
+        <div className='flex flex-col gap-2px'>
+          <Checkbox
+            checked={state.onboard}
+            disabled={disabled}
+            onChange={(checked: boolean) => state.setOnboard(checked)}
+            data-testid='team-experts-onboard'
+          >
+            {t('team.experts.onboard')}
+          </Checkbox>
+          <span className='text-11px leading-16px text-t-tertiary'>
+            {state.hasCards ? t('team.experts.onboardHint') : t('team.experts.onboardWithoutMemory')}
+          </span>
+        </div>
+      )}
       <div className='grid grid-cols-[96px_minmax(0,1fr)] items-start gap-x-10px'>
         <span className='pt-6px text-12px leading-18px text-t-secondary'>{t('team.experts.shared')}</span>
         <div className='flex flex-col gap-2px'>

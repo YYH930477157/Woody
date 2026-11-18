@@ -70,4 +70,64 @@ describe('module expert team roles', () => {
   it('needs at least one expert', () => {
     expect(() => buildExpertTeamRoles({ ...plan, experts: [] })).toThrow('at least one expert');
   });
+
+  it('gives every expert the steps to learn its module and the generated part of its card', () => {
+    const [dispatcher, sensor] = buildExpertTeamRoles(plan);
+    expect(sensor).toBeDefined();
+    expect(sensor.rules).toContain('Learning your module.');
+    expect(sensor.rules).toContain('Do not change project code while you do it.');
+    expect(sensor.rules).toContain('look for callers the index misses with search_code');
+    expect(sensor.rules).toContain('Write your part of .woody/features/sensor.md after the generated part');
+    expect(sensor.rules).toContain('Send the dispatcher a short report');
+    expect(sensor.rules).toContain('never edit between the woody:generated markers');
+    // Without codebase memory there is no brief to quote.
+    expect(sensor.rules).not.toContain('Module brief from the code index');
+    expect(dispatcher.rules).toContain('changing .woody/experts.json is the user’s decision');
+    expect(dispatcher.rules).not.toContain('When the team starts, these experts learn their modules');
+  });
+
+  it('quotes each expert’s brief and tells the dispatcher who learns its module first', () => {
+    const issues = { partial: 0, unusable: 1, changed: 2, missingFunctions: 3, missingGlobals: 0, unmatched: 1 };
+    const roles = buildExpertTeamRoles({
+      ...plan,
+      briefs: {
+        sensor: {
+          state: 'stale',
+          digest: {
+            files: 2,
+            entries: ['task vSensorTask', 'secondList #2 SENSOR_Second (if defined(FAST))'],
+            provides: [{ name: 'SENSOR_Read', callers: ['UI 专家', 'shared'] }],
+            writtenOutside: [],
+            issues,
+          },
+        },
+        ui: {
+          state: 'ready',
+          digest: {
+            files: 1,
+            entries: [],
+            provides: [],
+            writtenOutside: [],
+            issues: { ...issues, unusable: 0, changed: 0, missingFunctions: 0, unmatched: 0 },
+          },
+        },
+      },
+      onboarding: ['sensor'],
+    });
+    expect(roles[0].rules).toContain(
+      'When the team starts, these experts learn their modules and then report to you: Sensor 专家. Do not give one of them a task that changes code before its report arrives'
+    );
+    expect(roles[1].rules).toContain(
+      'Your card .woody/features/sensor.md when the team was created: your files changed after you last updated it; check it again.'
+    );
+    expect(roles[1].rules).toContain('- Scheduled: task vSensorTask; secondList #2 SENSOR_Second (if defined(FAST))');
+    expect(roles[1].rules).toContain('- Called from outside: SENSOR_Read (by UI 专家, shared)');
+    expect(roles[1].rules).not.toContain('Globals other files write');
+    expect(roles[1].rules).toContain(
+      '- Index check: 1 files the index could not parse, 2 files changed after the index, 3 functions missing from the index, 1 of your paths match no indexed file.'
+    );
+    expect(roles[2].rules).toContain('- Index check: no problem recorded for your files.');
+    // The verifier gets no brief.
+    expect(roles[3].rules).not.toContain('Module brief');
+  });
 });

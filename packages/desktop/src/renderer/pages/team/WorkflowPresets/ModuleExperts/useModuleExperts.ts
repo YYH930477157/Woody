@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ipcBridge } from '@/common';
+import type { ModuleCard, ModuleCards } from '@/common/types/codebaseMemory/types';
 import {
   expertIssue,
   MODULE_EXPERTS_LIMIT,
@@ -19,6 +20,8 @@ type Loaded = {
   shared: string[];
   /** The project already had a valid experts file. */
   saved: boolean;
+  /** Card states from codebase memory; undefined when the project has none. */
+  cards?: ModuleCards;
 };
 
 let nextKey = 0;
@@ -34,6 +37,8 @@ export function useModuleExperts(workspace: string, active: boolean) {
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(false);
   const [dirty, setDirty] = useState(false);
+  // Experts whose cards are not up to date learn their modules when the team starts.
+  const [onboard, setOnboard] = useState(true);
   const available = isElectronDesktop();
 
   useEffect(() => {
@@ -43,9 +48,12 @@ export function useModuleExperts(workspace: string, active: boolean) {
     if (!active || !workspace || !available) return;
     let cancelled = false;
     setLoading(true);
-    ipcBridge.codebaseMemory.experts
+    // A project without codebase memory has no cards; the experts list still works.
+    const cards = ipcBridge.codebaseMemory.moduleCards
       .invoke({ repoPath: workspace })
-      .then((state) => {
+      .catch((): ModuleCards | undefined => undefined);
+    Promise.all([ipcBridge.codebaseMemory.experts.invoke({ repoPath: workspace }), cards])
+      .then(([state, moduleCards]) => {
         if (cancelled) return;
         const experts =
           state.saved?.experts ?? state.cards.map((id) => ({ id, name: id, summary: '', paths: [] as string[] }));
@@ -55,6 +63,7 @@ export function useModuleExperts(workspace: string, active: boolean) {
           drafts: experts.slice(0, MODULE_EXPERTS_LIMIT).map(draftOf),
           shared: state.saved?.shared ?? [],
           saved: Boolean(state.saved),
+          cards: moduleCards,
         });
       })
       .catch((reason: unknown) => {
@@ -108,6 +117,11 @@ export function useModuleExperts(workspace: string, active: boolean) {
     available,
     loading,
     error,
+    /** Whether the project has codebase memory, so that Woody writes and tracks feature cards. */
+    hasCards: Boolean(loaded?.cards),
+    cardOf: (id: string): ModuleCard | undefined => loaded?.cards?.experts.find((card) => card.id === id),
+    onboard,
+    setOnboard,
     file: loaded?.file,
     drafts,
     shared: loaded?.shared ?? [],

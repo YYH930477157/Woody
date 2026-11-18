@@ -254,6 +254,11 @@
     "roles": {
       "dispatcher": "Coordenador",
       "verifier": "Verificador"
-    }
+    },
+    "onboard": "Pedir aos especialistas que estudem seus módulos depois de criar a equipe",
+    "onboardHint": "Especialistas cujo cartão não está como Estudado conferem o resumo do Woody com o fonte, completam o cartão e se reportam ao coordenador antes de pegar tarefas que alteram código.",
+    "onboardWithoutMemory": "Este projeto não tem memória de código, então não há resumo: os especialistas estudam seus módulos lendo o fonte.",
+    "onboardMessage": "Primeiro estude seu módulo: siga os passos \"Learning your module\" das suas regras, confira com o fonte o resumo que o Woody gerou em {{card}}, rastreie o módulo com a memória de código, complete o cartão e depois se reporte ao coordenador. Não altere o código do projeto enquanto isso.",
+    "onboardFailed": "A equipe foi criada, mas não foi possível pedir a estes especialistas que estudem seus módulos: {{names}}. Peça a eles nas próprias conversas."
   }
 }

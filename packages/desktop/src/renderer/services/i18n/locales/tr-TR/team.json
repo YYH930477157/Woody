@@ -254,6 +254,11 @@
     "roles": {
       "dispatcher": "Dağıtıcı",
       "verifier": "Doğrulayıcı"
-    }
+    },
+    "onboard": "Ekip oluşturulduktan sonra uzmanlar önce modüllerini öğrensin",
+    "onboardHint": "Kartı Öğrenildi olmayan uzmanlar, Woody'nin özetini kaynakla karşılaştırır, kartlarını tamamlar ve kod değiştiren görevler almadan önce dağıtıcıya rapor verir.",
+    "onboardWithoutMemory": "Bu projede kod belleği kapalı, bu yüzden özet yok: uzmanlar modüllerini kaynağı okuyarak öğrenir.",
+    "onboardMessage": "Lütfen önce modülünü öğren: kurallarındaki \"Learning your module\" adımlarını izle, {{card}} içindeki Woody özetini kaynakla karşılaştır, modülü kod belleğiyle izle, kartı tamamla ve sonra dağıtıcıya rapor ver. Bu sırada proje kodunu değiştirme.",
+    "onboardFailed": "Ekip oluşturuldu, ancak şu uzmanlardan modüllerini öğrenmeleri istenemedi: {{names}}. Onlara kendi sohbetlerinde sorun."
   }
 }

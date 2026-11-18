@@ -254,6 +254,11 @@
     "roles": {
       "dispatcher": "Répartiteur",
       "verifier": "Vérificateur"
-    }
+    },
+    "onboard": "Faire étudier leurs modules aux experts après la création de l'équipe",
+    "onboardHint": "Les experts dont la fiche n'est pas marquée Étudié confrontent le résumé de Woody aux sources, complètent leur fiche et se présentent au coordinateur avant de prendre des tâches qui modifient le code.",
+    "onboardWithoutMemory": "Ce projet n'a pas de mémoire du code, donc pas de résumé : les experts étudient leurs modules en lisant les sources.",
+    "onboardMessage": "Étudie d'abord ton module : suis les étapes « Learning your module » de tes règles, confronte aux sources le résumé que Woody a généré dans {{card}}, suis le module avec la mémoire du code, complète la fiche, puis présente-toi au coordinateur. Ne modifie pas le code du projet pendant ce temps.",
+    "onboardFailed": "L'équipe a été créée, mais ces experts n'ont pas pu être invités à étudier leurs modules : {{names}}. Demandez-le-leur dans leurs propres conversations."
   }
 }

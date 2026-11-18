@@ -1,6 +1,10 @@
+import type { ModuleCardDigest, ModuleCardState } from '@/common/types/codebaseMemory/types';
 import type { ModuleExpert } from '@/common/types/team/moduleExperts';
 
 export type ExpertTeamLabels = { dispatcher: string; verifier: string };
+
+/** What Woody knows about an expert's card when the team is created. */
+export type ExpertBrief = { state: ModuleCardState; digest?: ModuleCardDigest };
 
 export type ExpertTeamPlan = {
   experts: ModuleExpert[];
@@ -8,6 +12,10 @@ export type ExpertTeamPlan = {
   labels: ExpertTeamLabels;
   /** The `.woody` folder as members should address it: relative to the team workspace, or absolute for a separate workspace. */
   knowledge: string;
+  /** Card state and brief digest per expert id, when the project has codebase memory. */
+  briefs?: Record<string, ExpertBrief>;
+  /** Ids of the experts Woody asks to learn their module as soon as the team starts. */
+  onboarding?: string[];
 };
 
 const HEADER = '# Woody module expert team contract (v1)';
@@ -28,7 +36,58 @@ function expertLines(experts: ModuleExpert[]): string {
 }
 
 function knowledgeLine(knowledge: string): string {
-  return `Knowledge folder: ${knowledge}. It holds architecture.md (tasks, dispatch tables and change rules) and features/<expert id>.md, one feature card per module.`;
+  return `Knowledge folder: ${knowledge}. It holds architecture.md (tasks, dispatch tables and change rules) and features/<expert id>.md, one feature card per module. Woody rewrites the part of each card between the woody:generated markers from the code index after every index; the expert writes the rest.`;
+}
+
+const CARD_STATE_TEXT: Record<ModuleCardState, string> = {
+  nobrief: 'Woody has not written its brief yet',
+  missing: 'you have not written your part yet',
+  stale: 'your files changed after you last updated it; check it again',
+  ready: 'up to date with your files',
+  error: 'Woody could not read or write it',
+};
+
+/** The digest of an expert's brief, in the rules so that even a model that skips files sees it. */
+function briefLines(brief: ExpertBrief | undefined, card: string): string | undefined {
+  if (!brief) return undefined;
+  const lines = [`Your card ${card} when the team was created: ${CARD_STATE_TEXT[brief.state]}.`];
+  const digest = brief.digest;
+  if (digest) {
+    lines.push('Module brief from the code index (the card has the details, with file and line):');
+    if (digest.entries.length) lines.push(`- Scheduled: ${digest.entries.join('; ')}`);
+    if (digest.provides.length)
+      lines.push(
+        `- Called from outside: ${digest.provides.map((item) => `${item.name} (by ${item.callers.join(', ')})`).join('; ')}`
+      );
+    if (digest.writtenOutside.length) lines.push(`- Globals other files write: ${digest.writtenOutside.join(', ')}`);
+    const { partial, unusable, changed, missingFunctions, missingGlobals, unmatched } = digest.issues;
+    const issues = [
+      partial && `${partial} partly parsed files`,
+      unusable && `${unusable} files the index could not parse`,
+      changed && `${changed} files changed after the index`,
+      missingFunctions && `${missingFunctions} functions missing from the index`,
+      missingGlobals && `${missingGlobals} globals missing from the index graph`,
+      unmatched && `${unmatched} of your paths match no indexed file`,
+    ].filter(Boolean);
+    lines.push(
+      issues.length
+        ? `- Index check: ${issues.join(', ')}. Read those in the source before relying on the index; the card lists them.`
+        : '- Index check: no problem recorded for your files.'
+    );
+  }
+  return lines.join('\n');
+}
+
+function learnSteps(card: string, knowledge: string): string {
+  return [
+    'Learning your module. Do this when Woody, the user or the dispatcher asks you to learn your module. Do not change project code while you do it.',
+    `1. Read ${card} and ${knowledge}/architecture.md.`,
+    '2. Check the generated brief against the source: open every entry function; for each function called from outside, confirm its callers and look for callers the index misses with search_code (macros, function pointer and callback tables, API tables between firmware images); for each global, confirm who writes it. Read partly parsed ranges, files the index could not parse and files changed after the index directly.',
+    '3. Trace the module in the order of the codebase memory skill: flow, parameters and where they are stored, who changes the parameters, data sources, outputs, build switches, gaps.',
+    `4. Write your part of ${card} after the generated part, in the feature card format of the codebase memory skill, with the basis line (date, Git commit, index time). Keep the section with the user's corrections unchanged.`,
+    '5. Index check: list what the index got wrong or missed in your module, each with its evidence, and files that look like part of your module but are not in your list or belong to another expert.',
+    '6. Send the dispatcher a short report with the team message tool: that the card is updated, the key facts (entry points, interfaces, parameters and their storage), the index problems, and suggested changes to your file list.',
+  ].join('\n');
 }
 
 function dispatcherRules(plan: ExpertTeamPlan): string[] {
@@ -51,7 +110,20 @@ function dispatcherRules(plan: ExpertTeamPlan): string[] {
       '7. Report to the user: what changed in each module, the verification evidence, open issues and which feature cards were updated.',
     ].join('\n'),
     'When a requirement matches no expert, say so and ask the user who should take it, or suggest adding an expert to the project’s .woody/experts.json; do not do the work yourself. Do not propose or create extra teammates unless the user asks. Advance only after a handoff message arrives; a task marked completed is not a handoff. If team tools are unavailable, report blocked. Do not start a second goal without user direction.',
+    onboardingLine(plan),
   ];
+}
+
+function onboardingLine(plan: ExpertTeamPlan): string {
+  const learning = plan.experts.filter((expert) => plan.onboarding?.includes(expert.id));
+  const base =
+    'An expert can be asked to learn its module: it checks its card against the source, completes it, and reports to you with the index problems it found and suggestions for its file list. Collect those for the user; changing .woody/experts.json is the user’s decision.';
+  if (!learning.length) return base;
+  return `${base} When the team starts, these experts learn their modules and then report to you: ${learning
+    .map((expert) => expert.name)
+    .join(
+      ', '
+    )}. Do not give one of them a task that changes code before its report arrives; a question about its module can go to it at once.`;
 }
 
 function memberRules(expert: ModuleExpert, plan: ExpertTeamPlan): string[] {
@@ -66,11 +138,13 @@ function memberRules(expert: ModuleExpert, plan: ExpertTeamPlan): string[] {
       others.length ? others.map((other) => `${other.name} (${other.paths.join(', ')})`).join('; ') : 'none'
     }.`,
     knowledgeLine(knowledge),
+    ...[briefLines(plan.briefs?.[expert.id], card)].filter((line): line is string => Boolean(line)),
+    learnSteps(card, knowledge),
     [
       '- Work only on tasks from the dispatcher or the user. Edit only files you own, plus shared files the dispatcher assigned to you in the task. Read any file you need. When a change is needed in a file you do not own, stop and tell the dispatcher what to change, where and why; do not make it yourself.',
-      `- Before changing code, read ${card} when it exists, and ${knowledge}/architecture.md for the tasks and dispatch tables your module runs in. Check in the code the facts the task depends on; the card can be out of date.`,
+      `- Before changing code, read ${card} when it exists, and ${knowledge}/architecture.md for the tasks and dispatch tables your module runs in. Check in the code the facts the task depends on; the card can be out of date. Re-read first the files its index check lists as changed after the index.`,
       '- Keep interfaces exactly as the task states. If one cannot work, report blocked with the reason instead of changing it on your own.',
-      `- After a change, build when a build tool is available and report the command and the result. Then update ${card}, creating it when missing, in the feature card format of the codebase memory skill when that skill is available; keep the user corrections section unchanged.`,
+      `- After a change, build when a build tool is available and report the command and the result. Then update your part of ${card}, creating it when missing, in the feature card format of the codebase memory skill when that skill is available; never edit between the woody:generated markers, and keep the user corrections section unchanged.`,
       '- Send your complete handoff to the dispatcher with the team message tool, because the dispatcher cannot see your conversation.',
       '- Answer questions about your module from the card and the code, with file and line references.',
     ].join('\n'),

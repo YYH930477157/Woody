@@ -17,8 +17,9 @@ const TAG_COLORS: Record<ModuleCardState, string | undefined> = {
   ready: 'green',
   error: 'red',
 };
-const FIELD = 'grid grid-cols-[72px_minmax(0,1fr)] items-start gap-x-8px';
-const LABEL = 'pt-4px text-12px leading-18px text-t-secondary';
+// The panel is narrow: labels sit above their fields so the fields get the full width.
+const FIELD = 'flex flex-col gap-2px';
+const LABEL = 'text-12px leading-18px text-t-secondary';
 
 /**
  * The modules Woody found in the dispatch tables, and the project's module experts with the
