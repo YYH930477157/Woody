@@ -51,35 +51,7 @@ export const parseError = (error: unknown): string => {
  * 根据语言代码解析为标准化的区域键
  * Resolve language code to standardized locale key
  */
-export const resolveLocaleKey = (
-  language: string
-):
-  | 'zh-CN'
-  | 'en-US'
-  | 'ja-JP'
-  | 'zh-TW'
-  | 'ko-KR'
-  | 'tr-TR'
-  | 'ru-RU'
-  | 'uk-UA'
-  | 'pt-BR'
-  | 'de-DE'
-  | 'es-ES'
-  | 'fr-FR'
-  | 'fa-IR' => {
+export const resolveLocaleKey = (language: string): 'zh-CN' | 'en-US' => {
   const normalized = language.replace(/_/g, '-').toLowerCase();
-
-  if (normalized.startsWith('zh-tw')) return 'zh-TW';
-  if (normalized.startsWith('zh')) return 'zh-CN';
-  if (normalized.startsWith('ja')) return 'ja-JP';
-  if (normalized.startsWith('ko')) return 'ko-KR';
-  if (normalized.startsWith('tr')) return 'tr-TR';
-  if (normalized.startsWith('ru')) return 'ru-RU';
-  if (normalized.startsWith('uk')) return 'uk-UA';
-  if (normalized.startsWith('pt')) return 'pt-BR';
-  if (normalized.startsWith('de')) return 'de-DE';
-  if (normalized.startsWith('es')) return 'es-ES';
-  if (normalized.startsWith('fr')) return 'fr-FR';
-  if (normalized.startsWith('fa')) return 'fa-IR';
-  return 'en-US';
+  return normalized.startsWith('zh') ? 'zh-CN' : 'en-US';
 };

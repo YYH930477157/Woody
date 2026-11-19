@@ -12,43 +12,21 @@ describe('i18n', () => {
     it('passes through exact supported tags', () => {
       expect(normalizeLanguageCode('en-US')).toBe('en-US');
       expect(normalizeLanguageCode('zh-CN')).toBe('zh-CN');
-      expect(normalizeLanguageCode('de-DE')).toBe('de-DE');
-      expect(normalizeLanguageCode('fa-IR')).toBe('fa-IR');
     });
 
     it('normalizes underscores to hyphens', () => {
-      expect(normalizeLanguageCode('de_DE')).toBe('de-DE');
-      expect(normalizeLanguageCode('fa_IR')).toBe('fa-IR');
-      expect(normalizeLanguageCode('pt_BR')).toBe('pt-BR');
+      expect(normalizeLanguageCode('zh_CN')).toBe('zh-CN');
+      expect(normalizeLanguageCode('en_US')).toBe('en-US');
     });
 
-    it('resolves base language codes to their supported region', () => {
-      expect(normalizeLanguageCode('zh')).toBe('zh-CN');
+    it('resolves every Chinese variant to Simplified Chinese', () => {
+      for (const tag of ['zh', 'zh-TW', 'zh-HK', 'zh_HK', 'zh-Hant', 'zh-Hant-HK', 'zh-SG'])
+        expect(normalizeLanguageCode(tag), tag).toBe('zh-CN');
     });
 
-    it('maps Traditional-script regions and Hant tags to zh-TW, not Simplified', () => {
-      expect(normalizeLanguageCode('zh-HK')).toBe('zh-TW');
-      expect(normalizeLanguageCode('zh-MO')).toBe('zh-TW');
-      expect(normalizeLanguageCode('zh_HK')).toBe('zh-TW');
-      expect(normalizeLanguageCode('zh-Hant')).toBe('zh-TW');
-      expect(normalizeLanguageCode('zh-Hant-HK')).toBe('zh-TW');
-      expect(normalizeLanguageCode('zh-Hans-SG')).toBe('zh-CN');
-      expect(normalizeLanguageCode('zh-SG')).toBe('zh-CN');
-      expect(normalizeLanguageCode('ja')).toBe('ja-JP');
-      expect(normalizeLanguageCode('ko')).toBe('ko-KR');
-      expect(normalizeLanguageCode('tr')).toBe('tr-TR');
-      expect(normalizeLanguageCode('ru')).toBe('ru-RU');
-      expect(normalizeLanguageCode('uk')).toBe('uk-UA');
-      expect(normalizeLanguageCode('pt')).toBe('pt-BR');
-      expect(normalizeLanguageCode('de')).toBe('de-DE');
-      expect(normalizeLanguageCode('es')).toBe('es-ES');
-      expect(normalizeLanguageCode('fr')).toBe('fr-FR');
-      expect(normalizeLanguageCode('fa')).toBe('fa-IR');
-    });
-
-    it('resolves German regional variants to de-DE', () => {
-      expect(normalizeLanguageCode('de-AT')).toBe('de-DE');
-      expect(normalizeLanguageCode('de-CH')).toBe('de-DE');
+    it('resolves the languages AionUi no longer ships to English', () => {
+      for (const tag of ['ja-JP', 'ko', 'de-DE', 'de_AT', 'fa-IR', 'ru', 'pt-BR', 'en-GB'])
+        expect(normalizeLanguageCode(tag), tag).toBe('en-US');
     });
 
     it('falls back to the default language for unsupported codes', () => {

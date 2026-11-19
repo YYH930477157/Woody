@@ -120,71 +120,19 @@ describe('utils', () => {
   });
 
   describe('resolveLocaleKey', () => {
-    it('resolves zh variants to zh-CN', () => {
-      expect(resolveLocaleKey('zh')).toBe('zh-CN');
-      expect(resolveLocaleKey('zh-CN')).toBe('zh-CN');
-      expect(resolveLocaleKey('zh-Hans')).toBe('zh-CN');
+    it('resolves every Chinese variant to zh-CN', () => {
+      for (const tag of ['zh', 'zh-CN', 'zh-Hans', 'zh-TW', 'zh_tw', 'zh-Hant'])
+        expect(resolveLocaleKey(tag), tag).toBe('zh-CN');
     });
 
-    it('resolves zh-TW to zh-TW', () => {
-      expect(resolveLocaleKey('zh-TW')).toBe('zh-TW');
-      expect(resolveLocaleKey('zh-tw')).toBe('zh-TW');
-      expect(resolveLocaleKey('zh-Hant')).toBe('zh-CN'); // Falls back to CN
-    });
-
-    it('resolves ja variants to ja-JP', () => {
-      expect(resolveLocaleKey('ja')).toBe('ja-JP');
-      expect(resolveLocaleKey('ja-JP')).toBe('ja-JP');
-    });
-
-    it('resolves ko variants to ko-KR', () => {
-      expect(resolveLocaleKey('ko')).toBe('ko-KR');
-      expect(resolveLocaleKey('ko-KR')).toBe('ko-KR');
-    });
-
-    it('resolves tr variants to tr-TR', () => {
-      expect(resolveLocaleKey('tr')).toBe('tr-TR');
-      expect(resolveLocaleKey('tr-TR')).toBe('tr-TR');
-    });
-
-    it('resolves ru, uk, pt, de, es, fr, and fa variants to supported locales', () => {
-      expect(resolveLocaleKey('ru')).toBe('ru-RU');
-      expect(resolveLocaleKey('ru-RU')).toBe('ru-RU');
-      expect(resolveLocaleKey('uk')).toBe('uk-UA');
-      expect(resolveLocaleKey('uk-UA')).toBe('uk-UA');
-      expect(resolveLocaleKey('pt')).toBe('pt-BR');
-      expect(resolveLocaleKey('pt-BR')).toBe('pt-BR');
-      expect(resolveLocaleKey('de')).toBe('de-DE');
-      expect(resolveLocaleKey('de-DE')).toBe('de-DE');
-      expect(resolveLocaleKey('es')).toBe('es-ES');
-      expect(resolveLocaleKey('es-ES')).toBe('es-ES');
-      expect(resolveLocaleKey('fr')).toBe('fr-FR');
-      expect(resolveLocaleKey('fr-FR')).toBe('fr-FR');
-      expect(resolveLocaleKey('fa')).toBe('fa-IR');
-      expect(resolveLocaleKey('fa-IR')).toBe('fa-IR');
-    });
-
-    it('resolves unknown languages to en-US', () => {
-      expect(resolveLocaleKey('en')).toBe('en-US');
-      expect(resolveLocaleKey('en-US')).toBe('en-US');
-      expect(resolveLocaleKey('it')).toBe('en-US');
+    it('resolves every other language to en-US', () => {
+      for (const tag of ['en', 'en-US', 'ja-JP', 'ko', 'de-DE', 'fa', 'it'])
+        expect(resolveLocaleKey(tag), tag).toBe('en-US');
     });
 
     it('is case-insensitive', () => {
       expect(resolveLocaleKey('ZH')).toBe('zh-CN');
-      expect(resolveLocaleKey('JA')).toBe('ja-JP');
-      expect(resolveLocaleKey('KO')).toBe('ko-KR');
-      expect(resolveLocaleKey('TR')).toBe('tr-TR');
-      expect(resolveLocaleKey('RU')).toBe('ru-RU');
-      expect(resolveLocaleKey('UK')).toBe('uk-UA');
-      expect(resolveLocaleKey('PT')).toBe('pt-BR');
-      expect(resolveLocaleKey('ES')).toBe('es-ES');
-      expect(resolveLocaleKey('FR')).toBe('fr-FR');
-      expect(resolveLocaleKey('FA')).toBe('fa-IR');
-    });
-
-    it('handles empty string', () => {
-      expect(resolveLocaleKey('')).toBe('en-US');
+      expect(resolveLocaleKey('EN-us')).toBe('en-US');
     });
   });
 });

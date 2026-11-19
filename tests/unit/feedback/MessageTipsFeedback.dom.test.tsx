@@ -603,11 +603,9 @@ describe('agent error locale copy', () => {
       /重连/,
       /反馈/,
       /技术详情/,
-      /技術詳情/,
-      /回饋/,
     ];
 
-    for (const localeName of ['en-US', 'zh-CN', 'zh-TW']) {
+    for (const localeName of ['en-US', 'zh-CN']) {
       const locale = JSON.parse(readFileSync(path.join(localeDir, localeName, 'conversation.json'), 'utf8'));
 
       for (const code of protocolCodes) {

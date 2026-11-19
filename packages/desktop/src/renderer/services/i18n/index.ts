@@ -17,17 +17,6 @@ import { applyDocumentDirection } from './direction';
 // Static imports for all locales to ensure packaged app can always switch language.
 import enUS from './locales/en-US/index';
 import zhCN from './locales/zh-CN/index';
-import jaJP from './locales/ja-JP/index';
-import zhTW from './locales/zh-TW/index';
-import koKR from './locales/ko-KR/index';
-import trTR from './locales/tr-TR/index';
-import ruRU from './locales/ru-RU/index';
-import ukUA from './locales/uk-UA/index';
-import ptBR from './locales/pt-BR/index';
-import deDE from './locales/de-DE/index';
-import esES from './locales/es-ES/index';
-import frFR from './locales/fr-FR/index';
-import faIR from './locales/fa-IR/index';
 export type { I18nKey, I18nModule } from './i18n-keys';
 
 // Re-exports
@@ -39,17 +28,6 @@ export const supportedLanguages = i18nConfig.supportedLanguages;
 const localeData: LocaleData = {
   'en-US': enUS,
   'zh-CN': zhCN,
-  'ja-JP': jaJP,
-  'zh-TW': zhTW,
-  'ko-KR': koKR,
-  'tr-TR': trTR,
-  'ru-RU': ruRU,
-  'uk-UA': ukUA,
-  'pt-BR': ptBR,
-  'de-DE': deDE,
-  'es-ES': esES,
-  'fr-FR': frFR,
-  'fa-IR': faIR,
 };
 
 const fallbackLocale = localeData[DEFAULT_LANGUAGE] ?? {};
@@ -169,7 +147,7 @@ i18n.on('languageChanged', async (lang: string) => {
   }
 });
 
-// Keep <html dir>/<html lang> in step with the app language (fa-IR is RTL).
+// Keep <html dir>/<html lang> in step with the app language.
 // Separate listener: the one above early-returns once the bundle is loaded.
 i18n.on('languageChanged', (lang: string) => {
   applyDocumentDirection(lang);

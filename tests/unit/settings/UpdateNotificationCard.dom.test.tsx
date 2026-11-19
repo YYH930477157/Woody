@@ -157,7 +157,7 @@ describe('UpdateNotificationCard', () => {
 
     const card = await screen.findByTestId('update-notification-card');
     expect(card).toHaveClass('fixed');
-    // Inline-end anchoring: bottom-right in LTR, bottom-left under RTL (fa-IR).
+    // Inline-end anchoring: bottom-right in LTR, bottom-left under an RTL language.
     expect(card).toHaveClass('end-24px');
     expect(card).toHaveClass('bottom-24px');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();

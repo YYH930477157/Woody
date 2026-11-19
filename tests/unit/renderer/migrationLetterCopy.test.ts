@@ -34,9 +34,6 @@ const LOCALES_DIR = path.resolve(__dirname, '../../../packages/desktop/src/rende
 // old copy but well below the new, so honest rewording will not trip them.
 const MIN_CHARS: Record<string, { promise2: number; noRush: number }> = {
   'zh-CN': { promise2: 70, noRush: 60 },
-  'zh-TW': { promise2: 70, noRush: 60 },
-  'ja-JP': { promise2: 70, noRush: 60 },
-  'ko-KR': { promise2: 70, noRush: 60 },
 };
 const DEFAULT_MIN = { promise2: 200, noRush: 180 };
 
@@ -56,7 +53,7 @@ const locales = fs
 
 describe('migration letter data-handover copy', () => {
   it('ships every supported locale', () => {
-    expect(locales.length).toBeGreaterThanOrEqual(13);
+    expect(locales.toSorted()).toEqual(['en-US', 'zh-CN']);
     expect(locales).toContain('zh-CN');
     expect(locales).toContain('en-US');
   });

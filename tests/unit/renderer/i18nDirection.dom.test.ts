@@ -9,20 +9,10 @@ import { describe, expect, it } from 'vitest';
 import { applyDocumentDirection, directionForLanguage, isRtlLanguage } from '@/renderer/services/i18n/direction';
 
 describe('isRtlLanguage / directionForLanguage', () => {
-  it('marks fa-IR as RTL', () => {
-    expect(isRtlLanguage('fa-IR')).toBe(true);
-    expect(directionForLanguage('fa-IR')).toBe('rtl');
-  });
-
-  it('normalises regional and underscore variants before deciding', () => {
-    expect(isRtlLanguage('fa')).toBe(true);
-    expect(isRtlLanguage('fa_IR')).toBe(true);
-  });
-
-  it('treats every other shipped language as LTR', () => {
-    for (const lang of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'de-DE', 'ru-RU', 'tr-TR', 'uk-UA']) {
-      expect(isRtlLanguage(lang)).toBe(false);
-      expect(directionForLanguage(lang)).toBe('ltr');
+  it('lays out both shipped languages, and anything that falls back to them, left to right', () => {
+    for (const lang of ['en-US', 'zh-CN', 'zh-TW', 'fa-IR', 'fa', 'ja-JP']) {
+      expect(isRtlLanguage(lang), lang).toBe(false);
+      expect(directionForLanguage(lang), lang).toBe('ltr');
     }
   });
 
@@ -34,16 +24,13 @@ describe('isRtlLanguage / directionForLanguage', () => {
 });
 
 describe('applyDocumentDirection', () => {
-  it('sets dir and lang on <html> for an RTL language', () => {
-    applyDocumentDirection('fa-IR');
-    expect(document.documentElement.dir).toBe('rtl');
-    expect(document.documentElement.lang).toBe('fa-IR');
-  });
-
-  it('switches back to LTR when the language changes away', () => {
-    applyDocumentDirection('fa-IR');
-    applyDocumentDirection('de-DE');
+  it('sets dir and the normalized language tag on <html>', () => {
+    applyDocumentDirection('zh_CN');
     expect(document.documentElement.dir).toBe('ltr');
-    expect(document.documentElement.lang).toBe('de-DE');
+    expect(document.documentElement.lang).toBe('zh-CN');
+    // A language AionUi no longer ships is shown in English.
+    applyDocumentDirection('fa-IR');
+    expect(document.documentElement.dir).toBe('ltr');
+    expect(document.documentElement.lang).toBe('en-US');
   });
 });

@@ -7,8 +7,9 @@
 /**
  * Layout direction for the app language.
  *
- * fa-IR is the only right-to-left language AionUi ships. Direction is derived
- * from the app language (`i18n.language`), never from the host OS, for the same
+ * AionUi ships only Chinese and English, both left-to-right; the set below stays so
+ * a right-to-left language can be added later. Direction is derived from the app
+ * language (`i18n.language`), never from the host OS, for the same
  * reason number and date formatting is: the two must not disagree.
  *
  * Content that is inherently left-to-right — code blocks, terminal output,
@@ -18,7 +19,7 @@
 
 import { normalizeLanguageCode } from '@/common/config/i18n';
 
-const RTL_LANGUAGES: ReadonlySet<string> = new Set(['fa-IR']);
+const RTL_LANGUAGES: ReadonlySet<string> = new Set<string>();
 
 export type LayoutDirection = 'ltr' | 'rtl';
 

@@ -18,17 +18,6 @@ import {
 // work correctly in both development and production (no fs.readFile needed).
 import enUS from '@renderer/services/i18n/locales/en-US/index';
 import zhCN from '@renderer/services/i18n/locales/zh-CN/index';
-import jaJP from '@renderer/services/i18n/locales/ja-JP/index';
-import zhTW from '@renderer/services/i18n/locales/zh-TW/index';
-import koKR from '@renderer/services/i18n/locales/ko-KR/index';
-import trTR from '@renderer/services/i18n/locales/tr-TR/index';
-import ruRU from '@renderer/services/i18n/locales/ru-RU/index';
-import ukUA from '@renderer/services/i18n/locales/uk-UA/index';
-import ptBR from '@renderer/services/i18n/locales/pt-BR/index';
-import deDE from '@renderer/services/i18n/locales/de-DE/index';
-import esES from '@renderer/services/i18n/locales/es-ES/index';
-import frFR from '@renderer/services/i18n/locales/fr-FR/index';
-import faIR from '@renderer/services/i18n/locales/fa-IR/index';
 
 // All locale data keyed by language code.
 // NOTE: When adding a new language, add a static import above and an entry here.
@@ -37,17 +26,6 @@ import faIR from '@renderer/services/i18n/locales/fa-IR/index';
 const localeData: LocaleData = {
   'en-US': enUS,
   'zh-CN': zhCN,
-  'ja-JP': jaJP,
-  'zh-TW': zhTW,
-  'ko-KR': koKR,
-  'tr-TR': trTR,
-  'ru-RU': ruRU,
-  'uk-UA': ukUA,
-  'pt-BR': ptBR,
-  'de-DE': deDE,
-  'es-ES': esES,
-  'fr-FR': frFR,
-  'fa-IR': faIR,
 };
 
 const fallbackData = localeData[DEFAULT_LANGUAGE] ?? {};

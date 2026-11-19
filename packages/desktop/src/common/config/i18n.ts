@@ -15,8 +15,8 @@ export const DEFAULT_LANGUAGE = i18nConfig.fallbackLanguage;
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
 
 /**
- * Normalize a language code to a supported BCP 47 tag.
- * e.g. 'zh' → 'zh-CN', 'ja_JP' → 'ja-JP'
+ * Normalize a language code to a supported BCP 47 tag: any Chinese variant becomes
+ * zh-CN, everything else falls back to English. e.g. 'zh' → 'zh-CN', 'ja_JP' → 'en-US'
  */
 export function normalizeLanguageCode(language: string): SupportedLanguage {
   const normalized = language.replace(/_/g, '-');
@@ -25,38 +25,8 @@ export function normalizeLanguageCode(language: string): SupportedLanguage {
     return normalized as SupportedLanguage;
   }
 
-  const lower = normalized.toLowerCase();
-  // Traditional-script regions and explicit Hant tags must not degrade to
-  // Simplified Chinese: zh-HK / zh-MO / zh-Hant-* readers expect zh-TW.
-  if (lower.startsWith('zh')) {
-    return /\bhant\b|-hk\b|-mo\b/.test(lower) ? 'zh-TW' : 'zh-CN';
-  }
-
-  const langOnly = lower.split('-')[0];
-  switch (langOnly) {
-    case 'ja':
-      return 'ja-JP';
-    case 'ko':
-      return 'ko-KR';
-    case 'tr':
-      return 'tr-TR';
-    case 'ru':
-      return 'ru-RU';
-    case 'uk':
-      return 'uk-UA';
-    case 'pt':
-      return 'pt-BR';
-    case 'de':
-      return 'de-DE';
-    case 'es':
-      return 'es-ES';
-    case 'fr':
-      return 'fr-FR';
-    case 'fa':
-      return 'fa-IR';
-    default:
-      return DEFAULT_LANGUAGE;
-  }
+  if (normalized.toLowerCase().startsWith('zh')) return 'zh-CN';
+  return DEFAULT_LANGUAGE;
 }
 
 export function isPlainObject(value: unknown): value is Record<string, unknown> {

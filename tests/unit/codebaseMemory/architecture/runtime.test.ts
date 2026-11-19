@@ -128,9 +128,9 @@ describe('architecture file in the project runtime', () => {
     await service.save(repo, { version: 1, enabled: true, mode: 'full' });
     await expect(service.architecture(repo, { language: 'zh-CN' })).rejects.toThrow(/Index the project/);
     // The first index creates the file in the language of the panel that started it.
-    const first = await indexed(service, 'de-DE');
-    expect(first.architecture).toMatchObject({ tasks: 1, tables: 1, language: 'de-DE' });
-    expect(fs.readFileSync(architectureFile(), 'utf8')).toContain('language=de-DE');
+    const first = await indexed(service, 'zh-CN');
+    expect(first.architecture).toMatchObject({ tasks: 1, tables: 1, language: 'zh-CN' });
+    expect(fs.readFileSync(architectureFile(), 'utf8')).toContain('language=zh-CN');
 
     const status = await service.architecture(repo, { language: 'zh-CN' });
     expect(status.architecture).toMatchObject({ tasks: 1, tables: 1, language: 'zh-CN' });
