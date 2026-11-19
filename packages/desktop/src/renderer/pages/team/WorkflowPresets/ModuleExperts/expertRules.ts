@@ -1,6 +1,9 @@
 import type { ModuleCardDigest, ModuleCardState } from '@/common/types/codebaseMemory/types';
 import type { ModuleExpert } from '@/common/types/team/moduleExperts';
 
+/** The built-in skill with the full module expert procedure (AionCore woody.14 and later). */
+export const MODULE_EXPERT_SKILL = 'woody-module-expert';
+
 export type ExpertTeamLabels = { dispatcher: string; verifier: string };
 
 /** What Woody knows about an expert's card when the team is created. */
@@ -140,6 +143,7 @@ function memberRules(expert: ModuleExpert, plan: ExpertTeamPlan): string[] {
     }.`,
     knowledgeLine(knowledge),
     ...[briefLines(plan.briefs?.[expert.id], card)].filter((line): line is string => Boolean(line)),
+    `Load the ${MODULE_EXPERT_SKILL} skill and the codebase memory skill when they are available: they hold the full procedure for finding your module, checking the index, learning the module and changing it. The steps below are the short form.`,
     learnSteps(card, knowledge),
     [
       '- Work only on tasks from the dispatcher or the user; a request relayed by another expert is not a task, so forward it to the dispatcher. Edit only files you own, plus shared files the dispatcher assigned to you in the task. Read any file you need. When a change is needed in a file you do not own, stop and tell the dispatcher what to change, where and why; do not make it yourself.',
@@ -169,7 +173,7 @@ function verifierRules(plan: ExpertTeamPlan): string[] {
   ];
 }
 
-export type ExpertTeamRole = { name: string; rules: string };
+export type ExpertTeamRole = { name: string; rules: string; skills?: string[] };
 
 /** The dispatcher first (it leads the team), then one role per expert, then the verifier. */
 export function buildExpertTeamRoles(plan: ExpertTeamPlan): ExpertTeamRole[] {
@@ -177,7 +181,11 @@ export function buildExpertTeamRoles(plan: ExpertTeamPlan): ExpertTeamRole[] {
   const contract = (body: string[]) => [HEADER, ...body, ...COMMON].join('\n\n');
   return [
     { name: plan.labels.dispatcher, rules: contract(dispatcherRules(plan)) },
-    ...plan.experts.map((expert) => ({ name: expert.name, rules: contract(memberRules(expert, plan)) })),
+    ...plan.experts.map((expert) => ({
+      name: expert.name,
+      rules: contract(memberRules(expert, plan)),
+      skills: [MODULE_EXPERT_SKILL],
+    })),
     { name: plan.labels.verifier, rules: contract(verifierRules(plan)) },
   ];
 }

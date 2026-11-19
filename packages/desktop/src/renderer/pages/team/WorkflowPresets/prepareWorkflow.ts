@@ -21,8 +21,11 @@ export class WorkflowPreparationError extends Error {
 
 type RoleSettings = Pick<CreateAssistantRequest, 'enabled_skills' | 'disabled_builtin_skills' | 'defaults'>;
 
-/** A role of a team made from a template: its name in the team and the rules appended to the base assistant's. */
-export type RoleSpec = { name: string; rules: string };
+/**
+ * A role of a team made from a template: its name in the team, the rules appended to the
+ * base assistant's, and skills this role has on top of the base assistant's.
+ */
+export type RoleSpec = { name: string; rules: string; skills?: string[] };
 
 /** A fixed setting keeps its value; an auto one takes the last-used value, or stays auto without one. */
 function fixedScalar(setting: AssistantDefaultScalar, last: string | undefined): AssistantDefaultScalar {
@@ -92,12 +95,15 @@ export async function prepareRoles(params: {
     // Finish each copy before starting another so rollback sees every completed mutation.
     /* eslint-disable no-await-in-loop */
     for (const [index, role] of roles.entries()) {
+      const skills = (role.skills ?? []).reduce(withItem, settings.enabled_skills ?? []);
       const assistant = await ipcBridge.assistants.create.invoke({
         name: `${teamName.trim()} · ${role.name}`,
         agent_id: detail.engine.agent_id,
         avatar: detail.profile.avatar,
         custom_skill_names: detail.capabilities.custom_skill_names,
         ...settings,
+        enabled_skills: skills,
+        defaults: { ...settings.defaults, skills: { mode: 'fixed', value: skills } },
       });
       if (!assistant?.id) throw new Error('Assistant creation failed');
       createdIds.push(assistant.id);

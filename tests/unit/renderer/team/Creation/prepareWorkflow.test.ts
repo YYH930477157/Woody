@@ -229,6 +229,27 @@ describe('workflow role preparation', () => {
     expect(mocks.write.mock.calls[1][0].content).toBe('Keep project conventions.\n\nsensor');
   });
 
+  it('adds a role’s own skills to those of the base assistant, once', async () => {
+    await prepareRoles({
+      base: params.base,
+      teamName: 'Demo',
+      locale: 'zh-CN',
+      workspace: '',
+      roles: [
+        { name: '总管', rules: 'dispatch' },
+        { name: 'Sensor 专家', rules: 'sensor', skills: ['woody-module-expert', 'test'] },
+      ],
+    });
+    expect(mocks.create.mock.calls[0][0]).toMatchObject({
+      enabled_skills: ['test'],
+      defaults: { skills: { mode: 'fixed', value: ['test'] } },
+    });
+    expect(mocks.create.mock.calls[1][0]).toMatchObject({
+      enabled_skills: ['test', 'woody-module-expert'],
+      defaults: { skills: { mode: 'fixed', value: ['test', 'woody-module-expert'] } },
+    });
+  });
+
   it('rejects roles outside the selected workflow', () => {
     expect(() => buildWorkflowRules('review', 'implementation', labels)).toThrow('Role is not part');
   });

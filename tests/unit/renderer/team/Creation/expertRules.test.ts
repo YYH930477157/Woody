@@ -77,6 +77,9 @@ describe('module expert team roles', () => {
     expect(sensor.rules).toContain('Learning your module.');
     expect(sensor.rules).toContain('Do not change project code while you do it');
     expect(sensor.rules).toContain('never run index_repository');
+    expect(sensor.rules).toContain('Load the woody-module-expert skill');
+    expect(sensor.skills).toEqual(['woody-module-expert']);
+    expect(dispatcher.skills).toBeUndefined();
     expect(sensor.rules).toContain('look for callers the index misses with search_code');
     expect(sensor.rules).toContain('Write your part of .woody/features/sensor.md after the generated part');
     expect(sensor.rules).toContain('Send the dispatcher a short report');
