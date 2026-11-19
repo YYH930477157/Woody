@@ -250,6 +250,29 @@ describe('workflow role preparation', () => {
     });
   });
 
+  it('removes role and codebase-memory skills from disabled_builtin_skills while keeping others disabled', async () => {
+    mocks.access.mockResolvedValue({ mcpId: 'cbm-row', skill: 'woody-codebase-memory' });
+    mocks.get.mockResolvedValue({
+      ...detail,
+      capabilities: {
+        ...detail.capabilities,
+        default_disabled_builtin_skill_ids: ['disabled', 'woody-codebase-memory', 'woody-module-expert'],
+      },
+    });
+    await prepareRoles({
+      base: params.base,
+      teamName: 'Demo',
+      locale: 'zh-CN',
+      workspace: 'D:\\work\\project',
+      roles: [
+        { name: '总管', rules: 'dispatch' },
+        { name: 'Sensor 专家', rules: 'sensor', skills: ['woody-module-expert'] },
+      ],
+    });
+    expect(mocks.create.mock.calls[0][0].disabled_builtin_skills).toEqual(['disabled', 'woody-module-expert']);
+    expect(mocks.create.mock.calls[1][0].disabled_builtin_skills).toEqual(['disabled']);
+  });
+
   it('rejects roles outside the selected workflow', () => {
     expect(() => buildWorkflowRules('review', 'implementation', labels)).toThrow('Role is not part');
   });
