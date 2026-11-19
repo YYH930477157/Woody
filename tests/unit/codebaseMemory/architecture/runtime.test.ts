@@ -320,4 +320,43 @@ describe('module expert cards in the project runtime', () => {
     expect(broken.moduleCards?.error).toMatch(/not valid JSON/);
     await expect(service.moduleCards(repo, {})).rejects.toThrow(/not valid JSON/);
   });
+
+  it('re-checks other experts and returns updated modules when refreshing one outdated expert', async () => {
+    const service = runtime();
+    await service.save(repo, { version: 1, enabled: true, mode: 'full' });
+    await indexed(service, 'en-US');
+    fs.appendFileSync(path.join(repo, '.woody', 'features', 'sensor.md'), '\n## Flow\n\nReads sensor.\n');
+    expect((await service.moduleCards(repo, {})).experts[0].state).toBe('ready');
+
+    // Sensor source changes while a brand-new expert is added to experts.json.
+    write('app/sensor.c', 'int sensorLevel;\nvoid SENSOR_Second(void)\n{\n    sensorLevel += 2;\n}\n');
+    write(
+      '.woody/experts.json',
+      JSON.stringify({
+        version: 1,
+        experts: [
+          { id: 'sensor', name: 'Sensor expert', summary: 'Reads the sensor.', paths: ['app/sensor.c'] },
+          { id: 'tick', name: 'Tick expert', summary: 'Counts ticks.', paths: ['app/tick.c'] },
+        ],
+        shared: ['app/task.c'],
+      })
+    );
+
+    const refreshed = await service.moduleCards(repo, { refresh: true, ids: [] });
+    expect(refreshed.experts.find((item) => item.id === 'tick')?.state).toBe('missing');
+    expect(refreshed.experts.find((item) => item.id === 'sensor')?.state).toBe('stale');
+    expect(refreshed.modules.find((item) => item.id === 'tick')?.experts).toEqual(['tick']);
+  });
+
+  it('reports error instead of nobrief when a new expert card cannot be read', async () => {
+    const ciphertext = Buffer.from(Array.from({ length: 256 }, (_, index) => index));
+    write('.woody/features/sensor.md', ciphertext);
+    const service = runtime();
+    await service.save(repo, { version: 1, enabled: true, mode: 'full' });
+    await indexed(service, 'en-US');
+
+    const cards = await service.moduleCards(repo, {});
+    expect(cards.experts[0]).toMatchObject({ id: 'sensor', state: 'error', error: expect.stringMatching(/UTF-8/) });
+    expect(cards.experts[0].digest).toBeUndefined();
+  });
 });

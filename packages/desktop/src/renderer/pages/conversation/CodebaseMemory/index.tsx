@@ -145,7 +145,7 @@ function FolderMemory({
       />
       {indexed && (
         <ModuleList
-          modules={status?.architecture?.modules ?? []}
+          modules={moduleList.cards?.modules ?? status?.architecture?.modules ?? []}
           state={moduleList}
           disabled={locked || running || dirty}
         />

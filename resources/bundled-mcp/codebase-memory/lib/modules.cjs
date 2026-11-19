@@ -58,6 +58,7 @@ const DECLARATION_WORDS = new Set([
 const code = (name) => `\`${name}\``;
 const at = (file, line) => `${file}:${line}`;
 const collapse = (text) => text.replace(/\s+/g, ' ').trim();
+const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const stemOf = (file) =>
   file
     .split('/')
@@ -534,10 +535,12 @@ function collect(input) {
   const callSite = (file, start, name) => {
     const prepared = source(file);
     const def = (defsByFile.get(file) || []).find((item) => item.start === start);
-    if (!prepared || !def) return at(file, start);
+    if (!prepared || !def || typeof name !== 'string' || !name) return at(file, start);
     const from = prepared.starts[def.start - 1] ?? 0;
     const to = prepared.starts[def.end] ?? prepared.plain.length;
-    const pattern = new RegExp(`\\b${name}\\b`, 'g');
+    const lead = /^\w/.test(name) ? '\\b' : '';
+    const trail = /\w$/.test(name) ? '\\b' : '';
+    const pattern = new RegExp(`${lead}${escapeRegex(name)}${trail}`, 'g');
     pattern.lastIndex = from;
     const match = pattern.exec(prepared.plain);
     return at(file, match && match.index < to ? lineOf(prepared.starts, match.index) : start);
@@ -1008,13 +1011,19 @@ function ownPart(text, expert) {
   if (text === undefined) return '';
   const start = text.indexOf(MARK.start);
   const end = text.indexOf(MARK.end, start);
-  const rest = start < 0 || end < 0 ? text : text.slice(0, start) + text.slice(end + MARK.end.length);
-  return rest
-    .split(/\r?\n/)
-    .filter((line) => line.trim() !== `# ${expert.name}`)
-    .join(' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  if (start < 0 || end < 0) {
+    return text
+      .split(/\r?\n/)
+      .filter((line) => line.trim() !== `# ${expert.name}`)
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+  const beforeLines = text.slice(0, start).split(/\r?\n/);
+  // Ignore the card's leading H1 title even if the expert was later renamed.
+  const firstContent = beforeLines.findIndex((line) => line.trim().length > 0);
+  if (firstContent >= 0 && /^#\s+\S/.test(beforeLines[firstContent].trim())) beforeLines.splice(firstContent, 1);
+  return [...beforeLines, ...text.slice(end + MARK.end.length).split(/\r?\n/)].join(' ').replace(/\s+/g, ' ').trim();
 }
 
 /** Language of an existing card, from its generated header. */

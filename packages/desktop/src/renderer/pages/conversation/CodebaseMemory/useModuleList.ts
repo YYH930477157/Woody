@@ -28,23 +28,32 @@ export function useModuleList(repoPath: string, enabled: boolean, version: numbe
   const { i18n } = useTranslation();
   const [file, setFile] = useState<ModuleExpertsFile | null>(null);
   const [cards, setCards] = useState<ModuleCards>();
+  const [expertsError, setExpertsError] = useState<string>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState<Busy>();
   const request = useRef(0);
 
   const load = useCallback(async () => {
     const current = ++request.current;
-    try {
-      const [experts, state] = await Promise.all([
-        ipcBridge.codebaseMemory.experts.invoke({ repoPath }),
-        ipcBridge.codebaseMemory.moduleCards.invoke({ repoPath }),
-      ]);
-      if (request.current !== current) return;
-      setFile(experts.saved);
-      setCards(state);
+    const [expertsResult, cardsResult] = await Promise.allSettled([
+      ipcBridge.codebaseMemory.experts.invoke({ repoPath }),
+      ipcBridge.codebaseMemory.moduleCards.invoke({ repoPath }),
+    ]);
+    if (request.current !== current) return;
+    if (expertsResult.status === 'fulfilled') {
+      setFile(expertsResult.value.saved);
+      setExpertsError(undefined);
+    } else {
+      setFile(null);
+      setExpertsError(errorMessage(expertsResult.reason));
+    }
+    if (cardsResult.status === 'fulfilled') {
+      setCards(cardsResult.value);
       setError(undefined);
-    } catch (cause) {
-      if (request.current === current) setError(errorMessage(cause));
+    } else {
+      setCards(undefined);
+      // Avoid duplicating the experts-file error when experts.invoke already reported it.
+      setError(expertsResult.status === 'rejected' ? undefined : errorMessage(cardsResult.reason));
     }
   }, [repoPath]);
 
@@ -56,14 +65,20 @@ export function useModuleList(repoPath: string, enabled: boolean, version: numbe
   const saveAndWrite = async (next: ModuleExpertsFile, id: string) => {
     await ipcBridge.codebaseMemory.saveExperts.invoke({ repoPath, file: next });
     setFile(next);
-    setCards(
-      await ipcBridge.codebaseMemory.moduleCards.invoke({
-        repoPath,
-        refresh: true,
-        ids: [id],
-        language: i18n?.language,
-      })
-    );
+    setExpertsError(undefined);
+    try {
+      setCards(
+        await ipcBridge.codebaseMemory.moduleCards.invoke({
+          repoPath,
+          refresh: true,
+          ids: [id],
+          language: i18n?.language,
+        })
+      );
+    } catch (cause) {
+      // The expert is already saved; surface the card-write failure so the user can retry Refresh.
+      setError(errorMessage(cause));
+    }
   };
   /** Resolves true when the work succeeded; a failure is shown in the list. */
   const run = async (action: Busy, work: () => Promise<void>): Promise<boolean> => {
@@ -86,6 +101,7 @@ export function useModuleList(repoPath: string, enabled: boolean, version: numbe
     file,
     experts,
     cards,
+    expertsError,
     error,
     busy,
     canCreate: experts.length < MODULE_EXPERTS_LIMIT,

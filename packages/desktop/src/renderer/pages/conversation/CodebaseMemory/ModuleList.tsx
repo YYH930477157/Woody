@@ -30,7 +30,8 @@ export default function ModuleList({ modules, state, disabled }: Props) {
   const [chosen, setChosen] = useState<string[]>([]);
   const [draft, setDraft] = useState<ExpertFields>();
   const [target, setTarget] = useState<string>();
-  const locked = disabled || Boolean(state.busy);
+  const expertsError = state.expertsError ?? state.cards?.error;
+  const locked = disabled || Boolean(state.busy) || Boolean(state.expertsError);
   const cardOf = (id: string) => state.cards?.experts.find((card) => card.id === id);
   const nameOf = (id: string) => state.experts.find((expert) => expert.id === id)?.name ?? id;
 
@@ -94,10 +95,10 @@ export default function ModuleList({ modules, state, disabled }: Props) {
           })}
         </div>
       )}
-      {state.cards?.error && (
+      {expertsError && (
         <Alert
           type='warning'
-          content={t('conversation.codebaseMemory.modules.expertsUnreadable', { error: state.cards.error })}
+          content={t('conversation.codebaseMemory.modules.expertsUnreadable', { error: expertsError })}
         />
       )}
       {modules.length === 0 ? (

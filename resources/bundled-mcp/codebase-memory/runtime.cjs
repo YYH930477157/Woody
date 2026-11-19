@@ -1604,6 +1604,8 @@ function createRuntime(options) {
     }
     return coverage;
   }
+  const samePaths = (record, expert) =>
+    Array.isArray(record?.paths) && record.paths.join('\n') === expert.paths.join('\n');
   /**
    * The generated part of each expert's feature card in .woody/features, and the card state
    * for the team dialog. `only` limits the work to some experts; the others keep their record.
@@ -1686,7 +1688,8 @@ function createRuntime(options) {
           digest: modules.digest(data),
         };
       } catch (error) {
-        result.experts[expert.id] = { ...(before || {}), state: 'error', error: error.message };
+        const keep = samePaths(before, expert) ? before : undefined;
+        result.experts[expert.id] = { ...(keep || {}), paths: expert.paths, state: 'error', error: error.message };
       }
     }
     return result;
@@ -1980,8 +1983,6 @@ function createRuntime(options) {
       const saved = readExperts(project.root, throughPowerShell);
       const experts = saved?.experts || [];
       const records = status.moduleCards?.experts || {};
-      const samePaths = (record, expert) =>
-        Array.isArray(record?.paths) && record.paths.join('\n') === expert.paths.join('\n');
       const hasBrief = (expert) => {
         try {
           const text = readCard(woodyPath(project.root, `${FEATURES_DIR}/${expert.id}.md`));
@@ -1998,6 +1999,7 @@ function createRuntime(options) {
         .map((expert) => expert.id);
       const regenerate = cardOptions.refresh === true ? [...new Set([...wanted, ...outdated])] : [];
       let cards = status.moduleCards || {};
+      let latestModules = status.architecture?.modules || [];
       if (regenerate.length) {
         if (!available()) throw new Error('Bundled codebase-memory executable is unavailable');
         if (status.phase === 'running') throw new Error('An index is already running for this project');
@@ -2013,48 +2015,51 @@ function createRuntime(options) {
           });
           persist(project, { ...(readJson(project.statusFile) || {}), ...result });
           cards = result.moduleCards;
+          latestModules = result.architecture?.modules || latestModules;
         } finally {
           releaseLock(project, owner);
         }
-      } else {
-        // No index work: only see whether an expert has written its card since, or the
-        // module's files changed.
-        const next = { ...cards, experts: { ...records } };
-        let changed = false;
-        for (const expert of experts) {
-          const record = records[expert.id];
-          if (!record?.generatedAt || !samePaths(record, expert) || record.state === 'error') continue;
-          try {
-            const text = readCard(woodyPath(project.root, `${FEATURES_DIR}/${expert.id}.md`));
-            const own = modules.ownPart(text, expert);
-            const { state, record: updated } = modules.cardState(record, {
-              filesHash: hashFiles(project.root, record.owned || []),
-              ownHash: sha1(own),
-              hasOwn: own.length > 0,
-            });
-            if (state !== record.state || updated.reviewedFilesHash !== record.reviewedFilesHash) changed = true;
-            next.experts[expert.id] = { ...record, ...updated, state };
-          } catch (error) {
-            next.experts[expert.id] = { ...record, state: 'error', error: error.message };
-            changed = true;
-          }
-        }
-        if (changed && status.phase !== 'running')
-          persist(project, { ...(readJson(project.statusFile) || {}), moduleCards: next });
-        cards = next;
       }
+      // For experts not regenerated above, check whether their card was written or their files changed.
+      const regenerated = new Set(regenerate);
+      const next = { ...cards, experts: { ...(cards.experts || {}) } };
+      let changed = false;
+      for (const expert of experts) {
+        if (regenerated.has(expert.id)) continue;
+        const record = next.experts[expert.id];
+        if (!record?.generatedAt || !samePaths(record, expert) || record.state === 'error') continue;
+        try {
+          const text = readCard(woodyPath(project.root, `${FEATURES_DIR}/${expert.id}.md`));
+          const own = modules.ownPart(text, expert);
+          const { state, record: updated } = modules.cardState(record, {
+            filesHash: hashFiles(project.root, record.owned || []),
+            ownHash: sha1(own),
+            hasOwn: own.length > 0,
+          });
+          if (state !== record.state || updated.reviewedFilesHash !== record.reviewedFilesHash) changed = true;
+          next.experts[expert.id] = { ...record, ...updated, state };
+        } catch (error) {
+          next.experts[expert.id] = { ...record, state: 'error', error: error.message };
+          changed = true;
+        }
+      }
+      if (changed && status.phase !== 'running')
+        persist(project, { ...(readJson(project.statusFile) || {}), moduleCards: next });
+      cards = next;
       const current = cards.experts || {};
       return {
-        modules: status.architecture?.modules || [],
+        modules: latestModules,
         error: cards.error,
         experts: experts.map((expert) => {
           const record = current[expert.id];
-          const fresh = record?.generatedAt && samePaths(record, expert);
+          const matched = samePaths(record, expert);
+          const fresh = Boolean(record?.generatedAt && matched);
+          const failed = record?.state === 'error' && matched;
           return {
             id: expert.id,
             card: `${FEATURES_DIR}/${expert.id}.md`,
-            state: fresh ? record.state : 'nobrief',
-            ...(fresh && record.error ? { error: record.error } : {}),
+            state: fresh || failed ? record.state : 'nobrief',
+            ...((fresh || failed) && record.error ? { error: record.error } : {}),
             ...(fresh ? { generatedAt: record.generatedAt, digest: record.digest } : {}),
           };
         }),

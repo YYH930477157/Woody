@@ -560,4 +560,47 @@ describe('modules and experts in the architecture panel', () => {
     expect(screen.getByTestId('codebase-module-draft')).toBeInTheDocument();
     expect(api.moduleCards).not.toHaveBeenCalledWith(expect.objectContaining({ refresh: true }));
   });
+
+  it('shows updated module ownership immediately after creating an expert', async () => {
+    api.moduleCards
+      .mockResolvedValueOnce({ modules, experts: [{ id: 'ui', card: '.woody/features/ui.md', state: 'stale' }] })
+      .mockResolvedValueOnce({
+        modules: modules.map((item) => (item.id === 'sensor' ? { ...item, experts: ['sensor'] } : item)),
+        experts: [
+          { id: 'ui', card: '.woody/features/ui.md', state: 'stale' },
+          { id: 'sensor', card: '.woody/features/sensor.md', state: 'missing' },
+        ],
+      });
+    render(<CodebaseMemoryPanel repoPaths={{ one: 'D:/one' }} />);
+    await screen.findByText(key('modules.states.stale'));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'sensor' }));
+    fireEvent.click(screen.getByRole('button', { name: key('modules.newExpert') }));
+    const [name] = screen.getByTestId('codebase-module-draft').querySelectorAll('input');
+    fireEvent.change(name, { target: { value: 'Sensor expert' } });
+    fireEvent.click(within(screen.getByTestId('codebase-module-draft')).getByRole('button', { name: 'common.save' }));
+    await waitFor(() => expect(screen.getAllByText(key('modules.noExpert'))).toHaveLength(1));
+  });
+
+  it('closes the draft and reports the refresh error when saving succeeds but card refresh fails', async () => {
+    api.moduleCards
+      .mockResolvedValueOnce({ modules, experts: [{ id: 'ui', card: '.woody/features/ui.md', state: 'stale' }] })
+      .mockRejectedValueOnce(new Error('Index lock busy'));
+    render(<CodebaseMemoryPanel repoPaths={{ one: 'D:/one' }} />);
+    await screen.findByText(key('modules.states.stale'));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'sensor' }));
+    fireEvent.click(screen.getByRole('button', { name: key('modules.newExpert') }));
+    const [name] = screen.getByTestId('codebase-module-draft').querySelectorAll('input');
+    fireEvent.change(name, { target: { value: 'Sensor expert' } });
+    fireEvent.click(within(screen.getByTestId('codebase-module-draft')).getByRole('button', { name: 'common.save' }));
+    await waitFor(() => expect(screen.queryByTestId('codebase-module-draft')).toBeNull());
+    expect(await screen.findByText('Index lock busy')).toBeInTheDocument();
+  });
+
+  it('warns and disables module selection when experts.json cannot be read', async () => {
+    api.experts.mockRejectedValue(new Error('experts.json is not valid JSON'));
+    api.moduleCards.mockRejectedValue(new Error('experts.json is not valid JSON'));
+    render(<CodebaseMemoryPanel repoPaths={{ one: 'D:/one' }} />);
+    expect(await screen.findByText(key('modules.expertsUnreadable'))).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'sensor' })).toBeDisabled();
+  });
 });

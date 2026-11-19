@@ -370,4 +370,51 @@ describe('expert brief', () => {
     step = modules.cardState(step.record, { filesHash: 'f2', ownHash: 'o2', hasOwn: true });
     expect(step.state).toBe('ready');
   });
+
+  it('ignores the leading card title after an expert is renamed', () => {
+    const expert = experts[0];
+    const renamed = { ...expert, name: 'Sensor owner' };
+    const created = modules.mergeCard(undefined, 'Facts v1', expert, labels['en-US'], 'en-US');
+    expect(modules.ownPart(created, renamed)).toBe('');
+    const written = `${created}\n## Flow\n\nReads the sensor.\n`;
+    expect(modules.ownPart(written, renamed)).toBe(modules.ownPart(written, expert));
+  });
+
+  it('handles C++ callee names containing regex metacharacters without throwing', async () => {
+    const cppFiles: Record<string, string> = {
+      'app/sensor.cpp':
+        'struct S { S operator+(int v); ~S(); };\nS S::operator+(int v) { return *this; }\nS::~S() {}\n',
+      'app/ui.cpp': 'void render(S s) {\n  auto next = s.operator+(1);\n  s.~S();\n}\n',
+    };
+    const cppRows: Row[] = [
+      ['operator+', 'app/sensor.cpp', '2', '2'],
+      ['~S', 'app/sensor.cpp', '3', '3'],
+      ['render', 'app/ui.cpp', '1', '4'],
+    ];
+    const cppExperts = [
+      { id: 'sensor', name: 'Sensor', paths: ['app/sensor.cpp'] },
+      { id: 'ui', name: 'UI', paths: ['app/ui.cpp'] },
+    ];
+    const data = modules.collect({
+      expert: cppExperts[0],
+      experts: cppExperts,
+      shared: [],
+      model: { tasks: [], tables: [], otherTables: [], smallTables: [], structTables: [] },
+      functions: cppRows,
+      files: Object.keys(cppFiles),
+      calls: [
+        ['render', 'app/ui.cpp', '1', 'operator+', 'app/sensor.cpp'],
+        ['render', 'app/ui.cpp', '1', '~S', 'app/sensor.cpp'],
+      ],
+      variables: [],
+      coverage: new Map(),
+      source: source(cppFiles),
+    });
+    expect(
+      data.provides.map((item: { name: string; callers: Array<{ site: string }> }) => [item.name, item.callers[0].site])
+    ).toEqual([
+      ['~S', 'app/ui.cpp:3'],
+      ['operator+', 'app/ui.cpp:2'],
+    ]);
+  });
 });
