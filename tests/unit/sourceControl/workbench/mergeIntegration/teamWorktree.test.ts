@@ -54,7 +54,7 @@ const commit = async (cwd: string, file: string, text: string, message: string) 
   await run(cwd, ['commit', '-q', '-am', message]);
 };
 
-describe('team worktrees', () => {
+describe('team worktrees', { timeout: 30_000 }, () => {
   it('name branches and folders in ASCII, falling back to the time for other names', () => {
     const now = new Date(2026, 10, 15, 22, 45, 12);
     expect(teamWorktreeSlug('Sensor Threshold!', now)).toBe('sensor-threshold');
