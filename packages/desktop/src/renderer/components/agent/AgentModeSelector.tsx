@@ -11,6 +11,7 @@ import {
 } from '@/renderer/hooks/agent/useAcpConfigOptions';
 import type { AgentModeOption } from '@/renderer/utils/model/agentTypes';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
+import { useSendBoxFooter } from '@/renderer/components/chat/SendBox/useFooterLayout';
 import { AgentLogoIcon } from './AgentBadge';
 import { Dropdown, Menu, Message, Tooltip } from '@arco-design/web-react';
 import { Down } from '@icon-park/react';
@@ -104,6 +105,7 @@ const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({
   const { t } = useTranslation();
   const layout = useLayoutContext();
   const isMobile = Boolean(layout?.isMobile);
+  const { actionsTight } = useSendBoxFooter();
   const runtimeConfig = useAcpConfigOptions({
     conversation_id: conversation_id ?? '',
     prepareRuntime: beforeRuntimeSync,
@@ -287,23 +289,27 @@ const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({
     // dropping it pays for "→ <target>" outright.
     const showPendingTarget = Boolean(pendingModeLabel) && compactLabelType !== 'agent';
     const baseWithPending = showPendingTarget ? `${baseCompactLabel} → ${pendingModeLabel}` : baseCompactLabel;
-    const compactLabel =
-      compactLabelOverride ||
-      (compactLabelPrefix && compactLabelType !== 'agent' && !showPendingTarget
-        ? hideCompactLabelPrefixOnMobile && isMobile
-          ? baseCompactLabel
-          : `${compactLabelPrefix} · ${baseCompactLabel}`
-        : baseWithPending);
+    const prefixedLabel =
+      compactLabelPrefix && compactLabelType !== 'agent' && !showPendingTarget
+        ? `${compactLabelPrefix} · ${baseCompactLabel}`
+        : null;
+    // The prefix is also what gives first in a narrow send box: the shield icon
+    // still marks the pill, and the full label stays on hover.
+    const dropPrefix = Boolean(prefixedLabel) && ((hideCompactLabelPrefixOnMobile && isMobile) || actionsTight);
+    const fullCompactLabel = compactLabelOverride || prefixedLabel || baseWithPending;
+    const compactLabel = compactLabelOverride || (prefixedLabel && !dropPrefix ? prefixedLabel : baseWithPending);
     if (!canInteract && legacyCompactBehavior && !runtimeModeBlocked) {
       return null;
     }
 
     const compactContent = (
-      <span data-testid='mode-selector' data-current-mode={current_mode} className='inline-flex'>
+      <span data-testid='mode-selector' data-current-mode={current_mode} className='inline-flex min-w-0'>
         <RuntimeSelectorPill
           testId={backend ? `agent-mode-selector-${backend}` : 'agent-mode-selector'}
           className={`sendbox-model-btn agent-mode-compact-pill ${canInteract ? '' : 'agent-mode-compact-pill--readonly'}`}
           label={compactLabel}
+          fullLabel={fullCompactLabel}
+          title={compactLabel === fullCompactLabel ? undefined : fullCompactLabel}
           leading={
             <>
               {compactLeadingIcon && <span className='shrink-0 inline-flex items-center'>{compactLeadingIcon}</span>}

@@ -8,6 +8,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
 import AgentModeSelector from '@/renderer/components/agent/AgentModeSelector';
+import { SendBoxFooterContext } from '@/renderer/components/chat/SendBox/useFooterLayout';
 
 const { useAcpConfigOptionsMock } = vi.hoisted(() => ({
   useAcpConfigOptionsMock: vi.fn(),
@@ -112,6 +113,28 @@ describe('AgentModeSelector', () => {
       reload: vi.fn(),
       setConfigOption: vi.fn(),
     }));
+  });
+
+  it('drops the prefix in a send box short of room and keeps the full label on hover', () => {
+    const pill = (actionsTight: boolean) => (
+      <SendBoxFooterContext.Provider value={{ actionsTight }}>
+        <AgentModeSelector
+          backend='claude'
+          conversation_id='conv-1'
+          compact
+          modeLabelFormatter={(mode) => (mode.value === 'default' ? '默认' : '全自动')}
+          compactLabelPrefix='权限'
+        />
+      </SendBoxFooterContext.Provider>
+    );
+    const { rerender } = render(pill(false));
+    const button = screen.getByTestId('agent-mode-selector-claude');
+    expect(button).toHaveTextContent('权限 · 默认');
+    expect(button).not.toHaveAttribute('title');
+
+    rerender(pill(true));
+    expect(button).toHaveTextContent(/^默认/);
+    expect(button).toHaveAttribute('title', '权限 · 默认');
   });
 
   it('keeps observed runtime mode after rerender when initialMode is stale', async () => {

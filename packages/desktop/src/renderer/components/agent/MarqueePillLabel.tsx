@@ -27,7 +27,13 @@ const MARQUEE_SPEED = 30;
  */
 const MarqueePillLabel: React.FC<{
   children: string;
-}> = ({ children }) => {
+  /**
+   * The label's longest form when a shorter one is shown (e.g. without its
+   * "权限 · " prefix). Measured in a hidden span so the send box can tell
+   * whether the full form would fit.
+   */
+  fullText?: string;
+}> = ({ children, fullText }) => {
   const containerRef = useRef<HTMLSpanElement>(null);
   const measureRef = useRef<HTMLSpanElement>(null);
   const marqueeRef = useRef<HTMLSpanElement>(null);
@@ -80,6 +86,7 @@ const MarqueePillLabel: React.FC<{
   return (
     <span
       ref={containerRef}
+      data-pill-label
       className='inline-block overflow-hidden whitespace-nowrap leading-none min-w-0 relative'
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
@@ -87,11 +94,21 @@ const MarqueePillLabel: React.FC<{
       {/* Hidden measurement span: full text width, not clipped */}
       <span
         ref={measureRef}
+        data-pill-text
         className='invisible absolute whitespace-nowrap leading-none pointer-events-none'
         aria-hidden='true'
       >
         {children}
       </span>
+      {fullText && fullText !== children && (
+        <span
+          data-pill-full-text
+          className='invisible absolute whitespace-nowrap leading-none pointer-events-none'
+          aria-hidden='true'
+        >
+          {fullText}
+        </span>
+      )}
       {/* Static text: visible by default, hidden when marquee is active.
           On mobile we clip with ellipsis since hover marquee never fires. */}
       <span

@@ -34,6 +34,7 @@ import {
 import { buildAttachedMentionRanges } from '@/renderer/utils/chat/mentionHighlight';
 import { applyMentionInsertion, insertMentionAtCaret } from '@/renderer/utils/chat/mentionInsertion';
 import { reconcileSessionRefs } from './sessionMentionReconcile';
+import { SendBoxFooterContext, useFooterLayout } from './useFooterLayout';
 import { getLastAssistantText } from '@/renderer/utils/chat/getLastAssistantText';
 import { formatRelativeTime } from '@/renderer/utils/chat/relativeTime';
 import { emitter, type ReplyQuote, useAddEventListener } from '@/renderer/utils/emitter';
@@ -1917,6 +1918,17 @@ const SendBox: React.FC<{
     return segments;
   }, [highlightRanges, input]);
 
+  const footerRowRef = useRef<HTMLDivElement>(null);
+  const footerLeftRef = useRef<HTMLDivElement>(null);
+  const footerActionsRef = useRef<HTMLDivElement>(null);
+  const bottomToolsRef = useRef<HTMLDivElement>(null);
+  const { stackBottomTools, actionsTight } = useFooterLayout(
+    { row: footerRowRef, slot: bottomToolsRef, left: footerLeftRef, actions: footerActionsRef },
+    !isSingleLine,
+    Boolean(bottomTools)
+  );
+  const footerState = useMemo(() => ({ actionsTight }), [actionsTight]);
+
   return (
     <div className={`relative ${className ?? ''}`.trim()}>
       {topRightOverlay && (
@@ -2221,29 +2233,53 @@ const SendBox: React.FC<{
           )}
         </div>
         {!isSingleLine && (
-          <div className='flex items-center justify-between gap-2 w-full'>
+          <SendBoxFooterContext.Provider value={footerState}>
             <div
+              ref={footerRowRef}
               className={
-                isMobileCompact
-                  ? 'flex-shrink-0 sendbox-tools sendbox-tools-mobile-compact'
-                  : isMobile
-                    ? 'sendbox-tools sendbox-tools-scroll-mobile'
-                    : 'sendbox-tools'
+                // Too narrow for the status strip between the buttons: give it the
+                // top row of a grid and keep the buttons where they were below it.
+                stackBottomTools
+                  ? 'grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-4px w-full'
+                  : 'flex items-center justify-between gap-2 w-full'
               }
             >
-              <span className='sendbox-left-tool-group'>
-                {renderedTools}
-                {draftActionButton}
-              </span>
+              <div
+                ref={footerLeftRef}
+                className={`${
+                  isMobileCompact
+                    ? 'flex-shrink-0 sendbox-tools sendbox-tools-mobile-compact'
+                    : isMobile
+                      ? 'sendbox-tools sendbox-tools-scroll-mobile'
+                      : 'sendbox-tools'
+                }${stackBottomTools ? ' row-start-2 col-start-1' : ''}`}
+              >
+                <span className='sendbox-left-tool-group'>
+                  {renderedTools}
+                  {draftActionButton}
+                </span>
+              </div>
+              {bottomTools && (
+                <div
+                  ref={bottomToolsRef}
+                  data-testid='sendbox-bottom-tools'
+                  data-stacked={stackBottomTools ? 'true' : undefined}
+                  className={`${stackBottomTools ? 'col-span-full row-start-1' : 'flex-1'} flex items-center min-w-0 overflow-hidden`}
+                >
+                  {bottomTools}
+                </div>
+              )}
+              <div
+                ref={footerActionsRef}
+                className={`sendbox-actions flex items-center gap-1${stackBottomTools ? ' row-start-2 col-start-3' : ''}`}
+              >
+                {renderedRightTools}
+                {renderedSpeechButton}
+                {sendButtonPrefix}
+                {renderActionButtons()}
+              </div>
             </div>
-            {bottomTools && <div className='flex-1 flex items-center min-w-0 overflow-hidden'>{bottomTools}</div>}
-            <div className='sendbox-actions flex items-center gap-1'>
-              {renderedRightTools}
-              {renderedSpeechButton}
-              {sendButtonPrefix}
-              {renderActionButtons()}
-            </div>
-          </div>
+          </SendBoxFooterContext.Provider>
         )}
       </div>
     </div>

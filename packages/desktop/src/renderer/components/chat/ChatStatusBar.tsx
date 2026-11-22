@@ -6,7 +6,7 @@
 
 import { Tooltip } from '@arco-design/web-react';
 import { BookOpen, Lightning, Timer } from '@icon-park/react';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ContextUsageIndicator from '@renderer/components/agent/ContextUsageIndicator';
@@ -28,6 +28,10 @@ interface ChatStatusBarProps {
 
 /** Rough chars-per-token ratio for the pre-usage streaming estimate. */
 const CHARS_PER_TOKEN = 4;
+/** Space between segments, and the label gap a compact segment takes back. */
+const SEGMENT_GAP_PX = 16;
+const COMPACT_SEGMENT_GAP_PX = 10;
+const LABEL_GAP_PX = 4;
 
 const formatSeconds = (ms: number): string => {
   const seconds = ms / 1000;
@@ -59,6 +63,33 @@ const ChatStatusBar: React.FC<ChatStatusBarProps> = ({
   const { t, i18n } = useTranslation();
   const locale = i18n.language;
   const [now, setNow] = useState(() => Date.now());
+  const visible = Boolean(usageStats) || running;
+  const barRef = useRef<HTMLDivElement>(null);
+  const [compact, setCompact] = useState(false);
+
+  // A narrow send box (a team member's column) cannot fit the labelled strip.
+  // Drop the labels then, keeping icons and numbers, so nothing is clipped.
+  // Collapsed labels keep their text, so the full width is still measurable.
+  useLayoutEffect(() => {
+    const bar = barRef.current;
+    const slot = bar?.parentElement;
+    if (!visible || !bar || !slot) return;
+    const measure = () => {
+      const labels = Array.from(bar.querySelectorAll<HTMLElement>('[data-status-label]'));
+      let full = bar.offsetWidth;
+      for (const label of labels) full += label.scrollWidth - label.clientWidth;
+      if (bar.dataset.compact) {
+        full += (SEGMENT_GAP_PX - COMPACT_SEGMENT_GAP_PX) * (bar.children.length - 1) + LABEL_GAP_PX * labels.length;
+      }
+      setCompact(full > slot.clientWidth);
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const resize = new ResizeObserver(measure);
+    resize.observe(slot);
+    resize.observe(bar);
+    return () => resize.disconnect();
+  }, [visible]);
 
   // Tick while running so elapsed / estimated speed advance live.
   useEffect(() => {
@@ -69,7 +100,7 @@ const ChatStatusBar: React.FC<ChatStatusBarProps> = ({
     return () => clearInterval(timer);
   }, [running]);
 
-  if (!usageStats && !running) {
+  if (!visible) {
     return null;
   }
 
@@ -96,18 +127,34 @@ const ChatStatusBar: React.FC<ChatStatusBarProps> = ({
   // Response time: frozen after finish, live while the turn runs.
   const elapsedMs = finalElapsedMs ?? (running && startedAtMs && now > startedAtMs ? now - startedAtMs : null);
 
-  const segment = (icon: React.ReactNode, label: string, value: React.ReactNode, tooltip: React.ReactNode) => (
-    <Tooltip content={tooltip} position='top' mini className='chat-status-bar-tooltip'>
-      <span className='flex items-center gap-4px whitespace-nowrap cursor-default'>
+  const segment = (icon: React.ReactNode, label: string, value: React.ReactNode, tooltip: string) => (
+    <Tooltip
+      content={compact ? `${label} · ${tooltip}` : tooltip}
+      position='top'
+      mini
+      className='chat-status-bar-tooltip'
+    >
+      <span className='flex items-center whitespace-nowrap cursor-default' style={{ columnGap: LABEL_GAP_PX }}>
         <span className='inline-flex items-center text-14px leading-none'>{icon}</span>
-        <span>{label}</span>
+        <span
+          data-status-label
+          className={compact ? 'inline-block max-w-0 overflow-hidden' : undefined}
+          style={compact ? { marginInlineStart: -LABEL_GAP_PX } : undefined}
+        >
+          {label}
+        </span>
         <span className='text-t-secondary font-[500] tabular-nums'>{value}</span>
       </span>
     </Tooltip>
   );
 
   return (
-    <div className={`chat-status-bar flex items-center gap-16px text-12px text-t-tertiary ${className}`}>
+    <div
+      ref={barRef}
+      data-compact={compact ? 'true' : undefined}
+      className={`chat-status-bar flex items-center text-12px text-t-tertiary ${className}`}
+      style={{ columnGap: compact ? COMPACT_SEGMENT_GAP_PX : SEGMENT_GAP_PX }}
+    >
       {segment(
         <Lightning theme='outline' size='13' fill='currentColor' />,
         t('conversation.statusBar.speed', 'Speed'),

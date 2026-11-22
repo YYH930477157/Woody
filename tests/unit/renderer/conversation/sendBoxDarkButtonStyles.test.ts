@@ -47,3 +47,29 @@ describe('SendBox action button styles', () => {
     expect(tsx).not.toContain('<ArrowUp');
   });
 });
+
+describe('SendBox footer in a narrow box', () => {
+  // Rules whose selector list is exactly `selector`, at any nesting level.
+  const exactRuleBodies = (selector: string): string[] =>
+    (css.match(/[^{}]+\{[^{}]*\}/g) ?? [])
+      .filter(
+        (rule) =>
+          rule
+            .slice(0, rule.indexOf('{'))
+            .replace(/\/\*[\s\S]*?\*\//g, '')
+            .trim() === selector
+      )
+      .map((rule) => rule.slice(rule.indexOf('{') + 1, -1));
+
+  it('keeps the left buttons at full width so the right-side pills cannot cover them', () => {
+    expect(exactRuleBodies('.sendbox-tools').join('\n')).toContain('min-width: max-content');
+  });
+
+  it('lets the right side give way, so its pills shrink instead of overflowing', () => {
+    expect(exactRuleBodies('.sendbox-actions').join('\n')).toContain('min-width: 0');
+  });
+
+  it('still lets the mobile toolbar scroll', () => {
+    expect(exactRuleBodies('.sendbox-tools-scroll-mobile').join('\n')).toContain('min-width: 0');
+  });
+});

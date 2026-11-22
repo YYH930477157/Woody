@@ -495,8 +495,15 @@ body[arco-theme='dark'] .sendbox-panel .send-button-custom--disabled svg * {
   transform: none !important;
 }
 
-/* Allow sendbox tools area to shrink so the send button stays visible */
+/* The left buttons keep their width: their group never shrinks, so a narrower
+ * box only let them spill under the right-side pills. The right side gives way
+ * instead: its pills already shrink and scroll their text, and the send button
+ * stays rigid. (Mobile scrolls the left tools; see .sendbox-tools-scroll-mobile.) */
 .sendbox-tools {
+  min-width: max-content;
+}
+
+.sendbox-actions {
   min-width: 0;
 }
 
