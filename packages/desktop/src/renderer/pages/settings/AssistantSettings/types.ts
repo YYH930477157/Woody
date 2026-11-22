@@ -124,6 +124,8 @@ export type AssistantEditorViewModel = {
     availableSkills: SkillInfo[];
     selectedSkills: string[];
     setSelectedSkills: (value: string[]) => void;
+    customSkills?: string[];
+    setCustomSkills?: (value: string[]) => void;
     pendingSkills: Array<{ name: string; description: string }>;
     setDeletePendingSkillName: (value: string | null) => void;
     setDeleteCustomSkillName: (value: string | null) => void;

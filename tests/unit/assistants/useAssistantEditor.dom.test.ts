@@ -714,4 +714,40 @@ describe('useAssistantEditor', () => {
 
     consoleErrorSpy.mockRestore();
   });
+
+  it('preserves custom_skill_names when opening a builtin expert assistant for inspection', async () => {
+    const builtinExpert: AssistantListItem = {
+      id: 'woody-meter-lead',
+      name: 'Meter Lead',
+      sort_order: 1,
+      source: 'builtin',
+      enabled: true,
+      agent_id: 'agent-aionrs',
+      agent: { type: 'aionrs', source: 'internal' },
+    };
+    (ipcBridge.assistants.get.invoke as any).mockResolvedValue({
+      ...mockAssistantDetail,
+      id: 'woody-meter-lead',
+      source: 'builtin',
+      capabilities: {
+        default_skill_ids: ['woody-meter-business'],
+        custom_skill_names: ['woody-codebase-memory'],
+        default_disabled_builtin_skill_ids: [],
+      },
+    });
+
+    const { result } = renderHook(() =>
+      useAssistantEditor({
+        ...defaultParams,
+        activeAssistant: builtinExpert,
+      })
+    );
+
+    await act(async () => {
+      await result.current.handleEdit(builtinExpert);
+    });
+
+    expect(result.current.selectedSkills).toEqual(['woody-meter-business']);
+    expect(result.current.customSkills).toEqual(['woody-codebase-memory']);
+  });
 });

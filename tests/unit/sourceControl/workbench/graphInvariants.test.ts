@@ -35,7 +35,7 @@ const layOut = (commits: Commit[], known?: Set<string>) => {
 };
 const lanesLeaving = (row: GraphRow) => new Set(row.edges.filter((e) => e.toY === 2).map((e) => e.toLane));
 const lanesEntering = (row: GraphRow) => new Set(row.edges.filter((e) => e.fromY === 0).map((e) => e.fromLane));
-const sorted = (lanes: Set<number>) => [...lanes].sort((a, b) => a - b);
+const sorted = (lanes: Set<number>) => [...lanes].toSorted((a, b) => a - b);
 
 const expectInsideItsWidth = (row: GraphRow, context: string) => {
   expect(row.lane, context).toBeGreaterThanOrEqual(0);

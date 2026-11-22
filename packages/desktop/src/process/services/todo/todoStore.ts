@@ -75,7 +75,7 @@ class TodoFileLock {
           /* stat failed — retry loop handles it */
         }
         if (Date.now() > deadline) {
-          throw new Error(`todo store lock timeout: ${this.lockDir}`);
+          throw new Error(`todo store lock timeout: ${this.lockDir}`, { cause: error });
         }
         await sleep(LOCK_RETRY_DELAY_MS);
       }

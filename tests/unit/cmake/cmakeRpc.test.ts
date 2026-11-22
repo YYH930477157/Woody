@@ -8,7 +8,7 @@ import { CmakeService } from '@/process/services/cmake/cmakeService';
 describe('shared CMake AI access', () => {
   const cleanups: Array<() => Promise<unknown>> = [];
   afterEach(async () => {
-    for (const cleanup of cleanups.reverse()) await cleanup();
+    for (const cleanup of cleanups.toReversed()) await cleanup();
     cleanups.length = 0;
   });
 

@@ -9,6 +9,7 @@ import React from 'react';
  */
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { SWRConfig } from 'swr';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -131,6 +132,14 @@ describe('getAssistantsUsingSkill', () => {
       makeAssistant({ id: 'a3', enabled_skills: ['other'] }),
     ] as never[];
     expect(getAssistantsUsingSkill('demo-skill', assistants).map((a) => a.id)).toEqual(['a1', 'a2']);
+  });
+
+  it('treats auto-injected builtin skills as active unless disabled_builtin_skills excludes them', () => {
+    const assistants = [
+      makeAssistant({ id: 'a1', disabled_builtin_skills: [] }),
+      makeAssistant({ id: 'a2', disabled_builtin_skills: ['cron'] }),
+    ] as never[];
+    expect(getAssistantsUsingSkill('cron', assistants, { isAutoInject: true }).map((a) => a.id)).toEqual(['a1']);
   });
 });
 
@@ -267,5 +276,78 @@ describe('SkillDetailPage', () => {
       prompt:
         "I'd like to improve this Skill: demo-skill\n\nPlease review its content and help me make improvements. My suggestions are:",
     });
+  });
+
+  it('removes custom_skill_names references when detaching a skill attached via custom_skill_names', async () => {
+    mocks.assistantsList.mockResolvedValue([
+      makeAssistant({
+        id: 'expert-copy',
+        name: 'Meter Lead (Copy)',
+        enabled_skills: ['woody-meter-business'],
+        custom_skill_names: ['demo-skill'],
+      }),
+    ]);
+
+    render(
+      <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+        <SkillDetailPage />
+      </SWRConfig>
+    );
+
+    const detachBtn = await screen.findByTestId('btn-detach-expert-copy');
+    fireEvent.click(detachBtn);
+
+    await waitFor(() =>
+      expect(mocks.assistantsUpdate).toHaveBeenCalledWith({
+        id: 'expert-copy',
+        enabled_skills: ['woody-meter-business'],
+        custom_skill_names: [],
+      })
+    );
+  });
+
+  it('updates disabled_builtin_skills when detaching or re-attaching an auto-injected builtin skill', async () => {
+    mocks.params.skillName = 'cron';
+    mocks.listAvailableSkills.mockResolvedValue([
+      {
+        name: 'cron',
+        description: 'Scheduled tasks skill.',
+        location: '/tmp/builtin/auto-inject/cron',
+        is_auto_inject: true,
+        is_custom: false,
+        source: 'builtin',
+      },
+    ]);
+    mocks.assistantsList.mockResolvedValue([
+      makeAssistant({ id: 'a1', name: 'Active User', disabled_builtin_skills: [] }),
+      makeAssistant({ id: 'a2', name: 'Opted Out User', disabled_builtin_skills: ['cron'] }),
+    ]);
+
+    render(
+      <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+        <SkillDetailPage />
+      </SWRConfig>
+    );
+
+    const detachBtn = await screen.findByTestId('btn-detach-a1');
+    fireEvent.click(detachBtn);
+
+    await waitFor(() =>
+      expect(mocks.assistantsUpdate).toHaveBeenCalledWith({
+        id: 'a1',
+        disabled_builtin_skills: ['cron'],
+      })
+    );
+
+    fireEvent.click(screen.getByTestId('btn-add-assistant'));
+    const addItem = await screen.findByTestId('menu-add-assistant-a2');
+    fireEvent.click(addItem);
+
+    await waitFor(() =>
+      expect(mocks.assistantsUpdate).toHaveBeenCalledWith({
+        id: 'a2',
+        disabled_builtin_skills: [],
+      })
+    );
   });
 });

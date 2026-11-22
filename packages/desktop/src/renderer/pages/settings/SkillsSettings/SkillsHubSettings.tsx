@@ -7,7 +7,7 @@ import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
-import SkillUsedByStack, { getAssistantsUsingSkill } from './SkillUsedByStack';
+import SkillUsedByStack, { getAssistantsUsingSkill, getSkillAvatarColorClass } from './SkillUsedByStack';
 import SettingsPageWrapper from '../components/SettingsPageWrapper';
 import SettingsPageHeader from '../components/SettingsPageHeader';
 import TalkToButlerButton from '@/renderer/components/base/TalkToButlerButton';
@@ -67,23 +67,6 @@ interface SkillImportHistoryGroup {
 // Normalize skill name for data-testid usage
 const normalizeTestId = (name: string): string => {
   return name.replace(/[:/\s<>"'|?*]/g, '-');
-};
-
-const getAvatarColorClass = (name: string) => {
-  if (!name) return 'bg-[#165DFF] text-white';
-  const colors = [
-    'bg-[#165DFF] text-white', // Blue
-    'bg-[#00B42A] text-white', // Green
-    'bg-[#722ED1] text-white', // Purple
-    'bg-[#F5319D] text-white', // Pink
-    'bg-[#F77234] text-white', // Orange
-    'bg-[#14C9C9] text-white', // Cyan
-  ];
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return colors[Math.abs(hash) % colors.length];
 };
 
 const formatBytes = (bytes?: number): string | null => {
@@ -670,7 +653,7 @@ const SkillsHubSettings: React.FC<SkillsHubSettingsProps> = ({ withWrapper = tru
             </div>
           ) : (
             <div
-              className={`w-40px h-40px rd-10px flex items-center justify-center font-bold text-16px shadow-sm text-transform-uppercase ${getAvatarColorClass(skill.name)}`}
+              className={`w-40px h-40px rd-10px flex items-center justify-center font-bold text-16px shadow-sm text-transform-uppercase ${getSkillAvatarColorClass(skill.name)}`}
             >
               {skill.name.charAt(0).toUpperCase()}
             </div>
@@ -685,7 +668,9 @@ const SkillsHubSettings: React.FC<SkillsHubSettingsProps> = ({ withWrapper = tru
           )}
         </div>
         <div className='shrink-0 sm:self-center flex items-center justify-end ps-4px'>
-          <SkillUsedByStack assistants={getAssistantsUsingSkill(skill.name, assistantCatalog ?? [])} />
+          <SkillUsedByStack
+            assistants={getAssistantsUsingSkill(skill.name, assistantCatalog ?? [], { isAutoInject: isAuto })}
+          />
         </div>
       </div>
     );
@@ -854,7 +839,7 @@ const SkillsHubSettings: React.FC<SkillsHubSettingsProps> = ({ withWrapper = tru
               )}
               <div className='shrink-0 flex items-start sm:mt-2px'>
                 <div
-                  className={`w-40px h-40px rd-10px flex items-center justify-center font-bold text-16px shadow-sm text-transform-uppercase ${getAvatarColorClass(skill.name)}`}
+                  className={`w-40px h-40px rd-10px flex items-center justify-center font-bold text-16px shadow-sm text-transform-uppercase ${getSkillAvatarColorClass(skill.name)}`}
                 >
                   {skill.name.charAt(0).toUpperCase()}
                 </div>

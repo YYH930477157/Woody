@@ -8,19 +8,55 @@ import type { SkillFileNode } from '@/common/adapter/ipcBridge';
 import fs from 'fs/promises';
 import path from 'path';
 
+export type SkillFileServiceOptions = {
+  getAllowedLocations?: () => Promise<string[]>;
+};
+
+const normalizeComparisonPath = (filePath: string): string =>
+  process.platform === 'win32' ? filePath.toLowerCase() : filePath;
+
 const isWithin = (root: string, target: string): boolean => {
-  const relative = path.relative(root, target);
+  const relative = path.relative(normalizeComparisonPath(root), normalizeComparisonPath(target));
   return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
 };
 
-const resolveSkillRoot = async (skillLocation: string): Promise<string> => {
+const toSkillDirectory = (skillLocation: string): string => {
+  const location = path.resolve(skillLocation);
+  return path.basename(location).toLowerCase() === 'skill.md' ? path.dirname(location) : location;
+};
+
+const resolveAllowedRoots = async (getAllowedLocations: () => Promise<string[]>): Promise<string[]> => {
+  const locations = await getAllowedLocations();
+  const roots = await Promise.all(
+    locations
+      .filter((loc): loc is string => typeof loc === 'string' && path.isAbsolute(loc))
+      .map(async (loc) => {
+        try {
+          return await fs.realpath(toSkillDirectory(loc));
+        } catch {
+          return null;
+        }
+      })
+  );
+  return roots.filter((item): item is string => item !== null);
+};
+
+const resolveSkillRoot = async (
+  skillLocation: string,
+  getAllowedLocations?: () => Promise<string[]>
+): Promise<string> => {
   if (!path.isAbsolute(skillLocation)) {
     throw new Error('Skill location must be absolute');
   }
 
-  const location = path.resolve(skillLocation);
-  const root = path.basename(location).toLowerCase() === 'skill.md' ? path.dirname(location) : location;
-  return fs.realpath(root);
+  const root = await fs.realpath(toSkillDirectory(skillLocation));
+  if (getAllowedLocations) {
+    const allowedRoots = await resolveAllowedRoots(getAllowedLocations);
+    if (!allowedRoots.some((allowedRoot) => isWithin(allowedRoot, root))) {
+      throw new Error('Skill location is outside registered skill directories');
+    }
+  }
+  return root;
 };
 
 const resolveExistingEntry = async (root: string, relativePath: string): Promise<string> => {
@@ -71,14 +107,14 @@ const listDirectory = async (root: string, directory: string): Promise<SkillFile
   return nodes.toSorted(compareEntries);
 };
 
-export const createSkillFileService = () => ({
+export const createSkillFileService = (options: SkillFileServiceOptions = {}) => ({
   async list(skillLocation: string): Promise<SkillFileNode[]> {
-    const root = await resolveSkillRoot(skillLocation);
+    const root = await resolveSkillRoot(skillLocation, options.getAllowedLocations);
     return listDirectory(root, root);
   },
 
   async read(skillLocation: string, relativePath: string): Promise<string> {
-    const root = await resolveSkillRoot(skillLocation);
+    const root = await resolveSkillRoot(skillLocation, options.getAllowedLocations);
     const target = await resolveExistingEntry(root, relativePath);
     return fs.readFile(target, 'utf8');
   },

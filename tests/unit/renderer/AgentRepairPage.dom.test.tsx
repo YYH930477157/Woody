@@ -11,8 +11,8 @@
  * to find the row gone.
  */
 
-import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 
 vi.mock('react-i18next', () => ({
@@ -48,7 +48,9 @@ vi.mock('@renderer/pages/settings/AgentSettings/AgentRepairPanel', () => ({
   default: () => <div data-testid='agent-repair-panel-stub' />,
 }));
 vi.mock('@renderer/pages/settings/AgentSettings/BoundAssistants', () => ({
-  BoundAssistantList: () => null,
+  BoundAssistantList: ({ onOpenAssistant }: { onOpenAssistant?: (id: string) => void }) => (
+    <button type='button' data-testid='open-bound-assistant' onClick={() => onOpenAssistant?.('woody-meter-lead')} />
+  ),
   getBoundAssistants: () => [],
   useAssistantsForAgents: () => ({ assistants: [] }),
 }));
@@ -66,6 +68,10 @@ const agent = {
 };
 
 describe('AgentRepairPage', () => {
+  beforeEach(() => {
+    navigate.mockReset();
+  });
+
   it('keeps the repair panel mounted while the catalog revalidates in the background', () => {
     useManagedAgents.mockReturnValue({ agents: [agent], isRefreshing: true, refreshCatalog: vi.fn() });
 
@@ -82,5 +88,16 @@ describe('AgentRepairPage', () => {
 
     expect(screen.queryByTestId('agent-repair-panel-stub')).toBeNull();
     expect(navigate).toHaveBeenCalledWith('/settings/agent', { replace: true });
+  });
+
+  it('navigates directly to /assistants with editor state when opening a bound assistant', () => {
+    useManagedAgents.mockReturnValue({ agents: [agent], isRefreshing: false, refreshCatalog: vi.fn() });
+
+    render(<AgentRepairPage />);
+    fireEvent.click(screen.getByTestId('open-bound-assistant'));
+
+    expect(navigate).toHaveBeenCalledWith('/assistants', {
+      state: { openAssistantEditor: true, openAssistantId: 'woody-meter-lead' },
+    });
   });
 });

@@ -38,7 +38,7 @@ export function initWebsitePasswordsBridge(): void {
         return await handler(params);
       } catch (error) {
         const code = error instanceof Error && safeCodes.test(error.message) ? error.message : 'WEBSITE_PASSWORDS_IO';
-        throw new Error(code);
+        throw new Error(code, { cause: error });
       }
     };
   const accountId = (params: { id: string }): string => {

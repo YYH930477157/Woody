@@ -4,4 +4,4 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export { createSkillFileService } from './skillFiles';
+export { createSkillFileService, type SkillFileServiceOptions } from './skillFiles';

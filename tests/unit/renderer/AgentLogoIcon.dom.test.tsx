@@ -4,13 +4,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // AgentLogoIcon lives in AgentBadge but is a named export consumed by
 // AgentModeSelector, MobileConversationBrand, and ChatLayout.
-import { AgentLogoIcon } from '@/renderer/components/agent/AgentBadge';
+import AgentBadge, { AgentLogoIcon } from '@/renderer/components/agent/AgentBadge';
 import ThemedLogo from '@/renderer/components/agent/ThemedLogo';
 
 const { useAgentLogosMock } = vi.hoisted(() => ({
@@ -81,5 +82,30 @@ describe('AgentLogoIcon', () => {
     render(<AgentLogoIcon agentLogoIsFallback />);
 
     expect(screen.getByTestId('robot-fallback')).toBeInTheDocument();
+  });
+
+  it('navigates directly to /assistants with editor open state when AgentBadge is clicked', () => {
+    useAgentLogosMock.mockReturnValue({});
+    let capturedLocation: ReturnType<typeof useLocation> | undefined;
+    const Probe = () => {
+      capturedLocation = useLocation();
+      return null;
+    };
+
+    render(
+      <MemoryRouter initialEntries={['/conversation/1']}>
+        <AgentBadge agent_name='Meter Lead' agentLogo='⚡' agentLogoIsEmoji assistantId='woody-meter-lead' />
+        <Probe />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByTestId('agent-badge'));
+
+    expect(capturedLocation?.pathname).toBe('/assistants');
+    expect(capturedLocation?.search).toBe('?highlight=woody-meter-lead');
+    expect(capturedLocation?.state).toEqual({
+      openAssistantEditor: true,
+      openAssistantId: 'woody-meter-lead',
+    });
   });
 });

@@ -168,6 +168,8 @@ const AssistantSettings: React.FC = () => {
       availableSkills: editor.availableSkills,
       selectedSkills: editor.selectedSkills,
       setSelectedSkills: editor.setSelectedSkills,
+      customSkills: editor.customSkills,
+      setCustomSkills: editor.setCustomSkills,
       pendingSkills: editor.pendingSkills,
       setDeletePendingSkillName: editor.setDeletePendingSkillName,
       setDeleteCustomSkillName: editor.setDeleteCustomSkillName,

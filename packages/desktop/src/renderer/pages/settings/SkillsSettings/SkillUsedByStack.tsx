@@ -18,14 +18,40 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatNameList } from '@/renderer/services/i18n/list';
 
+export const getSkillAvatarColorClass = (name: string): string => {
+  if (!name) return 'bg-primary-6 text-white';
+  const colors = [
+    'bg-primary-6 text-white',
+    'bg-success-6 text-white',
+    'bg-brand text-white',
+    'bg-danger-5 text-white',
+    'bg-warning-6 text-white',
+    'bg-aou-7 text-white',
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
+};
+
 /**
- * Assistants that have this skill attached (enabled or custom list).
- * The live API may omit the skill arrays on some assistants, so guard both.
+ * Assistants that have this skill attached (enabled or custom list, or not
+ * excluded via `disabled_builtin_skills` for auto-injected builtin skills).
+ * The live API may omit the skill arrays on some assistants, so guard all.
  */
-export const getAssistantsUsingSkill = (skillName: string, assistants: Assistant[]): Assistant[] =>
-  assistants.filter(
+export const getAssistantsUsingSkill = (
+  skillName: string,
+  assistants: Assistant[],
+  options?: { isAutoInject?: boolean }
+): Assistant[] => {
+  if (options?.isAutoInject) {
+    return assistants.filter((a) => !(a.disabled_builtin_skills ?? []).includes(skillName));
+  }
+  return assistants.filter(
     (a) => (a.enabled_skills ?? []).includes(skillName) || (a.custom_skill_names ?? []).includes(skillName)
   );
+};
 
 const SkillUsedByStack: React.FC<{ assistants: Assistant[]; max?: number }> = ({ assistants, max = 4 }) => {
   const { t, i18n } = useTranslation();

@@ -9,7 +9,7 @@ import type { SkillFileNode } from '@/common/adapter/ipcBridge';
 import CodeEditor from '@/renderer/pages/conversation/Preview/components/editors/CodeEditor';
 import MarkdownViewer from '@/renderer/pages/conversation/Preview/components/viewers/MarkdownViewer';
 import { Empty, Spin, Tree } from '@arco-design/web-react';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 type SkillFileBrowserProps = {
@@ -46,6 +46,7 @@ const SkillFileBrowser: React.FC<SkillFileBrowserProps> = ({ skill }) => {
   const [loadingTree, setLoadingTree] = useState(true);
   const [loadingContent, setLoadingContent] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
+  const fileLoadRequestRef = useRef(0);
 
   const isMarkdown = /\.md$/i.test(selectedPath);
   const skillRoot = useMemo(() => toSkillRoot(skill.location), [skill.location]);
@@ -56,6 +57,7 @@ const SkillFileBrowser: React.FC<SkillFileBrowserProps> = ({ skill }) => {
 
   const loadFile = useCallback(
     async (relativePath: string) => {
+      const requestId = ++fileLoadRequestRef.current;
       setSelectedPath(relativePath);
       setLoadingContent(true);
       setLoadFailed(false);
@@ -64,13 +66,17 @@ const SkillFileBrowser: React.FC<SkillFileBrowserProps> = ({ skill }) => {
           skill_location: skill.location,
           relative_path: relativePath,
         });
+        if (fileLoadRequestRef.current !== requestId) return;
         setContent(nextContent);
       } catch (error) {
+        if (fileLoadRequestRef.current !== requestId) return;
         console.error('[SkillFileBrowser] Failed to read skill file:', error);
         setContent('');
         setLoadFailed(true);
       } finally {
-        setLoadingContent(false);
+        if (fileLoadRequestRef.current === requestId) {
+          setLoadingContent(false);
+        }
       }
     },
     [skill.location]
@@ -78,6 +84,7 @@ const SkillFileBrowser: React.FC<SkillFileBrowserProps> = ({ skill }) => {
 
   useEffect(() => {
     let active = true;
+    fileLoadRequestRef.current += 1;
     setLoadingTree(true);
     setLoadFailed(false);
     setNodes([]);
@@ -102,6 +109,7 @@ const SkillFileBrowser: React.FC<SkillFileBrowserProps> = ({ skill }) => {
 
     return () => {
       active = false;
+      fileLoadRequestRef.current += 1;
     };
   }, [loadFile, skill.location]);
 

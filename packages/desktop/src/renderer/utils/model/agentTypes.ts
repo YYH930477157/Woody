@@ -17,7 +17,7 @@ import type { TFunction } from 'i18next';
 export const MANAGED_AGENTS_SWR_KEY = 'agents.managed';
 
 /** Type of an agent. */
-export type AgentType = 'acp' | 'remote' | 'aionrs' | 'openclaw-gateway' | 'nanobot';
+export type AgentType = 'acp' | 'remote' | 'aionrs' | 'antigravity' | 'openclaw-gateway' | 'nanobot';
 
 /** Source tier of an agent row, mirroring backend `agent_source` enum. */
 export type AgentSource = 'internal' | 'builtin' | 'extension' | 'custom';

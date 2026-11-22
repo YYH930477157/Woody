@@ -57,6 +57,11 @@ const CapabilitiesRedirect: React.FC = () => {
   return <Navigate to={tab === 'tools' ? '/settings/tools' : '/settings/skills'} replace />;
 };
 
+const AssistantsRedirect: React.FC = () => {
+  const { search, state } = useLocation();
+  return <Navigate to={{ pathname: '/assistants', search }} state={state} replace />;
+};
+
 const LayoutContext = createContext<React.ReactElement | null>(null);
 
 const ProtectedLayout: React.FC = () => {
@@ -112,7 +117,7 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
             <Route path='/assistants' element={withRouteFallback(AssistantSettings)} />
             {/* Assistants moved out of Settings to a top-level entry; keep a redirect
               so old deep links / back-nav still land on the new page. */}
-            <Route path='/settings/assistants' element={<Navigate to='/assistants' replace />} />
+            <Route path='/settings/assistants' element={<AssistantsRedirect />} />
             <Route path='/settings/agent' element={withRouteFallback(AgentSettings)} />
             <Route path='/settings/agent/:id/repair' element={withRouteFallback(AgentRepairPage)} />
             {/* Skills and Tools are top-level settings entries. */}

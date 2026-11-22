@@ -452,7 +452,44 @@ describe('AssistantEditorSections', () => {
     );
 
     const defaultsCard = screen.getByTestId('assistant-card-defaults');
-    expect(within(defaultsCard).getByText('User MCP、Disabled MCP、Builtin MCP')).toBeInTheDocument();
+    expect(within(defaultsCard).getByText('User MCP, Disabled MCP, and Builtin MCP')).toBeInTheDocument();
+  });
+
+  it('includes custom_skill_names in the read-only skill summary for builtin expert assistants', () => {
+    renderWithProviders(
+      <AssistantEditorSections
+        editor={createEditor({
+          isCreating: false,
+          skills: {
+            availableSkills: [],
+            selectedSkills: ['woody-meter-business'],
+            setSelectedSkills: vi.fn(),
+            customSkills: ['woody-codebase-memory'],
+            setCustomSkills: vi.fn(),
+            pendingSkills: [],
+            setDeletePendingSkillName: vi.fn(),
+            setDeleteCustomSkillName: vi.fn(),
+            builtinAutoSkills: [],
+            disabledBuiltinSkills: [],
+            setDisabledBuiltinSkills: vi.fn(),
+          },
+        })}
+        activeAssistant={{
+          id: 'woody-meter-lead',
+          source: 'builtin',
+          name: 'Meter Lead',
+          description: '',
+          avatar: '⚡',
+          enabled: true,
+          sort_order: 1,
+          agent_id: 'agent-aionrs',
+          agent: { type: 'aionrs', source: 'internal' },
+        }}
+      />
+    );
+
+    const defaultsCard = screen.getByTestId('assistant-card-defaults');
+    expect(within(defaultsCard).getByText('woody-meter-business and woody-codebase-memory')).toBeInTheDocument();
   });
 
   it('uses provider-backed models for aionrs even when detected agent metadata exposes model options', () => {

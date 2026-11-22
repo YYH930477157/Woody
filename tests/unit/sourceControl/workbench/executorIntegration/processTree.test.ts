@@ -77,7 +77,7 @@ else {
       } finally {
         signal.abort();
         // Cleanup only the exact PIDs recorded by this fixture, never name-based process matching.
-        for (const pid of pids.reverse()) {
+        for (const pid of pids.toReversed()) {
           if (!alive(pid)) continue;
           try {
             if (process.platform === 'win32')

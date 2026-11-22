@@ -28,32 +28,15 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import useSWR, { mutate as swrMutate } from 'swr';
 import SettingsPageWrapper from '../components/SettingsPageWrapper';
 import SkillFileBrowser from './SkillFileBrowser';
-import { getAssistantsUsingSkill } from './SkillUsedByStack';
+import { getAssistantsUsingSkill, getSkillAvatarColorClass } from './SkillUsedByStack';
 
-interface SkillInfo {
+type SkillInfo = {
   name: string;
   description: string;
   location: string;
   is_auto_inject: boolean;
   is_custom: boolean;
   source?: 'builtin' | 'custom' | 'cron' | 'extension';
-}
-
-const getAvatarColorClass = (name: string) => {
-  if (!name) return 'bg-[#165DFF] text-white';
-  const colors = [
-    'bg-[#165DFF] text-white', // Blue
-    'bg-[#00B42A] text-white', // Green
-    'bg-[#722ED1] text-white', // Purple
-    'bg-[#F5319D] text-white', // Pink
-    'bg-[#F77234] text-white', // Orange
-    'bg-[#14C9C9] text-white', // Cyan
-  ];
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return colors[Math.abs(hash) % colors.length];
 };
 
 const SectionCard: React.FC<{
@@ -91,9 +74,10 @@ const SkillDetailPage: React.FC = () => {
   } = useSWR<Assistant[]>('assistants.list', () => ipcBridge.assistants.list.invoke());
 
   const skill = useMemo(() => (skills ?? []).find((s) => s.name === decodedName), [skills, decodedName]);
+  const isAutoInject = Boolean(skill?.source === 'builtin' && skill?.is_auto_inject);
   const usingAssistants = useMemo(
-    () => getAssistantsUsingSkill(decodedName, assistants ?? []),
-    [assistants, decodedName]
+    () => getAssistantsUsingSkill(decodedName, assistants ?? [], { isAutoInject }),
+    [assistants, decodedName, isAutoInject]
   );
   // Attachment editing covers user + generated assistants; builtin assistants'
   // update endpoint only accepts agent_id/defaults (see useAssistantEditor).
@@ -146,15 +130,30 @@ const SkillDetailPage: React.FC = () => {
     async (assistant: Assistant, attach: boolean) => {
       setSaving(true);
       try {
-        const update: UpdateAssistantRequest = {
-          id: assistant.id,
-          enabled_skills: attach
-            ? Array.from(new Set([...(assistant.enabled_skills ?? []), decodedName]))
-            : (assistant.enabled_skills ?? []).filter((n) => n !== decodedName),
-        };
+        const hasCustomRef = !attach && (assistant.custom_skill_names ?? []).includes(decodedName);
+        const update: UpdateAssistantRequest = isAutoInject
+          ? {
+              id: assistant.id,
+              disabled_builtin_skills: attach
+                ? (assistant.disabled_builtin_skills ?? []).filter((n) => n !== decodedName)
+                : Array.from(new Set([...(assistant.disabled_builtin_skills ?? []), decodedName])),
+            }
+          : {
+              id: assistant.id,
+              enabled_skills: attach
+                ? Array.from(new Set([...(assistant.enabled_skills ?? []), decodedName]))
+                : (assistant.enabled_skills ?? []).filter((n) => n !== decodedName),
+              ...(hasCustomRef
+                ? { custom_skill_names: (assistant.custom_skill_names ?? []).filter((n) => n !== decodedName) }
+                : {}),
+            };
         await ipcBridge.assistants.update.invoke(update);
         Message.success(t('settings.skillsHub.detailAttachSuccess', { defaultValue: 'Assistants updated' }));
-        await Promise.all([mutateAssistants(), swrMutate('agents.boundAssistants.list')]);
+        await Promise.all([
+          mutateAssistants(),
+          swrMutate('agents.boundAssistants.list'),
+          swrMutate((key) => typeof key === 'string' && key.startsWith(`guid.assistant.detail.${assistant.id}.`)),
+        ]);
       } catch (error) {
         console.error('Failed to update assistant skills:', error);
         Message.error(t('settings.skillsHub.detailAttachError', { defaultValue: 'Failed to update assistants' }));
@@ -162,7 +161,7 @@ const SkillDetailPage: React.FC = () => {
         setSaving(false);
       }
     },
-    [decodedName, mutateAssistants, t]
+    [decodedName, isAutoInject, mutateAssistants, t]
   );
 
   // Assistants that can still be added: editable and not yet using the skill.
@@ -208,7 +207,7 @@ const SkillDetailPage: React.FC = () => {
             >
               <div className='flex gap-16px'>
                 <div
-                  className={`h-48px w-48px shrink-0 rounded-12px flex items-center justify-center text-18px font-bold shadow-sm text-transform-uppercase ${getAvatarColorClass(skill.name)}`}
+                  className={`h-48px w-48px shrink-0 rounded-12px flex items-center justify-center text-18px font-bold shadow-sm text-transform-uppercase ${getSkillAvatarColorClass(skill.name)}`}
                 >
                   {skill.name.charAt(0).toUpperCase()}
                 </div>

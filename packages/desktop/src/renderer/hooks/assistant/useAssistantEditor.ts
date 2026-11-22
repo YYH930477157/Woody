@@ -268,7 +268,7 @@ export const useAssistantEditor = ({
       setBuiltinAutoSkills(autoSkills);
       setAvailableMcpServers(mcpServers);
       setSelectedSkills(detail.capabilities.default_skill_ids ?? []);
-      setCustomSkills(isBuiltinAssistant(assistant) ? [] : (detail.capabilities.custom_skill_names ?? []));
+      setCustomSkills(detail.capabilities.custom_skill_names ?? []);
       setDisabledBuiltinSkills(detail.capabilities.default_disabled_builtin_skill_ids ?? []);
     } catch (error) {
       console.error('Failed to load assistant detail:', error);

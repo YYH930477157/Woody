@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -116,5 +116,33 @@ describe('SkillFileBrowser', () => {
     render(<SkillFileBrowser skill={{ location: '/tmp/skills/demo/SKILL.md' }} />);
 
     await waitFor(() => expect(screen.getByText("Could not load this skill's files.")).toBeInTheDocument());
+  });
+
+  it('ignores stale file reads when switching files before an earlier read resolves', async () => {
+    let resolveSlowSkillMd: (content: string) => void = () => {};
+    mocks.listSkillFiles.mockResolvedValue([
+      { name: 'SKILL.md', relativePath: 'SKILL.md', type: 'file' },
+      { name: 'notes.md', relativePath: 'notes.md', type: 'file' },
+    ]);
+    mocks.readSkillFile.mockImplementation(({ relative_path }: { relative_path: string }) => {
+      if (relative_path === 'SKILL.md') {
+        return new Promise<string>((resolve) => {
+          resolveSlowSkillMd = resolve;
+        });
+      }
+      return Promise.resolve('# Fresh notes');
+    });
+
+    render(<SkillFileBrowser skill={{ location: '/tmp/skills/demo/SKILL.md' }} />);
+
+    const notesButton = await screen.findByRole('button', { name: 'notes.md' });
+    fireEvent.click(notesButton);
+
+    await waitFor(() => expect(screen.getByTestId('markdown-viewer')).toHaveTextContent('# Fresh notes'));
+
+    resolveSlowSkillMd('# Stale SKILL.md');
+    await Promise.resolve();
+
+    expect(screen.getByTestId('markdown-viewer')).toHaveTextContent('# Fresh notes');
   });
 });

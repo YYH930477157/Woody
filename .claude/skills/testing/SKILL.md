@@ -91,7 +91,7 @@ bun run test:coverage     # Check coverage (before opening a PR)
 
 ### Step 4: Verify Coverage
 
-**Coverage target**: ≥ 80% for all source files matched by `vitest.config.ts` → `coverage.include` (currently `src/**/*.{ts,tsx}` plus a few scripts).
+**Coverage target**: ≥ 80% for all source files matched by `vitest.config.ts` → `coverage.include` (currently `packages/desktop/src/**/*.{ts,tsx}` plus shared packages/scripts).
 
 New source files are automatically included in coverage — no manual config changes needed. If a new file is accidentally excluded by a rule in `coverage.exclude`, remove it from the exclude list.
 

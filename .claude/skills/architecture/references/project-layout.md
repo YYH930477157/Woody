@@ -58,15 +58,14 @@ packages/desktop/
 ```
 packages/desktop/src/
 ├── renderer/              # React UI, browser-only code
-├── process/               # Electron main-process and worker code
+├── process/               # Electron main-process code
+│   ├── backend/           # AionCore binary resolution & startup
 │   ├── bridge/            # IPC handlers
-│   ├── services/          # Business logic
-│   ├── agent/             # AI platform connections
-│   ├── channels/          # Multi-channel messaging
-│   ├── extensions/        # Plugin system
-│   ├── webserver/         # WebUI server
-│   └── worker/            # Background workers
-├── common/                # Shared types, adapters, utilities
+│   ├── resources/         # Built-in MCP server entries
+│   ├── services/          # Desktop business logic (cmake, codebaseMemory, skills, sourceControl, terminal, etc.)
+│   ├── startup/           # Startup & database/backend handoff checks
+│   └── utils/             # Main-process utilities & migrations
+├── common/                # Shared types, HTTP/IPC adapters, utilities
 ├── preload/               # contextBridge / ipcRenderer exposure
 ├── index.ts               # Main process entry point
 └── types.d.ts             # Ambient declarations

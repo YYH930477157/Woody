@@ -4,16 +4,14 @@
 
 ```
 packages/desktop/src/process/
-├── bridge/        # IPC handlers — one file per domain
+├── backend/       # AionCore binary resolution
+├── bridge/        # IPC handlers — one file or subdir per domain
 │   ├── index.ts   # Registers all bridges
 │   └── *Bridge.ts # Individual bridge files
-├── services/      # Business logic services
-│   ├── cron/      # Complex service → subdirectory
-│   └── mcp-services/
-├── database/      # SQLite layer — schema, migrations, repositories
-├── task/          # Agent/task management — managers, factories
-├── utils/         # Main-process-only utilities
-└── i18n/          # Main-process i18n
+├── resources/     # Built-in MCP servers (browser, image-gen)
+├── services/      # Desktop business logic services (cmake, codebaseMemory, database, memory, skills, sourceControl, terminal, todo, websitePasswords)
+├── startup/       # Startup lifecycle & recovery
+└── utils/         # Main-process-only utilities & legacy-to-backend migrations
 ```
 
 ## Naming Conventions
@@ -94,25 +92,6 @@ Code imported by **both** main and renderer processes.
 - **Belongs**: shared types, API adapters, protocol converters, storage keys
 - **Does NOT belong**: React components → `renderer/`, Node.js-specific → `process/`
 
-### Agent (`packages/desktop/src/process/agent/`)
+### Backend Boundary (`aioncore`)
 
-One directory per AI platform (lowercase): `acp/`, `codex/`, `gemini/`, `nanobot/`, `openclaw/`. Each has `index.ts` entry. Runs in main or worker process.
-
-### Worker (`packages/desktop/src/process/worker/`)
-
-```
-packages/desktop/src/process/worker/
-├── fork/              # Fork management
-├── <platform>.ts      # One file per agent platform (lowercase)
-├── WorkerProtocol.ts  # Protocol definition (PascalCase — it's a class)
-└── index.ts
-```
-
-### Other Modules
-
-| Module     | Location                                   | Purpose                                            |
-| ---------- | ------------------------------------------ | -------------------------------------------------- |
-| Channels   | `packages/desktop/src/process/channels/`   | Multi-channel messaging (Lark, DingTalk, Telegram) |
-| Extensions | `packages/desktop/src/process/extensions/` | Plugin loading, resolvers, sandbox                 |
-| WebServer  | `packages/desktop/src/process/webserver/`  | Express + WebSocket for WebUI                      |
-| Adapter    | `packages/desktop/src/common/adapter/`     | Platform adapters (browser vs main environment)    |
+Agent runtimes, channels, extensions, cron execution, and the built-in assistant/skill catalog live in the `aioncore` backend rather than `packages/desktop/src/process/`. Desktop code talks to `aioncore` through `packages/desktop/src/common/adapter/` (`ipcBridge` / `httpBridge`).

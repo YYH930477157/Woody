@@ -13,11 +13,38 @@ import os from 'os';
 import path from 'path';
 import { ipcBridge } from '@/common';
 import { createSkillFileService } from '@process/services/skills';
-import { getSystemDir, ProcessEnv } from '@process/utils/initStorage';
+import { getCronSkillsDir, getSkillsDir, getSystemDir, ProcessEnv } from '@process/utils/initStorage';
 import { copyDirectoryRecursively, getConfigPath, getDataPath, resolveCliSafePath } from '@process/utils';
 
 export function initApplicationBridgeCore(): void {
-  const skillFiles = createSkillFileService();
+  const skillFiles = createSkillFileService({
+    getAllowedLocations: async () => {
+      const [skills, skillPaths, externalPaths] = await Promise.all([
+        ipcBridge.fs.listAvailableSkills
+          .invoke()
+          .then((items) => items.map((item) => item.location))
+          .catch(() => [] as string[]),
+        ipcBridge.fs.getSkillPaths
+          .invoke()
+          .then((paths) => [paths.user_skills_dir, paths.builtin_skills_dir])
+          .catch(() => [] as string[]),
+        ipcBridge.fs.getCustomExternalPaths
+          .invoke()
+          .then((items) => items.map((item) => item.path))
+          .catch(() => [] as string[]),
+      ]);
+      const bundledResourcesRoot =
+        (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath || path.join(process.cwd(), 'resources');
+      return [
+        getSkillsDir(),
+        getCronSkillsDir(),
+        path.join(bundledResourcesRoot, 'bundled-mcp', 'codebase-memory', 'skills'),
+        ...skills,
+        ...skillPaths,
+        ...externalPaths,
+      ];
+    },
+  });
   ipcBridge.fs.listSkillFiles.provider(({ skill_location }) => skillFiles.list(skill_location));
   ipcBridge.fs.readSkillFile.provider(({ skill_location, relative_path }) =>
     skillFiles.read(skill_location, relative_path)

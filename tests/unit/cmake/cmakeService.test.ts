@@ -132,7 +132,7 @@ describe('CMake workbench service', () => {
     expect(read.job.status).toBe('succeeded');
     expect(calls.every((call) => call.args.length === 1 && call.args[0] === '--version')).toBe(true);
     expect(read.job.toolChecks?.map((tool) => tool.status)).toEqual(Array(5).fill('found'));
-    expect((await fs.readdir(project)).sort()).toEqual(['CMakeLists.txt', 'cmake-variants.yaml'].sort());
+    expect((await fs.readdir(project)).toSorted()).toEqual(['CMakeLists.txt', 'cmake-variants.yaml'].toSorted());
   });
   it('reports all missing tools and retains the explicitly configured path', async () => {
     const instance = await service();

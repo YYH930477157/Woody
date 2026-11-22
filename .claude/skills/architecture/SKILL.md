@@ -28,26 +28,23 @@ Is it UI (React components, hooks, pages)?
 Is it an IPC handler responding to renderer calls?
   └── YES → packages/desktop/src/process/bridge/        → see references/process.md
 
-Is it business logic running in the main process?
+Is it business logic running in the Electron main process?
   └── YES → packages/desktop/src/process/services/      → see references/process.md
 
-Is it an AI platform connection (API client, message protocol)?
-  └── YES → packages/desktop/src/process/agent/<platform>/
+Is it a bundled MCP server entry or desktop resource adapter?
+  └── YES → packages/desktop/src/process/resources/ or resources/bundled-mcp/
 
-Is it a background task that runs in a worker thread?
-  └── YES → packages/desktop/src/process/worker/
+Is it startup / lifecycle / migration logic for the desktop process?
+  └── YES → packages/desktop/src/process/startup/ or packages/desktop/src/process/utils/
 
 Is it used by BOTH main and renderer processes?
   └── YES → packages/desktop/src/common/
 
-Is it an HTTP/WebSocket endpoint?
-  └── YES → packages/desktop/src/process/webserver/
+Is it WebUI static hosting or backend process launching?
+  └── YES → packages/web-host/ or packages/web-cli/
 
-Is it a plugin/extension resolver or loader?
-  └── YES → packages/desktop/src/process/extensions/
-
-Is it a messaging channel (Lark, DingTalk, Telegram)?
-  └── YES → packages/desktop/src/process/channels/
+Is it backend agent runtime, SQLite catalog, channels, cron, or built-in skills/assistants?
+  └── YES → Owned by the `aioncore` backend repository (see patches/README.md)
 ```
 
 ---
@@ -56,17 +53,16 @@ Is it a messaging channel (Lark, DingTalk, Telegram)?
 
 **Hard rules — violating them causes runtime crashes.**
 
-| Process                                             | Can use                                                    | Cannot use                                      |
-| --------------------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------- |
-| **Main** (`packages/desktop/src/process/`)          | Node.js, Electron main APIs, `fs`, `path`, `child_process` | DOM APIs (`document`, `window`, React)          |
-| **Renderer** (`packages/desktop/src/renderer/`)     | DOM APIs, React, browser APIs                              | Node.js APIs (`fs`, `path`), Electron main APIs |
-| **Worker** (`packages/desktop/src/process/worker/`) | Node.js APIs                                               | DOM APIs, Electron APIs                         |
-| **Preload** (`packages/desktop/src/preload/`)       | `contextBridge`, `ipcRenderer`                             | DOM manipulation, Node.js `fs`                  |
+| Process                                         | Can use                                                    | Cannot use                                      |
+| ----------------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------- |
+| **Main** (`packages/desktop/src/process/`)      | Node.js, Electron main APIs, `fs`, `path`, `child_process` | DOM APIs (`document`, `window`, React)          |
+| **Renderer** (`packages/desktop/src/renderer/`) | DOM APIs, React, browser APIs                              | Node.js APIs (`fs`, `path`), Electron main APIs |
+| **Preload** (`packages/desktop/src/preload/`)   | `contextBridge`, `ipcRenderer`                             | DOM manipulation, Node.js `fs`                  |
 
 Cross-process communication:
 
 - Main ↔ Renderer: IPC via `packages/desktop/src/preload/` + `packages/desktop/src/process/bridge/*.ts`
-- Main ↔ Worker: fork protocol via `packages/desktop/src/process/worker/WorkerProtocol.ts`
+- Renderer / Main ↔ Backend (`aioncore`): HTTP / WebSocket via `packages/desktop/src/common/adapter/`
 
 ```typescript
 // NEVER in renderer
@@ -115,11 +111,11 @@ const result = await window.api.someMethod(); // goes through preload
 
 Tests mirror source files in `tests/` subdirectories:
 
-| Source                                                       | Test                                            |
-| ------------------------------------------------------------ | ----------------------------------------------- |
-| `packages/desktop/src/process/services/CronService.ts`       | `tests/unit/cronService.test.ts`                |
-| `packages/desktop/src/renderer/hooks/ui/useAutoScroll.ts`    | `tests/unit/useAutoScroll.dom.test.ts`          |
-| `packages/desktop/src/process/extensions/ExtensionLoader.ts` | `tests/unit/extensions/extensionLoader.test.ts` |
+| Source                                                            | Test                                        |
+| ----------------------------------------------------------------- | ------------------------------------------- |
+| `packages/desktop/src/process/services/skills/skillFiles.ts`      | `tests/unit/skills/skillFiles.test.ts`      |
+| `packages/desktop/src/renderer/hooks/ui/useAutoScroll.ts`         | `tests/unit/useAutoScroll.dom.test.ts`      |
+| `packages/desktop/src/process/services/codebaseMemory/experts.ts` | `tests/unit/codebaseMemory/experts.test.ts` |
 
 When `tests/unit/` exceeds 10 direct children, group into subdirectories matching source structure.
 

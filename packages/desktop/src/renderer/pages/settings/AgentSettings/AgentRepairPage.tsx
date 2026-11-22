@@ -78,7 +78,7 @@ const AgentRepairPage: React.FC = () => {
       } catch (error) {
         console.error('[AgentRepair] Failed to persist assistant open intent:', error);
       }
-      navigate('/settings/assistants', { state: { openAssistantEditor: true, openAssistantId: assistantId } });
+      navigate('/assistants', { state: { openAssistantEditor: true, openAssistantId: assistantId } });
     },
     [navigate]
   );

@@ -18,6 +18,7 @@ import { Avatar, Select, Tag } from '@arco-design/web-react';
 import { Info, Robot } from '@icon-park/react';
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { formatNameList } from '@/renderer/services/i18n/list';
 import IdentitySection from './editor/IdentitySection';
 import PromptsSection from './editor/PromptsSection';
 import DefaultsSection from './editor/DefaultsSection';
@@ -126,6 +127,8 @@ const AssistantEditorSections: React.FC<AssistantEditorSectionsProps> = ({ edito
   const availableSkills = skills.availableSkills;
   const selectedSkills = skills.selectedSkills;
   const setSelectedSkills = skills.setSelectedSkills;
+  const customSkills = useMemo(() => skills.customSkills ?? [], [skills.customSkills]);
+  const setCustomSkills = skills.setCustomSkills;
   const pendingSkills = skills.pendingSkills;
   const builtinAutoSkills = skills.builtinAutoSkills;
   const disabledBuiltinSkills = skills.disabledBuiltinSkills;
@@ -241,6 +244,10 @@ const AssistantEditorSections: React.FC<AssistantEditorSectionsProps> = ({ edito
   const editableSkillOptions = useMemo(() => {
     const optionMap = new Map<string, { value: string; label: string; isAuto?: boolean; disabled?: boolean }>();
 
+    customSkills.forEach((skillName) => {
+      optionMap.set(skillName, { value: skillName, label: skillName });
+    });
+
     pendingSkills.forEach((skill) => {
       optionMap.set(skill.name, { value: skill.name, label: skill.name });
     });
@@ -261,18 +268,19 @@ const AssistantEditorSections: React.FC<AssistantEditorSectionsProps> = ({ edito
     });
 
     return Array.from(optionMap.values());
-  }, [availableSkills, builtinAutoSkills, pendingSkills, t]);
+  }, [availableSkills, builtinAutoSkills, customSkills, pendingSkills]);
   const selectedSkillValues = useMemo(
     () =>
       Array.from(
         new Set([
           ...selectedSkills,
+          ...customSkills,
           ...builtinAutoSkills
             .filter((skill) => !disabledBuiltinSkills.includes(skill.name))
             .map((skill) => skill.name),
         ])
       ),
-    [builtinAutoSkills, disabledBuiltinSkills, selectedSkills]
+    [builtinAutoSkills, customSkills, disabledBuiltinSkills, selectedSkills]
   );
 
   const applyPromptItems = (items: string[]) => {
@@ -280,7 +288,7 @@ const AssistantEditorSections: React.FC<AssistantEditorSectionsProps> = ({ edito
   };
 
   const readonlySelectionSummary = (items: string[], emptyLabel: string) =>
-    items.length > 0 ? items.join('、') : emptyLabel;
+    items.length > 0 ? formatNameList(items, localeKey) : emptyLabel;
 
   const handleBeginPromptEdit = (index: number) => {
     setEditingPromptIndex(index);
@@ -318,6 +326,7 @@ const AssistantEditorSections: React.FC<AssistantEditorSectionsProps> = ({ edito
     const nextSelected = values.filter((value) => !autoSkillNames.includes(value));
     const nextDisabledAuto = autoSkillNames.filter((skillName) => !values.includes(skillName));
     setSelectedSkills(nextSelected);
+    setCustomSkills?.(customSkills.filter((skillName) => values.includes(skillName)));
     setDisabledBuiltinSkills(nextDisabledAuto);
   };
 
@@ -353,7 +362,7 @@ const AssistantEditorSections: React.FC<AssistantEditorSectionsProps> = ({ edito
               <span>
                 {t('settings.assistantBuiltinReadonlyTip', {
                   defaultValue:
-                    'This is a builtin assistant. You can change Main Agent, Default Model, and Default Permission. To customize other fields, ',
+                    'This is an official assistant — only engine-related settings can be changed. To customize anything else, ',
                 })}
               </span>
               <span

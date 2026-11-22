@@ -47,4 +47,25 @@ describe('skill file service', () => {
 
     await expect(service.read(path.join(customSkill, 'SKILL.md'), 'notes.md')).resolves.toBe('Notes');
   });
+
+  it('allows reading skills located within registered skill roots', async () => {
+    const service = createSkillFileService({
+      getAllowedLocations: async () => [path.join(sandbox, 'custom'), path.join(sandbox, 'missing-dir')],
+    });
+
+    await expect(service.read(path.join(customSkill, 'SKILL.md'), 'notes.md')).resolves.toBe('Notes');
+  });
+
+  it('rejects listing or reading directories outside registered skill roots', async () => {
+    const outsideDir = path.join(sandbox, 'outside-secret');
+    await fs.mkdir(outsideDir, { recursive: true });
+    await fs.writeFile(path.join(outsideDir, 'secret.txt'), 'top-secret', 'utf8');
+
+    const service = createSkillFileService({
+      getAllowedLocations: async () => [path.join(sandbox, 'custom')],
+    });
+
+    await expect(service.list(outsideDir)).rejects.toThrow('outside registered skill directories');
+    await expect(service.read(outsideDir, 'secret.txt')).rejects.toThrow('outside registered skill directories');
+  });
 });
