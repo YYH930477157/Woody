@@ -361,6 +361,30 @@ describe('AionrsSendBox', () => {
     });
   });
 
+  it('tries a failing team start once, not again on every team context change', async () => {
+    const warmupSession = vi.fn().mockRejectedValue(new Error('A team member runtime failed to start'));
+    // The real context is a new object whenever a member's runtime status changes.
+    useTeamPermissionMock.mockImplementation(() => ({
+      isTeamMode: true,
+      isLeaderAgent: true,
+      leaderConversationId: 'conv-1',
+      allConversationIds: ['conv-1'],
+      propagateMode: vi.fn(),
+      warmupSession,
+    }));
+
+    const { rerender } = render(<AionrsSendBox conversation_id='conv-1' modelSelection={modelSelection} />);
+    await waitFor(() => {
+      expect(Message.error).toHaveBeenCalledTimes(1);
+    });
+    rerender(<AionrsSendBox conversation_id='conv-1' modelSelection={modelSelection} />);
+    rerender(<AionrsSendBox conversation_id='conv-1' modelSelection={modelSelection} />);
+    await act(async () => {});
+
+    expect(warmupSession).toHaveBeenCalledTimes(1);
+    expect(Message.error).toHaveBeenCalledTimes(1);
+  });
+
   it('does not start standalone runtime while preparing a team conversation', async () => {
     const warmupSession = vi.fn().mockResolvedValue(undefined);
     useTeamPermissionMock.mockReturnValue({

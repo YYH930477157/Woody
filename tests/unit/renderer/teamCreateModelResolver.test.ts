@@ -7,12 +7,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const getAssistantMock = vi.fn();
+const listProvidersMock = vi.fn();
 
 vi.mock('@/common', () => ({
   ipcBridge: {
     assistants: {
       get: {
         invoke: (...args: unknown[]) => getAssistantMock(...args),
+      },
+    },
+    mode: {
+      listProviders: {
+        invoke: (...args: unknown[]) => listProvidersMock(...args),
       },
     },
   },
@@ -23,6 +29,8 @@ import { resolveDefaultTeamAgentModel } from '@/renderer/pages/team/components/t
 describe('resolveDefaultTeamAgentModel', () => {
   beforeEach(() => {
     getAssistantMock.mockReset();
+    listProvidersMock.mockReset();
+    listProvidersMock.mockResolvedValue([]);
   });
 
   it('prefers the assistant fixed default model over agent-level fallbacks', async () => {
@@ -133,12 +141,40 @@ describe('resolveDefaultTeamAgentModel', () => {
     ).resolves.toBe('');
   });
 
-  it('keeps the default placeholder for aionrs assistants', async () => {
+  it('gives an aionrs assistant without a model the first available model, like a new chat', async () => {
+    listProvidersMock.mockResolvedValue([
+      { id: 'empty', platform: 'custom', name: 'Empty', base_url: '', api_key: '', models: [] },
+      {
+        id: 'relay',
+        platform: 'custom',
+        name: 'Relay',
+        base_url: '',
+        api_key: '',
+        models: ['mimo-v2.6-flash', 'deepseek-flash'],
+        model_enabled: { 'mimo-v2.6-flash': false },
+      },
+    ]);
+    getAssistantMock.mockResolvedValue({
+      defaults: { model: { mode: 'auto' } },
+      preferences: { last_model_id: undefined },
+      engine: { agent_id: 'aionrs', agent: { id: 'aionrs', type: 'aionrs', source: 'builtin' } },
+    });
+
+    await expect(resolveDefaultTeamAgentModel({ assistant_id: 'woody-meter-lead' })).resolves.toBe('deepseek-flash');
+  });
+
+  it('keeps the default placeholder for aionrs when no model is configured', async () => {
     await expect(
       resolveDefaultTeamAgentModel({
         assistant_backend: 'aionrs',
       })
     ).resolves.toBe('default');
+  });
+
+  it('keeps the default placeholder for aionrs when the providers cannot be read', async () => {
+    listProvidersMock.mockRejectedValue(new Error('backend not ready'));
+
+    await expect(resolveDefaultTeamAgentModel({ assistant_backend: 'aionrs' })).resolves.toBe('default');
   });
 
   it('keeps the default placeholder for other ACP backends such as claude', async () => {

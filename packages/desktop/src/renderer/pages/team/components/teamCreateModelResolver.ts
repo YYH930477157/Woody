@@ -6,6 +6,7 @@
 
 import { ipcBridge } from '@/common';
 import { assistantRuntimeKey, type AssistantDetail } from '@/common/types/agent/assistantTypes';
+import { getAvailableModels } from '@/renderer/pages/guid/utils/modelUtils';
 
 /**
  * Resolve the `model` value a team agent should send to `POST /api/teams`.
@@ -100,6 +101,22 @@ async function resolveGeminiDefaultModel(): Promise<string> {
   return 'auto';
 }
 
+/**
+ * An aionrs member without a model of its own runs on the model a new chat on the home
+ * page starts with: the first available model of the first provider that has one. The
+ * backend matches the name against the providers' model lists; the 'default' placeholder
+ * matches none of them and fails every member with "Provider 'aionrs' not found", so it
+ * is only kept when no model is configured at all.
+ */
 async function resolveAionrsDefaultModel(): Promise<string> {
+  try {
+    const providers = (await ipcBridge.mode.listProviders.invoke()) ?? [];
+    for (const provider of providers) {
+      const model = getAvailableModels(provider)[0];
+      if (model) return model;
+    }
+  } catch {
+    // Keep the placeholder; team creation reports the backend's error.
+  }
   return 'default';
 }

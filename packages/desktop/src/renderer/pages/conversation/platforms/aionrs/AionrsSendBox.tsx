@@ -179,16 +179,21 @@ const AionrsSendBox: React.FC<{
   );
 
   const [agentWarmed, setAgentWarmed] = useState(false);
+  // Depend on the stable warmup function, not the team context object: the context is a new
+  // object whenever a member's runtime status changes, and a failed start changes it again,
+  // which re-ran the warmup below in a loop and showed an error toast several times a second.
+  const isTeam = Boolean(teamPermission);
+  const warmupTeamSession = teamPermission?.warmupSession;
   const prepareRuntimeConfig = useCallback(async () => {
-    if (teamPermission) return;
-  }, [teamPermission]);
+    if (isTeam) return;
+  }, [isTeam]);
   const prepareRuntimeSync = useCallback(async () => {
-    if (teamPermission) {
-      await teamPermission.warmupSession();
+    if (warmupTeamSession) {
+      await warmupTeamSession();
       return;
     }
     await ensureConversationRuntime(conversation_id);
-  }, [conversation_id, teamPermission]);
+  }, [conversation_id, warmupTeamSession]);
   const runtimeConfig = useAcpConfigOptions({
     conversation_id,
     prepareRuntime: prepareRuntimeConfig,
