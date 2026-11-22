@@ -235,6 +235,14 @@ describe('AionrsModelSelector runtime options', () => {
     expect(screen.getByRole('group', { name: 'OpenAI' })).toBeInTheDocument();
   });
 
+  it('tells the user the thinking level appears once a waking member is ready', () => {
+    const { rerender } = render(<AionrsModelSelector selection={makeSelection()} />);
+    expect(screen.queryByText('agent.thoughtLevel.waking')).toBeNull();
+
+    rerender(<AionrsModelSelector selection={makeSelection()} thoughtLevelPending />);
+    expect(screen.getByText('agent.thoughtLevel.waking')).toBeInTheDocument();
+  });
+
   it('sets thought level through the optional runtime callback', async () => {
     const onSetThoughtLevel = vi.fn().mockResolvedValue(undefined);
 

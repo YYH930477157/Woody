@@ -47,7 +47,8 @@
     "defaultLabel": "Default thinking level",
     "label": "Thinking Level",
     "switchSuccess": "Thinking level switched",
-    "switchFailed": "Failed to switch thinking level"
+    "switchFailed": "Failed to switch thinking level",
+    "waking": "Thinking level · waking this member…"
   },
   "warmup": {
     "clickToWake": "Click to wake this member"

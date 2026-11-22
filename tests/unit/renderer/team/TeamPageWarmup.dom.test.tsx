@@ -21,6 +21,8 @@ const {
   messageErrorMock,
   modalConfirmMock,
   layoutState,
+  aionrsSelectorProps,
+  getConfigOptionsMock,
 } = vi.hoisted(() => {
   const handlers: Record<string, Array<(event: unknown) => void>> = {};
   const makeChannel = (name: string) => ({
@@ -44,6 +46,8 @@ const {
     messageErrorMock: vi.fn(),
     modalConfirmMock: vi.fn(),
     layoutState: { isMobile: false },
+    aionrsSelectorProps: { current: undefined as undefined | Record<string, unknown> },
+    getConfigOptionsMock: vi.fn(),
   };
 });
 
@@ -79,6 +83,7 @@ vi.mock('@/common', () => ({
       addAgent: { invoke: vi.fn() },
       removeAgent: { invoke: vi.fn() },
       attachAgent: { invoke: vi.fn(async () => undefined) },
+      getConfigOptions: { invoke: (...args: unknown[]) => getConfigOptionsMock(...args) },
       resetAgentContext: { invoke: (...args: unknown[]) => resetAgentContextMock(...args) },
       pauseSlotWork: { invoke: vi.fn() },
       getRunState: { invoke: vi.fn(async () => ({ session_generation: null, active_run: null, slot_work: [] })) },
@@ -118,6 +123,9 @@ vi.mock('@/common', () => ({
       },
     },
     realtime: { reconnected: makeTeamEventChannel('reconnected') },
+    // The aionrs header reads runtime options and the provider list.
+    acpConversation: { responseStream: makeTeamEventChannel('acpResponseStream') },
+    mode: { listProviders: { invoke: vi.fn(async () => []) } },
   },
 }));
 
@@ -166,7 +174,10 @@ vi.mock('@/renderer/hooks/agent/useAcpConfigOptions', async () => {
 
 vi.mock('@/renderer/pages/conversation/platforms/aionrs/AionrsModelSelector', () => ({
   __esModule: true,
-  default: () => <div data-testid='mock-aionrs-model-selector' />,
+  default: (props: Record<string, unknown>) => {
+    aionrsSelectorProps.current = props;
+    return <div data-testid='mock-aionrs-model-selector' />;
+  },
 }));
 
 vi.mock('@/renderer/pages/team/components/TeamChatView', () => ({
@@ -209,7 +220,78 @@ describe('TeamPage teammate warmup wiring', () => {
     layoutState.isMobile = false;
     for (const key of Object.keys(teamEventHandlers)) delete teamEventHandlers[key];
     getConversationOrNullMock.mockImplementation(async (id: string) => conversation({ id, name: id }));
+    getConfigOptionsMock.mockReset().mockRejectedValue(new Error('TEAM_RUNTIME_NOT_READY'));
+    aionrsSelectorProps.current = undefined;
     localStorage.clear();
+  });
+
+  it('wakes a dormant aionrs member when its model menu opens, then shows its thinking level', async () => {
+    ensureSessionMock.mockResolvedValue(undefined);
+    getConversationOrNullMock.mockImplementation(async (id: string) =>
+      conversation({ id, name: id, type: id === 'aionrs-conv-a' ? 'aionrs' : 'acp' } as Partial<TChatConversation>)
+    );
+    render(
+      <MemoryRouter>
+        <TeamPage team={aionrsTeam('aionrs-conv-a')} />
+      </MemoryRouter>
+    );
+    await screen.findByTestId('mock-aionrs-model-selector');
+    // Dormant: no runtime, so no thinking level yet.
+    expect(aionrsSelectorProps.current?.thoughtLevel).toBeNull();
+
+    await act(async () => {
+      (aionrsSelectorProps.current!.onOpen as () => void)();
+    });
+    expect(ipcBridge.team.attachAgent.invoke).toHaveBeenCalledWith({ team_id: 'team-1', slot_id: 'member-slot' });
+    expect(aionrsSelectorProps.current?.thoughtLevelPending).toBe(true);
+
+    getConfigOptionsMock.mockResolvedValue({
+      config_options: [
+        {
+          id: 'reasoning_effort',
+          category: 'thought_level',
+          type: 'select',
+          current_value: 'medium',
+          options: [{ value: 'low' }, { value: 'medium' }, { value: 'high' }],
+        },
+      ],
+    });
+    act(() => {
+      for (const handler of teamEventHandlers.agentRuntimeStatusChanged ?? []) {
+        handler({ team_id: 'team-1', slot_id: 'member-slot', conversation_id: 'aionrs-conv-a', status: 'ready' });
+      }
+    });
+    await waitFor(() =>
+      expect(aionrsSelectorProps.current?.thoughtLevel).toMatchObject({
+        id: 'reasoning_effort',
+        currentValue: 'medium',
+      })
+    );
+    expect(aionrsSelectorProps.current?.thoughtLevelPending).toBe(false);
+  });
+
+  it('stops showing the waking hint when the member fails to start', async () => {
+    ensureSessionMock.mockResolvedValue(undefined);
+    getConversationOrNullMock.mockImplementation(async (id: string) =>
+      conversation({ id, name: id, type: id === 'aionrs-conv-b' ? 'aionrs' : 'acp' } as Partial<TChatConversation>)
+    );
+    render(
+      <MemoryRouter>
+        <TeamPage team={aionrsTeam('aionrs-conv-b')} />
+      </MemoryRouter>
+    );
+    await screen.findByTestId('mock-aionrs-model-selector');
+    await act(async () => {
+      (aionrsSelectorProps.current!.onOpen as () => void)();
+    });
+    expect(aionrsSelectorProps.current?.thoughtLevelPending).toBe(true);
+    act(() => {
+      for (const handler of teamEventHandlers.agentRuntimeStatusChanged ?? []) {
+        handler({ team_id: 'team-1', slot_id: 'member-slot', conversation_id: 'aionrs-conv-b', status: 'failed' });
+      }
+    });
+    await waitFor(() => expect(aionrsSelectorProps.current?.thoughtLevelPending).toBe(false));
+    expect(aionrsSelectorProps.current?.thoughtLevel).toBeNull();
   });
 
   it('withholds the trigger while the team is warming (isWarmingUp)', async () => {
@@ -487,6 +569,19 @@ function conversation(overrides?: Partial<TChatConversation>): TChatConversation
     extra: {},
     ...overrides,
   } as TChatConversation;
+}
+
+/** The warmup team with an aionrs teammate on its own conversation, so caches do not leak between tests. */
+function aionrsTeam(conversationId: string): TTeam {
+  const base = team();
+  return {
+    ...base,
+    assistants: base.assistants.map((member) =>
+      member.slot_id === 'member-slot'
+        ? { ...member, conversation_id: conversationId, assistant_backend: 'aionrs' }
+        : member
+    ),
+  } as TTeam;
 }
 
 function team(): TTeam {

@@ -36,7 +36,18 @@ const AionrsModelSelector: React.FC<{
   /** Kept for call-site compatibility; the two-level submenu no longer gates on set status here. */
   setStatus?: AcpConfigSetStatus;
   onSetThoughtLevel?: (optionId: string, value: string) => Promise<unknown>;
-}> = ({ selection, disabled = false, thoughtLevel: rawThoughtLevel = null, onSetThoughtLevel }) => {
+  /** Called when the menu opens; a dormant team member is woken here to read its thinking level. */
+  onOpen?: () => void;
+  /** The thinking level is not known yet because the runtime is still starting. */
+  thoughtLevelPending?: boolean;
+}> = ({
+  selection,
+  disabled = false,
+  thoughtLevel: rawThoughtLevel = null,
+  onSetThoughtLevel,
+  onOpen,
+  thoughtLevelPending = false,
+}) => {
   const { t } = useTranslation();
   const thoughtLevel = localizeAionrsThoughtLevel(rawThoughtLevel, t);
   const { isOpen: isPreviewOpen } = usePreviewContext();
@@ -115,6 +126,9 @@ const AionrsModelSelector: React.FC<{
   return (
     <Dropdown
       trigger='click'
+      onVisibleChange={(visible: boolean) => {
+        if (visible) onOpen?.();
+      }}
       // Mobile: portal the popup to <body> so it escapes the titlebar slot.
       // Desktop: leave default container so click events reach Menu.Item normally.
       {...(isMobileHeaderCompact ? { getPopupContainer: () => document.body } : {})}
@@ -158,7 +172,14 @@ const AionrsModelSelector: React.FC<{
               </Menu.SubMenu>
             </>
           ) : (
-            modelListNode
+            <>
+              {modelListNode}
+              {thoughtLevelPending && (
+                <Menu.Item key='thought-level-pending' disabled data-testid='aionrs-thought-level-pending'>
+                  {t('agent.thoughtLevel.waking')}
+                </Menu.Item>
+              )}
+            </>
           )}
         </Menu>
       }

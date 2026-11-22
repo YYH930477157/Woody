@@ -47,7 +47,8 @@
     "defaultLabel": "默认思考强度",
     "label": "思考强度",
     "switchSuccess": "思考强度切换成功",
-    "switchFailed": "思考强度切换失败"
+    "switchFailed": "思考强度切换失败",
+    "waking": "思考强度 · 正在唤醒成员…"
   },
   "warmup": {
     "clickToWake": "点击唤醒该成员"

@@ -73,11 +73,20 @@ const configErrorMessageKey = (error: unknown) => {
   return 'agent.config.failed';
 };
 
-/** Compact aionrs model selector for the agent header */
-const AionrsHeaderModelSelector: React.FC<{ conversation_id: string; initialModel?: TProviderWithModel }> = ({
-  conversation_id,
-  initialModel,
-}) => {
+/** How long the menu shows "waking" before giving up on a member that never reports ready. */
+const THOUGHT_LEVEL_WAKE_TIMEOUT_MS = 60_000;
+
+/**
+ * Compact aionrs model selector for the agent header. A teammate stays dormant until it
+ * gets work, and a dormant member has no runtime to read its thinking level from; opening
+ * the menu wakes that one member, and its options are reloaded once it reports ready.
+ */
+const AionrsHeaderModelSelector: React.FC<{
+  conversation_id: string;
+  initialModel?: TProviderWithModel;
+  team_id: string;
+  slot_id: string;
+}> = ({ conversation_id, initialModel, team_id, slot_id }) => {
   const { t } = useTranslation();
   const teamPermission = useTeamPermission();
   const onSelectModel = useCallback(
@@ -108,13 +117,49 @@ const AionrsHeaderModelSelector: React.FC<{ conversation_id: string; initialMode
     },
     [runtimeConfig, t]
   );
+  const [waking, setWaking] = useState(false);
+  const { reload, thoughtLevel } = runtimeConfig;
+  // Whatever woke the member (this menu, a task, a message), read its options once it is ready.
+  useEffect(
+    () =>
+      ipcBridge.team.agentRuntimeStatusChanged.on((event) => {
+        if (event.team_id !== team_id || event.slot_id !== slot_id) return;
+        if (event.status === 'ready') {
+          void reload()
+            .catch(() => {})
+            .finally(() => setWaking(false));
+        } else if (event.status === 'failed') {
+          setWaking(false);
+        }
+      }),
+    [reload, slot_id, team_id]
+  );
+  useEffect(() => {
+    if (!waking) return;
+    const timer = setTimeout(() => setWaking(false), THOUGHT_LEVEL_WAKE_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [waking]);
+  const handleOpen = useCallback(() => {
+    if (thoughtLevel || waking) return;
+    setWaking(true);
+    void ipcBridge.team.attachAgent
+      .invoke({ team_id, slot_id })
+      // A member that is already running reports no new status; read its options now.
+      .then(() => reload())
+      .then((options) => {
+        if (options) setWaking(false);
+      })
+      .catch(() => {});
+  }, [reload, slot_id, team_id, thoughtLevel, waking]);
   return (
     <AionrsModelSelector
       selection={modelSelection}
       disabled={runtimeConfig.isConfigOptionBlocked?.('model') ?? false}
-      thoughtLevel={runtimeConfig.thoughtLevel}
+      thoughtLevel={thoughtLevel}
       setStatus={runtimeConfig.setStatus}
       onSetThoughtLevel={handleThoughtLevelSetOption}
+      onOpen={handleOpen}
+      thoughtLevelPending={waking && !thoughtLevel}
     />
   );
 };
@@ -492,6 +537,8 @@ const AssistantChatSlot: React.FC<{
                 key={assistant.conversation_id}
                 conversation_id={assistant.conversation_id}
                 initialModel={conversation?.model as TProviderWithModel | undefined}
+                team_id={team_id}
+                slot_id={assistant.slot_id}
               />
             </div>
           )}
