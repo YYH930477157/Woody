@@ -214,6 +214,7 @@ describe('TeamCreateModal', () => {
       file: EXPERTS_FILE,
       saved: { version: 1, experts: [sensor, ui], shared: ['src/tasks.c'] },
       cards: [],
+      business: true,
     });
     await startExpertTeam();
     fireEvent.click(within(await screen.findByTestId('team-expert-ui')).getByRole('checkbox'));
@@ -258,6 +259,7 @@ describe('TeamCreateModal', () => {
         file: EXPERTS_FILE,
         saved: { version: 1, experts: [sensor, ui], shared: ['src/tasks.c'] },
         cards: [],
+        business: true,
       });
       expertsMocks.cards.mockResolvedValue(cards);
       prepareRolesMock.mockResolvedValue([
@@ -286,6 +288,7 @@ describe('TeamCreateModal', () => {
         'conversation.codebaseMemory.modules.states.ready'
       );
       expect(screen.getByText('team.experts.onboardHint')).toBeInTheDocument();
+      expect(screen.queryByTestId('team-experts-business')).toBeNull();
       fireEvent.click(screen.getByRole('button', { name: 'Confirm Create' }));
       await waitFor(() => expect(sendToAgentMock).toHaveBeenCalledTimes(1));
       expect(expertsMocks.cards).toHaveBeenCalledWith({
@@ -312,13 +315,46 @@ describe('TeamCreateModal', () => {
       expect(messageWarningMock).not.toHaveBeenCalled();
     });
 
-    it('asks nobody when the option is off', async () => {
+    it('asks the dispatcher to write the business overview a project lacks, and reports when it cannot', async () => {
+      expertsMocks.experts.mockResolvedValue({
+        file: EXPERTS_FILE,
+        saved: { version: 1, experts: [sensor, ui], shared: ['src/tasks.c'] },
+        cards: [],
+        business: false,
+      });
+      sendToAgentMock.mockImplementation(async ({ slot_id }: { slot_id: string }) => {
+        if (slot_id === 'slot-dispatcher') throw new Error('session not ready');
+        return { accepted: true };
+      });
+      await startExpertTeam();
+      expect(await screen.findByTestId('team-experts-business')).toHaveTextContent('team.experts.onboardBusiness');
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm Create' }));
+      await waitFor(() => expect(messageWarningMock).toHaveBeenCalledWith('team.experts.onboardFailed'));
+      expect(sendToAgentMock).toHaveBeenCalledWith({
+        team_id: 'team-1',
+        slot_id: 'slot-dispatcher',
+        input: 'team.experts.leadOnboardMessage',
+      });
+      expect(sendToAgentMock.mock.calls.map(([call]) => call.slot_id)).toEqual(['slot-dispatcher', 'slot-sensor']);
+      const { roles } = prepareRolesMock.mock.calls[0][0];
+      expect(roles[0].rules).toContain('learn the project’s meter business first');
+      expect(roles[0].skills).toEqual(['woody-meter-business']);
+    });
+
+    it('asks nobody when the option is off, not even for a missing business overview', async () => {
+      expertsMocks.experts.mockResolvedValue({
+        file: EXPERTS_FILE,
+        saved: { version: 1, experts: [sensor, ui], shared: ['src/tasks.c'] },
+        cards: [],
+        business: false,
+      });
       await startExpertTeam();
       fireEvent.click(await screen.findByTestId('team-experts-onboard'));
       fireEvent.click(screen.getByRole('button', { name: 'Confirm Create' }));
       await waitFor(() => expect(createTeamInvokeMock).toHaveBeenCalledTimes(1));
       const { roles } = prepareRolesMock.mock.calls[0][0];
       expect(roles[0].rules).not.toContain('When the team starts, these experts learn their modules');
+      expect(roles[0].rules).not.toContain('learn the project’s meter business first');
       await Promise.resolve();
       expect(sendToAgentMock).not.toHaveBeenCalled();
     });
@@ -344,11 +380,12 @@ describe('TeamCreateModal', () => {
   });
 
   it('starts from feature cards, requires every expert to be complete, and saves the list first', async () => {
-    expertsMocks.experts.mockResolvedValue({ file: EXPERTS_FILE, saved: null, cards: ['sensor'] });
+    expertsMocks.experts.mockResolvedValue({ file: EXPERTS_FILE, saved: null, cards: ['sensor'], business: true });
     expertsMocks.save.mockImplementation(async ({ file }: { file: unknown }) => ({
       file: EXPERTS_FILE,
       saved: file,
       cards: ['sensor'],
+      business: true,
     }));
     await startExpertTeam();
     const row = await screen.findByTestId('team-expert-sensor');
@@ -382,6 +419,7 @@ describe('TeamCreateModal', () => {
       file: EXPERTS_FILE,
       saved: { version: 1, experts: [sensor], shared: [] },
       cards: [],
+      business: true,
     });
     expertsMocks.save.mockRejectedValue(new Error('read-only folder'));
     await startExpertTeam();

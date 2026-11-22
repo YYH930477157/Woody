@@ -22,6 +22,8 @@ type Loaded = {
   saved: boolean;
   /** Card states from codebase memory; undefined when the project has none. */
   cards?: ModuleCards;
+  /** The project already has the business overview `.woody/business.md`. */
+  business: boolean;
 };
 
 let nextKey = 0;
@@ -37,7 +39,8 @@ export function useModuleExperts(workspace: string, active: boolean) {
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(false);
   const [dirty, setDirty] = useState(false);
-  // Experts whose cards are not up to date learn their modules when the team starts.
+  // Experts whose cards are not up to date learn their modules when the team starts, and
+  // the dispatcher writes the business overview when the project has none.
   const [onboard, setOnboard] = useState(true);
   const available = isElectronDesktop();
 
@@ -64,6 +67,7 @@ export function useModuleExperts(workspace: string, active: boolean) {
           shared: state.saved?.shared ?? [],
           saved: Boolean(state.saved),
           cards: moduleCards,
+          business: state.business,
         });
       })
       .catch((reason: unknown) => {
@@ -122,6 +126,8 @@ export function useModuleExperts(workspace: string, active: boolean) {
     cardOf: (id: string): ModuleCard | undefined => loaded?.cards?.experts.find((card) => card.id === id),
     onboard,
     setOnboard,
+    /** Whether the project lacks the business overview, so the dispatcher writes it when the team starts. */
+    businessMissing: loaded ? !loaded.business : false,
     file: loaded?.file,
     drafts,
     shared: loaded?.shared ?? [],

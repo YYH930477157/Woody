@@ -255,10 +255,12 @@
       "dispatcher": "Dispatcher",
       "verifier": "Verifier"
     },
-    "onboard": "Have experts learn their modules after the team is created",
+    "onboard": "Have the dispatcher and experts learn the project after the team is created",
     "onboardHint": "Experts whose card is not marked Learned check Woody's brief against the source, complete their card and report to the dispatcher before taking tasks that change code.",
     "onboardWithoutMemory": "This project has no codebase memory, so there is no brief: experts learn their modules by reading the source.",
+    "onboardBusiness": "This project has no business overview yet: the dispatcher first reads the project and writes .woody/business.md, showing where each meter business function lives and which expert owns it.",
     "onboardMessage": "Please learn your module first: follow the \"Learning your module\" steps in your rules, check the brief Woody generated in {{card}} against the source, trace the module with codebase memory, complete the card, and then report to the dispatcher. Do not change project code while you do this.",
-    "onboardFailed": "The team was created, but these experts could not be asked to learn their modules: {{names}}. Ask them in their own chats."
+    "leadOnboardMessage": "Please learn this project's meter business first: following sections 2 and 3 of the woody-meter-business skill, read the architecture, expert list and feature cards in the knowledge folder, find the object list and where each business function is implemented in the source, and write {{file}}. Do not change project code while you do this; when experts report in, check the module facts they report against the overview. Then tell me the key points, which expert carries each function, the functions with no owner, and what you could not verify.",
+    "onboardFailed": "The team was created, but these members could not be asked to start learning: {{names}}. Ask them in their own chats."
   }
 }

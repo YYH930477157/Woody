@@ -31,7 +31,18 @@ describe('module experts store', () => {
       file: path.join(root, '.woody', 'experts.json'),
       saved: null,
       cards: ['power-save', 'sensor'],
+      business: false,
     });
+  });
+
+  it('tells whether the project has a business overview', () => {
+    fs.mkdirSync(path.join(root, '.woody', 'business.md'), { recursive: true });
+    // A folder with the overview's name is not an overview.
+    expect(store.read(root).business).toBe(false);
+    fs.rmSync(path.join(root, '.woody', 'business.md'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.woody', 'business.md'), '# Business overview\n');
+    expect(store.read(root).business).toBe(true);
+    expect(store.save(root, file).business).toBe(true);
   });
 
   it('saves the list as formatted JSON in .woody and reads it back', () => {

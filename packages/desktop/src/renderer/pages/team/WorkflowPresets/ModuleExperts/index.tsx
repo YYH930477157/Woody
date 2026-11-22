@@ -146,6 +146,11 @@ const ModuleExperts: React.FC<Props> = ({ workspace, state, disabled }) => {
           <span className='text-11px leading-16px text-t-tertiary'>
             {state.hasCards ? t('team.experts.onboardHint') : t('team.experts.onboardWithoutMemory')}
           </span>
+          {state.businessMissing && (
+            <span className='text-11px leading-16px text-t-tertiary' data-testid='team-experts-business'>
+              {t('team.experts.onboardBusiness')}
+            </span>
+          )}
         </div>
       )}
       <div className='grid grid-cols-[96px_minmax(0,1fr)] items-start gap-x-10px'>

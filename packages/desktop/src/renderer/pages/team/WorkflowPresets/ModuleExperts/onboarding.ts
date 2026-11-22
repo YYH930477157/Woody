@@ -32,9 +32,10 @@ export function onboardingIds(experts: ModuleExpert[], briefs: Record<string, Ex
 }
 
 /**
- * Ask each onboarding expert of a new team to learn its module. `agents` are the team's
- * roles in order (dispatcher, experts, verifier), so the expert at index i is agent i + 1.
- * Resolves to the names of the experts that could not be asked.
+ * Ask each onboarding expert of a new team to learn its module, and the dispatcher to write
+ * the business overview when `lead` is given. `agents` are the team's roles in order
+ * (dispatcher, experts, verifier), so the dispatcher is agent 0 and the expert at index i is
+ * agent i + 1. Resolves to the names of the members that could not be asked.
  */
 export async function startOnboarding(params: {
   team: TTeam;
@@ -43,24 +44,33 @@ export async function startOnboarding(params: {
   ids: string[];
   knowledge: string;
   message: (card: string) => string;
+  /** The dispatcher's name and the message that asks it to learn the business. */
+  lead?: { name: string; message: string };
 }): Promise<string[]> {
-  const { team, agents, experts, ids, knowledge, message } = params;
+  const { team, agents, experts, ids, knowledge, message, lead } = params;
   const members = team.assistants ?? team.agents ?? [];
-  const results = await Promise.allSettled(
-    experts.map(async (expert, index) => {
-      if (!ids.includes(expert.id)) return;
-      const assistantId = agents[index + 1]?.assistant_id;
-      const slot = members.find((member) => assistantId && member.assistant_id === assistantId)?.slot_id;
-      if (!slot) throw new Error(`No team member for ${expert.id}`);
-      const ack = await ipcBridge.team.sendMessageToAgent.invoke({
-        team_id: team.id,
-        slot_id: slot,
-        input: message(`${knowledge}/features/${expert.id}.md`),
-      });
-      // The platform bridge returns provider errors as a sentinel object.
-      const failure = ack as unknown as { __bridgeError?: boolean; message?: string };
-      if (failure?.__bridgeError) throw new Error(failure.message ?? 'send failed');
-    })
-  );
-  return experts.filter((_, index) => results[index].status === 'rejected').map((expert) => expert.name);
+  const send = async (agent: TeamAssistantInput | undefined, label: string, input: string) => {
+    const assistantId = agent?.assistant_id;
+    const slot = members.find((member) => assistantId && member.assistant_id === assistantId)?.slot_id;
+    if (!slot) throw new Error(`No team member for ${label}`);
+    const ack = await ipcBridge.team.sendMessageToAgent.invoke({ team_id: team.id, slot_id: slot, input });
+    // The platform bridge returns provider errors as a sentinel object.
+    const failure = ack as unknown as { __bridgeError?: boolean; message?: string };
+    if (failure?.__bridgeError) throw new Error(failure.message ?? 'send failed');
+  };
+  const asked = [
+    ...(lead ? [{ name: lead.name, run: () => send(agents[0], 'the dispatcher', lead.message) }] : []),
+    ...experts.flatMap((expert, index) =>
+      ids.includes(expert.id)
+        ? [
+            {
+              name: expert.name,
+              run: () => send(agents[index + 1], expert.id, message(`${knowledge}/features/${expert.id}.md`)),
+            },
+          ]
+        : []
+    ),
+  ];
+  const results = await Promise.allSettled(asked.map((item) => item.run()));
+  return asked.filter((_, index) => results[index].status === 'rejected').map((item) => item.name);
 }

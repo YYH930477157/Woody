@@ -24,11 +24,15 @@ export type ModuleExpertsState = {
   saved: ModuleExpertsFile | null;
   /** Feature card ids found in `.woody/features`. */
   cards: string[];
+  /** Whether the business overview `.woody/business.md` exists. */
+  business: boolean;
 };
 
 export type ExpertIssue = 'id' | 'idTaken' | 'name' | 'nameTaken' | 'summary' | 'paths';
 
 export const MODULE_EXPERTS_FILE = 'experts.json';
+/** The business overview the dispatcher (the meter business lead) keeps next to the experts file. */
+export const BUSINESS_OVERVIEW_FILE = 'business.md';
 export const MODULE_EXPERTS_LIMIT = 12;
 /** The PowerShell plain reader on encrypted machines returns at most 64 KiB. */
 export const MODULE_EXPERTS_MAX_BYTES = 64 * 1024;

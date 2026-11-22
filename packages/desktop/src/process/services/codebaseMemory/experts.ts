@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
+  BUSINESS_OVERVIEW_FILE,
   isExpertId,
   MODULE_EXPERTS_FILE,
   MODULE_EXPERTS_MAX_BYTES,
@@ -79,11 +80,20 @@ export function createExpertsStore(options: ExpertsStoreOptions) {
     }
   }
 
+  /** Only whether the overview exists: its content is for the team, not for Woody. */
+  function hasBusiness(root: string): boolean {
+    try {
+      return fs.statSync(path.join(root, '.woody', BUSINESS_OVERVIEW_FILE)).isFile();
+    } catch {
+      return false;
+    }
+  }
+
   return {
     read(repoPath: string): ModuleExpertsState {
       const root = options.canonical(repoPath);
       const file = fileOf(root);
-      return { file, saved: readSaved(file), cards: cards(root) };
+      return { file, saved: readSaved(file), cards: cards(root), business: hasBusiness(root) };
     },
     /** Replace the saved experts. A file that exists but cannot be read is never overwritten. */
     save(repoPath: string, next: ModuleExpertsFile): ModuleExpertsState {
@@ -99,7 +109,7 @@ export function createExpertsStore(options: ExpertsStoreOptions) {
       } finally {
         fs.rmSync(temp, { force: true });
       }
-      return { file, saved: readSaved(file), cards: cards(root) };
+      return { file, saved: readSaved(file), cards: cards(root), business: hasBusiness(root) };
     },
   };
 }

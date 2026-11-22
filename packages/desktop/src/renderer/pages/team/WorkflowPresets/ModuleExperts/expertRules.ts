@@ -4,6 +4,9 @@ import type { ModuleExpert } from '@/common/types/team/moduleExperts';
 /** The built-in skill with the full module expert procedure (AionCore woody.14 and later). */
 export const MODULE_EXPERT_SKILL = 'woody-module-expert';
 
+/** The built-in skill with the meter business knowledge the dispatcher leads with (AionCore woody.16 and later). */
+export const METER_BUSINESS_SKILL = 'woody-meter-business';
+
 export type ExpertTeamLabels = { dispatcher: string; verifier: string };
 
 /** What Woody knows about an expert's card when the team is created. */
@@ -19,6 +22,8 @@ export type ExpertTeamPlan = {
   briefs?: Record<string, ExpertBrief>;
   /** Ids of the experts Woody asks to learn their module as soon as the team starts. */
   onboarding?: string[];
+  /** Whether Woody asks the dispatcher to write the business overview as soon as the team starts. */
+  businessOnboarding?: boolean;
 };
 
 const HEADER = '# Woody module expert team contract (v1)';
@@ -93,10 +98,18 @@ function learnSteps(card: string, knowledge: string): string {
   ].join('\n');
 }
 
+function businessLines(knowledge: string): string[] {
+  return [
+    `You are also the team’s meter business lead: you know what each business function of the meter is for, how the functions depend on each other and which expert carries each one here. Load the ${METER_BUSINESS_SKILL} skill when it is available: it holds the business map, the checklist for breaking a requirement down and the format of the business overview.`,
+    `Business overview: ${knowledge}/business.md maps the meter’s business functions to this project’s code and owners. Read it before you plan. When it is missing, plan from the code and the skill and offer the user to write it. When the code, an expert’s report or the user shows it is wrong, incomplete or out of date, correct it outside the "Corrections from the user" section, update its basis line and tell the user what changed. You may write in the knowledge folder; you still do not edit project files. Use the code index as it is: never run index_repository unless the user asks, and say so when it looks out of date.`,
+  ];
+}
+
 function dispatcherRules(plan: ExpertTeamPlan): string[] {
   const { experts, shared, labels, knowledge } = plan;
   return [
     `You are the dispatcher (${labels.dispatcher}) of a module expert team. You route requirements to the experts who own the code, decide the order of work and report to the user. You do not edit project files yourself.`,
+    ...businessLines(knowledge),
     knowledgeLine(knowledge),
     `Experts (look up their slot IDs with the team member tool; the names match):\n${expertLines(experts)}`,
     `Shared files without an owner; for each goal name exactly one expert to edit them: ${shared.length ? shared.join(', ') : 'none listed'}. Files that match no entry are unowned and handled the same way.`,
@@ -104,12 +117,12 @@ function dispatcherRules(plan: ExpertTeamPlan): string[] {
     OWNERSHIP,
     [
       'On a user goal:',
-      `1. Read ${knowledge}/architecture.md when present and the feature cards of the experts that may be involved. Locate the code to change, with the codebase memory tools when available, otherwise by search. Map every file to its owner by the ownership rule.`,
-      '2. Show the user a dispatch plan: which expert does what, the files each one changes, the interfaces between modules (function, data structure, NVM address, call site, call order), the order of work and what the verifier will check. Base the plan on the impact found in the code, not on the cards alone: before you show it, run search_code yourself for each type, field, default value, address macro, protocol id and function that changes, or ask the owning expert for that list, and show every place that uses, builds or copies it (initializers, sizeof and offsetof, callers) with file, line and owner, so that no copy elsewhere is left behind. List the open questions about the requirement for the user; never treat your own reading of the requirement as confirmed. End your turn and wait for the user’s confirmation; continue only after they confirm or answer, and confirm again if they change the plan. Skip this wait only when the user explicitly said to proceed without confirmation. A question about one module that needs no change goes straight to its expert without a plan.',
+      `1. Read ${knowledge}/business.md and ${knowledge}/architecture.md when present, and the feature cards of the experts that may be involved. With the requirement checklist of the meter business skill, list every business function the goal touches; a new event, for example, usually also reaches the event log, alarm bits, the status word, the display, the load profile status, objects and access rights, and parameters in NVM. Locate the code to change, with the codebase memory tools when available, otherwise by search. Map every file to its owner by the ownership rule.`,
+      '2. Show the user a dispatch plan: which expert does what, the files each one changes, the interfaces between modules (function, data structure, NVM address, call site, call order), the order of work and what the verifier will check. List the business functions the goal touches, each with its owning expert or "no owner", and ask the user who takes the ones with no owner. Base the plan on the impact found in the code, not on the cards alone: before you show it, run search_code yourself for each type, field, default value, address macro, protocol id and function that changes, or ask the owning expert for that list, and show every place that uses, builds or copies it (initializers, sizeof and offsetof, callers) with file, line and owner, so that no copy elsewhere is left behind. Name in the plan the terms you searched; a structure initialised by position (such as {6000u, 10u, ...}) shifts silently when a field is added, so list each such initializer, including factory reset and production defaults. List the open questions about the requirement for the user, including the business questions the skill says are most often missed: values already stored in meters in the field, copies of defaults and factory reset, the head end object list and access rights, and build variants; never treat your own reading of the requirement as confirmed. End your turn and wait for the user’s confirmation; continue only after they confirm or answer, and confirm again if they change the plan. Skip this wait only when the user explicitly said to proceed without confirmation. A question about one module that needs no change goes straight to its expert without a plan.',
       '3. Dispatch with tasks assigned to the experts. Put the complete handoff in each task description, because members cannot see your conversation or each other’s: the goal, the acceptance criteria, the files involved, the interface the expert provides or uses, and the earlier handoffs it depends on. When one module provides what another uses, dispatch the provider first and the user of the interface only after the provider’s handoff arrives. Dispatch experts at the same time only when their files do not overlap and neither needs the other’s output. Do not create tasks in advance and do not chain tasks with dependencies: a dependent task starts its owner as soon as the earlier task is marked completed, before you have the handoff.',
       '4. When an expert reports that it needs a change outside its files, decide who makes it: the owning expert in a new task, or for shared and unowned files one expert you name. Never let two experts edit the same file at the same time. When a change adds a call into another module or changes data, timing or behaviour another module relies on, have that module’s expert check the effects in its module (buffers, counters, timing, state) and update its card before the verifier task; this holds also for changes the user asked an expert for directly.',
       '- When an expert reports that it is blocked on a decision, or asks you to confirm something with the user, put the question to the user at once, with the options and side effects the experts gave; never leave an expert waiting without asking.',
-      '5. When every expert handoff has arrived, create one verifier task with all handoffs, the changed files and the acceptance criteria.',
+      '5. When every expert handoff has arrived, create one verifier task with all handoffs, the changed files, the acceptance criteria and the business functions the goal touches.',
       '6. When the verifier reports findings, send each one to the expert that owns the file as a new task, then create a new verifier task. Allow at most two correction cycles, then report what remains to the user.',
       '7. Report to the user: what changed in each module, the verification evidence, open issues and which feature cards were updated.',
     ].join('\n'),
@@ -120,10 +133,13 @@ function dispatcherRules(plan: ExpertTeamPlan): string[] {
 
 function onboardingLine(plan: ExpertTeamPlan): string {
   const learning = plan.experts.filter((expert) => plan.onboarding?.includes(expert.id));
+  const lead = plan.businessOnboarding
+    ? ` When the team starts, the user asks you to learn the project’s meter business first and write ${plan.knowledge}/business.md as the meter business skill describes; do not change project code while you do it. Handle expert reports that arrive meanwhile as usual, and check the module facts they report against the overview.`
+    : '';
   const base =
     'An expert can be asked to learn its module: it checks its card against the source, completes it, and reports to you with the index problems it found and suggestions for its file list. When those reports arrive, tell the user, expert by expert, every index problem and file list suggestion as reported, or that the expert found none; never call the index fine when an expert reported a problem. Changing .woody/experts.json is the user’s decision.';
-  if (!learning.length) return base;
-  return `${base} When the team starts, these experts learn their modules and then report to you: ${learning
+  if (!learning.length) return `${base}${lead}`;
+  return `${base}${lead} When the team starts, these experts learn their modules and then report to you: ${learning
     .map((expert) => expert.name)
     .join(
       ', '
@@ -168,6 +184,7 @@ function verifierRules(plan: ExpertTeamPlan): string[] {
       '- Work only on tasks from the dispatcher. Your input is the expert handoffs, the changed files and the acceptance criteria.',
       '- Build the project with the available build tool, and run tests or serial checks when the task says the hardware or test setup is available. Report the exact commands and results; never claim a check ran without evidence.',
       '- Inspect the combined change (git diff when the project is a repository): every changed file belongs to the expert that changed it or was assigned to it; both sides of each interface agree (signatures, data layout, NVM addresses, call order), and a new call into another module has no unwanted side effect there (duplicate work, counters, buffers, timestamps, timing); copies of a changed value or structure elsewhere in the project were changed too or reported; #if configuration variants and task or dispatch table order still hold; nothing unrelated changed.',
+      '- When the task lists the business functions the goal touches, check each one in the combined change and report any that the change does not handle.',
       '- Do not modify project files. Send the dispatcher your result with the team message tool: each finding with its owning expert, file and line, severity, evidence and suggested correction; or passed, with the evidence.',
     ].join('\n'),
   ];
@@ -175,12 +192,15 @@ function verifierRules(plan: ExpertTeamPlan): string[] {
 
 export type ExpertTeamRole = { name: string; rules: string; skills?: string[] };
 
-/** The dispatcher first (it leads the team), then one role per expert, then the verifier. */
+/**
+ * The dispatcher first (it leads the team and the meter business), then one role per
+ * expert, then the verifier.
+ */
 export function buildExpertTeamRoles(plan: ExpertTeamPlan): ExpertTeamRole[] {
   if (plan.experts.length === 0) throw new Error('An expert team needs at least one expert');
   const contract = (body: string[]) => [HEADER, ...body, ...COMMON].join('\n\n');
   return [
-    { name: plan.labels.dispatcher, rules: contract(dispatcherRules(plan)) },
+    { name: plan.labels.dispatcher, rules: contract(dispatcherRules(plan)), skills: [METER_BUSINESS_SKILL] },
     ...plan.experts.map((expert) => ({
       name: expert.name,
       rules: contract(memberRules(expert, plan)),

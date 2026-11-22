@@ -40,7 +40,7 @@ describe('module expert team roles', () => {
     // A pre-created dependent task would wake its owner before the handoff exists.
     expect(dispatcher.rules).toContain('do not chain tasks with dependencies');
     expect(dispatcher.rules).toContain('at most two correction cycles');
-    expect(dispatcher.rules).toContain('Read .woody/architecture.md');
+    expect(dispatcher.rules).toContain('Read .woody/business.md and .woody/architecture.md when present');
   });
 
   it('keeps each expert to its own files and its feature card', () => {
@@ -79,7 +79,7 @@ describe('module expert team roles', () => {
     expect(sensor.rules).toContain('never run index_repository');
     expect(sensor.rules).toContain('Load the woody-module-expert skill');
     expect(sensor.skills).toEqual(['woody-module-expert']);
-    expect(dispatcher.skills).toBeUndefined();
+    expect(dispatcher.skills).toEqual(['woody-meter-business']);
     expect(sensor.rules).toContain('look for callers the index misses with search_code');
     expect(sensor.rules).toContain('Write your part of .woody/features/sensor.md after the generated part');
     expect(sensor.rules).toContain('Send the dispatcher a short report');
@@ -102,6 +102,34 @@ describe('module expert team roles', () => {
       'a new call into another module has no unwanted side effect there'
     );
     expect(dispatcher.rules).not.toContain('When the team starts, these experts learn their modules');
+  });
+
+  it('makes the dispatcher the meter business lead with the overview and the requirement checklist', () => {
+    const [dispatcher, , , verifier] = buildExpertTeamRoles(plan);
+    expect(dispatcher.rules).toContain('You are also the team’s meter business lead');
+    expect(dispatcher.rules).toContain('Load the woody-meter-business skill');
+    expect(dispatcher.rules).toContain('Business overview: .woody/business.md maps');
+    expect(dispatcher.rules).toContain(
+      'When it is missing, plan from the code and the skill and offer the user to write it'
+    );
+    expect(dispatcher.rules).toContain('You may write in the knowledge folder; you still do not edit project files');
+    expect(dispatcher.rules).toContain('never run index_repository unless the user asks');
+    expect(dispatcher.rules).toContain('With the requirement checklist of the meter business skill');
+    expect(dispatcher.rules).toContain('each with its owning expert or "no owner"');
+    expect(dispatcher.rules).toContain('values already stored in meters in the field');
+    expect(dispatcher.rules).toContain('Name in the plan the terms you searched');
+    expect(dispatcher.rules).toContain('the acceptance criteria and the business functions the goal touches');
+    expect(verifier.rules).toContain('check each one in the combined change');
+  });
+
+  it('asks the dispatcher to write the overview first only when Woody kicks it off', () => {
+    expect(buildExpertTeamRoles(plan)[0].rules).not.toContain('learn the project’s meter business first');
+    const rules = buildExpertTeamRoles({ ...plan, businessOnboarding: true, onboarding: ['sensor'] })[0].rules;
+    expect(rules).toContain(
+      'When the team starts, the user asks you to learn the project’s meter business first and write .woody/business.md'
+    );
+    // The experts' kickoff stays.
+    expect(rules).toContain('these experts learn their modules and then report to you: Sensor 专家.');
   });
 
   it('quotes each expert’s brief and tells the dispatcher who learns its module first', () => {

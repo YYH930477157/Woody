@@ -68,7 +68,9 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
   const [workflowBaseId, setWorkflowBaseId] = useState<string>();
   const [preparedWorkflow, setPreparedWorkflow] = useState<TeamAssistantInput[]>();
   // Who learns their module once the expert team exists; kept with the prepared roles for a retry.
-  const onboardingRef = useRef<{ experts: ModuleExpert[]; ids: string[]; knowledge: string } | undefined>(undefined);
+  const onboardingRef = useRef<
+    { experts: ModuleExpert[]; ids: string[]; knowledge: string; business: boolean } | undefined
+  >(undefined);
   const isolated = useIsolatedWorkspace(workspace);
   const experts = useModuleExperts(workspace, workflowPreset === 'experts');
   const expertsMissing = workflowPreset === 'experts' && !preparedWorkflow && !experts.ready;
@@ -185,6 +187,8 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
             // Briefs Woody has not written yet, or that no longer match the experts, are written now.
             const briefs = experts.hasCards ? await loadExpertBriefs(workspace, i18n.language) : undefined;
             const onboarding = experts.onboard ? onboardingIds(chosenExperts.experts, briefs) : [];
+            // The dispatcher leads the meter business: it writes the overview a project lacks.
+            const businessOnboarding = experts.onboard && experts.businessMissing;
             agents = await prepareRoles({
               base: workflowBase,
               teamName: name,
@@ -196,9 +200,15 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
                 knowledge,
                 briefs,
                 onboarding,
+                businessOnboarding,
               }),
             });
-            onboardingRef.current = { experts: chosenExperts.experts, ids: onboarding, knowledge };
+            onboardingRef.current = {
+              experts: chosenExperts.experts,
+              ids: onboarding,
+              knowledge,
+              business: businessOnboarding,
+            };
           } else {
             const labels = Object.fromEntries(
               WORKFLOW_ROLES.map((role) => [role, t(`team.workflow.roles.${role}`)])
@@ -258,12 +268,20 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
       onCreated(team);
       resetModalState();
       // The team exists whatever happens here: a failed request is reported, not undone.
-      if (learning?.ids.length)
+      if (learning && (learning.ids.length || learning.business))
         void startOnboarding({
           team,
           agents,
-          ...learning,
+          experts: learning.experts,
+          ids: learning.ids,
+          knowledge: learning.knowledge,
           message: (card) => t('team.experts.onboardMessage', { card }),
+          lead: learning.business
+            ? {
+                name: t('team.experts.roles.dispatcher'),
+                message: t('team.experts.leadOnboardMessage', { file: `${learning.knowledge}/business.md` }),
+              }
+            : undefined,
         }).then((failed) => {
           if (failed.length) Message.warning(t('team.experts.onboardFailed', { names: failed.join(', ') }));
         });
