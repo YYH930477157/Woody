@@ -132,6 +132,120 @@ describe('module classification', () => {
     const [found] = modules.classify({ model, functions, files: Object.keys(files) });
     expect(found.files).toEqual(['app/sensor.c']);
   });
+
+  it('groups split display_*.c files and headers into one display module without merging unrelated layer prefixes', async () => {
+    const files: Record<string, string> = {
+      'app/task.c': [
+        'static const tTask initList[] = { TASK(DISP_Init), TASK(SU_Init) };',
+        'static const tTask pdList[] = { TASK(DISP_PwrDwnSave) };',
+        'static const tTask phyList[] = { TASK(hdlc_process), TASK(wrapper_process) };',
+        'void vMainTask(void *p)',
+        '{',
+        '    for (int i = 0; i < 2; i++) initList[i].func();',
+        '    for (int i = 0; i < 1; i++) pdList[i].func();',
+        '    for (int i = 0; i < 2; i++) phyList[i].func();',
+        '    vTaskDelay(25);',
+        '}',
+        'void appInit(void) { xTaskCreate(vMainTask, "main", 512, NULL, 3, NULL); }',
+        '',
+      ].join('\n'),
+      'app/routine/display_task.c': 'void DISP_Init(void)\n{\n}\nstatic void dispSecondTask(void)\n{\n}\n',
+      'app/routine/display_pwdn.c': 'void DISP_PwrDwnSave(void)\n{\n}\n',
+      'app/routine/display_icon.c': 'void dispIcon(void)\n{\n}\n',
+      'app/routine/display_digit.c': 'void dispDigit(void)\n{\n}\n',
+      'app/routine/display_key.c': 'void keyCodeProcess(void)\n{\n}\n',
+      'app/routine/display_table.c': 'const int dispTable[] = { 1, 2 };\n',
+      'app/routine/display.h': 'void DISP_Init(void);\n',
+      'app/routine/display_priv.h': 'void dispIcon(void);\n',
+      'app/routine/su_14522.c': 'void SU_Init(void)\n{\n}\n',
+      'app/dlms/phy/dlms_hdlc.c': 'void hdlc_process(void)\n{\n}\n',
+      'app/dlms/phy/dlms_wrapper.c': 'void wrapper_process(void)\n{\n}\n',
+    };
+    const functions: Row[] = [
+      ['vMainTask', 'app/task.c', '4', '10'],
+      ['appInit', 'app/task.c', '11', '11'],
+      ['DISP_Init', 'app/routine/display_task.c', '1', '3'],
+      ['dispSecondTask', 'app/routine/display_task.c', '4', '6'],
+      ['DISP_PwrDwnSave', 'app/routine/display_pwdn.c', '1', '3'],
+      ['dispIcon', 'app/routine/display_icon.c', '1', '3'],
+      ['dispDigit', 'app/routine/display_digit.c', '1', '3'],
+      ['keyCodeProcess', 'app/routine/display_key.c', '1', '3'],
+      ['SU_Init', 'app/routine/su_14522.c', '1', '3'],
+      ['hdlc_process', 'app/dlms/phy/dlms_hdlc.c', '1', '3'],
+      ['wrapper_process', 'app/dlms/phy/dlms_wrapper.c', '1', '3'],
+    ];
+    const model = await analysis(files, functions);
+    const found = modules.classify({
+      model,
+      functions,
+      files: Object.keys(files),
+      experts: [{ id: 'display', name: '显示专家', paths: ['app/routine/display_*.c', 'app/routine/display*.h'] }],
+      shared: [],
+    });
+    expect(found).toEqual([
+      expect.objectContaining({ id: 'dlms-hdlc', files: ['app/dlms/phy/dlms_hdlc.c'] }),
+      expect.objectContaining({ id: 'dlms-wrapper', files: ['app/dlms/phy/dlms_wrapper.c'] }),
+      {
+        id: 'display',
+        files: [
+          'app/routine/display_digit.c',
+          'app/routine/display_icon.c',
+          'app/routine/display_key.c',
+          'app/routine/display_pwdn.c',
+          'app/routine/display_table.c',
+          'app/routine/display_task.c',
+          'app/routine/display.h',
+          'app/routine/display_priv.h',
+        ],
+        prefix: 'DISP',
+        tables: [
+          { table: 'initList', functions: ['DISP_Init'] },
+          { table: 'pdList', functions: ['DISP_PwrDwnSave'] },
+        ],
+        experts: ['display'],
+      },
+      expect.objectContaining({ id: 'su-14522', files: ['app/routine/su_14522.c'] }),
+    ]);
+  });
+
+  it('discovers standalone RTOS tasks, secondary tables and struct vtable modules while suggesting shared files', async () => {
+    const files: Record<string, string> = {
+      'app/mtask.c': TASK,
+      'app/sensor.c': 'void SENSOR_Second(void)\n{\n}\n',
+      'app/ui.c': 'void UI_Second(void)\n{\n}\n',
+      'app/tick.c': 'void TICK_Second(void)\n{\n}\n',
+      'app/lvgl_task.c': 'void lvgl_task(void *p)\n{\n    vTaskDelay(10);\n}\n',
+      'app/factory.c':
+        'static const tTask cmdList[] = { TASK(FACT_Read), TASK(FACT_Write) };\nvoid FACT_Run(void)\n{\n    for (int i = 0; i < 2; i++) cmdList[i].func();\n}\nvoid FACT_Read(void)\n{\n}\nvoid FACT_Write(void)\n{\n}\n',
+      'app/eeprom_addr_table.h': 'ENTRY(A, 1)\nENTRY(B, 2)\n',
+      'app/datastore.h': 'enum {\n#define ENTRY(a, b) a,\n#include "eeprom_addr_table.h"\n};\n',
+    };
+    const functions: Row[] = [
+      ['vMainTask', 'app/mtask.c', '7', '10'],
+      ['appInit', 'app/mtask.c', '11', '14'],
+      ['SENSOR_Second', 'app/sensor.c', '1', '3'],
+      ['UI_Second', 'app/ui.c', '1', '3'],
+      ['TICK_Second', 'app/tick.c', '1', '3'],
+      ['lvgl_task', 'app/lvgl_task.c', '1', '4'],
+      ['FACT_Run', 'app/factory.c', '2', '5'],
+      ['FACT_Read', 'app/factory.c', '6', '8'],
+      ['FACT_Write', 'app/factory.c', '9', '11'],
+    ];
+    files['app/mtask.c'] = files['app/mtask.c'].replace(
+      'xTaskCreate(vMainTask, "main", 512, NULL, 3, NULL);',
+      'xTaskCreate(vMainTask, "main", 512, NULL, 3, NULL);\n    xTaskCreate(lvgl_task, "lvgl", 512, NULL, 2, NULL);'
+    );
+    functions[1] = ['appInit', 'app/mtask.c', '11', '15'];
+    const model = await architecture.analyze({
+      functions,
+      sourceFiles: Object.keys(files),
+      readSource: (file: string) => files[file] ?? null,
+      callersOf: async () => new Map([['appInit|app/mtask.c', ['main']]]),
+    });
+    const found = modules.classify({ model, functions, files: Object.keys(files) });
+    expect(found.map((item: { id: string }) => item.id)).toEqual(['factory', 'lvgl-task', 'sensor', 'tick', 'ui']);
+    expect(modules.suggestShared({ model })).toEqual(['app/datastore.h', 'app/eeprom_addr_table.h', 'app/mtask.c']);
+  });
 });
 
 describe('source scanning', () => {
@@ -416,5 +530,126 @@ describe('expert brief', () => {
       ['~S', 'app/ui.cpp:3'],
       ['operator+', 'app/ui.cpp:2'],
     ]);
+  });
+
+  it('extracts CRLF and multiline address macros, skips #if 0 macros, and ignores indexed *ADDR* functions', () => {
+    const crlfFiles: Record<string, string> = {
+      'app/alarm.c': [
+        '#if 0',
+        '#define ALARM_PARA_ADDR 0x00',
+        '#endif',
+        '#define ALARM_PARA_ADDR (NVM_ADDR(1) + 0x10)',
+        '#define ALARM_BAK_ADDR(slot) \\',
+        '    (ALARM_PARA_ADDR + ((slot) * 0x40))',
+        'void ALARM_Init(void)',
+        '{',
+        '#if 0',
+        '    nvmRead(DEAD_ADDR);',
+        '#endif',
+        '    nvmRead(ALARM_PARA_ADDR);',
+        '    nvmRead(ALARM_BAK_ADDR(1));',
+        '    nvmRead(LOG_ADDR(2));',
+        '    nvmRead(UNKNOWN_EXT_ADDR);',
+        '}',
+        '',
+      ].join('\r\n'),
+      'app/datastore.c':
+        'int LOG_ADDR(int id)\r\n{\r\n    return id;\r\n}\r\nint NVM_ADDR(int id)\r\n{\r\n    return id;\r\n}\r\n',
+    };
+    const rows: Row[] = [
+      ['ALARM_Init', 'app/alarm.c', '7', '16'],
+      ['LOG_ADDR', 'app/datastore.c', '1', '4'],
+      ['NVM_ADDR', 'app/datastore.c', '5', '8'],
+    ];
+    const data = modules.collect({
+      expert: { id: 'alarm', name: 'Alarm', paths: ['app/alarm.c'] },
+      experts: [{ id: 'alarm', name: 'Alarm', paths: ['app/alarm.c'] }],
+      shared: [],
+      model: { tasks: [], tables: [], otherTables: [], smallTables: [], structTables: [] },
+      functions: rows,
+      files: Object.keys(crlfFiles),
+      calls: [],
+      variables: [],
+      coverage: new Map(),
+      source: source(crlfFiles),
+    });
+    const text = modules.renderBrief(data, labels['en-US'], { date: 'd', mode: 'full' });
+    expect(text).toContain('- `ALARM_PARA_ADDR`: defined as `(NVM_ADDR(1) + 0x10)` at app/alarm.c:4');
+    expect(text).toContain(
+      '- `ALARM_BAK_ADDR(slot)`: defined as `(ALARM_PARA_ADDR + ((slot) * 0x40))` at app/alarm.c:5'
+    );
+    expect(text).toContain('- `UNKNOWN_EXT_ADDR`: definition not found; used at app/alarm.c:15');
+    expect(text).not.toContain('LOG_ADDR');
+    expect(text).not.toContain('DEAD_ADDR');
+  });
+
+  it('flags unowned split files and unparsed table outlines without flagging unrelated shared-prefix folders', () => {
+    const splitFiles: Record<string, string> = {
+      'app/routine/display_task.c': 'void DISP_Init(void)\n{\n}\n',
+      'app/routine/display_icon.c': 'void dispIcon(void)\n{\n}\n',
+      'app/routine/display_table.c': 'const int DispItems[] = {\n    1,\n    2,\n};\n',
+      'app/routine/display.h': 'void DISP_Init(void);\n',
+      'app/ic/ic_01.c': 'void IC_DataGet(void)\n{\n}\n',
+      'app/ic/ic_03.c': 'void IC_RegGet(void)\n{\n}\n',
+      'app/ic/ic_07.c': 'void IC_ProfileGet(void)\n{\n}\n',
+    };
+    const detectedModules = [
+      {
+        id: 'display',
+        files: [
+          'app/routine/display_icon.c',
+          'app/routine/display_table.c',
+          'app/routine/display_task.c',
+          'app/routine/display.h',
+        ],
+        experts: ['display'],
+      },
+      {
+        id: 'ic',
+        files: ['app/ic/ic_01.c', 'app/ic/ic_03.c', 'app/ic/ic_07.c'],
+        experts: ['profile'],
+      },
+    ];
+    const currentExperts: Expert[] = [
+      // Legacy single-file path before display.c was split into display_*.c.
+      {
+        id: 'display',
+        name: 'Display',
+        paths: ['app/routine/display.c', 'app/routine/display.h', 'app/routine/display_table.c'],
+      },
+      { id: 'profile', name: 'Profile', paths: ['app/ic/ic_07.c'] },
+    ];
+    const dispData = modules.collect({
+      expert: currentExperts[0],
+      experts: currentExperts,
+      shared: [],
+      model: { tasks: [], tables: [], otherTables: [], smallTables: [], structTables: [] },
+      functions: [],
+      files: Object.keys(splitFiles),
+      calls: [],
+      variables: [],
+      coverage: new Map([['app/routine/display_table.c', { status: 'unusable', freshness: 'clean', ranges: [] }]]),
+      source: source(splitFiles),
+      modules: detectedModules,
+    });
+    const dispBrief = modules.renderBrief(dispData, labels['en-US'], { date: 'd', mode: 'full' });
+    expect(dispData.driftFiles).toEqual(['app/routine/display_icon.c', 'app/routine/display_task.c']);
+    expect(dispBrief).toContain('tables: `DispItems` (1-4)');
+    expect(modules.digest(dispData).issues.drift).toBe(2);
+
+    const profData = modules.collect({
+      expert: currentExperts[1],
+      experts: currentExperts,
+      shared: [],
+      model: { tasks: [], tables: [], otherTables: [], smallTables: [], structTables: [] },
+      functions: [['IC_ProfileGet', 'app/ic/ic_07.c', '1', '3']],
+      files: Object.keys(splitFiles),
+      calls: [],
+      variables: [],
+      coverage: new Map(),
+      source: source(splitFiles),
+      modules: detectedModules,
+    });
+    expect(profData.driftFiles).toEqual([]);
   });
 });

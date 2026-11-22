@@ -603,4 +603,52 @@ describe('modules and experts in the architecture panel', () => {
     expect(await screen.findByText(key('modules.expertsUnreadable'))).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'sensor' })).toBeDisabled();
   });
+
+  it('saves wildcard display_*.c paths when creating the display expert from a split display module', async () => {
+    const splitModules = [
+      ...modules,
+      {
+        id: 'display',
+        files: [
+          'app/routine/display_data.c',
+          'app/routine/display_icon.c',
+          'app/routine/display_task.c',
+          'app/routine/display.h',
+        ],
+        tables: ['initList', 'secondList'],
+        functions: ['DISP_Init', 'DISP_SecondProc'],
+        experts: [],
+      },
+    ];
+    api.moduleCards.mockResolvedValue({
+      modules: splitModules,
+      experts: [{ id: 'ui', card: '.woody/features/ui.md', state: 'stale' }],
+    });
+    render(<CodebaseMemoryPanel repoPaths={{ one: 'D:/one' }} />);
+    await screen.findByText(key('modules.states.stale'));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'display' }));
+    fireEvent.click(screen.getByRole('button', { name: key('modules.newExpert') }));
+    const [name, id] = screen.getByTestId('codebase-module-draft').querySelectorAll('input');
+    expect(id).toHaveValue('display');
+    fireEvent.change(name, { target: { value: '显示专家' } });
+    fireEvent.click(within(screen.getByTestId('codebase-module-draft')).getByRole('button', { name: 'common.save' }));
+    await waitFor(() =>
+      expect(api.saveExperts).toHaveBeenCalledExactlyOnceWith({
+        repoPath: 'D:/one',
+        file: {
+          version: 1,
+          experts: [
+            uiExpert,
+            {
+              id: 'display',
+              name: '显示专家',
+              summary: key('modules.summaryDraft'),
+              paths: ['app/routine/display_*.c', 'app/routine/display.h'],
+            },
+          ],
+          shared: ['app/task.c'],
+        },
+      })
+    );
+  });
 });

@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
-import { Button, Checkbox, Input, Tag } from '@arco-design/web-react';
+import { Alert, Button, Checkbox, Input, Tag } from '@arco-design/web-react';
 import { Delete, Edit, Plus } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
+import type { ModuleCardState } from '@/common/types/codebaseMemory/types';
 import { parseExpertPaths } from '@/common/types/team/moduleExperts';
 import ExpertEditor from './ExpertEditor';
 import type { ModuleExpertsState } from './useModuleExperts';
 
 export { buildExpertTeamRoles, type ExpertBrief, type ExpertTeamLabels } from './expertRules';
 export { loadExpertBriefs, onboardingIds, startOnboarding } from './onboarding';
-export { useModuleExperts, type ModuleExpertsState } from './useModuleExperts';
+export { useModuleExperts, type ExpertIndexState, type ModuleExpertsState } from './useModuleExperts';
 
 type Props = {
   workspace: string;
@@ -16,9 +17,16 @@ type Props = {
   disabled: boolean;
 };
 
+function cardTagColor(state: ModuleCardState | undefined): 'green' | 'orange' | 'red' | undefined {
+  if (state === 'ready') return 'green';
+  if (state === 'stale') return 'orange';
+  if (state === 'error') return 'red';
+  return undefined;
+}
+
 /** The module experts of the chosen project: who joins this team, and their saved definitions. */
 const ModuleExperts: React.FC<Props> = ({ workspace, state, disabled }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [open, setOpen] = useState<Set<string>>(() => new Set());
   const [sharedText, setSharedText] = useState<string>();
   const toggleOpen = (key: string) =>
@@ -42,6 +50,34 @@ const ModuleExperts: React.FC<Props> = ({ workspace, state, disabled }) => {
   }
   if (state.loading || !state.file) return null;
 
+  let bannerType: 'info' | 'warning' | 'error' | undefined;
+  let bannerMessage: string | undefined;
+  let bannerAction: string | undefined;
+  if (state.indexState === 'disabled') {
+    bannerType = 'info';
+    bannerMessage = t('team.experts.indexStatus.disabled');
+    bannerAction = t('team.experts.indexStatus.enableAndIndex');
+  } else if (state.indexState === 'unindexed') {
+    bannerType = 'warning';
+    bannerMessage = t('team.experts.indexStatus.unindexed');
+    bannerAction = t('team.experts.indexStatus.buildIndex');
+  } else if (state.indexState === 'running') {
+    bannerType = 'info';
+    bannerMessage = t('team.experts.indexStatus.running');
+  } else if (state.indexState === 'failed') {
+    bannerType = 'error';
+    bannerMessage = t('team.experts.indexStatus.failed', { message: state.indexError ?? '' });
+    bannerAction = t('team.experts.indexStatus.retryIndex');
+  } else if (state.indexState === 'outdated') {
+    bannerType = 'warning';
+    bannerMessage = t('team.experts.indexStatus.outdated', {
+      added: state.indexDrift?.added ?? 0,
+      modified: state.indexDrift?.modified ?? 0,
+      deleted: state.indexDrift?.deleted ?? 0,
+    });
+    bannerAction = t('team.experts.indexStatus.refreshIndex');
+  }
+
   return (
     <section data-testid='team-experts' className='flex flex-col gap-10px'>
       <div className='flex items-center justify-between gap-10px'>
@@ -64,6 +100,32 @@ const ModuleExperts: React.FC<Props> = ({ workspace, state, disabled }) => {
           {t('team.experts.add')}
         </Button>
       </div>
+      {bannerType && bannerMessage && (
+        <div data-testid='team-experts-index-banner'>
+          <Alert
+            type={bannerType}
+            showIcon
+            className='rounded-8px px-12px py-8px text-12px'
+            content={bannerMessage}
+            action={
+              bannerAction && state.canIndex ? (
+                <Button
+                  size='mini'
+                  type='outline'
+                  disabled={disabled || state.indexing}
+                  loading={state.indexing}
+                  onClick={() => {
+                    void state.runIndex(i18n.language);
+                  }}
+                  data-testid='team-experts-index-action'
+                >
+                  {bannerAction}
+                </Button>
+              ) : undefined
+            }
+          />
+        </div>
+      )}
       {state.drafts.length === 0 && (
         <div className='text-12px leading-18px text-t-tertiary'>{t('team.experts.empty')}</div>
       )}
@@ -92,7 +154,7 @@ const ModuleExperts: React.FC<Props> = ({ workspace, state, disabled }) => {
                     {state.hasCards && draft.id && (
                       <Tag
                         size='small'
-                        color={state.cardOf(draft.id)?.state === 'ready' ? 'green' : undefined}
+                        color={cardTagColor(state.cardOf(draft.id)?.state)}
                         data-testid={`team-expert-card-${draft.id}`}
                       >
                         {t(`conversation.codebaseMemory.modules.states.${state.cardOf(draft.id)?.state ?? 'nobrief'}`)}

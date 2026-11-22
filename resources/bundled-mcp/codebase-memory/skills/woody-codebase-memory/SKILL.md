@@ -44,7 +44,7 @@ Use real names and project-relative paths. The project is bound for you: never p
 Use this when the user asks how a feature works, for example "where are the alarm parameters stored and where does the alarm check get its data". Work in this order, and read the key code with `get_code_snippet` before stating a condition, threshold or address.
 
 1. Look for a card first: list `.woody/features/*.md` in the project root. If one covers the feature, read it, re-check only the facts the question depends on, and answer from it.
-2. Entry points: `search_graph({"query":"alarm detection","label":"Function","limit":30})`, then `search_graph({"name_pattern":"(?i)alarm","label":"Function","limit":60})` with the feature's own word.
+2. Entry points: `search_graph({"query":"alarm detection","label":"Function","limit":30})`, then `search_graph({"name_pattern":"(?i)alarm","label":"Function","limit":60})` with the feature's own word. When a module is split across `<module>_*.c` files (for example `display_*.c` with `display.h` / `display_*.h` instead of a single `display.c`), include every sibling `<module>_*.c` file in that folder—even those that do not register directly in a dispatch table—and prefer `<dir>/<module>_*.c` in `.woody/experts.json`.
 3. Flow: trace the periodic or top-level function outbound, two levels. Trace it inbound to learn what schedules it; if that is empty, apply the macro and table rule above.
 4. Data sources: checks often read global measurement structures instead of calling getters. For each check, list the globals it uses with the USAGE query above, then trace who writes those variables.
 5. Parameters: find the parameter variable and its type (names such as `Para`, `Param`, `Cfg`, `Thd`), its readers and writers, and its default value. Trace the set or save function with `mode` `data_flow`: the arguments show the storage call and address macro, for example an EEPROM write of `PARA_ADDR`. Find the macro with `search_code`. Trace the set function inbound to see who changes the parameters: protocol objects, factory commands or the UI.
@@ -72,7 +72,7 @@ A module expert's card (`.woody/features/<expert id>.md`) starts with a part bet
 
 ## Architecture file
 
-Woody writes `.woody/architecture.md` from the index and keeps it up to date after every index. It lists the RTOS tasks and what they wait on, the dispatch tables each task runs (in order, with `#if` conditions and comments), the functions held in struct fields and where those fields are called through a pointer, the order constraints from those comments, and which tables each module registers in. Its last section, the Change rules, is written by the team.
+Woody writes `.woody/architecture.md` from the index and keeps it up to date after every index. It lists the RTOS tasks and what they wait on, the dispatch tables each task runs (in order, with `#if` conditions and comments), the functions held in struct fields (both C99 `.field = fn` and positional initializers) and where those fields are called through a pointer, inter-image API vector tables (`Boot` / `APP1` / `APP2` pointer macros and entry structs), large data and X-Macro tables (with line ranges even when a file failed to parse), the order constraints from comments, and which tables or tasks each module registers in. Its last section, the Change rules, is written by the team.
 
 Read it before you change code, and follow it:
 
@@ -82,6 +82,14 @@ Read it before you change code, and follow it:
 4. Never edit between the `woody:generated` markers; Woody rewrites that part. If you learn a rule the team should keep, suggest adding it to the Change rules.
 5. Entries marked as not in the index are real code in a skipped folder or behind `#if`: read their files directly.
 
+## Adapting when architecture changes
+
+Firmware projects evolve: monolithic `.c` files split into `<module>_*.c`, folders move, modules shift from cooperative dispatch tables to standalone RTOS tasks or struct vtables, or new inter-image / X-Macro tables appear. Adapt in this order whenever the generated brief, `.woody/architecture.md`, or the source disagrees with an older card or `.woody/experts.json`:
+
+1. Trust the source and the latest `woody:generated` sections over prose in `.woody/features/*.md` or `.woody/business.md`. Woody marks a card stale automatically when owned files change, an expert path stops matching, unowned sibling files appear in the same module, or the module's scheduling entries shift.
+2. Check the `Index check` and `Files and index state` lines of the card first: if paths match no indexed file or unowned files are flagged in the same module, inspect those candidate files and suggest updating `.woody/experts.json` with resilient patterns (`<dir>/<module>_*.c`, `<dir>/<module>*.h`, or `<dir>/`) rather than brittle single-file names.
+3. Follow whichever scheduling mechanism the module now uses in `.woody/architecture.md`—dispatch tables, standalone RTOS tasks, struct function-pointer tables, or inter-image API tables—and rewrite the outdated sections of the feature card (while keeping `Corrections from the user` intact).
+
 ## Around a change
 
-Before editing, find the entry point, trace callers and callees one or two levels, and read the exact code you will change. In a project with `.woody/architecture.md`, read it first. After editing, run the relevant tests; in a Git project `detect_changes` lists affected symbols you may have missed. If the change touches a feature that has a card, update the card.
+Before editing, find the entry point, trace callers and callees one or two levels, and read the exact code you will change. In a project with `.woody/architecture.md`, read it first. After editing, run the relevant tests; `detect_changes` maps Git diffs to affected symbols, and in workspaces without Git automatically falls back to reporting files modified, deleted or added since the last index along with their external callers. If the change touches a feature that has a card, update the card.

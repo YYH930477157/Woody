@@ -25,7 +25,9 @@ if (tool === 'query_graph') {
   const query = JSON.parse(args[args.length - 1]).query;
   const rows = query.includes('a.start_line')
     ? graph.edges || []
-    : query.includes('CALLS')
+    : query.includes('DISTINCT b.name')
+      ? graph.impact || []
+      : query.includes('CALLS')
       ? graph.callers
       : query.includes('Variable')
         ? graph.variables || []
@@ -358,5 +360,150 @@ describe('module expert cards in the project runtime', () => {
     const cards = await service.moduleCards(repo, {});
     expect(cards.experts[0]).toMatchObject({ id: 'sensor', state: 'error', error: expect.stringMatching(/UTF-8/) });
     expect(cards.experts[0].digest).toBeUndefined();
+  });
+
+  it('marks a ready expert card stale when module boundaries drift without owned files changing', async () => {
+    const service = runtime();
+    await service.save(repo, { version: 1, enabled: true, mode: 'full' });
+    await indexed(service, 'en-US');
+    fs.appendFileSync(path.join(repo, '.woody', 'features', 'sensor.md'), '\n## Flow\n\nReads sensor.\n');
+    expect((await service.moduleCards(repo, {})).experts[0].state).toBe('ready');
+
+    // A new sibling file joins the `sensor` module while `app/sensor.c` itself is untouched.
+    write('app/sensor_cal.c', 'void SENSOR_Cal(void)\n{\n}\n');
+    write(
+      'graph.json',
+      JSON.stringify({
+        files: ['app/task.c', 'app/sensor.c', 'app/sensor_cal.c', 'app/tick.c'],
+        functions: [
+          ['vMainTask', 'app/task.c', '6', '9'],
+          ['appInit', 'app/task.c', '10', '13'],
+          ['SENSOR_Second', 'app/sensor.c', '1', '3'],
+          ['SENSOR_Cal', 'app/sensor_cal.c', '1', '3'],
+          ['TICK_Second', 'app/tick.c', '1', '3'],
+        ],
+        callers: [['appInit', 'app/task.c', 'main']],
+      })
+    );
+    await indexed(service);
+    const updated = await service.moduleCards(repo, {});
+    expect(updated.experts[0].state).toBe('stale');
+    expect(updated.experts[0].digest?.issues.drift).toBe(1);
+  });
+
+  it('falls back to index freshness for detect_changes when the workspace has no Git repository', async () => {
+    write(
+      'graph.json',
+      JSON.stringify({
+        files: ['app/task.c', 'app/sensor.c', 'app/old.c'],
+        functions: [
+          ['vMainTask', 'app/task.c', '6', '9'],
+          ['appInit', 'app/task.c', '10', '13'],
+          ['SENSOR_Second', 'app/sensor.c', '1', '3'],
+        ],
+        callers: [['appInit', 'app/task.c', 'main']],
+        impact: [['SENSOR_Second', 'app/sensor.c', 'vMainTask', 'app/task.c']],
+      })
+    );
+    write(
+      'coverage.json',
+      JSON.stringify({
+        paths: [
+          { path: 'app/task.c', status: 'indexed', freshness: 'clean', coverage: [] },
+          { path: 'app/sensor.c', status: 'indexed', freshness: 'metadata_changed', coverage: [] },
+          { path: 'app/old.c', status: 'indexed', freshness: 'missing', coverage: [] },
+        ],
+      })
+    );
+    write('app/sensor_new.c', 'void SENSOR_New(void)\n{\n}\n');
+    const service = runtime();
+    await service.save(repo, { version: 1, enabled: true, mode: 'full' });
+    await indexed(service, 'en-US');
+
+    const jsonResult = await service.callTool(repo, 'detect_changes', { format: 'json' });
+    expect(jsonResult.structuredContent).toMatchObject({
+      source: 'index_freshness_fallback',
+      modified: ['app/sensor.c'],
+      deleted: ['app/old.c'],
+      added: ['app/sensor_new.c', 'app/tick.c'],
+      impacted: [
+        { callee: 'SENSOR_Second', calleeFile: 'app/sensor.c', caller: 'vMainTask', callerFile: 'app/task.c' },
+      ],
+    });
+  });
+
+  it('reports indexPhase and pre-checks disk drift (added, modified, deleted) until re-indexed', async () => {
+    const service = runtime();
+    await service.save(repo, { version: 1, enabled: true, mode: 'full' });
+
+    const before = await service.moduleCards(repo, {});
+    expect(before.indexPhase).toBe('idle');
+    expect(before.indexDrift).toBeUndefined();
+
+    await indexed(service, 'en-US');
+    const clean = await service.moduleCards(repo, {});
+    expect(clean.indexPhase).toBe('succeeded');
+    expect(clean.indexDrift).toBeUndefined();
+
+    // Ensure disk writes land strictly after `indexedAt`.
+    await new Promise((resolve) => setTimeout(resolve, 15));
+    write('app/sensor.c', 'int sensorLevel = 2;\nvoid SENSOR_Second(void)\n{\n}\n');
+    write('app/display_lcd.c', 'void DISPLAY_Lcd(void)\n{\n}\n');
+    fs.rmSync(path.join(repo, 'app/tick.c'));
+
+    const drifted = await service.moduleCards(repo, {});
+    expect(drifted.indexPhase).toBe('succeeded');
+    expect(drifted.indexDrift).toEqual({ added: 1, modified: 1, deleted: 1 });
+
+    write(
+      'graph.json',
+      JSON.stringify({
+        files: ['app/task.c', 'app/sensor.c', 'app/display_lcd.c'],
+        functions: [
+          ['vMainTask', 'app/task.c', '6', '9'],
+          ['appInit', 'app/task.c', '10', '13'],
+          ['SENSOR_Second', 'app/sensor.c', '2', '4'],
+          ['DISPLAY_Lcd', 'app/display_lcd.c', '1', '3'],
+        ],
+        callers: [['appInit', 'app/task.c', 'main']],
+      })
+    );
+    await indexed(service, 'en-US');
+    const refreshed = await service.moduleCards(repo, {});
+    expect(refreshed.indexPhase).toBe('succeeded');
+    expect(refreshed.indexDrift).toBeUndefined();
+  });
+
+  it('resolves a linked Git worktree without .woody config to the main repository index', async () => {
+    const service = runtime();
+    await service.save(repo, { version: 1, enabled: true, mode: 'full' });
+    await indexed(service, 'en-US');
+
+    // Simulate `<repo>/.git/worktrees/feature` and a linked worktree `<root>/firmware-feature`.
+    const gitWorktreeMeta = path.join(repo, '.git', 'worktrees', 'feature');
+    fs.mkdirSync(gitWorktreeMeta, { recursive: true });
+    fs.writeFileSync(path.join(gitWorktreeMeta, 'commondir'), '../..\n');
+    const worktree = path.join(root, 'firmware-feature');
+    fs.mkdirSync(worktree, { recursive: true });
+    fs.writeFileSync(path.join(worktree, '.git'), `gitdir: ${gitWorktreeMeta}\n`);
+
+    const session = await service.session(worktree);
+    expect(session.enabled).toBe(true);
+    expect(session.transport?.env.WOODY_CBM_REPO).toBe(fs.realpathSync.native(repo));
+
+    const cards = await service.moduleCards(worktree, {});
+    expect(cards.indexPhase).toBe('succeeded');
+    expect(cards.experts.map((item: { id: string }) => item.id)).toEqual(['sensor']);
+
+    const toolRes = await service.callTool(worktree, 'index_status', { repo_path: worktree });
+    expect(toolRes.isError).toBe(false);
+
+    // A submodule `.git` file has no `commondir` pointing to a main repo `.git` and must stay independent.
+    const submoduleMeta = path.join(repo, '.git', 'modules', 'sub');
+    fs.mkdirSync(submoduleMeta, { recursive: true });
+    const submodule = path.join(root, 'sub-repo');
+    fs.mkdirSync(submodule, { recursive: true });
+    fs.writeFileSync(path.join(submodule, '.git'), `gitdir: ${submoduleMeta}\n`);
+    expect((await service.session(submodule)).enabled).toBe(false);
   });
 });

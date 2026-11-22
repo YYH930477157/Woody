@@ -144,7 +144,7 @@ describe('module expert team roles', () => {
             entries: ['task vSensorTask', 'secondList #2 SENSOR_Second (if defined(FAST))'],
             provides: [{ name: 'SENSOR_Read', callers: ['UI 专家', 'shared'] }],
             writtenOutside: [],
-            issues,
+            issues: { ...issues, drift: 2 },
           },
         },
         ui: {
@@ -170,7 +170,7 @@ describe('module expert team roles', () => {
     expect(roles[1].rules).toContain('- Called from outside: SENSOR_Read (by UI 专家, shared)');
     expect(roles[1].rules).not.toContain('Globals other files write');
     expect(roles[1].rules).toContain(
-      '- Index check: 1 files the index could not parse, 2 files changed after the index, 3 functions missing from the index, 1 of your paths match no indexed file.'
+      '- Index check: 1 files the index could not parse, 2 files changed after the index, 3 functions missing from the index, 1 of your paths match no indexed file, 2 unowned files detected in your module.'
     );
     expect(roles[2].rules).toContain('- Index check: no problem recorded for your files.');
     // The verifier gets no brief.

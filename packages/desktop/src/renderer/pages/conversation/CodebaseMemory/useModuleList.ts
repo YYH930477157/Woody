@@ -5,19 +5,17 @@ import type { CodebaseMemoryModule, ModuleCards } from '@/common/types/codebaseM
 import {
   expertIssue,
   MODULE_EXPERTS_LIMIT,
+  modulePaths,
   type ExpertIssue,
   type ModuleExpert,
   type ModuleExpertsFile,
 } from '@/common/types/team/moduleExperts';
 
+export { modulePaths };
+
 export type ExpertFields = Pick<ModuleExpert, 'id' | 'name' | 'summary'>;
 type Busy = 'create' | 'add' | 'refresh';
 const errorMessage = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
-
-/** Files of the chosen modules, in module order, each once. */
-export function modulePaths(modules: CodebaseMemoryModule[], ids: string[]): string[] {
-  return [...new Set(modules.filter((item) => ids.includes(item.id)).flatMap((item) => item.files))];
-}
 
 /**
  * The detected modules of a project and its module experts, for the Architecture panel:

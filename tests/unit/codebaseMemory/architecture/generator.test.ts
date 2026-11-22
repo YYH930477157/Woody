@@ -404,4 +404,122 @@ describe('architecture map', () => {
     expect(architecture.languageOf('<!-- woody:architecture version=1 language=zh-TW -->')).toBe('zh-TW');
     expect(architecture.labelsFor(labels, 'xx-XX').language).toBe('en-US');
   });
+
+  it('ignores arrays of struct variables in otherTables and does not let struct variables shadow missing functions', async () => {
+    const tableSources: Record<string, string> = {
+      'app/obis.c': [
+        'const tObjTable ic_01_table = { 1, 0, NULL };',
+        'const tObjTable ic_07_table = { 7, 0, NULL };',
+        'const tObjTable* const ObjectTable[] = { &ic_01_table, &ic_07_table };',
+        'const tCfg sensorCfg = { 10 };',
+        'static const tEntry hookList[] = { { &sensorCfg, SENSOR_Init }, { &sensorCfg, MISSING_Hook } };',
+        'int dispatchObj(int idx) { return ObjectTable[idx]->getFunc(); }',
+        'void vMainTask(void *p) { for (int i = 0; i < 2; i++) hookList[i].fn(); }',
+        'int main(void) { xTaskCreate(vMainTask, "main", 256, NULL, 2, NULL); return 0; }',
+        '',
+      ].join('\n'),
+      'app/sensor.c': 'void SENSOR_Init(void)\n{\n}\n',
+    };
+    const model = await architecture.analyze({
+      functions: [
+        ['dispatchObj', 'app/obis.c', 6, 6],
+        ['vMainTask', 'app/obis.c', 7, 7],
+        ['main', 'app/obis.c', 8, 8],
+        ['SENSOR_Init', 'app/sensor.c', 1, 3],
+      ],
+      sourceFiles: Object.keys(tableSources),
+      readSource: (file: string) => tableSources[file] ?? null,
+      callersOf: async () => new Map(),
+    });
+    expect(model.otherTables.map((table: { name: string }) => table.name)).not.toContain('ObjectTable');
+    expect(model.gaps.entriesNotIndexed).toEqual(['MISSING_Hook']);
+  });
+
+  it('links positional struct function tables via extern pointer arrays and caps large types per struct type', async () => {
+    const icDefs = Array.from(
+      { length: 14 },
+      (_, idx) => `const tObjTable ic_${idx}_table = { ${idx}, 0, IC_ProfileGet, NULL };`
+    ).join('\n');
+    const posSources: Record<string, string> = {
+      'app/ic_xx.h': [
+        'typedef int IC_GET(void);',
+        'typedef int IC_ACT(void);',
+        'typedef struct { int class_id; int ver; IC_GET *getFunc; IC_ACT *actFunc; } tObjTable;',
+        'typedef struct { void (*sample)(void); } tMicOps;',
+        'extern const tObjTable* const ObjectTable[];',
+        '',
+      ].join('\n'),
+      'app/obis_table.c': `${icDefs}\nconst tMicOps micOps = { MIC_Sample };\n`,
+      'app/dlms_api.c': 'int dispatchGet(int i)\n{\n    return ObjectTable[i]->getFunc();\n}\n',
+      'app/ic_07.c': 'int IC_ProfileGet(void)\n{\n    return 1;\n}\n',
+      'app/mic.c': 'void MIC_Sample(void)\n{\n    micOps.sample();\n}\n',
+    };
+    const model = await architecture.analyze({
+      functions: [
+        ['dispatchGet', 'app/dlms_api.c', 1, 4],
+        ['IC_ProfileGet', 'app/ic_07.c', 1, 4],
+        ['MIC_Sample', 'app/mic.c', 1, 4],
+      ],
+      sourceFiles: Object.keys(posSources),
+      readSource: (file: string) => posSources[file] ?? null,
+      callersOf: async () => new Map(),
+    });
+    const rendered = architecture.render(model, labels['en-US'], { language: 'en-US', date: 'd', mode: 'full' });
+    expect(rendered).toContain('### `tObjTable`');
+    expect(rendered).toContain('- `.getFunc`: called in `dispatchGet` (app/dlms_api.c:3)');
+    expect(rendered).toContain('### `tMicOps`');
+  });
+
+  it('refuses positional mapping when a struct definition contains #if directives that shift fields', async () => {
+    const guardedSources: Record<string, string> = {
+      'app/cfg.h': 'typedef struct {\n#if EXTRA_SLOT\n    int extra;\n#endif\n    void (*run)(void);\n} tGuardedOps;\n',
+      'app/cfg.c': 'const tGuardedOps ops = { HOOK_Run };\nvoid HOOK_Run(void)\n{\n}\n',
+    };
+    const model = await architecture.analyze({
+      functions: [['HOOK_Run', 'app/cfg.c', 2, 4]],
+      sourceFiles: Object.keys(guardedSources),
+      readSource: (file: string) => guardedSources[file] ?? null,
+      callersOf: async () => new Map(),
+    });
+    expect(model.structTables).toEqual([]);
+  });
+
+  it('maps inter-image vector API macros, X-Macro headers, and pure data-table files', async () => {
+    const bigRows = Array.from({ length: 55 }, (_, idx) => `    ${idx},`).join('\n');
+    const fwSources: Record<string, string> = {
+      'app/app1_api.h': [
+        'typedef struct { void (*en_init)(void); void (*EN_Reset)(void); void (*EXT_Only)(void); } tLegalEntry;',
+        '#define legal_api ((tLegalEntry*)APP1_ENTRY_ADDR)',
+        '#define EN_Initialize legal_api->en_init',
+        '#define EN_Reset legal_api->EN_Reset',
+        '#define EXT_Only legal_api->EXT_Only',
+        '',
+      ].join('\n'),
+      'app/app1_api.c':
+        'const tLegalEntry legal_entry_list = {\n#undef EN_Initialize\n    en_init,\n    EN_Reset,\n};\n',
+      'app/energy.c': 'void en_init(void)\n{\n}\nvoid EN_Reset(void)\n{\n}\n',
+      'app/mtask.c':
+        'void appStart(void)\n{\n    EN_Initialize();\n}\nint main(void)\n{\n    appStart();\n    return 0;\n}\n',
+      'app/eeprom_addr_table.h': 'ENTRY(NVM_ALARM, 64)\nENTRY(NVM_DISP, 128)\nENTRY(NVM_STATE, 32)\n',
+      'app/datastore.h': 'typedef enum {\n#define ENTRY(id, sz) id,\n#include "eeprom_addr_table.h"\n} tNvmIdx;\n',
+      'app/obis_data.c': `const int DataObj[] = {\n${bigRows}\n};\n`,
+    };
+    const model = await architecture.analyze({
+      functions: [
+        ['en_init', 'app/energy.c', 1, 3],
+        ['EN_Reset', 'app/energy.c', 4, 6],
+        ['appStart', 'app/mtask.c', 1, 4],
+        ['main', 'app/mtask.c', 5, 9],
+      ],
+      sourceFiles: Object.keys(fwSources),
+      readSource: (file: string) => fwSources[file] ?? null,
+      callersOf: async () => new Map(),
+    });
+    const rendered = architecture.render(model, labels['en-US'], { language: 'en-US', date: 'd', mode: 'full' });
+    expect(rendered).toContain(
+      '- `legal_api` (app/app1_api.h, `APP1_ENTRY_ADDR`): 3 entries (2 in index); vector table `legal_entry_list` (app/app1_api.c:1); renamed macros: `EN_Initialize` → `.en_init`; outside index: `EXT_Only`'
+    );
+    expect(rendered).toContain('- app/eeprom_addr_table.h: X-Macro `ENTRY` (3 entries), expanded in app/datastore.h:3');
+    expect(rendered).toContain('- app/obis_data.c: `DataObj` (1-57)');
+  });
 });

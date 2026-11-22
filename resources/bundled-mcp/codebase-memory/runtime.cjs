@@ -8,7 +8,7 @@ const { execFile, spawn, spawnSync } = require('node:child_process');
 const TOOL_SCHEMAS = new Map(require('./tools.json').map((tool) => [tool.name, tool.inputSchema]));
 const architecture = require('./lib/architecture.cjs');
 const modules = require('./lib/modules.cjs');
-const { C_FAMILY_EXTENSIONS, prepareSourceOnlyOverlay } = require('./lib/sourceFilter.cjs');
+const { C_FAMILY_EXTENSIONS, detectGit, prepareSourceOnlyOverlay } = require('./lib/sourceFilter.cjs');
 const ARCHITECTURE_LABELS = require('./lib/architecture-labels.json');
 const DEFAULT_CONFIG = { version: 1, enabled: false, mode: 'fast' };
 const TOOLS = new Set([
@@ -962,7 +962,11 @@ function boundArguments(project, name, supplied, config) {
     throw new Error('Tool arguments must be an object');
   const args = { ...supplied };
   if (args.project !== undefined && args.project !== project.name) throw new Error('Cannot query another project');
-  if (args.repo_path !== undefined && canonical(args.repo_path) !== project.root)
+  if (
+    args.repo_path !== undefined &&
+    canonical(args.repo_path) !== project.root &&
+    canonical(args.repo_path) !== project.worktreeRoot
+  )
     throw new Error('Cannot index another project');
   for (const key of [
     'base_project',
@@ -1084,7 +1088,42 @@ function createRuntime(options) {
     : undefined;
   const readProjectConfig = (root) => readConfig(root, throughPowerShell);
   let disposed = false;
-  const projectFor = (repoPath) => identity(canonical(repoPath), path.resolve(options.cacheRoot));
+  function worktreeMainRoot(resolved) {
+    let cursor = resolved;
+    for (;;) {
+      const dotGit = path.join(cursor, '.git');
+      try {
+        const stat = fs.lstatSync(dotGit);
+        if (stat.isDirectory()) return undefined;
+        if (stat.isFile()) {
+          const match = /^gitdir:\s*(.+)$/im.exec(fs.readFileSync(dotGit, 'utf8'));
+          if (!match) return undefined;
+          const gitDir = path.resolve(cursor, match[1].trim());
+          const commondirFile = path.join(gitDir, 'commondir');
+          if (!fs.existsSync(commondirFile)) return undefined;
+          const commonDir = path.resolve(gitDir, fs.readFileSync(commondirFile, 'utf8').trim());
+          if (path.basename(commonDir).toLowerCase() !== '.git') return undefined;
+          const mainTop = path.dirname(commonDir);
+          const rel = path.relative(cursor, resolved);
+          return canonical(rel ? path.join(mainTop, rel) : mainTop);
+        }
+      } catch {
+        // Keep walking up until the filesystem root.
+      }
+      const parent = path.dirname(cursor);
+      if (parent === cursor) return undefined;
+      cursor = parent;
+    }
+  }
+  const projectFor = (repoPath) => {
+    const resolved = canonical(repoPath);
+    if (!fs.existsSync(configPath(resolved))) {
+      const origin = worktreeMainRoot(resolved);
+      if (origin && fs.existsSync(configPath(origin)))
+        return { ...identity(origin, path.resolve(options.cacheRoot)), worktreeRoot: resolved };
+    }
+    return identity(resolved, path.resolve(options.cacheRoot));
+  };
   function available() {
     return fs.existsSync(options.binaryPath);
   }
@@ -1119,6 +1158,7 @@ function createRuntime(options) {
       architecture: architectureStatus,
       moduleCards,
       language,
+      indexedAt,
     } = value;
     atomicJson(project.statusFile, {
       phase,
@@ -1136,6 +1176,7 @@ function createRuntime(options) {
       architecture: architectureStatus,
       moduleCards,
       language,
+      indexedAt,
       projectName: project.name,
       updatedAt: Date.now(),
     });
@@ -1559,16 +1600,21 @@ function createRuntime(options) {
    * Write .woody/architecture.md, with the modules section. Keeps everything outside the
    * generated markers. `requested` is the panel's language; updates keep the file's own.
    */
-  function writeArchitecture(project, config, requested, analysis, found) {
+  function writeArchitecture(project, config, requested, analysis, found, saved) {
     const filename = architecturePath(project.root);
     const existing = readArchitecture(filename);
     const wanted = requested && ARCHITECTURE_LABELS[requested] ? requested : architecture.languageOf(existing);
     const { language, text } = architecture.labelsFor(ARCHITECTURE_LABELS, wanted);
     const { model } = analysis;
+    const suggestedShared = modules.suggestShared({
+      model,
+      experts: saved?.experts || [],
+      shared: saved?.shared || [],
+    });
     const generated = [
       architecture.render(model, text, { language, date: localStamp(), mode: config.mode }).trimEnd(),
       '',
-      modules.renderModules(found, text),
+      modules.renderModules(found, text, { suggestedShared }),
     ].join('\n');
     atomicWrite(filename, architecture.merge(existing, generated, text));
     return { generatedAt: Date.now(), tasks: model.tasks.length, tables: model.tables.length, language };
@@ -1603,6 +1649,87 @@ function createRuntime(options) {
       // Coverage only adds notes to the brief.
     }
     return coverage;
+  }
+  /**
+   * Fallback for `detect_changes` when the workspace has no Git repository (or no HEAD commit):
+   * compare the workspace against the last codebase-memory index and list affected callers.
+   */
+  async function detectIndexChanges(project, config, bound) {
+    const indexedFiles = (await queryRows(project, FILES_QUERY))
+      .map((row) => row[0])
+      .filter((file) => typeof file === 'string' && /^[^<:/\\][^:]*$/.test(file))
+      .sort();
+    const coverage = await coverageOf(project, config, indexedFiles);
+    const deleted = indexedFiles.filter(
+      (file) => coverage.get(file)?.freshness === 'missing' || !fs.existsSync(path.join(project.root, file))
+    );
+    const deletedSet = new Set(deleted);
+    const modified = indexedFiles.filter(
+      (file) => !deletedSet.has(file) && coverage.get(file)?.freshness === 'metadata_changed'
+    );
+    const indexedSet = new Set(indexedFiles);
+    const dirs = [...new Set(indexedFiles.map((file) => file.slice(0, Math.max(0, file.lastIndexOf('/')))))];
+    const isCFamily = cFamilyProject(project.root);
+    const cExt = new Set(C_FAMILY_EXTENSIONS.map((ext) => `.${ext}`));
+    const added = [];
+    for (const relDir of dirs) {
+      const absDir = relDir ? path.join(project.root, relDir) : project.root;
+      let entries = [];
+      try {
+        entries = fs.readdirSync(absDir, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      for (const entry of entries) {
+        if (!entry.isFile()) continue;
+        const ext = path.extname(entry.name).toLowerCase();
+        if (isCFamily ? !cExt.has(ext) : !SAMPLE_EXTENSIONS.has(ext)) continue;
+        const relFile = relDir ? `${relDir}/${entry.name}` : entry.name;
+        if (!indexedSet.has(relFile)) added.push(relFile);
+      }
+    }
+    added.sort();
+    const touched = [...modified, ...deleted];
+    const impacted = [];
+    if (bound.scope !== 'files' && touched.length) {
+      const list = cypherList(touched);
+      try {
+        const rows = await queryRows(
+          project,
+          `MATCH (a:Function)-[:CALLS|CALL_REFERENCE]->(b:Function) WHERE b.file_path IN [${list}] AND NOT a.file_path IN [${list}] RETURN DISTINCT b.name, b.file_path, a.name, a.file_path LIMIT 100`
+        );
+        for (const [callee, calleeFile, caller, callerFile] of rows)
+          impacted.push({ callee, calleeFile, caller, callerFile });
+      } catch {
+        // Impact edges are optional when only file-level freshness is available.
+      }
+    }
+    const payload = {
+      source: 'index_freshness_fallback',
+      note: 'No Git repository (or HEAD commit) found; changes are compared against the last codebase-memory index.',
+      modified,
+      deleted,
+      added,
+      ...(bound.scope !== 'files' ? { impacted } : {}),
+    };
+    if (bound.format === 'json')
+      return { content: [{ type: 'text', text: JSON.stringify(payload) }], structuredContent: payload };
+    const lines = [payload.note];
+    if (!modified.length && !deleted.length && !added.length) {
+      lines.push('No indexed file has changed since the last index.');
+    } else {
+      if (modified.length) lines.push(`Modified since index (${modified.length}): ${modified.join(', ')}`);
+      if (deleted.length) lines.push(`Deleted since index (${deleted.length}): ${deleted.join(', ')}`);
+      if (added.length) lines.push(`Added in indexed folders (${added.length}): ${added.join(', ')}`);
+      if (impacted.length)
+        lines.push(
+          `External callers of changed files (${impacted.length}):`,
+          ...impacted
+            .slice(0, 30)
+            .map((item) => `- ${item.caller} (${item.callerFile}) -> ${item.callee} (${item.calleeFile})`)
+        );
+    }
+    return { content: [{ type: 'text', text: lines.join('\n') }] };
   }
   const samePaths = (record, expert) =>
     Array.isArray(record?.paths) && record.paths.join('\n') === expert.paths.join('\n');
@@ -1674,13 +1801,15 @@ function createRuntime(options) {
         const next = modules.mergeCard(existing, generated, expert, text, language);
         if (next !== existing) atomicWrite(filename, next);
         const own = modules.ownPart(next, expert);
+        const driftSig = modules.driftSignature(data);
         const { state, record } = modules.cardState(before, {
-          filesHash: hashFiles(project.root, owned),
+          filesHash: sha1(`${hashFiles(project.root, owned)}\n${driftSig}`),
           ownHash: sha1(own),
           hasOwn: own.length > 0,
         });
         result.experts[expert.id] = {
           ...record,
+          driftSig,
           state,
           paths: expert.paths,
           owned,
@@ -1719,7 +1848,7 @@ function createRuntime(options) {
     });
     let architectureStatus;
     try {
-      architectureStatus = writeArchitecture(project, config, language, analysis, found);
+      architectureStatus = writeArchitecture(project, config, language, analysis, found, saved);
     } catch (error) {
       if (strict) throw error;
       architectureStatus = { ...previous.architecture, error: error.message };
@@ -1772,6 +1901,7 @@ function createRuntime(options) {
       indexerReadsPlain: previous.indexerReadsPlain === true ? true : undefined,
       architecture: previous.architecture,
       moduleCards: previous.moduleCards,
+      indexedAt: previous.indexedAt,
       // The panel's language, for files the first index creates.
       language: typeof language === 'string' && ARCHITECTURE_LABELS[language] ? language : previous.language,
     };
@@ -1852,6 +1982,7 @@ function createRuntime(options) {
       .then(
         (result) => {
           state.phase = 'succeeded';
+          state.indexedAt = Date.now();
           state.summary = JSON.stringify(result.structuredContent || result.content).slice(0, LOG_LIMIT);
           removeLegacyIndex(project);
           return result;
@@ -1880,6 +2011,85 @@ function createRuntime(options) {
     // GUI jobs finish after start() returns. Keep their rejection observed.
     job.promise.catch(() => {});
     return job;
+  }
+  /**
+   * Fast filesystem pre-check against the last completed index: counts source files that were
+   * deleted, modified after `indexedAt`, or added into module/expert directories without spawning
+   * the native indexer.
+   */
+  function computeIndexDrift(project, status, saved, latestModules, current) {
+    if (status.phase !== 'succeeded') return undefined;
+    const baseline = status.indexedAt ?? status.architecture?.generatedAt ?? status.updatedAt ?? 0;
+    const experts = saved?.experts || [];
+    const knownFiles = new Set(
+      [
+        ...(latestModules || []).flatMap((item) => item.files || []),
+        ...Object.values(current || {}).flatMap((record) => record?.owned || []),
+      ].filter((file) => typeof file === 'string' && file && !/^[<:/\\]/.test(file))
+    );
+    let added = 0;
+    let deleted = 0;
+    let modified = 0;
+    for (const file of knownFiles) {
+      try {
+        const stat = fs.statSync(path.join(project.root, file));
+        if (baseline > 0 && Math.floor(stat.mtimeMs) > baseline) modified++;
+      } catch (error) {
+        if (error.code === 'ENOENT') deleted++;
+      }
+    }
+    const dirSet = new Set();
+    for (const file of knownFiles) {
+      dirSet.add(file.includes('/') ? file.slice(0, file.lastIndexOf('/')) : '');
+    }
+    for (const expert of experts) {
+      for (const raw of expert.paths || []) {
+        const prefix = raw.includes('*') ? raw.slice(0, raw.indexOf('*')) : raw;
+        const relDir = prefix.endsWith('/')
+          ? prefix.replace(/\/+$/, '')
+          : prefix.includes('/')
+            ? prefix.slice(0, prefix.lastIndexOf('/'))
+            : '';
+        if (!relDir.includes('..') && !path.isAbsolute(relDir) && !/^[A-Za-z]:/.test(relDir)) dirSet.add(relDir);
+      }
+    }
+    const extensions = cFamilyProject(project.root) ? C_FAMILY : SOURCE_EXTENSIONS;
+    const seenCandidates = new Set();
+    for (const relDir of dirSet) {
+      if (relDir && relDir.split('/').some((seg) => architecture.FOREIGN_SEGMENTS.has(seg.toLowerCase()))) continue;
+      const absDir = relDir ? path.join(project.root, relDir) : project.root;
+      let entries;
+      try {
+        entries = fs.readdirSync(absDir, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      for (const entry of entries) {
+        if (!entry.isFile()) continue;
+        if (!extensions.has(path.extname(entry.name).toLowerCase())) continue;
+        const relFile = relDir ? `${relDir}/${entry.name}` : entry.name;
+        if (knownFiles.has(relFile) || seenCandidates.has(relFile)) continue;
+        if (relFile.split('/').some((seg) => architecture.FOREIGN_SEGMENTS.has(seg.toLowerCase()))) continue;
+        seenCandidates.add(relFile);
+        try {
+          const stat = fs.statSync(path.join(project.root, relFile));
+          const stamp = Math.floor(Math.max(stat.mtimeMs, stat.birthtimeMs || 0));
+          if (baseline > 0 && stamp > baseline) added++;
+        } catch {
+          continue;
+        }
+      }
+    }
+    if (!knownFiles.size && !dirSet.size && baseline > 0) {
+      for (const full of sampleFiles(project.root)) {
+        try {
+          if (Math.floor(fs.statSync(full).mtimeMs) > baseline) modified++;
+        } catch {
+          // Best-effort pre-check only.
+        }
+      }
+    }
+    return added + deleted + modified > 0 ? { added, deleted, modified } : undefined;
   }
   const api = {
     async get(repoPath) {
@@ -2000,6 +2210,7 @@ function createRuntime(options) {
       const regenerate = cardOptions.refresh === true ? [...new Set([...wanted, ...outdated])] : [];
       let cards = status.moduleCards || {};
       let latestModules = status.architecture?.modules || [];
+      let latestStatus = status;
       if (regenerate.length) {
         if (!available()) throw new Error('Bundled codebase-memory executable is unavailable');
         if (status.phase === 'running') throw new Error('An index is already running for this project');
@@ -2016,6 +2227,7 @@ function createRuntime(options) {
           persist(project, { ...(readJson(project.statusFile) || {}), ...result });
           cards = result.moduleCards;
           latestModules = result.architecture?.modules || latestModules;
+          latestStatus = await api.get(repoPath);
         } finally {
           releaseLock(project, owner);
         }
@@ -2031,8 +2243,12 @@ function createRuntime(options) {
         try {
           const text = readCard(woodyPath(project.root, `${FEATURES_DIR}/${expert.id}.md`));
           const own = modules.ownPart(text, expert);
+          const filesHash =
+            record.driftSig !== undefined
+              ? sha1(`${hashFiles(project.root, record.owned || [])}\n${record.driftSig}`)
+              : hashFiles(project.root, record.owned || []);
           const { state, record: updated } = modules.cardState(record, {
-            filesHash: hashFiles(project.root, record.owned || []),
+            filesHash,
             ownHash: sha1(own),
             hasOwn: own.length > 0,
           });
@@ -2047,9 +2263,13 @@ function createRuntime(options) {
         persist(project, { ...(readJson(project.statusFile) || {}), moduleCards: next });
       cards = next;
       const current = cards.experts || {};
+      const indexDrift = computeIndexDrift(project, latestStatus, saved, latestModules, current);
       return {
         modules: latestModules,
         error: cards.error,
+        indexPhase: latestStatus.phase,
+        ...(latestStatus.phase === 'failed' && latestStatus.error ? { indexError: latestStatus.error } : {}),
+        ...(indexDrift ? { indexDrift } : {}),
         experts: experts.map((expert) => {
           const record = current[expert.id];
           const matched = samePaths(record, expert);
@@ -2116,6 +2336,16 @@ function createRuntime(options) {
       if (!config.enabled) throw new Error('Codebase memory is disabled for this project');
       const bound = boundArguments(project, tool, args, config);
       if (tool === 'index_repository') return (await beginIndex(project, config)).promise;
+      if (tool === 'detect_changes') {
+        if (!detectGit(project.root)) return detectIndexChanges(project, config, bound);
+        try {
+          return await native(project, tool, bound).promise;
+        } catch (error) {
+          if (/git revision|not a git repository|ambiguous argument 'HEAD'/i.test(error.message))
+            return detectIndexChanges(project, config, bound);
+          throw error;
+        }
+      }
       if (tool === 'search_graph' && typeof bound.query === 'string' && /[^\x00-\x7f]/.test(bound.query)) {
         const query = asciiWords(bound.query);
         if (!/[A-Za-z0-9_]{2,}/.test(query))

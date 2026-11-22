@@ -261,6 +261,17 @@
     "onboardBusiness": "This project has no business overview yet: the dispatcher first reads the project and writes .woody/business.md, showing where each meter business function lives and which expert owns it.",
     "onboardMessage": "Please learn your module first: follow the \"Learning your module\" steps in your rules, check the brief Woody generated in {{card}} against the source, trace the module with codebase memory, complete the card, and then report to the dispatcher. Do not change project code while you do this.",
     "leadOnboardMessage": "Please learn this project's meter business first: following sections 2 and 3 of the woody-meter-business skill, read the architecture, expert list and feature cards in the knowledge folder, find the object list and where each business function is implemented in the source, and write {{file}}. Do not change project code while you do this; when experts report in, check the module facts they report against the overview. Then tell me the key points, which expert carries each function, the functions with no owner, and what you could not verify.",
-    "onboardFailed": "The team was created, but these members could not be asked to start learning: {{names}}. Ask them in their own chats."
+    "onboardFailed": "The team was created, but these members could not be asked to start learning: {{names}}. Ask them in their own chats.",
+    "indexStatus": {
+      "disabled": "Codebase memory is not enabled for this project yet. Enable and build the index so experts get code graph tools and module briefs.",
+      "unindexed": "Codebase memory is enabled, but the index has not been built yet.",
+      "running": "Building the code index… Experts and module briefs will refresh automatically when it finishes.",
+      "failed": "The last code index failed: {{message}}",
+      "outdated": "Source files changed since the last index (added: {{added}}, modified: {{modified}}, deleted: {{deleted}}). Refresh the index before creating the team.",
+      "enableAndIndex": "Enable & index",
+      "buildIndex": "Build index",
+      "retryIndex": "Retry index",
+      "refreshIndex": "Refresh index"
+    }
   }
 }

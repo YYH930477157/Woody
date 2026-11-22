@@ -55,10 +55,15 @@ const inFolders = (file, names) => file.split('/').some((segment) => names.has(s
 const ROOT_DEPTH = 3;
 const MAX_CALLS_SHOWN = 12;
 const MAX_OTHER_TABLES = 40;
-const MAX_STRUCT_TABLES = 40;
+const MAX_STRUCT_TYPES = 20;
+const MAX_TABLES_PER_TYPE = 12;
 const MAX_FIELD_FUNCTIONS = 6;
 const MAX_FIELD_SITES = 4;
 const MAX_TABLE_FIELDS = 10;
+const MAX_VECTOR_ITEMS = 8;
+const MAX_DATA_FILE_ITEMS = 16;
+const C_HEADER_EXT = /\.(h|hh|hpp|hxx)$/i;
+const C_SOURCE_EXT = /\.(c|cc|cpp|cxx)$/i;
 /** `Type name = {` or `Type name[N] = {`: a struct or an array of structs with an initializer. */
 const STRUCT_DEFINITION = /\b([A-Za-z_]\w*)\s+(?:const\s+)?([A-Za-z_]\w*)\s*(?:\[[^\];{}]*\]\s*)?=\s*\{/g;
 /** `.field = function`, also `.field = &function` and `.field = (cast)function`. */
@@ -307,27 +312,41 @@ async function analyze({ functions, sourceFiles = [], readSource, callersOf }) {
     byFile.get(file).push(def);
   }
   for (const defs of byName.values()) defs.sort((a, b) => a.file.localeCompare(b.file) || a.start - b.start);
-  const resolve = (name, preferFile) => {
+  const vectorAliases = new Map();
+  const resolveDirect = (name, preferFile) => {
     const defs = byName.get(name);
     if (!defs) return undefined;
     return defs.find((def) => def.file === preferFile) || defs[0];
   };
+  const resolve = (name, preferFile) =>
+    resolveDirect(name, preferFile) ||
+    (vectorAliases.has(name) ? resolveDirect(vectorAliases.get(name), preferFile) : undefined);
 
   const info = new Map();
   const sites = [];
   const arrayFiles = new Map();
+  const dataNames = new Set();
   const unreadable = [];
   // Struct tables whose fields hold functions, the calls through struct fields, and
   // `typedef struct tag {...} Name;` so that `struct tag *p` and `Name *p` compare equal.
-  const found = [];
+  const pendingStructs = [];
+  const structLayouts = new Map();
+  const globalTypes = new Map();
   const fieldCalls = [];
   const tags = new Map();
+  const apiBases = new Map();
+  const apiMacros = [];
+  const xmacroSites = [];
+  const dataTables = [];
   const createPattern = new RegExp(`\\b(${CREATE_APIS.join('|')})\\s*\\(`, 'g');
   const waitPattern = new RegExp(`\\b(${WAIT_APIS.join('|')})\\s*\\(`, 'g');
   const dataFiles = sourceFiles.filter(
     (file) => typeof file === 'string' && /^[^<:/\\][^:]*\.(c|h|cc|cpp|cxx|hh|hpp|hxx)$/i.test(file)
   );
-  const files = [...new Set([...byFile.keys(), ...dataFiles])].sort();
+  // Scan headers before sources so cross-image macro aliases and global types are ready when scanning .c bodies.
+  const files = [...new Set([...byFile.keys(), ...dataFiles])].sort(
+    (a, b) => Number(C_SOURCE_EXT.test(a)) - Number(C_SOURCE_EXT.test(b)) || a.localeCompare(b)
+  );
   for (const file of files) {
     const text = readSource(file);
     if (text === null || text === undefined) {
@@ -342,6 +361,11 @@ async function analyze({ functions, sourceFiles = [], readSource, callersOf }) {
       defs.filter((def) => def.start <= line && line <= def.end).sort((a, b) => a.end - a.start - (b.end - b.start))[0];
     const live = (offset) => !guards[lineOf(starts, offset) - 1]?.dead;
     const fileTypes = new Map();
+
+    collectStructTypes(source, tags, structLayouts);
+    collectGlobalTypes(source, globalTypes);
+    collectVectorDirectives(source, byName, apiBases, apiMacros, vectorAliases);
+    collectXMacroSites(source, xmacroSites);
 
     for (const def of defs) {
       const from = offsetOfLine(def.start);
@@ -387,12 +411,7 @@ async function analyze({ functions, sourceFiles = [], readSource, callersOf }) {
       info.set(def.key, entry);
     }
 
-    for (const table of structTables(source, resolve)) found.push(table);
-    for (const match of plain.matchAll(/\btypedef\s+(?:struct|union)\s+([A-Za-z_]\w*)\s*\{/g)) {
-      const close = matchClose(plain, match.index + match[0].length - 1);
-      const alias = close < 0 ? undefined : /^\s*([A-Za-z_]\w*)\s*[;,[]/.exec(plain.slice(close + 1))?.[1];
-      if (alias) tags.set(match[1], alias);
-    }
+    for (const item of scanStructInitializers(source, dataNames)) pendingStructs.push(item);
 
     for (const match of plain.matchAll(createPattern)) {
       const line = lineOf(starts, match.index);
@@ -422,11 +441,32 @@ async function analyze({ functions, sourceFiles = [], readSource, callersOf }) {
       });
     }
 
+    const fileAggregates = [];
     for (const match of plain.matchAll(ARRAY_DEFINITION)) {
+      const line = lineOf(starts, match.index);
+      if (!guards[line - 1]?.dead) {
+        dataNames.add(match[1]);
+        const open = match.index + match[0].length - 1;
+        const close = matchClose(plain, open);
+        if (close >= 0) fileAggregates.push({ name: match[1], start: line, end: lineOf(starts, close) });
+      }
       if (!arrayFiles.has(match[1])) arrayFiles.set(match[1], new Set());
       arrayFiles.get(match[1]).add(file);
     }
+    if (C_SOURCE_EXT.test(file) && !defs.length && !inFolders(file, FOREIGN_SEGMENTS)) {
+      const structItems = pendingStructs
+        .filter((item) => item.file === file && !fileAggregates.some((known) => known.name === item.name))
+        .map((item) => ({ name: item.name, start: item.line, end: item.endLine }));
+      const allItems = [...fileAggregates, ...structItems].sort((a, b) => a.start - b.start);
+      const maxSpan = allItems.reduce((max, item) => Math.max(max, item.end - item.start), 0);
+      if (allItems.length >= 5 || maxSpan >= 50) dataTables.push({ file, items: allItems });
+    }
   }
+
+  for (const call of fieldCalls) if (!call.type && globalTypes.get(call.base)) call.type = globalTypes.get(call.base);
+  const found = resolveStructTables(pendingStructs, resolve, structLayouts, tags);
+  const vectorApis = buildVectorApis(apiBases, apiMacros, pendingStructs, resolve, byName);
+  const xmacroTables = resolveXMacroTables(xmacroSites, files, readSource);
 
   // Tasks.
   const gaps = {
@@ -537,7 +577,7 @@ async function analyze({ functions, sourceFiles = [], readSource, callersOf }) {
     if (text === null || text === undefined) continue;
     const source = prepare(file, text);
     for (const name of names)
-      for (const variant of parseTables(source, name, resolve)) {
+      for (const variant of parseTables(source, name, resolve, dataNames)) {
         const key = `${file}|${name}`;
         if (!definitions.has(key)) definitions.set(key, []);
         definitions.get(key).push(variant);
@@ -578,7 +618,7 @@ async function analyze({ functions, sourceFiles = [], readSource, callersOf }) {
   const smallTables = [];
   const otherSeen = new Set();
   for (const item of others) {
-    const all = variantsOf(item).filter((variant) => variant.entries.length >= 1);
+    const all = variantsOf(item).filter((variant) => variant.entries.some((entry) => entry.def));
     if (!all.length) continue;
     const variants = all.filter((variant) => variant.entries.length >= 2);
     const id = `${all[0].file}|${item.table}`;
@@ -596,17 +636,31 @@ async function analyze({ functions, sourceFiles = [], readSource, callersOf }) {
   const listed = new Set([
     ...tables.flatMap((table) => table.variants.map((variant) => `${variant.file}|${table.name}`)),
     ...[...otherTables, ...smallTables].map((table) => `${table.variants[0].file}|${table.name}`),
+    ...vectorApis.filter((api) => api.table).map((api) => `${api.table.file}|${api.table.name}`),
   ]);
+  const linkedStructs = linkFieldCalls(
+    found.filter((table) => !listed.has(`${table.file}|${table.name}`)),
+    fieldCalls,
+    (type) => tags.get(type) || type
+  );
+  const resolvedFieldCallSites = new Set();
+  for (const table of linkedStructs)
+    for (const field of table.fields)
+      for (const call of field.calls) resolvedFieldCallSites.add(`${call.def.file}:${call.line}`);
+  gaps.tableUnknown = gaps.tableUnknown.filter(
+    (item) =>
+      !resolvedFieldCallSites.has(item.site) ||
+      !fieldCalls.some((call) => `${call.def.file}:${call.line}` === item.site && call.base === item.table)
+  );
   return {
     tasks,
     tables,
     otherTables,
     smallTables,
-    structTables: linkFieldCalls(
-      found.filter((table) => !listed.has(`${table.file}|${table.name}`)),
-      fieldCalls,
-      (type) => tags.get(type) || type
-    ),
+    structTables: linkedStructs,
+    vectorApis,
+    dataTables,
+    xmacroTables,
     gaps,
     modules: modules(tables),
     files: files.length,
@@ -626,41 +680,372 @@ function declaredType(name, text) {
   return undefined;
 }
 
-/** Structs and arrays of structs in a file whose designated fields name indexed functions. */
-function structTables(source, resolve) {
-  const { file, plain, starts, guards } = source;
-  const result = [];
+/** Collect unambiguous top-level variable/array types across headers and sources (e.g. `extern const tObjTable* const ObjectTable[];`). */
+function collectGlobalTypes(source, globalTypes) {
+  const { plain, starts, guards } = source;
+  const pattern = /\b([A-Za-z_]\w*)\s*(?:const\s*)?\**\s*(?:const\s+)?([A-Za-z_]\w*)\s*(?:\[[^\];{}]*\]\s*)?[;=]/g;
+  let depth = 0;
+  let cursor = 0;
+  for (const match of plain.matchAll(pattern)) {
+    for (; cursor < match.index; cursor++)
+      if (plain[cursor] === '{') depth++;
+      else if (plain[cursor] === '}') depth = Math.max(0, depth - 1);
+    if (depth !== 0) continue;
+    const [, type, name] = match;
+    if (NOT_TYPES.has(type) || NOT_NAMES.has(name) || guards[lineOf(starts, match.index) - 1]?.dead) continue;
+    if (!globalTypes.has(name)) globalTypes.set(name, type);
+    else if (globalTypes.get(name) !== type) globalTypes.set(name, null);
+  }
+}
+
+/**
+ * Deterministic member order of a `struct { ... }` body, or `null` when `#if`, nested
+ * aggregates or bitfields could shift positional initializer slots.
+ */
+function parseStructMembers(codeSlice, plainSlice) {
+  if (/^\s*#/m.test(codeSlice)) return null;
+  const decls = [];
+  let depth = 0;
+  let from = 0;
+  for (let i = 0; i < plainSlice.length; i++) {
+    const c = plainSlice[i];
+    if (c === '{' || c === '}') return null;
+    if (c === '(' || c === '[') depth++;
+    else if (c === ')' || c === ']') {
+      if (--depth < 0) return null;
+    } else if (c === ';' && depth === 0) {
+      decls.push(plainSlice.slice(from, i));
+      from = i + 1;
+    }
+  }
+  if (depth !== 0 || plainSlice.slice(from).trim()) return null;
+  const members = [];
+  for (const rawDecl of decls) {
+    const trimmed = rawDecl.trim();
+    if (!trimmed) continue;
+    let pDepth = 0;
+    for (let i = 0; i < trimmed.length; i++) {
+      const c = trimmed[i];
+      if (c === '(' || c === '[') pDepth++;
+      else if (c === ')' || c === ']') pDepth--;
+      else if (c === ':' && pDepth === 0) return null;
+    }
+    const pieces = splitTopLevel(trimmed, 0, trimmed.length);
+    for (let index = 0; index < pieces.length; index++) {
+      const piece = trimmed.slice(pieces[index].start, pieces[index].end).trim();
+      if (!piece) return null;
+      const fnPtr = /\(\s*\*\s*(?:const\s+|volatile\s+)*([A-Za-z_]\w*)\s*((?:\[[^\]]*\]\s*)*)\)\s*\([^;]*\)\s*$/.exec(
+        piece
+      );
+      if (fnPtr) {
+        if (index === 0 && !piece.slice(0, fnPtr.index).trim()) return null;
+        members.push({ name: fnPtr[1], isArray: Boolean(fnPtr[2].trim()) });
+        continue;
+      }
+      const normal = /([A-Za-z_]\w*)\s*((?:\[[^\]]*\]\s*)*)$/.exec(piece);
+      if (!normal) return null;
+      if (index === 0 && !piece.slice(0, normal.index).trim()) return null;
+      members.push({ name: normal[1], isArray: Boolean(normal[2].trim()) });
+    }
+  }
+  return members.length ? members : null;
+}
+
+/** Collect `typedef struct [tag] {...} Alias;` and `struct tag {...};` tags and field layouts. */
+function collectStructTypes(source, tags, structLayouts) {
+  const { code, plain, starts, guards } = source;
+  const record = (name, layout) => {
+    if (!name) return;
+    if (!layout) {
+      structLayouts.set(name, null);
+      return;
+    }
+    if (!structLayouts.has(name)) {
+      structLayouts.set(name, layout);
+      return;
+    }
+    const existing = structLayouts.get(name);
+    if (!existing) return;
+    const key = (list) => list.map((item) => `${item.name}${item.isArray ? '[]' : ''}`).join(',');
+    if (key(existing) !== key(layout)) structLayouts.set(name, null);
+  };
+  for (const match of plain.matchAll(/\btypedef\s+(struct|union)(?:\s+([A-Za-z_]\w*))?\s*\{/g)) {
+    if (guards[lineOf(starts, match.index) - 1]?.dead) continue;
+    const open = match.index + match[0].length - 1;
+    const close = matchClose(plain, open);
+    if (close < 0) continue;
+    const semi = plain.indexOf(';', close + 1);
+    const tail = semi < 0 ? '' : plain.slice(close + 1, semi);
+    const aliases = splitTopLevel(tail, 0, tail.length)
+      .map((part) => tail.slice(part.start, part.end).trim())
+      .filter((piece) => piece && !piece.startsWith('*'))
+      .map((piece) => /^([A-Za-z_]\w*)\s*(?:\[[^\]]*\]\s*)?$/.exec(piece)?.[1])
+      .filter(Boolean);
+    if (match[2] && aliases[0]) tags.set(match[2], aliases[0]);
+    if (match[1] === 'struct') {
+      const layout = parseStructMembers(code.slice(open + 1, close), plain.slice(open + 1, close));
+      if (match[2]) record(match[2], layout);
+      for (const alias of aliases) record(alias, layout);
+    }
+  }
+  for (const match of plain.matchAll(/\bstruct\s+([A-Za-z_]\w*)\s*\{/g)) {
+    if (guards[lineOf(starts, match.index) - 1]?.dead) continue;
+    const before = plain.slice(Math.max(0, match.index - 16), match.index);
+    if (/\btypedef\s*$/.test(before)) continue;
+    const open = match.index + match[0].length - 1;
+    const close = matchClose(plain, open);
+    if (close < 0) continue;
+    record(match[1], parseStructMembers(code.slice(open + 1, close), plain.slice(open + 1, close)));
+  }
+}
+
+/** Capture struct and struct-array initializer blocks during the file scan. */
+function scanStructInitializers(source, dataNames) {
+  const { file, code, plain, starts, guards } = source;
+  const items = [];
   for (const match of plain.matchAll(STRUCT_DEFINITION)) {
     const [, type, name] = match;
     if (NOT_TYPES.has(type)) continue;
     const line = lineOf(starts, match.index);
     if (guards[line - 1]?.dead) continue;
+    if (dataNames) dataNames.add(name);
     const open = match.index + match[0].length - 1;
     const close = matchClose(plain, open);
     if (close < 0) continue;
+    items.push({
+      file,
+      type,
+      name,
+      line,
+      endLine: lineOf(starts, close),
+      isArray: match[0].includes('['),
+      open,
+      bodyPlain: plain.slice(open, close + 1),
+      bodyCode: code.slice(open, close + 1),
+      starts,
+      guards,
+    });
+  }
+  return items;
+}
+
+/** Resolve both C99 designated (`.field = fn`) and deterministic positional struct function tables. */
+function resolveStructTables(pendingStructs, resolve, structLayouts, tags) {
+  const result = [];
+  for (const item of pendingStructs) {
+    const { file, type, name, line, isArray, open, bodyPlain, bodyCode, starts, guards } = item;
     // Fields of the declared type sit one brace deep in a struct, two in an array of them;
     // deeper ones belong to a nested struct whose type is not declared here.
-    const own = match[0].includes('[') ? 2 : 1;
-    const body = plain.slice(open, close);
+    const own = isArray ? 2 : 1;
+    const innerPlain = bodyPlain.slice(0, -1);
     const fields = new Map();
-    let depth = 0;
-    let scanned = 0;
-    for (const item of body.matchAll(DESIGNATED_FUNCTION)) {
-      for (; scanned < item.index; scanned++)
-        if (body[scanned] === '{') depth++;
-        else if (body[scanned] === '}') depth--;
-      const [, field, target] = item;
-      if (NOT_NAMES.has(target) || guards[lineOf(starts, open + item.index) - 1]?.dead) continue;
-      const def = resolve(target, file);
-      if (!def) continue;
+    const addDef = (field, def, isOwn) => {
       if (!fields.has(field)) fields.set(field, { defs: [], nested: true });
       const entry = fields.get(field);
-      if (depth <= own) entry.nested = false;
+      if (isOwn) entry.nested = false;
       if (!entry.defs.some((known) => known.key === def.key)) entry.defs.push(def);
+    };
+    let depth = 0;
+    let scanned = 0;
+    for (const desig of innerPlain.matchAll(DESIGNATED_FUNCTION)) {
+      for (; scanned < desig.index; scanned++)
+        if (innerPlain[scanned] === '{') depth++;
+        else if (innerPlain[scanned] === '}') depth--;
+      const [, field, target] = desig;
+      if (NOT_NAMES.has(target) || guards[lineOf(starts, open + desig.index) - 1]?.dead) continue;
+      const def = resolve(target, file);
+      if (def) addDef(field, def, depth <= own);
+    }
+
+    const canonicalType = tags.get(type) || type;
+    const layout = structLayouts.get(type) !== undefined ? structLayouts.get(type) : structLayouts.get(canonicalType);
+    if (layout) {
+      const elements = [];
+      if (!isArray) elements.push({ start: 1, end: bodyPlain.length - 1 });
+      else {
+        for (const elem of splitTopLevel(bodyPlain, 1, bodyPlain.length - 1)) {
+          const slice = bodyPlain.slice(elem.start, elem.end);
+          if (!slice.trim()) continue;
+          const stripped = slice.replace(/^\s*\[[^\]]*\]\s*=\s*/, (prefix) => blank(prefix));
+          const relBrace = stripped.search(/\S/);
+          if (relBrace < 0 || stripped[relBrace] !== '{') continue;
+          const elemOpen = elem.start + relBrace;
+          const elemClose = matchClose(bodyPlain, elemOpen);
+          if (elemClose > elemOpen) elements.push({ start: elemOpen + 1, end: elemClose });
+        }
+      }
+      for (const elem of elements) {
+        if (guards[lineOf(starts, open + elem.start) - 1]?.dead) continue;
+        if (/^\s*#/m.test(bodyCode.slice(elem.start, elem.end))) continue;
+        const parts = splitTopLevel(bodyPlain, elem.start, elem.end);
+        if (parts.length && !bodyPlain.slice(parts.at(-1).start, parts.at(-1).end).trim()) parts.pop();
+        if (!parts.length || parts.length > layout.length) continue;
+        let cursor = 0;
+        for (const part of parts) {
+          const raw = bodyPlain.slice(part.start, part.end).trim();
+          const desig = /^\.\s*([A-Za-z_]\w*)\s*=/.exec(raw);
+          if (desig) {
+            const idx = layout.findIndex((member) => member.name === desig[1]);
+            cursor = idx >= 0 ? idx + 1 : layout.length + 1;
+            continue;
+          }
+          if (raw.startsWith('[')) {
+            cursor = layout.length + 1;
+            continue;
+          }
+          if (cursor >= layout.length) break;
+          const member = layout[cursor++];
+          if (member.isArray && !raw.startsWith('{')) {
+            cursor = layout.length + 1;
+            continue;
+          }
+          const target = /^(?:\(\s*[A-Za-z_][\w\s*]*\)\s*)*&?\s*([A-Za-z_]\w*)$/.exec(raw)?.[1];
+          if (!target || NOT_NAMES.has(target) || guards[lineOf(starts, open + part.start) - 1]?.dead) continue;
+          const def = resolve(target, file);
+          if (def) addDef(member.name, def, true);
+        }
+      }
     }
     if (fields.size) result.push({ name, type, file, line, fields });
   }
   return result;
+}
+
+/** Collect cross-image pointer-struct macros (`#define api ((Type*)ADDR)` and `#define Fn api->field`). */
+function collectVectorDirectives(source, byName, apiBases, apiMacros, vectorAliases) {
+  const { file, code, guards } = source;
+  if (inFolders(file, FOREIGN_SEGMENTS)) return;
+  const lines = code.split('\n');
+  for (let index = 0; index < lines.length; index++) {
+    if (guards[index]?.dead) continue;
+    let raw = lines[index].replace(/\r$/, '');
+    if (!/^\s*#\s*define\b/.test(raw)) continue;
+    while (/\\\s*$/.test(raw) && index + 1 < lines.length)
+      raw = raw.replace(/\\\s*$/, ' ') + lines[++index].replace(/\r$/, '');
+    const baseMatch =
+      /^\s*#\s*define\s+([A-Za-z_]\w*)\s+\(\s*\(\s*(?:const\s+)?([A-Za-z_]\w*)\s*\*\s*\)\s*([^)]+)\)/.exec(raw);
+    if (baseMatch && !NOT_TYPES.has(baseMatch[2])) {
+      apiBases.set(baseMatch[1], {
+        base: baseMatch[1],
+        type: baseMatch[2],
+        addr: collapse(baseMatch[3]),
+        file,
+        line: index + 1,
+      });
+      continue;
+    }
+    const fwd =
+      /^\s*#\s*define\s+([A-Za-z_]\w*)(?:\([^)]*\))?\s+(?:\(\s*\*\s*)?([A-Za-z_]\w*)\s*->\s*([A-Za-z_]\w*)\s*\)?(?:\([^)]*\))?\s*$/.exec(
+        raw
+      );
+    if (!fwd) continue;
+    const [, macro, base, field] = fwd;
+    if (KEYWORDS.has(macro) || NOT_NAMES.has(macro)) continue;
+    apiMacros.push({ macro, base, field, file, line: index + 1 });
+    if (macro !== field) {
+      if (!byName.has(macro) && byName.has(field)) vectorAliases.set(macro, field);
+      else if (!byName.has(field) && byName.has(macro)) vectorAliases.set(field, macro);
+    }
+  }
+}
+
+/** Group cross-image pointer-struct macro clusters and match their vector table instances. */
+function buildVectorApis(apiBases, apiMacros, pendingStructs, resolve, byName) {
+  const byBase = new Map();
+  for (const item of apiMacros) {
+    if (!byBase.has(item.base)) byBase.set(item.base, []);
+    const list = byBase.get(item.base);
+    if (!list.some((known) => known.macro === item.macro && known.field === item.field)) list.push(item);
+  }
+  const out = [];
+  for (const [base, entries] of byBase) {
+    const baseInfo = apiBases.get(base);
+    const hasIndexedTarget = entries.some((entry) => byName.has(entry.macro) || byName.has(entry.field));
+    if (!baseInfo && (entries.length < 4 || !hasIndexedTarget)) continue;
+    if (baseInfo && entries.length < 2) continue;
+    const header = baseInfo?.file || entries[0].file;
+    const tableDef = baseInfo?.type ? pendingStructs.find((item) => item.type === baseInfo.type) : undefined;
+    const mapped = entries.map((entry) => ({
+      ...entry,
+      def: resolve(entry.macro, tableDef?.file || header) || resolve(entry.field, tableDef?.file || header),
+    }));
+    out.push({
+      base,
+      header,
+      type: baseInfo?.type,
+      addr: baseInfo?.addr,
+      table: tableDef ? { name: tableDef.name, file: tableDef.file, line: tableDef.line } : undefined,
+      entries: mapped,
+      aliases: mapped.filter((entry) => entry.macro !== entry.field),
+      external: mapped.filter((entry) => !entry.def),
+    });
+  }
+  return out.sort((a, b) => a.header.localeCompare(b.header) || a.base.localeCompare(b.base));
+}
+
+/** Record `#define MACRO(...) ...` followed shortly by `#include "table.h"` outside `#if 0`. */
+function collectXMacroSites(source, xmacroSites) {
+  const { file, literals, guards } = source;
+  if (inFolders(file, FOREIGN_SEGMENTS)) return;
+  const lines = literals.split('\n');
+  const active = new Map();
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index].replace(/\r$/, '');
+    if (guards[index]?.dead) continue;
+    const def = /^\s*#\s*define\s+([A-Za-z_]\w*)\s*\([^)]*\)/.exec(line);
+    if (def) {
+      active.set(def[1], index + 1);
+      while (/\\\s*$/.test(lines[index]) && index + 1 < lines.length) index++;
+      continue;
+    }
+    const undef = /^\s*#\s*undef\s+([A-Za-z_]\w*)\b/.exec(line);
+    if (undef) {
+      active.delete(undef[1]);
+      continue;
+    }
+    const inc = /^\s*#\s*include\s*"([^"]+)"/.exec(line);
+    if (!inc || !active.size) continue;
+    for (const [macro, definedLine] of active)
+      if (index + 1 - definedLine <= 12)
+        xmacroSites.push({ expander: file, line: index + 1, macro, include: inc[1].replace(/\\/g, '/') });
+  }
+}
+
+/** Match X-Macro `#include` headers against project files and count active entries. */
+function resolveXMacroTables(xmacroSites, files, readSource) {
+  if (!xmacroSites.length) return [];
+  const groups = new Map();
+  for (const site of xmacroSites) {
+    const expDir = site.expander.slice(0, Math.max(0, site.expander.lastIndexOf('/')));
+    const local = expDir ? `${expDir}/${site.include}` : site.include;
+    const matches = files.filter(
+      (file) => file === local || file === site.include || file.endsWith(`/${site.include}`)
+    );
+    const target = matches.find((file) => file === local) || (matches.length === 1 ? matches[0] : undefined);
+    if (!target) continue;
+    const key = `${target}|${site.macro}`;
+    if (!groups.has(key)) groups.set(key, { file: target, macro: site.macro, sites: [] });
+    const entry = groups.get(key);
+    if (!entry.sites.some((known) => known.file === site.expander && known.line === site.line))
+      entry.sites.push({ file: site.expander, line: site.line });
+  }
+  const out = [];
+  for (const group of groups.values()) {
+    const text = readSource(group.file);
+    if (!text) continue;
+    const prepared = prepare(group.file, text);
+    const pattern = new RegExp(`\\b${group.macro}\\s*\\(`, 'g');
+    let count = 0;
+    for (const match of prepared.code.matchAll(pattern)) {
+      const line = lineOf(prepared.starts, match.index);
+      if (prepared.guards[line - 1]?.dead) continue;
+      const lineText = prepared.code.slice(prepared.starts[line - 1], prepared.starts[line] ?? prepared.code.length);
+      if (/^\s*#/.test(lineText)) continue;
+      count++;
+    }
+    if (count >= 2) out.push({ ...group, count });
+  }
+  return out.sort((a, b) => a.file.localeCompare(b.file) || a.macro.localeCompare(b.macro));
 }
 
 /**
@@ -719,7 +1104,7 @@ function linkFieldCalls(found, fieldCalls, canonical) {
 }
 
 /** Every definition of `name` in a file, with its entries in order. */
-function parseTables(source, name, resolve) {
+function parseTables(source, name, resolve, dataNames) {
   const { file, plain, comments, starts, guards } = source;
   const variants = [];
   const pattern = new RegExp(`\\b${name}${ARRAY_DECLARATOR}`, 'g');
@@ -757,7 +1142,7 @@ function parseTables(source, name, resolve) {
         if (def) {
           if (!named.some((item) => item.def.key === def.key))
             named.push({ def, line: lineOf(starts, part.start + id.index) });
-        } else candidates.push(id[0]);
+        } else if (!dataNames?.has(id[0])) candidates.push(id[0]);
       }
       // A function the index does not hold (its folder is skipped, or it sits under #if)
       // still takes a place in the order: keep it, by the name that looks like a function.
@@ -905,17 +1290,18 @@ function render(model, labels, { language, date, mode }) {
     out.push('');
   }
 
-  const structs = (model.structTables || []).slice(0, MAX_STRUCT_TABLES);
-  if (structs.length) {
+  const allStructs = model.structTables || [];
+  if (allStructs.length) {
     out.push(`## ${t.structTables}`, '', t.structTablesIntro, '');
     const more = (list, max) => (list.length > max ? `, … (${list.length - max})` : '');
-    // One heading per struct type: where its fields are called, once, then each table's functions.
+    // Group by struct type first so one large table family (e.g. 69 IC tables) never hides other types.
     const groups = new Map();
-    for (const table of structs) {
+    for (const table of allStructs) {
       if (!groups.has(table.type)) groups.set(table.type, []);
       groups.get(table.type).push(table);
     }
-    for (const [type, members] of groups) {
+    const entries = [...groups.entries()];
+    for (const [type, members] of entries.slice(0, MAX_STRUCT_TYPES)) {
       out.push(`### ${code(type)}`, '');
       const calls = new Map();
       for (const table of members)
@@ -934,7 +1320,7 @@ function render(model, labels, { language, date, mode }) {
         out.push(`- ${code(`.${field}`)}: ${fill(t.calledIn, { sites: sites + more(list, MAX_FIELD_SITES) })}`);
       }
       if (called.length) out.push('');
-      for (const table of members) {
+      for (const table of members.slice(0, MAX_TABLES_PER_TYPE)) {
         const fields = table.fields.slice(0, MAX_TABLE_FIELDS).map((item) => {
           const functions = item.defs.slice(0, MAX_FIELD_FUNCTIONS).map((def) => code(def.name));
           return `${code(`.${item.field}`)} → ${functions.join(', ')}${more(item.defs, MAX_FIELD_FUNCTIONS)}`;
@@ -944,10 +1330,84 @@ function render(model, labels, { language, date, mode }) {
           `- ${code(table.name)} (${at(table.file, table.line)}): ${fields.join('; ')}${hidden > 0 ? `; … (${hidden})` : ''}`
         );
       }
+      if (members.length > MAX_TABLES_PER_TYPE) out.push(`- … (${members.length - MAX_TABLES_PER_TYPE})`);
       out.push('');
     }
-    const left = (model.structTables || []).length - structs.length;
-    if (left > 0) out.push(`- … (${left})`, '');
+    if (entries.length > MAX_STRUCT_TYPES) out.push(`- … (${entries.length - MAX_STRUCT_TYPES})`, '');
+  }
+
+  const vectorApis = model.vectorApis || [];
+  if (vectorApis.length) {
+    const more = (list, max) => (list.length > max ? `, … (${list.length - max})` : '');
+    out.push(`## ${t.vectorApis}`, '', t.vectorApisIntro, '');
+    for (const api of vectorApis) {
+      const header = api.addr ? `${api.header}, ${code(api.addr)}` : api.header;
+      const table = api.table
+        ? fill(t.vectorApiTable, { name: code(api.table.name), site: at(api.table.file, api.table.line) })
+        : '';
+      const aliasItems = api.aliases
+        .slice(0, MAX_VECTOR_ITEMS)
+        .map((item) => `${code(item.macro)} → ${code(`.${item.field}`)}`)
+        .join(', ');
+      const aliases = api.aliases.length
+        ? fill(t.vectorApiAliases, { items: aliasItems + more(api.aliases, MAX_VECTOR_ITEMS) })
+        : '';
+      const extItems = api.external
+        .slice(0, MAX_VECTOR_ITEMS)
+        .map((item) => code(item.macro))
+        .join(', ');
+      const external = api.external.length
+        ? fill(t.vectorApiExternal, { items: extItems + more(api.external, MAX_VECTOR_ITEMS) })
+        : '';
+      out.push(
+        `- ${fill(t.vectorApiLine, {
+          base: code(api.base),
+          header,
+          count: api.entries.length,
+          resolved: api.entries.length - api.external.length,
+          table,
+          aliases,
+          external,
+        })}`
+      );
+    }
+    out.push('');
+  }
+
+  const dataTables = model.dataTables || [];
+  const xmacroTables = model.xmacroTables || [];
+  if (dataTables.length || xmacroTables.length) {
+    const more = (list, max) => (list.length > max ? `, … (${list.length - max})` : '');
+    out.push(`## ${t.dataTables}`, '', t.dataTablesIntro, '');
+    for (const item of xmacroTables) {
+      const sites = item.sites
+        .slice(0, MAX_FIELD_SITES)
+        .map((site) => at(site.file, site.line))
+        .join(', ');
+      out.push(
+        `- ${fill(t.xmacroLine, {
+          file: item.file,
+          macro: code(item.macro),
+          count: item.count,
+          sites: sites + more(item.sites, MAX_FIELD_SITES),
+        })}`
+      );
+    }
+    for (const tableFile of dataTables) {
+      // Show multi-line tables first when a file has dozens of 1-line descriptors alongside big object arrays.
+      const prioritized = tableFile.items
+        .slice()
+        .sort((a, b) => Number(b.end - b.start >= 5) - Number(a.end - a.start >= 5) || a.start - b.start);
+      const shown = prioritized
+        .slice(0, MAX_DATA_FILE_ITEMS)
+        .sort((a, b) => a.start - b.start)
+        .map(
+          (entry) => `${code(entry.name)} (${entry.start === entry.end ? entry.start : `${entry.start}-${entry.end}`})`
+        )
+        .join(', ');
+      out.push(`- ${tableFile.file}: ${shown}${more(tableFile.items, MAX_DATA_FILE_ITEMS)}`);
+    }
+    out.push('');
   }
 
   const constraints = [];

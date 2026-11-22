@@ -193,7 +193,7 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
               base: workflowBase,
               teamName: name,
               locale: i18n.language,
-              workspace: teamWorkspace,
+              workspace,
               roles: buildExpertTeamRoles({
                 ...chosenExperts,
                 labels: { dispatcher: t('team.experts.roles.dispatcher'), verifier: t('team.experts.roles.verifier') },
@@ -218,7 +218,7 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
               base: workflowBase,
               teamName: name,
               locale: i18n.language,
-              workspace: teamWorkspace,
+              workspace,
               labels,
             });
           }

@@ -68,7 +68,7 @@ function briefLines(brief: ExpertBrief | undefined, card: string): string | unde
         `- Called from outside: ${digest.provides.map((item) => `${item.name} (by ${item.callers.join(', ')})`).join('; ')}`
       );
     if (digest.writtenOutside.length) lines.push(`- Globals other files write: ${digest.writtenOutside.join(', ')}`);
-    const { partial, unusable, changed, missingFunctions, missingGlobals, unmatched } = digest.issues;
+    const { partial, unusable, changed, missingFunctions, missingGlobals, unmatched, drift } = digest.issues;
     const issues = [
       partial && `${partial} partly parsed files`,
       unusable && `${unusable} files the index could not parse`,
@@ -76,6 +76,7 @@ function briefLines(brief: ExpertBrief | undefined, card: string): string | unde
       missingFunctions && `${missingFunctions} functions missing from the index`,
       missingGlobals && `${missingGlobals} globals missing from the index graph`,
       unmatched && `${unmatched} of your paths match no indexed file`,
+      drift && `${drift} unowned files detected in your module`,
     ].filter(Boolean);
     lines.push(
       issues.length
@@ -93,8 +94,8 @@ function learnSteps(card: string, knowledge: string): string {
     '2. Check the generated brief against the source: open every entry function; for each function called from outside, confirm its callers and look for callers the index misses with search_code (macros, function pointer and callback tables, API tables between firmware images); for each global, confirm who writes it. Read partly parsed ranges, files the index could not parse and files changed after the index directly.',
     '3. Trace the module in the order of the codebase memory skill: flow, parameters and where they are stored, who changes the parameters, data sources, outputs, build switches, gaps.',
     `4. Write your part of ${card} after the generated part, in the feature card format of the codebase memory skill, with the basis line (date, Git commit, index time). Keep the section with the user's corrections unchanged.`,
-    '5. Index check: list what the index or the generated brief got wrong or missed in your module, and files that look like part of your module but are not in your list or belong to another expert. Name each item (function, call, global, table entry or file) with the place in the source and the tool result that shows the index lacks it, for example a get_file_outline or search_graph result; do not report a count you have not matched name by name. If you found nothing, say so.',
-    '6. Send the dispatcher a short report with the team message tool: that the card is updated, the key facts (entry points, interfaces, parameters and their storage), the index problems, and suggested changes to your file list.',
+    '5. Index check: list what the index or the generated brief got wrong or missed in your module, and files that look like part of your module (including newly split `<module>_*.c` files or moved folders) but are not in your list or belong to another expert. Name each item (function, call, global, table entry or file) with the place in the source and the tool result that shows the index lacks it, for example a get_file_outline or search_graph result; do not report a count you have not matched name by name. If you found nothing, say so.',
+    '6. Send the dispatcher a short report with the team message tool: that the card is updated, the key facts (entry points, interfaces, parameters and their storage), the index problems, and suggested changes to your file list (preferring `<dir>/<module>_*.c` or `<dir>/` patterns when a module is split across files).',
   ].join('\n');
 }
 

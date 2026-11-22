@@ -45,7 +45,7 @@
     "entryNotIndexed": "{site}: the task entry {expression} is not in the index; its folder may be skipped, or it may be excluded by #if.",
     "entryParameter": "{site}: {creator} creates a task from its parameter {expression}; the tasks it creates depend on who calls {creator}.",
     "modulesTitle": "Modules",
-    "modulesIntro": "Modules found from the dispatch tables: each source file that registers functions in a table, with its header and the source files whose functions share its name prefix. Choose in the Architecture panel which modules get an expert; one expert can take several modules.",
+    "modulesIntro": "Modules found from the dispatch tables, standalone tasks and struct function tables: each source file (or split <module>_*.c group in one folder) that registers entries there, with its headers and the source files whose functions share its name prefix. Choose in the Architecture panel which modules get an expert; one expert can take several modules.",
     "modulesNone": "No source file registers functions in a dispatch table.",
     "modulesFiles": "Files",
     "modulesTables": "Registers in",
@@ -95,7 +95,19 @@
     "checkPartial": "{file}: lines {ranges} were only partly parsed; code there may be missing from the index.",
     "checkChanged": "{file}: changed after the last index; line numbers and calls in the index may be off. Read the file directly.",
     "checkMissingFunctions": "Defined in the source but missing from the index: {names}.",
-    "checkMissingGlobals": "{count} globals are not in the index graph; use search_code for them: {names}."
+    "checkMissingGlobals": "{count} globals are not in the index graph; use search_code for them: {names}.",
+    "vectorApis": "Inter-image API tables",
+    "vectorApisIntro": "Pointer macros and entry structs that forward calls across firmware images (such as Boot, APP1 and APP2).",
+    "vectorApiLine": "{base} ({header}): {count} entries ({resolved} in index){table}{aliases}{external}",
+    "vectorApiTable": "; vector table {name} ({site})",
+    "vectorApiAliases": "; renamed macros: {items}",
+    "vectorApiExternal": "; outside index: {items}",
+    "dataTables": "Data and X-Macro tables",
+    "dataTablesIntro": "Large source tables and X-Macro headers scanned directly from the source, including files the parser could not index.",
+    "xmacroLine": "{file}: X-Macro {macro} ({count} entries), expanded in {sites}",
+    "modulesShared": "Candidate shared files (referenced across modules, not yet owned): {files}.",
+    "fileTables": "tables: {items}",
+    "driftFiles": "Unowned files detected in the same module (possible split or refactor; consider updating experts.json): {files}."
   },
   "zh-CN": {
     "title": "架构",
@@ -143,7 +155,7 @@
     "entryNotIndexed": "{site}：任务入口 {expression} 不在索引中，可能是所在目录被跳过，或被 #if 排除。",
     "entryParameter": "{site}：{creator} 用参数 {expression} 创建任务，具体是哪个任务取决于谁调用 {creator}。",
     "modulesTitle": "模块分类",
-    "modulesIntro": "按调度表识别出的模块：每个在调度表里登记了函数的源文件算一个模块，连同同名头文件，以及函数名前缀与它相同的其他源文件。在架构面板里选择哪些模块设专家；一位专家可以负责几个模块。",
+    "modulesIntro": "按调度表、独立任务和结构体函数表识别出的模块：每个在其中登记了入口的源文件（或同一目录下拆分成 <模块>_*.c 的一组文件）算一个模块，连同对应头文件，以及函数名前缀与它相同的其他源文件。在架构面板里选择哪些模块设专家；一位专家可以负责几个模块。",
     "modulesNone": "没有源文件在调度表里登记函数。",
     "modulesFiles": "文件",
     "modulesTables": "登记在",
@@ -193,6 +205,18 @@
     "checkPartial": "{file}：第 {ranges} 行只解析了一部分，那里的代码可能不在索引中。",
     "checkChanged": "{file}：索引后改过，索引里的行号和调用可能已经偏移，请直接读源码。",
     "checkMissingFunctions": "源码里有定义、索引里没有的函数：{names}。",
-    "checkMissingGlobals": "{count} 个全局变量不在索引图中，请用 search_code 查：{names}。"
+    "checkMissingGlobals": "{count} 个全局变量不在索引图中，请用 search_code 查：{names}。",
+    "vectorApis": "镜像间接口向量表",
+    "vectorApisIntro": "跨固件镜像（如 Boot、APP1、APP2）转发调用的指针宏与入口结构体表。",
+    "vectorApiLine": "{base}（{header}）：共 {count} 项（索引中有 {resolved} 项）{table}{aliases}{external}",
+    "vectorApiTable": "；向量表 {name}（{site}）",
+    "vectorApiAliases": "；宏名与字段名不同：{items}",
+    "vectorApiExternal": "；不在本索引中：{items}",
+    "dataTables": "数据表与 X-Macro 表",
+    "dataTablesIntro": "直接从源码扫描出的大型数据表与 X-Macro 头文件（含解析器未能建索引的文件）。",
+    "xmacroLine": "{file}：X-Macro {macro}（{count} 项），展开于 {sites}",
+    "modulesShared": "建议归入共享（shared）的公共文件（跨模块共用、当前无归属）：{files}。",
+    "fileTables": "数据表：{items}",
+    "driftFiles": "同一模块下发现未归属文件（可能是模块拆分或重构新增，建议更新 experts.json）：{files}。"
   }
 }

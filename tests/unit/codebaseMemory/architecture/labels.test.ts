@@ -46,6 +46,22 @@ describe('architecture file headings', () => {
           ],
         },
       ],
+      vectorApis: [
+        {
+          base: 'legal_api',
+          header: 'app1_api.h',
+          addr: 'APP1_ENTRY_ADDR',
+          table: { name: 'legal_entry_list', file: 'app1_api.c', line: 10 },
+          entries: [
+            { macro: 'EN_Init', field: 'en_init', def: { name: 'en_init', file: 'energy.c', start: 1 } },
+            { macro: 'BOOT_Jump', field: 'BOOT_Jump', def: undefined },
+          ],
+          aliases: [{ macro: 'EN_Init', field: 'en_init' }],
+          external: [{ macro: 'BOOT_Jump', field: 'BOOT_Jump' }],
+        },
+      ],
+      dataTables: [{ file: 'obis_table.c', items: [{ name: 'DataObj', start: 10, end: 120 }] }],
+      xmacroTables: [{ file: 'eeprom_addr_table.h', macro: 'ENTRY', count: 12, sites: [{ file: 'ds.h', line: 5 }] }],
       modules: { columns: [], rows: new Map(), common: [], differs: [] },
       gaps: {
         unreadable: ['a.c'],

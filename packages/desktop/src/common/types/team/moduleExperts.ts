@@ -1,3 +1,5 @@
+import type { CodebaseMemoryModule } from '../codebaseMemory/types';
+
 /** One module expert of a project, saved in `<project>/.woody/experts.json`. */
 export type ModuleExpert = {
   /** Lowercase ASCII words joined by `-`; also names the feature card `.woody/features/<id>.md`. */
@@ -115,4 +117,54 @@ export function validateExpertsFile(value: unknown): ModuleExpertsFile {
   const shared = [...new Set(stringList(record.shared, 'shared'))];
   if (shared.length > PATHS_MAX || !shared.every(isProjectPath)) throw new Error('shared holds an invalid path');
   return { version: 1, experts, shared };
+}
+
+const SPLIT_FILE = /^(?:(.+)\/)?([A-Za-z0-9]+)_[^/]+\.([A-Za-z0-9]+)$/;
+
+function matchesSplitPattern(dir: string, base: string, ext: string, file: string): boolean {
+  const prefix = dir ? `${dir}/` : '';
+  if (!file.startsWith(`${prefix}${base}_`) || !file.endsWith(`.${ext}`)) return false;
+  return !file.slice(prefix.length).includes('/');
+}
+
+/**
+ * Files of the chosen modules, in module order, each once. When a module is split across
+ * several `<dir>/<base>_*.c` (or `.h`) files, such as `display_*.c` after `display.c` is
+ * split, collapse them to `<dir>/<base>_*.c` so new split files stay owned automatically.
+ */
+export function modulePaths(modules: CodebaseMemoryModule[], ids: string[]): string[] {
+  const chosenSet = new Set(ids);
+  const otherFiles = modules.filter((item) => !chosenSet.has(item.id)).flatMap((item) => item.files);
+  const out: string[] = [];
+  for (const item of modules) {
+    if (!chosenSet.has(item.id)) continue;
+    const counts = new Map<string, { dir: string; base: string; ext: string; count: number }>();
+    for (const file of item.files) {
+      const match = SPLIT_FILE.exec(file);
+      if (!match) continue;
+      const [, dir = '', base, ext] = match;
+      const key = `${dir}\0${base.toLowerCase()}\0${ext.toLowerCase()}`;
+      const current = counts.get(key);
+      if (current) current.count += 1;
+      else counts.set(key, { dir, base, ext, count: 1 });
+    }
+    for (const file of item.files) {
+      const match = SPLIT_FILE.exec(file);
+      if (match) {
+        const [, dir = '', base, ext] = match;
+        const group = counts.get(`${dir}\0${base.toLowerCase()}\0${ext.toLowerCase()}`);
+        if (
+          group &&
+          group.count >= 2 &&
+          !otherFiles.some((other) => matchesSplitPattern(group.dir, group.base, group.ext, other))
+        ) {
+          const pattern = `${group.dir ? `${group.dir}/` : ''}${group.base}_*.${group.ext}`;
+          if (!out.includes(pattern)) out.push(pattern);
+          continue;
+        }
+      }
+      if (!out.includes(file)) out.push(file);
+    }
+  }
+  return out;
 }

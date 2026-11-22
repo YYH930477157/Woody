@@ -112,7 +112,14 @@ vi.mock('@renderer/components/workspace', () => ({
 }));
 
 const worktreeMocks = vi.hoisted(() => ({ inspect: vi.fn(), create: vi.fn(), discard: vi.fn() }));
-const expertsMocks = vi.hoisted(() => ({ experts: vi.fn(), save: vi.fn(), cards: vi.fn() }));
+const expertsMocks = vi.hoisted(() => ({
+  experts: vi.fn(),
+  save: vi.fn(),
+  cards: vi.fn(),
+  getStatus: vi.fn(),
+  saveConfig: vi.fn(),
+  startIndex: vi.fn(),
+}));
 vi.mock('@renderer/utils/platform', () => ({ isElectronDesktop: () => true }));
 
 vi.mock('@/common', () => ({
@@ -130,6 +137,9 @@ vi.mock('@/common', () => ({
       teamWorktreeDiscard: { invoke: worktreeMocks.discard },
     },
     codebaseMemory: {
+      get: { invoke: expertsMocks.getStatus },
+      save: { invoke: expertsMocks.saveConfig },
+      start: { invoke: expertsMocks.startIndex },
       experts: { invoke: expertsMocks.experts },
       saveExperts: { invoke: expertsMocks.save },
       moduleCards: { invoke: expertsMocks.cards },
@@ -189,6 +199,9 @@ describe('TeamCreateModal', () => {
     // Without codebase memory the card call fails, like the real one for a project without it.
     expertsMocks.cards.mockReset();
     expertsMocks.cards.mockRejectedValue(new Error('Codebase memory is disabled for this project'));
+    expertsMocks.getStatus.mockReset();
+    expertsMocks.saveConfig.mockReset();
+    expertsMocks.startIndex.mockReset();
     messageWarningMock.mockReset();
     sendToAgentMock.mockReset();
     sendToAgentMock.mockResolvedValue({ accepted: true });
@@ -237,6 +250,132 @@ describe('TeamCreateModal', () => {
       workspace: 'D:\\work\\project',
       agents: [{ role: 'leader', assistant_id: 'dispatcher-copy', assistant_name: '总管', model: 'configured-model' }],
     });
+  });
+
+  it('passes the main workspace to prepareRoles while creating an isolated worktree team', async () => {
+    expertsMocks.experts.mockResolvedValue({
+      file: EXPERTS_FILE,
+      saved: { version: 1, experts: [sensor], shared: ['src/tasks.c'] },
+      cards: [],
+      business: true,
+    });
+    await startExpertTeam();
+    await screen.findByTestId('team-expert-sensor');
+    fireEvent.click(await screen.findByRole('switch', { name: 'team.create.isolated.label' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Create' }));
+    await waitFor(() => expect(createTeamInvokeMock).toHaveBeenCalledTimes(1));
+
+    const { roles, workspace } = prepareRolesMock.mock.calls[0][0];
+    expect(workspace).toBe('D:\\work\\project');
+    expect(roles[1].rules).toContain('D:\\work\\project\\.woody/features/sensor.md');
+    expect(createTeamInvokeMock.mock.calls[0][0]).toMatchObject({
+      workspace: 'D:\\work\\project-feature',
+      workspace_mode: 'isolated',
+    });
+  });
+
+  it('enables and builds the index from the banner and seeds split module wildcards when no experts exist yet', async () => {
+    expertsMocks.experts.mockResolvedValue({ file: EXPERTS_FILE, saved: null, cards: [], business: true });
+    expertsMocks.getStatus.mockResolvedValue({
+      repoPath: 'D:\\work\\project',
+      config: { version: 1, enabled: false, mode: 'full' },
+      available: true,
+      phase: 'idle',
+      log: '',
+    });
+    expertsMocks.saveConfig.mockResolvedValue({
+      repoPath: 'D:\\work\\project',
+      config: { version: 1, enabled: true, mode: 'full' },
+      available: true,
+      phase: 'idle',
+      log: '',
+    });
+    expertsMocks.startIndex.mockImplementation(async () => {
+      expertsMocks.cards.mockResolvedValue({
+        indexPhase: 'succeeded',
+        modules: [
+          {
+            id: 'display',
+            files: ['app/display_lcd.c', 'app/display_menu.c', 'app/display.h'],
+            tables: ['secondList'],
+            functions: ['DISPLAY_Second'],
+            experts: [],
+          },
+        ],
+        experts: [],
+      });
+      return {
+        repoPath: 'D:\\work\\project',
+        config: { version: 1, enabled: true, mode: 'full' },
+        available: true,
+        phase: 'succeeded',
+        log: '',
+      };
+    });
+
+    await startExpertTeam();
+    const banner = await screen.findByTestId('team-experts-index-banner');
+    expect(banner).toHaveTextContent('team.experts.indexStatus.disabled');
+    fireEvent.click(screen.getByTestId('team-experts-index-action'));
+
+    await waitFor(() => expect(screen.queryByTestId('team-experts-index-banner')).toBeNull());
+    expect(expertsMocks.saveConfig).toHaveBeenCalledWith({
+      repoPath: 'D:\\work\\project',
+      config: { version: 1, enabled: true, mode: 'full' },
+    });
+    expect(expertsMocks.startIndex).toHaveBeenCalledWith({ repoPath: 'D:\\work\\project', language: 'zh-CN' });
+    const row = await screen.findByTestId('team-expert-display');
+    expect(within(row).getByPlaceholderText('team.experts.fields.pathsPlaceholder')).toHaveValue(
+      'app/display_*.c\napp/display.h'
+    );
+  });
+
+  it('warns when disk sources drifted since the last index and refreshes on click', async () => {
+    expertsMocks.experts.mockResolvedValue({
+      file: EXPERTS_FILE,
+      saved: { version: 1, experts: [sensor], shared: [] },
+      cards: [],
+      business: true,
+    });
+    expertsMocks.cards.mockResolvedValue({
+      indexPhase: 'succeeded',
+      indexDrift: { added: 2, modified: 1, deleted: 1 },
+      modules: [],
+      experts: [{ id: 'sensor', card: '.woody/features/sensor.md', state: 'stale' }],
+    });
+    expertsMocks.getStatus.mockResolvedValue({
+      repoPath: 'D:\\work\\project',
+      config: { version: 1, enabled: true, mode: 'full' },
+      available: true,
+      phase: 'succeeded',
+      log: '',
+    });
+    expertsMocks.startIndex.mockImplementation(async () => {
+      expertsMocks.cards.mockResolvedValue({
+        indexPhase: 'succeeded',
+        modules: [],
+        experts: [{ id: 'sensor', card: '.woody/features/sensor.md', state: 'ready' }],
+      });
+      return {
+        repoPath: 'D:\\work\\project',
+        config: { version: 1, enabled: true, mode: 'full' },
+        available: true,
+        phase: 'succeeded',
+        log: '',
+      };
+    });
+
+    await startExpertTeam();
+    const banner = await screen.findByTestId('team-experts-index-banner');
+    expect(banner).toHaveTextContent('team.experts.indexStatus.outdated');
+    fireEvent.click(screen.getByTestId('team-experts-index-action'));
+
+    await waitFor(() => expect(screen.queryByTestId('team-experts-index-banner')).toBeNull());
+    expect(expertsMocks.saveConfig).not.toHaveBeenCalled();
+    expect(expertsMocks.startIndex).toHaveBeenCalledWith({ repoPath: 'D:\\work\\project', language: 'zh-CN' });
+    expect(screen.getByTestId('team-expert-card-sensor')).toHaveTextContent(
+      'conversation.codebaseMemory.modules.states.ready'
+    );
   });
 
   describe('experts learning their modules', () => {

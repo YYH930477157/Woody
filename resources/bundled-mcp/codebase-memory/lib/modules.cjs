@@ -30,6 +30,7 @@ const LIMITS = {
   addressSites: 3,
   structTables: 4,
   fileFunctions: 40,
+  fileTables: 12,
   switches: 25,
   missing: 30,
   digestProvides: 8,
@@ -255,6 +256,44 @@ function definitionsOf(source) {
   return [...found.values()];
 }
 
+/** Top-level initialized arrays and structs with their start/end lines, for pure-table or unparsed files. */
+function fileTablesOf(source) {
+  const { plain, starts, guards } = source;
+  const items = [];
+  const pattern = /\b([A-Za-z_]\w*)\s*(?:\[[^\];{}]*\]\s*)?=\s*\{/g;
+  let depth = 0;
+  let cursor = 0;
+  for (const match of plain.matchAll(pattern)) {
+    for (; cursor < match.index; cursor++)
+      if (plain[cursor] === '{') depth++;
+      else if (plain[cursor] === '}') depth = Math.max(0, depth - 1);
+    if (depth !== 0) continue;
+    const start = lineOf(starts, match.index);
+    if (guards[start - 1]?.dead || DECLARATION_WORDS.has(match[1])) continue;
+    const open = match.index + match[0].length - 1;
+    const close = matchClose(plain, open);
+    if (close < 0) continue;
+    items.push({ name: match[1], start, end: lineOf(starts, close) });
+  }
+  return items;
+}
+
+/** Unwrapped `#define ...` text starting at 1-based `line`, with CRLF and `\` continuations joined. */
+function macroLine(prepared, line) {
+  let raw = '';
+  for (let index = line - 1; index < prepared.starts.length; index++) {
+    const from = prepared.starts[index];
+    const next = prepared.starts[index + 1];
+    const segment = prepared.literals
+      .slice(from, next === undefined ? prepared.literals.length : next - 1)
+      .replace(/\r$/, '');
+    const continued = /\\\s*$/.test(segment);
+    raw += (raw ? ' ' : '') + (continued ? segment.replace(/\\\s*$/, '') : segment);
+    if (!continued) break;
+  }
+  return raw;
+}
+
 /** How `plain` uses the variable whose name starts at `offset`: write, address or read. */
 function accessKind(plain, offset, name) {
   const before = plain.slice(Math.max(0, offset - 3), offset);
@@ -287,6 +326,10 @@ function accessKind(plain, offset, name) {
 // ---------------------------------------------------------------------------
 
 const prefixOf = (name) => /^([A-Za-z][A-Za-z0-9]*)_/.exec(name)?.[1].toUpperCase();
+const splitBase = (stem) => {
+  const index = stem.indexOf('_');
+  return index >= 2 ? stem.slice(0, index) : undefined;
+};
 
 /** The prefix most of a file's functions share, when at least half of them share it. */
 function dominantPrefix(names) {
@@ -299,8 +342,8 @@ function dominantPrefix(names) {
   return best && best[1] * 2 >= names.length ? best[0] : undefined;
 }
 
-/** `alarm`, or `routine-alarm` when two modules share a file name. */
-function moduleIds(seeds) {
+/** `alarm`, or `routine-alarm` when two modules share a stem. */
+function groupIds(groups) {
   const slug = (text) =>
     text
       .toLowerCase()
@@ -308,22 +351,24 @@ function moduleIds(seeds) {
       .replace(/^-+|-+$/g, '')
       .slice(0, 40) || 'module';
   const byStem = new Map();
-  for (const file of seeds) {
-    const id = slug(stemOf(file));
+  for (const group of groups) {
+    const id = slug(group.stem);
     if (!byStem.has(id)) byStem.set(id, []);
-    byStem.get(id).push(file);
+    byStem.get(id).push(group);
   }
   const ids = new Map();
-  for (const [id, files] of byStem)
-    for (const file of files)
-      ids.set(file, files.length === 1 ? id : slug(`${dirOf(file).split('/').pop() || 'root'}-${id}`));
+  for (const [id, items] of byStem)
+    for (const group of items)
+      ids.set(group, items.length === 1 ? id : slug(`${group.dir.split('/').pop() || 'root'}-${id}`));
   return ids;
 }
 
 /**
- * Modules of the project: each source file that registers functions in a dispatch table
- * leads one, with its header and the other source files whose functions mostly share its
- * prefix. Files in library and demo folders are left out.
+ * Modules of the project: each source file (or `<base>_*.c` split-file family in one folder,
+ * such as `display_*.c` after `display.c` is split) that registers functions in a dispatch
+ * table, standalone RTOS task or called struct interface table leads one, with its headers
+ * and the other source files whose functions mostly share its prefix. Files in library and
+ * demo folders are left out.
  *
  * @param {object} input
  * @param {object} input.model result of architecture.analyze
@@ -334,69 +379,207 @@ function moduleIds(seeds) {
  */
 function classify({ model, functions, files, experts = [], shared = [] }) {
   const registered = new Map();
-  for (const table of model.tables)
+  const register = (file, tableName, fnName) => {
+    if (!C_SOURCE.test(file) || foreign(file)) return;
+    if (!registered.has(file)) registered.set(file, new Map());
+    const tables = registered.get(file);
+    if (!tables.has(tableName)) tables.set(tableName, []);
+    if (!tables.get(tableName).includes(fnName)) tables.get(tableName).push(fnName);
+  };
+  // Central scheduler files define or run tables whose entries belong to other files (e.g. mtask.c).
+  const schedulerFiles = new Set();
+  const centralSchedulers = new Set();
+  for (const table of model.tables || []) {
+    const externalFiles = new Set(
+      table.variants.flatMap((variant) =>
+        variant.entries.flatMap((entry) => entry.defs.map((def) => def.file).filter((file) => file !== variant.file))
+      )
+    );
+    if (!externalFiles.size) continue;
+    for (const variant of table.variants) {
+      schedulerFiles.add(variant.file);
+      if (externalFiles.size >= 3) centralSchedulers.add(variant.file);
+    }
+    for (const dispatcher of table.dispatchers || []) {
+      if (dispatcher.def?.file) schedulerFiles.add(dispatcher.def.file);
+      for (const path of dispatcher.paths || []) if (path[0]?.file) schedulerFiles.add(path[0].file);
+    }
+  }
+  for (const table of model.tables || [])
     for (const variant of table.variants)
       for (const entry of variant.entries)
-        for (const def of entry.defs) {
-          if (!C_SOURCE.test(def.file) || foreign(def.file)) continue;
-          if (!registered.has(def.file)) registered.set(def.file, new Map());
-          const tables = registered.get(def.file);
-          if (!tables.has(table.name)) tables.set(table.name, []);
-          if (!tables.get(table.name).includes(def.name)) tables.get(table.name).push(def.name);
-        }
+        for (const def of entry.defs)
+          if (!centralSchedulers.has(def.file) && ownerOf(def.file, experts, shared) !== 'shared')
+            register(def.file, table.name, def.name);
+  for (const table of model.otherTables || [])
+    for (const variant of table.variants)
+      for (const entry of variant.entries)
+        for (const def of entry.defs) if (!schedulerFiles.has(def.file)) register(def.file, table.name, def.name);
+  for (const table of model.structTables || [])
+    for (const field of table.fields || []) {
+      if (!field.calls?.length) continue;
+      for (const def of field.defs || [])
+        if (!schedulerFiles.has(def.file)) register(def.file, `${table.type}.${field.field}`, def.name);
+    }
+  for (const task of model.tasks || []) {
+    const file = task.entry?.file;
+    if (file && !schedulerFiles.has(file) && !registered.has(file)) register(file, 'RTOS task', task.entry.name);
+  }
   const namesByFile = new Map();
   for (const [name, file] of functions) {
     if (typeof name !== 'string' || typeof file !== 'string') continue;
     if (!namesByFile.has(file)) namesByFile.set(file, []);
     namesByFile.get(file).push(name);
   }
+  const validPath = (file) => typeof file === 'string' && /^[^<:/\\][^:]*$/.test(file) && !foreign(file);
+  const allSources = [...new Set([...files, ...namesByFile.keys()])]
+    .filter((file) => validPath(file) && C_SOURCE.test(file))
+    .sort();
+  const allHeaders = files.filter((file) => validPath(file) && C_HEADER.test(file)).sort();
+  const headers = new Map();
+  for (const file of allHeaders) {
+    const stem = stemOf(file).toLowerCase();
+    if (!headers.has(stem)) headers.set(stem, []);
+    headers.get(stem).push(file);
+  }
+  const headerOfStem = (dir, stem) => {
+    const candidates = headers.get(stem) || [];
+    return candidates.find((file) => dirOf(file) === dir) || (candidates.length === 1 ? candidates[0] : undefined);
+  };
+  const headerOf = (source) => headerOfStem(dirOf(source), stemOf(source).toLowerCase());
+  const matchesBase = (file, base) => {
+    const stem = stemOf(file).toLowerCase();
+    return stem === base || stem.startsWith(`${base}_`);
+  };
+
   const seeds = [...registered.keys()].sort();
-  const ids = moduleIds(seeds);
-  const prefixes = new Map(seeds.map((file) => [file, dominantPrefix(namesByFile.get(file) || [])]));
-  const seedsByPrefix = new Map();
-  for (const [file, prefix] of prefixes)
-    if (prefix) seedsByPrefix.set(prefix, [...(seedsByPrefix.get(prefix) || []), file]);
+  const groups = [];
+  const consumed = new Set();
+  for (const seed of seeds) {
+    if (consumed.has(seed)) continue;
+    const dir = dirOf(seed);
+    const stem = stemOf(seed).toLowerCase();
+    const base = stem.includes('_') ? splitBase(stem) : stem.length >= 2 ? stem : undefined;
+    const familySources = base ? allSources.filter((file) => dirOf(file) === dir && matchesBase(file, base)) : [];
+    const familySeeds = familySources.filter((file) => registered.has(file));
+    const hasExactSource = Boolean(base) && familySources.some((file) => stemOf(file).toLowerCase() === base);
+    const hasBaseHeader = Boolean(base && headerOfStem(dir, base));
+    const otherDirHasSeed = Boolean(base) && seeds.some((file) => dirOf(file) !== dir && matchesBase(file, base));
+    const seedPrefixes = new Set(
+      familySeeds.map((file) => dominantPrefix([...registered.get(file).values()].flat())).filter(Boolean)
+    );
+    const isSplit =
+      Boolean(base) &&
+      familySeeds.length >= 1 &&
+      seedPrefixes.size <= 1 &&
+      ((hasExactSource && familySources.length >= 2) ||
+        (!hasExactSource && (familySources.length >= 2 || hasBaseHeader) && (hasBaseHeader || !otherDirHasSeed)));
+    if (isSplit) {
+      for (const item of familySeeds) consumed.add(item);
+      const ordered = [
+        ...familySources.filter((file) => stemOf(file).toLowerCase() === base),
+        ...familySources.filter((file) => stemOf(file).toLowerCase() !== base),
+      ];
+      groups.push({ dir, stem: base, base, seeds: familySeeds, sources: ordered });
+    } else {
+      consumed.add(seed);
+      groups.push({ dir, stem: stemOf(seed), base: undefined, seeds: [seed], sources: [seed] });
+    }
+  }
+
+  const ids = groupIds(groups);
+  const ownedByGroup = new Set(groups.flatMap((group) => group.sources));
+  const prefixes = new Map(
+    groups.map((group) => {
+      const seedFunctions = group.seeds.flatMap((file) => namesByFile.get(file) || []);
+      const tableFunctions = group.seeds.flatMap((file) => [...registered.get(file).values()].flat());
+      return [group, dominantPrefix(seedFunctions) || dominantPrefix(tableFunctions)];
+    })
+  );
+  const groupsByPrefix = new Map();
+  for (const [group, prefix] of prefixes)
+    if (prefix) groupsByPrefix.set(prefix, [...(groupsByPrefix.get(prefix) || []), group]);
   // Other source files that join a module by prefix; a prefix in many of them names a layer.
   const followers = new Map();
   for (const [file, names] of namesByFile) {
-    if (registered.has(file) || !C_SOURCE.test(file) || foreign(file)) continue;
+    if (ownedByGroup.has(file) || !validPath(file) || !C_SOURCE.test(file)) continue;
     const prefix = dominantPrefix(names);
-    if (!prefix || seedsByPrefix.get(prefix)?.length !== 1) continue;
+    if (!prefix || groupsByPrefix.get(prefix)?.length !== 1) continue;
     if (!followers.has(prefix)) followers.set(prefix, []);
     followers.get(prefix).push(file);
   }
-  const headers = new Map();
-  for (const file of files)
-    if (C_HEADER.test(file) && !foreign(file)) {
-      const stem = stemOf(file).toLowerCase();
-      if (!headers.has(stem)) headers.set(stem, []);
-      headers.get(stem).push(file);
-    }
-  const headerOf = (source) => {
-    const candidates = headers.get(stemOf(source).toLowerCase()) || [];
-    return (
-      candidates.find((file) => dirOf(file) === dirOf(source)) || (candidates.length === 1 ? candidates[0] : undefined)
-    );
-  };
-  return seeds.map((seed) => {
-    const prefix = prefixes.get(seed);
+
+  return groups.map((group) => {
+    const prefix = prefixes.get(group);
     const joined =
       prefix && (followers.get(prefix) || []).length <= LAYER_PREFIX_FILES ? followers.get(prefix) || [] : [];
-    const sources = [seed, ...joined.sort()];
-    const moduleFiles = [...new Set(sources.flatMap((file) => [file, headerOf(file)].filter(Boolean)))];
+    const sources = [...group.sources, ...joined.sort()];
+    const splitHeaders = group.base
+      ? [
+          headerOfStem(group.dir, group.base),
+          ...allHeaders.filter((file) => dirOf(file) === group.dir && matchesBase(file, group.base)),
+        ]
+      : [];
+    const moduleFiles = [
+      ...new Set([...sources.flatMap((file) => [file, headerOf(file)]), ...splitHeaders].filter(Boolean)),
+    ];
+    const tables = new Map();
+    const orderedTableNames = [
+      ...(model.tables || []).map((table) => table.name),
+      ...new Set(group.seeds.flatMap((seed) => [...(registered.get(seed)?.keys() || [])])),
+    ];
+    for (const tableName of orderedTableNames)
+      for (const seed of group.seeds)
+        for (const name of registered.get(seed)?.get(tableName) || []) {
+          if (!tables.has(tableName)) tables.set(tableName, []);
+          if (!tables.get(tableName).includes(name)) tables.get(tableName).push(name);
+        }
     const owners = [...new Set(moduleFiles.map((file) => ownerOf(file, experts, shared)).filter(Boolean))];
     return {
-      id: ids.get(seed),
+      id: ids.get(group),
       files: moduleFiles,
       prefix,
-      tables: [...registered.get(seed)].map(([table, names]) => ({ table, functions: names })),
+      tables: [...tables].map(([table, names]) => ({ table, functions: names })),
       experts: owners.filter((owner) => owner !== 'shared'),
     };
   });
 }
 
+/**
+ * Unowned central infrastructure files (task schedulers, multi-module struct registries,
+ * X-Macro tables and cross-image API headers) that are good candidates for `shared`.
+ */
+function suggestShared({ model, experts = [], shared = [] }) {
+  const candidates = new Set();
+  const add = (file) => {
+    if (typeof file !== 'string' || !/^[^<:/\\][^:]*$/.test(file) || foreign(file)) return;
+    if (ownerOf(file, experts, shared) === undefined) candidates.add(file);
+  };
+  for (const table of model.tables || [])
+    for (const variant of table.variants) {
+      const external = new Set(variant.entries.flatMap((entry) => entry.defs.map((def) => def.file)));
+      if (external.size >= 3) add(variant.file);
+    }
+  const structHolders = new Map();
+  for (const table of model.structTables || []) {
+    if (!table.fields?.some((field) => field.calls?.length)) continue;
+    if (!structHolders.has(table.file)) structHolders.set(table.file, new Set());
+    for (const field of table.fields) for (const def of field.defs || []) structHolders.get(table.file).add(def.file);
+  }
+  for (const [file, targets] of structHolders) if (targets.size >= 3) add(file);
+  for (const item of model.xmacroTables || []) {
+    add(item.file);
+    for (const site of item.sites || []) add(site.file);
+  }
+  for (const api of model.vectorApis || []) {
+    add(api.header);
+    if (api.table?.file) add(api.table.file);
+  }
+  return [...candidates].sort();
+}
+
 /** The modules section of the architecture file. */
-function renderModules(list, labels) {
+function renderModules(list, labels, options = {}) {
   const t = labels;
   const out = [`## ${t.modulesTitle}`, '', t.modulesIntro, ''];
   if (!list.length) return [...out, t.modulesNone, ''].join('\n');
@@ -408,6 +591,10 @@ function renderModules(list, labels) {
         .join('; ')} | ${item.experts.length ? item.experts.map(code).join(', ') : t.none} |`
     );
   out.push('');
+  const suggested = options.suggestedShared || [];
+  if (suggested.length && t.modulesShared) {
+    out.push(fill(t.modulesShared, { files: suggested.map(code).join(', ') }), '');
+  }
   return out.join('\n');
 }
 
@@ -460,16 +647,35 @@ function collect(input) {
   // Files and index state.
   const fileStates = owned.map((file) => {
     const info = coverage.get(file) || {};
+    const names = (defsByFile.get(file) || []).sort((a, b) => a.start - b.start).map((def) => def.name);
+    const prepared =
+      (info.status === 'unusable' || (!names.length && C_SOURCE.test(file))) && source ? source(file) : null;
     return {
       file,
-      functions: (defsByFile.get(file) || []).length,
+      functions: names.length,
       // Names, so an expert compares the index with the source name by name, not by count.
-      names: (defsByFile.get(file) || []).sort((a, b) => a.start - b.start).map((def) => def.name),
+      names,
+      tables: prepared ? fileTablesOf(prepared) : [],
       status: info.status,
       changed: info.freshness === 'metadata_changed' || info.freshness === 'missing',
       ranges: info.ranges || [],
     };
   });
+
+  // Unowned sibling/replacement files in a module whose id matches this expert or whose files mostly belong to it.
+  const driftFiles = [
+    ...new Set(
+      (input.modules || [])
+        .filter((item) => {
+          if (item.id === expert.id) return true;
+          if ((item.experts || []).length !== 1 || item.experts[0] !== expert.id) return false;
+          const ownedCount = item.files.filter(mine).length;
+          return ownedCount * 2 >= item.files.length;
+        })
+        .flatMap((item) => item.files)
+        .filter((file) => owner(file) === undefined)
+    ),
+  ].sort();
 
   // Scheduling.
   const entries = [];
@@ -626,6 +832,7 @@ function collect(input) {
         const previous = plain.slice(Math.max(0, match.index - 2), match.index);
         if (/(\.|->)\s*$/.test(previous) || /\.\s?$/.test(previous)) continue;
         const line = lineOf(starts, match.index);
+        if (prepared.guards[line - 1]?.dead) continue;
         const lineText = plain.slice(starts[line - 1], starts[line] ?? plain.length);
         if (/\bextern\b/.test(lineText)) continue;
         const item = byName.get(match[1]);
@@ -644,6 +851,7 @@ function collect(input) {
     if (!prepared) continue;
     for (const match of prepared.code.matchAll(ADDRESS_MACRO)) {
       const line = lineOf(prepared.starts, match.index);
+      if (prepared.guards[line - 1]?.dead) continue;
       const lineText = prepared.code.slice(prepared.starts[line - 1], prepared.starts[line] ?? prepared.code.length);
       if (new RegExp(`^\\s*#\\s*define\\s+${match[0]}\\b`).test(lineText)) continue;
       if (!addressUses.has(match[0])) addressUses.set(match[0], []);
@@ -651,12 +859,13 @@ function collect(input) {
       if (!sites.some((site) => site.file === file && site.line === line)) sites.push({ file, line });
     }
   }
-  const addresses = [...addressUses]
+  const functionNames = new Set(functions.map(([name]) => name).filter((name) => typeof name === 'string'));
+  const addressCandidates = [...addressUses]
     .map(([name, sites]) => ({ name, sites }))
     .sort((a, b) => b.sites.length - a.sites.length || a.name.localeCompare(b.name))
-    .slice(0, LIMITS.addresses);
-  if (addresses.length) {
-    const wanted = new Map(addresses.map((item) => [item.name, item]));
+    .slice(0, LIMITS.addresses * 3);
+  if (addressCandidates.length) {
+    const wanted = new Map(addressCandidates.map((item) => [item.name, item]));
     const define = new RegExp(`^[ \\t]*#[ \\t]*define[ \\t]+(${[...wanted.keys()].join('|')})\\b(.*)$`, 'gm');
     // The module's own files first, then the rest of the project.
     for (const file of [...owned, ...indexed.filter((item) => !ownedSet.has(item))]) {
@@ -667,13 +876,18 @@ function collect(input) {
         const item = wanted.get(match[1]);
         if (item.definition) continue;
         const line = lineOf(prepared.starts, match.index);
-        const raw = prepared.literals.slice(match.index, prepared.literals.indexOf('\n', match.index) >>> 0);
+        if (prepared.guards[line - 1]?.dead) continue;
+        const raw = macroLine(prepared, line);
         // A function-like macro keeps its parameters with its name: NVM_ADDR(block) = (block).
         const parts = /^\s*#\s*define\s+\w+(\([^)]*\))?(.*)$/.exec(raw) || [];
         item.definition = { file, line, params: parts[1] || '', value: collapse(parts[2] || '').slice(0, 120) };
       }
     }
   }
+  // Uppercase functions such as LOG_ADDR(id) match ADDRESS_MACRO; keep them only when #defined.
+  const addresses = addressCandidates
+    .filter((item) => item.definition || !functionNames.has(item.name))
+    .slice(0, LIMITS.addresses);
 
   // Build switches.
   const switches = new Map();
@@ -704,6 +918,7 @@ function collect(input) {
   return {
     owned,
     unmatched,
+    driftFiles,
     fileStates,
     tasks,
     entries,
@@ -745,6 +960,17 @@ function renderBrief(data, labels, { date, mode }) {
     const names =
       item.names.slice(0, LIMITS.fileFunctions).map(code).join(', ') + more(item.names, LIMITS.fileFunctions, t);
     const notes = [`${fill(t.fileFunctions, { count: item.functions })}${item.names.length ? ` (${names})` : ''}`];
+    if (item.tables?.length && t.fileTables) {
+      const items =
+        item.tables
+          .slice(0, LIMITS.fileTables)
+          .map(
+            (entry) =>
+              `${code(entry.name)} (${entry.start === entry.end ? entry.start : `${entry.start}-${entry.end}`})`
+          )
+          .join(', ') + more(item.tables, LIMITS.fileTables, t);
+      notes.push(fill(t.fileTables, { items }));
+    }
     if (item.status === 'unusable') notes.push(t.fileUnusable);
     else if (item.status === 'partial')
       notes.push(
@@ -758,6 +984,8 @@ function renderBrief(data, labels, { date, mode }) {
     out.push(`- ${item.file}: ${notes.join('; ')}`);
   }
   for (const entry of data.unmatched) out.push(`- ${fill(t.entryNoFile, { entry: code(entry) })}`);
+  if (data.driftFiles?.length && t.driftFiles)
+    out.push(`- ${fill(t.driftFiles, { files: data.driftFiles.map(code).join(', ') })}`);
   out.push('');
 
   out.push(`## ${t.briefEntries}`, '');
@@ -931,12 +1159,25 @@ function checkLines(data, t) {
       })}`
     );
   for (const entry of data.unmatched) lines.push(`- ${fill(t.entryNoFile, { entry: code(entry) })}`);
+  if (data.driftFiles?.length && t.driftFiles)
+    lines.push(`- ${fill(t.driftFiles, { files: data.driftFiles.map(code).join(', ') })}`);
   return lines;
+}
+
+/** Structural fingerprint of the expert's boundaries and schedule, so architecture shifts mark ready cards stale. */
+function driftSignature(data) {
+  return [
+    `u:${data.unmatched.join(',')}`,
+    `d:${(data.driftFiles || []).join(',')}`,
+    `t:${data.tasks.map((task) => `${task.name}@${task.site}`).join(',')}`,
+    `e:${data.entries.map((entry) => `${entry.table}#${entry.position}:${entry.names.join(',')}`).join(',')}`,
+  ].join('\n');
 }
 
 /** The short form the expert's role rules carry, in English like the rest of the rules. */
 function digest(data) {
   const missingGlobals = data.globals.filter((item) => !item.inGraph).length;
+  const drift = data.driftFiles?.length || 0;
   return {
     files: data.owned.length,
     entries: [
@@ -965,6 +1206,7 @@ function digest(data) {
       missingFunctions: data.missingFunctions.length,
       missingGlobals,
       unmatched: data.unmatched.length,
+      ...(drift ? { drift } : {}),
     },
   };
 }
@@ -1046,10 +1288,12 @@ function cardState(previous, { filesHash, ownHash, hasOwn }) {
 
 module.exports = {
   classify,
+  suggestShared,
   renderModules,
   collect,
   renderBrief,
   digest,
+  driftSignature,
   mergeCard,
   ownPart,
   cardLanguage,
@@ -1059,5 +1303,6 @@ module.exports = {
   sourceCache,
   globalsOf,
   definitionsOf,
+  fileTablesOf,
   accessKind,
 };

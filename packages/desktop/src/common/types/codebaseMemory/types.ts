@@ -88,6 +88,7 @@ export type ModuleCardDigest = {
     missingFunctions: number;
     missingGlobals: number;
     unmatched: number;
+    drift?: number;
   };
 };
 
@@ -101,12 +102,24 @@ export type ModuleCard = {
   digest?: ModuleCardDigest;
 };
 
+export type CodebaseMemoryIndexDrift = {
+  added: number;
+  deleted: number;
+  modified: number;
+};
+
 export type ModuleCards = {
   modules: CodebaseMemoryModule[];
   /** One entry per expert in `.woody/experts.json`, in its order. */
   experts: ModuleCard[];
   /** The experts file could not be read when the cards were last written. */
   error?: string;
+  /** Current phase of the project's codebase-memory index. */
+  indexPhase?: CodebaseMemoryStatus['phase'];
+  /** Last index error when `indexPhase === 'failed'`. */
+  indexError?: string;
+  /** Disk changes detected since the last completed index. */
+  indexDrift?: CodebaseMemoryIndexDrift;
 };
 
 export type ModuleCardsRequest = {
