@@ -1,3 +1,5 @@
+import { execFileSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -489,7 +491,8 @@ describe('module expert cards in the project runtime', () => {
 
     const session = await service.session(worktree);
     expect(session.enabled).toBe(true);
-    expect(session.transport?.env.WOODY_CBM_REPO).toBe(fs.realpathSync.native(repo));
+    // The chat binds the worktree itself, which maps to the main index again.
+    expect(session.transport?.env.WOODY_CBM_REPO).toBe(fs.realpathSync.native(worktree));
 
     const cards = await service.moduleCards(worktree, {});
     expect(cards.indexPhase).toBe('succeeded');
@@ -505,5 +508,112 @@ describe('module expert cards in the project runtime', () => {
     fs.mkdirSync(submodule, { recursive: true });
     fs.writeFileSync(path.join(submodule, '.git'), `gitdir: ${submoduleMeta}\n`);
     expect((await service.session(submodule)).enabled).toBe(false);
+  });
+
+  it('keeps a card reviewed before the drift signature ready across the upgrade, unless its files changed', async () => {
+    const service = runtime();
+    await service.save(repo, { version: 1, enabled: true, mode: 'full' });
+    await indexed(service, 'en-US');
+    fs.appendFileSync(path.join(repo, '.woody', 'features', 'sensor.md'), '\n## Flow\n\nReads sensor.\n');
+    expect((await service.moduleCards(repo, {})).experts[0].state).toBe('ready');
+
+    // Turn the record into one written by woody.16: plain files hash, no drift signature.
+    const statusFile = fs
+      .readdirSync(path.join(root, 'cache'))
+      .map((name) => path.join(root, 'cache', name, 'woody-status.json'))
+      .find((file) => fs.existsSync(file)) as string;
+    const legacy = () => {
+      const status = JSON.parse(fs.readFileSync(statusFile, 'utf8'));
+      const record = status.moduleCards.experts.sensor;
+      const hash = crypto.createHash('sha1');
+      for (const file of [...record.owned].toSorted())
+        hash
+          .update(file)
+          .update('\0')
+          .update(fs.readFileSync(path.join(repo, file)))
+          .update('\0');
+      const plain = hash.digest('hex');
+      delete record.driftSig;
+      record.filesHash = plain;
+      record.reviewedFilesHash = plain;
+      fs.writeFileSync(statusFile, JSON.stringify(status));
+    };
+    legacy();
+    await indexed(service);
+    expect((await service.moduleCards(repo, {})).experts[0].state).toBe('ready');
+
+    legacy();
+    write('app/sensor.c', 'int sensorLevel = 3;\nvoid SENSOR_Second(void)\n{\n}\n');
+    await indexed(service);
+    expect((await service.moduleCards(repo, {})).experts[0].state).toBe('stale');
+  });
+
+  it('counts an edited indexed file outside every module as modified, not added', async () => {
+    const service = runtime();
+    await service.save(repo, { version: 1, enabled: true, mode: 'full' });
+    await indexed(service, 'en-US');
+    await new Promise((resolve) => setTimeout(resolve, 15));
+    // app/task.c is the shared scheduler: indexed, in no module.
+    fs.appendFileSync(path.join(repo, 'app/task.c'), '\n');
+    expect((await service.moduleCards(repo, {})).indexDrift).toEqual({ added: 0, modified: 1, deleted: 0 });
+  });
+
+  it('takes the drift baseline from when the index started, so edits made while it ran still count', async () => {
+    const service = runtime();
+    await service.save(repo, { version: 1, enabled: true, mode: 'full' });
+    await service.start(repo, {});
+    const afterStart = Date.now();
+    let status = await service.get(repo);
+    for (let i = 0; i < 150 && status.phase === 'running'; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      status = await service.get(repo);
+    }
+    expect(status.phase).toBe('succeeded');
+    expect(status.indexedAt).toBeLessThanOrEqual(afterStart);
+  });
+
+  it('lists what a linked worktree changed against the main checkout and notes the shared index', async () => {
+    const git = (cwd: string, ...args: string[]) =>
+      execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], {
+        cwd,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    write('.gitignore', '.woody/\n');
+    git(repo, 'init', '-q', '-b', 'main');
+    git(repo, 'add', '-A');
+    git(repo, 'commit', '-q', '-m', 'base');
+    const service = runtime();
+    await service.save(repo, { version: 1, enabled: true, mode: 'full' });
+    await indexed(service, 'en-US');
+
+    const worktree = path.join(root, 'firmware-feature');
+    git(repo, 'worktree', 'add', '-q', '-b', 'feature', worktree);
+    fs.writeFileSync(path.join(worktree, 'app/sensor.c'), 'int sensorLevel = 9;\nvoid SENSOR_Second(void)\n{\n}\n');
+    fs.writeFileSync(path.join(worktree, 'app/sensor_cal.c'), 'void SENSOR_Cal(void)\n{\n}\n');
+    fs.rmSync(path.join(worktree, 'app/tick.c'));
+    git(worktree, 'add', 'app/tick.c');
+    git(worktree, 'commit', '-q', '-m', 'drop tick');
+    // An uncommitted edit in the main checkout: the index has it, the worktree does not.
+    fs.appendFileSync(path.join(repo, 'app/task.c'), '\n');
+
+    const result = await service.callTool(worktree, 'detect_changes', { format: 'json', scope: 'files' });
+    expect(result.structuredContent).toMatchObject({
+      source: 'worktree_diff',
+      modified: ['app/sensor.c'],
+      deleted: ['app/tick.c'],
+      added: ['app/sensor_cal.c'],
+      mainEdited: ['app/task.c'],
+    });
+    expect(result.structuredContent).not.toHaveProperty('impacted');
+
+    const text = await service.callTool(worktree, 'detect_changes', {});
+    expect(text.content[0].text).toContain('Modified in your worktree (1): app/sensor.c');
+
+    const other = await service.callTool(worktree, 'index_status', {});
+    expect(other.content[0].text).toContain('you work in the Git worktree');
+    // The main checkout itself gets no note.
+    const main = await service.callTool(repo, 'index_status', {});
+    expect(JSON.stringify(main)).not.toContain('you work in the Git worktree');
   });
 });

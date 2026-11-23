@@ -103,6 +103,7 @@ describe('module classification', () => {
       {
         id: 'sensor',
         files: ['app/sensor.c', 'app/sensor.h', 'app/sensor_cal.c'],
+        split: { dir: 'app', base: 'sensor' },
         prefix: 'SENSOR',
         tables: [{ table: 'secondList', functions: ['SENSOR_Second'] }],
         experts: ['sensor-expert'],
@@ -197,6 +198,7 @@ describe('module classification', () => {
           'app/routine/display.h',
           'app/routine/display_priv.h',
         ],
+        split: { dir: 'app/routine', base: 'display' },
         prefix: 'DISP',
         tables: [
           { table: 'initList', functions: ['DISP_Init'] },
@@ -651,5 +653,45 @@ describe('expert brief', () => {
       modules: detectedModules,
     });
     expect(profData.driftFiles).toEqual([]);
+  });
+});
+
+const signatureData = (overrides: Record<string, unknown> = {}) => ({
+  unmatched: [],
+  driftFiles: [],
+  tasks: [{ name: 'vSensorTask', site: 'app/main.c:40' }],
+  entries: [{ table: 'secondList', position: 2, names: ['SENSOR_Second'], conditions: [] }],
+  ...overrides,
+});
+
+describe('drift signature of a card', () => {
+  it('ignores line numbers and table positions, which move when other files or modules change', () => {
+    const before = modules.driftSignature(signatureData());
+    const shifted = modules.driftSignature(
+      signatureData({
+        tasks: [{ name: 'vSensorTask', site: 'app/main.c:41' }],
+        entries: [{ table: 'secondList', position: 3, names: ['SENSOR_Second'], conditions: [] }],
+      })
+    );
+    expect(shifted).toBe(before);
+    expect(modules.isCurrentDriftSignature(before)).toBe(true);
+  });
+
+  it('changes when the module is scheduled differently or gains unowned files', () => {
+    const before = modules.driftSignature(signatureData());
+    expect(modules.driftSignature(signatureData({ tasks: [] }))).not.toBe(before);
+    expect(
+      modules.driftSignature(
+        signatureData({
+          entries: [{ table: 'secondList', position: 2, names: ['SENSOR_Second'], conditions: ['METER_3P'] }],
+        })
+      )
+    ).not.toBe(before);
+    expect(modules.driftSignature(signatureData({ driftFiles: ['app/sensor_cal.c'] }))).not.toBe(before);
+  });
+
+  it('tells signatures of an older format apart', () => {
+    expect(modules.isCurrentDriftSignature('u:\nd:\nt:vSensorTask@app/main.c:40\ne:')).toBe(false);
+    expect(modules.isCurrentDriftSignature(undefined)).toBe(false);
   });
 });

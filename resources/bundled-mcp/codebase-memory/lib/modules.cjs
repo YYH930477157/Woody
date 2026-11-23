@@ -538,6 +538,8 @@ function classify({ model, functions, files, experts = [], shared = [] }) {
     return {
       id: ids.get(group),
       files: moduleFiles,
+      // A split-file family: experts may own it as `<dir>/<base>_*.c` so new split files stay theirs.
+      ...(group.base ? { split: { dir: group.dir, base: group.base } } : {}),
       prefix,
       tables: [...tables].map(([table, names]) => ({ table, functions: names })),
       experts: owners.filter((owner) => owner !== 'shared'),
@@ -1165,14 +1167,32 @@ function checkLines(data, t) {
 }
 
 /** Structural fingerprint of the expert's boundaries and schedule, so architecture shifts mark ready cards stale. */
+const DRIFT_SIGNATURE_VERSION = 'v2';
+const sortedUnique = (items) => [...new Set(items)].sort();
+
+/**
+ * What makes a ready card stale besides the expert's own files: paths that match nothing,
+ * unowned files in the module, and where the module is scheduled. Names only: line numbers
+ * and table positions move whenever other files or other modules' entries change.
+ */
 function driftSignature(data) {
   return [
-    `u:${data.unmatched.join(',')}`,
-    `d:${(data.driftFiles || []).join(',')}`,
-    `t:${data.tasks.map((task) => `${task.name}@${task.site}`).join(',')}`,
-    `e:${data.entries.map((entry) => `${entry.table}#${entry.position}:${entry.names.join(',')}`).join(',')}`,
+    DRIFT_SIGNATURE_VERSION,
+    `u:${sortedUnique(data.unmatched).join(',')}`,
+    `d:${sortedUnique(data.driftFiles || []).join(',')}`,
+    `t:${sortedUnique(data.tasks.map((task) => task.name)).join(',')}`,
+    `e:${sortedUnique(
+      data.entries.map(
+        (entry) =>
+          `${entry.table}:${entry.names.join(',')}${entry.conditions.length ? `?${entry.conditions.join('&&')}` : ''}`
+      )
+    ).join(',')}`,
   ].join('\n');
 }
+
+/** Whether a stored signature was made by this version of `driftSignature`. */
+const isCurrentDriftSignature = (signature) =>
+  typeof signature === 'string' && signature.startsWith(`${DRIFT_SIGNATURE_VERSION}\n`);
 
 /** The short form the expert's role rules carry, in English like the rest of the rules. */
 function digest(data) {
@@ -1294,6 +1314,7 @@ module.exports = {
   renderBrief,
   digest,
   driftSignature,
+  isCurrentDriftSignature,
   mergeCard,
   ownPart,
   cardLanguage,

@@ -412,6 +412,19 @@ const NON_ASCII_QUERY =
   'search_graph matches code names, so it cannot search for words that are not English. Find them in comments and strings with search_code({"pattern":"<words>"}), or call search_graph again with English words from the names, such as "uart receive timeout".';
 const NON_ASCII_NOTE =
   'note: words that are not English were left out of the query, because search_graph matches code names. Find them in comments and strings with search_code.';
+const worktreeNote = (project) =>
+  `note: you work in the Git worktree ${project.worktreeRoot}, but this index describes the main checkout ${project.root}. Files you changed can differ from these results: read them in your workspace, and list them with detect_changes.`;
+/** Git's output in `cwd`, with paths unquoted, or undefined when git fails or is missing. */
+function gitOutput(cwd, args) {
+  const result = spawnSync('git', ['-C', cwd, '-c', 'core.quotepath=off', ...args], {
+    encoding: 'utf8',
+    timeout: 15000,
+    windowsHide: true,
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  return result.status === 0 ? result.stdout : undefined;
+}
+const nulList = (text) => (text || '').split('\0').filter(Boolean);
 const asciiWords = (query) =>
   query
     .replace(/[^\x00-\x7f]+/g, ' ')
@@ -1624,6 +1637,7 @@ function createRuntime(options) {
     found.map((item) => ({
       id: item.id,
       files: item.files,
+      ...(item.split ? { split: item.split } : {}),
       tables: item.tables.map((entry) => entry.table),
       functions: item.tables.flatMap((entry) => entry.functions),
       experts: item.experts,
@@ -1691,19 +1705,7 @@ function createRuntime(options) {
     added.sort();
     const touched = [...modified, ...deleted];
     const impacted = [];
-    if (bound.scope !== 'files' && touched.length) {
-      const list = cypherList(touched);
-      try {
-        const rows = await queryRows(
-          project,
-          `MATCH (a:Function)-[:CALLS|CALL_REFERENCE]->(b:Function) WHERE b.file_path IN [${list}] AND NOT a.file_path IN [${list}] RETURN DISTINCT b.name, b.file_path, a.name, a.file_path LIMIT 100`
-        );
-        for (const [callee, calleeFile, caller, callerFile] of rows)
-          impacted.push({ callee, calleeFile, caller, callerFile });
-      } catch {
-        // Impact edges are optional when only file-level freshness is available.
-      }
-    }
+    if (bound.scope !== 'files') impacted.push(...(await externalCallers(project, touched)));
     const payload = {
       source: 'index_freshness_fallback',
       note: 'No Git repository (or HEAD commit) found; changes are compared against the last codebase-memory index.',
@@ -1712,15 +1714,38 @@ function createRuntime(options) {
       added,
       ...(bound.scope !== 'files' ? { impacted } : {}),
     };
+    return changesReply(payload, bound, 'No indexed file has changed since the last index.', [
+      ['modified', 'Modified since index'],
+      ['deleted', 'Deleted since index'],
+      ['added', 'Added in indexed folders'],
+    ]);
+  }
+  /** Functions outside `files` that call into them, from the index; empty when the graph cannot say. */
+  async function externalCallers(project, files) {
+    if (!files.length) return [];
+    const list = cypherList(files);
+    try {
+      const rows = await queryRows(
+        project,
+        `MATCH (a:Function)-[:CALLS|CALL_REFERENCE]->(b:Function) WHERE b.file_path IN [${list}] AND NOT a.file_path IN [${list}] RETURN DISTINCT b.name, b.file_path, a.name, a.file_path LIMIT 100`
+      );
+      return rows.map(([callee, calleeFile, caller, callerFile]) => ({ callee, calleeFile, caller, callerFile }));
+    } catch {
+      // Impact edges are optional when only file-level changes are known.
+      return [];
+    }
+  }
+  /** The reply of a Woody-made `detect_changes`: JSON, or the note, each listed group and the callers. */
+  function changesReply(payload, bound, nothing, groups) {
     if (bound.format === 'json')
       return { content: [{ type: 'text', text: JSON.stringify(payload) }], structuredContent: payload };
     const lines = [payload.note];
-    if (!modified.length && !deleted.length && !added.length) {
-      lines.push('No indexed file has changed since the last index.');
+    const impacted = payload.impacted || [];
+    if (groups.every(([key]) => !payload[key].length)) {
+      lines.push(nothing);
     } else {
-      if (modified.length) lines.push(`Modified since index (${modified.length}): ${modified.join(', ')}`);
-      if (deleted.length) lines.push(`Deleted since index (${deleted.length}): ${deleted.join(', ')}`);
-      if (added.length) lines.push(`Added in indexed folders (${added.length}): ${added.join(', ')}`);
+      for (const [key, label] of groups)
+        if (payload[key].length) lines.push(`${label} (${payload[key].length}): ${payload[key].join(', ')}`);
       if (impacted.length)
         lines.push(
           `External callers of changed files (${impacted.length}):`,
@@ -1731,8 +1756,84 @@ function createRuntime(options) {
     }
     return { content: [{ type: 'text', text: lines.join('\n') }] };
   }
+  /**
+   * `detect_changes` for a linked Git worktree that shares the main checkout's index: what the
+   * worktree changed against the main checkout's HEAD (commits on its branch, edits and new
+   * files), the files the main checkout edited without committing (the index shows those
+   * edits, the worktree does not), and the callers of the changed files in the shared index.
+   * `since` or `base_branch` replace the main checkout's HEAD as the base.
+   */
+  async function detectWorktreeChanges(project, bound) {
+    const worktree = project.worktreeRoot;
+    const ref = (value) => (typeof value === 'string' && value && !value.startsWith('-') ? value : undefined);
+    const mergeBase = ref(bound.base_branch)
+      ? gitOutput(worktree, ['merge-base', bound.base_branch, 'HEAD'])?.trim()
+      : undefined;
+    const requested = ref(bound.since) || mergeBase;
+    const base = requested || gitOutput(project.root, ['rev-parse', 'HEAD'])?.trim();
+    if (!base) throw new Error(`Git cannot read the main checkout ${project.root} to compare this worktree with`);
+    const diff = gitOutput(worktree, ['diff', '--name-status', '-z', '--no-renames', '--relative', base, '--']);
+    if (diff === undefined) throw new Error(`git diff against ${base} failed in ${worktree}`);
+    const modified = [];
+    const deleted = [];
+    const added = [];
+    const fields = nulList(diff);
+    for (let index = 0; index + 1 < fields.length; index += 2) {
+      const status = fields[index];
+      const file = fields[index + 1];
+      if (status.startsWith('A')) added.push(file);
+      else if (status.startsWith('D')) deleted.push(file);
+      else modified.push(file);
+    }
+    for (const file of nulList(gitOutput(worktree, ['ls-files', '--others', '--exclude-standard', '-z'])))
+      if (!added.includes(file)) added.push(file);
+    const listed = new Set([...modified, ...deleted, ...added]);
+    const mainEdited = requested
+      ? []
+      : nulList(gitOutput(project.root, ['diff', '--name-only', '-z', '--relative', 'HEAD', '--'])).filter(
+          (file) => !listed.has(file)
+        );
+    const against = requested ? base : `the main checkout's HEAD (${base.slice(0, 12)})`;
+    const payload = {
+      source: 'worktree_diff',
+      note: `You work in the Git worktree ${worktree}; the index describes the main checkout ${project.root}. Changes are your worktree against ${against}.`,
+      base,
+      modified: modified.sort(),
+      deleted: deleted.sort(),
+      added: added.sort(),
+      mainEdited: mainEdited.sort(),
+    };
+    if (bound.scope !== 'files')
+      payload.impacted = await externalCallers(project, [
+        ...payload.modified,
+        ...payload.deleted,
+        ...payload.mainEdited,
+      ]);
+    return changesReply(payload, bound, 'Your worktree has no changes against that base.', [
+      ['modified', 'Modified in your worktree'],
+      ['deleted', 'Deleted in your worktree'],
+      ['added', 'Added in your worktree'],
+      ['mainEdited', 'Edited in the main checkout only, so the index shows its version'],
+    ]);
+  }
+  /** Files of the last index, kept for the drift pre-check, which must not start the indexer. */
+  const indexedFilesPath = (project) => path.join(project.cache, 'woody-indexed-files.json');
+  const indexedFileList = ({ sourceFiles, functions }) =>
+    [...new Set([...sourceFiles, ...functions.map((row) => row[1])])]
+      .filter((file) => typeof file === 'string' && /^[^<:/\\][^:]*$/.test(file))
+      .sort();
   const samePaths = (record, expert) =>
     Array.isArray(record?.paths) && record.paths.join('\n') === expert.paths.join('\n');
+  /**
+   * A card reviewed under an older files hash (before the drift signature, or with an older
+   * format of it) whose files have not changed since: carry the review over to the new hash,
+   * so an upgrade alone does not send every expert back to learning.
+   */
+  function carryReview(before, plainHash, filesHash) {
+    if (!before?.reviewedFilesHash || modules.isCurrentDriftSignature(before.driftSig)) return before;
+    const reviewedUnder = before.driftSig === undefined ? plainHash : sha1(`${plainHash}\n${before.driftSig}`);
+    return before.reviewedFilesHash === reviewedUnder ? { ...before, reviewedFilesHash: filesHash } : before;
+  }
   /**
    * The generated part of each expert's feature card in .woody/features, and the card state
    * for the team dialog. `only` limits the work to some experts; the others keep their record.
@@ -1802,8 +1903,10 @@ function createRuntime(options) {
         if (next !== existing) atomicWrite(filename, next);
         const own = modules.ownPart(next, expert);
         const driftSig = modules.driftSignature(data);
-        const { state, record } = modules.cardState(before, {
-          filesHash: sha1(`${hashFiles(project.root, owned)}\n${driftSig}`),
+        const plainHash = hashFiles(project.root, owned);
+        const filesHash = sha1(`${plainHash}\n${driftSig}`);
+        const { state, record } = modules.cardState(carryReview(before, plainHash, filesHash), {
+          filesHash,
           ownHash: sha1(own),
           hasOwn: own.length > 0,
         });
@@ -1832,6 +1935,11 @@ function createRuntime(options) {
   async function writeProjectFiles(project, config, options = {}) {
     const { language, previous = {}, only, strict = false } = options;
     const analysis = await analyzeProject(project);
+    try {
+      atomicJson(indexedFilesPath(project), indexedFileList(analysis));
+    } catch {
+      // Without the list the drift pre-check counts edited files outside modules as added.
+    }
     let saved;
     let expertsError;
     try {
@@ -1982,7 +2090,9 @@ function createRuntime(options) {
       .then(
         (result) => {
           state.phase = 'succeeded';
-          state.indexedAt = Date.now();
+          // When the indexer started reading: a file saved while it ran may be missing from
+          // the index, so the drift pre-check must count it.
+          state.indexedAt = startedAt;
           state.summary = JSON.stringify(result.structuredContent || result.content).slice(0, LOG_LIMIT);
           removeLegacyIndex(project);
           return result;
@@ -2027,6 +2137,8 @@ function createRuntime(options) {
         ...Object.values(current || {}).flatMap((record) => record?.owned || []),
       ].filter((file) => typeof file === 'string' && file && !/^[<:/\\]/.test(file))
     );
+    const indexedList = readJson(indexedFilesPath(project));
+    const indexed = new Set(Array.isArray(indexedList) ? indexedList.filter((file) => typeof file === 'string') : []);
     let added = 0;
     let deleted = 0;
     let modified = 0;
@@ -2073,12 +2185,24 @@ function createRuntime(options) {
         seenCandidates.add(relFile);
         try {
           const stat = fs.statSync(path.join(project.root, relFile));
+          // An indexed file outside every module was edited, not added.
+          if (indexed.has(relFile)) {
+            if (baseline > 0 && Math.floor(stat.mtimeMs) > baseline) modified++;
+            continue;
+          }
           const stamp = Math.floor(Math.max(stat.mtimeMs, stat.birthtimeMs || 0));
           if (baseline > 0 && stamp > baseline) added++;
         } catch {
           continue;
         }
       }
+    }
+    // Indexed files outside every module that are gone from the scanned folders.
+    for (const file of indexed) {
+      if (knownFiles.has(file) || !extensions.has(path.extname(file).toLowerCase())) continue;
+      if (!dirSet.has(file.includes('/') ? file.slice(0, file.lastIndexOf('/')) : '')) continue;
+      if (file.split('/').some((seg) => architecture.FOREIGN_SEGMENTS.has(seg.toLowerCase()))) continue;
+      if (!fs.existsSync(path.join(project.root, file))) deleted++;
     }
     if (!knownFiles.size && !dirSet.size && baseline > 0) {
       for (const full of sampleFiles(project.root)) {
@@ -2269,6 +2393,9 @@ function createRuntime(options) {
         error: cards.error,
         indexPhase: latestStatus.phase,
         ...(latestStatus.phase === 'failed' && latestStatus.error ? { indexError: latestStatus.error } : {}),
+        ...(latestStatus.phase === 'failed' && latestStatus.precheckRefused === true
+          ? { indexPrecheckRefused: true }
+          : {}),
         ...(indexDrift ? { indexDrift } : {}),
         experts: experts.map((expert) => {
           const record = current[expert.id];
@@ -2323,7 +2450,8 @@ function createRuntime(options) {
           command: 'node',
           args: [options.adapterPath],
           env: {
-            WOODY_CBM_REPO: project.root,
+            // The folder itself: a worktree maps to the main index again and keeps its own diff.
+            WOODY_CBM_REPO: project.worktreeRoot || project.root,
             WOODY_CBM_BINARY: options.binaryPath,
             WOODY_CBM_CACHE_ROOT: options.cacheRoot,
           },
@@ -2335,31 +2463,39 @@ function createRuntime(options) {
       const config = readProjectConfig(project.root);
       if (!config.enabled) throw new Error('Codebase memory is disabled for this project');
       const bound = boundArguments(project, tool, args, config);
-      if (tool === 'index_repository') return (await beginIndex(project, config)).promise;
-      if (tool === 'detect_changes') {
-        if (!detectGit(project.root)) return detectIndexChanges(project, config, bound);
-        try {
-          return await native(project, tool, bound).promise;
-        } catch (error) {
-          if (/git revision|not a git repository|ambiguous argument 'HEAD'/i.test(error.message))
-            return detectIndexChanges(project, config, bound);
-          throw error;
-        }
-      }
-      if (tool === 'search_graph' && typeof bound.query === 'string' && /[^\x00-\x7f]/.test(bound.query)) {
-        const query = asciiWords(bound.query);
-        if (!/[A-Za-z0-9_]{2,}/.test(query))
-          return { isError: true, content: [{ type: 'text', text: NON_ASCII_QUERY }] };
-        const result = await native(project, tool, { ...bound, query }).promise;
-        return { ...result, content: [{ type: 'text', text: NON_ASCII_NOTE }, ...(result.content || [])] };
-      }
-      return native(project, tool, bound).promise;
+      if (!project.worktreeRoot) return callBound(project, config, tool, bound);
+      if (tool === 'detect_changes') return detectWorktreeChanges(project, bound);
+      // The shared index is the main checkout's: say so wherever positions or text may differ.
+      const result = await callBound(project, config, tool, bound);
+      return result && typeof result === 'object' && !result.isError
+        ? { ...result, content: [{ type: 'text', text: worktreeNote(project) }, ...(result.content || [])] }
+        : result;
     },
     dispose() {
       disposed = true;
       for (const operation of processes) operation.cancel();
     },
   };
+  async function callBound(project, config, tool, bound) {
+    if (tool === 'index_repository') return (await beginIndex(project, config)).promise;
+    if (tool === 'detect_changes') {
+      if (!detectGit(project.root)) return detectIndexChanges(project, config, bound);
+      try {
+        return await native(project, tool, bound).promise;
+      } catch (error) {
+        if (/git revision|not a git repository|ambiguous argument 'HEAD'/i.test(error.message))
+          return detectIndexChanges(project, config, bound);
+        throw error;
+      }
+    }
+    if (tool === 'search_graph' && typeof bound.query === 'string' && /[^\x00-\x7f]/.test(bound.query)) {
+      const query = asciiWords(bound.query);
+      if (!/[A-Za-z0-9_]{2,}/.test(query)) return { isError: true, content: [{ type: 'text', text: NON_ASCII_QUERY }] };
+      const result = await native(project, tool, { ...bound, query }).promise;
+      return { ...result, content: [{ type: 'text', text: NON_ASCII_NOTE }, ...(result.content || [])] };
+    }
+    return native(project, tool, bound).promise;
+  }
   return api;
 }
 module.exports = {
