@@ -53,7 +53,11 @@ const ModuleExperts: React.FC<Props> = ({ workspace, state, disabled }) => {
   let bannerType: 'info' | 'warning' | 'error' | undefined;
   let bannerMessage: string | undefined;
   let bannerAction: string | undefined;
-  if (state.indexState === 'disabled') {
+  if (state.precheckRefused) {
+    bannerType = 'error';
+    bannerMessage = t('team.experts.indexStatus.precheckRefused');
+    bannerAction = t('team.experts.indexStatus.indexAnyway');
+  } else if (state.indexState === 'disabled') {
     bannerType = 'info';
     bannerMessage = t('team.experts.indexStatus.disabled');
     bannerAction = t('team.experts.indexStatus.enableAndIndex');
@@ -115,7 +119,7 @@ const ModuleExperts: React.FC<Props> = ({ workspace, state, disabled }) => {
                   disabled={disabled || state.indexing}
                   loading={state.indexing}
                   onClick={() => {
-                    void state.runIndex(i18n.language);
+                    void state.runIndex(i18n.language, { bypassPrecheck: state.precheckRefused });
                   }}
                   data-testid='team-experts-index-action'
                 >

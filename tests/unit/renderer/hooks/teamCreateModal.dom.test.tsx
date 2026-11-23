@@ -297,6 +297,7 @@ describe('TeamCreateModal', () => {
           {
             id: 'display',
             files: ['app/display_lcd.c', 'app/display_menu.c', 'app/display.h'],
+            split: { dir: 'app', base: 'display' },
             tables: ['secondList'],
             functions: ['DISPLAY_Second'],
             experts: [],
@@ -325,8 +326,129 @@ describe('TeamCreateModal', () => {
     });
     expect(expertsMocks.startIndex).toHaveBeenCalledWith({ repoPath: 'D:\\work\\project', language: 'zh-CN' });
     const row = await screen.findByTestId('team-expert-display');
+    // A complete seeded expert starts folded; open it to see its paths.
+    fireEvent.click(within(row).getByRole('button', { name: 'common.edit' }));
     expect(within(row).getByPlaceholderText('team.experts.fields.pathsPlaceholder')).toHaveValue(
       'app/display_*.c\napp/display.h'
+    );
+
+    // A seeded expert is complete: the team is created without filling anything in.
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Create' }));
+    await waitFor(() => expect(createTeamInvokeMock).toHaveBeenCalledTimes(1));
+    expect(expertsMocks.save).toHaveBeenCalledWith({
+      repoPath: 'D:\\work\\project',
+      file: {
+        version: 1,
+        experts: [
+          {
+            id: 'display',
+            // The untranslated key is longer than a name may be, so the id stands in.
+            name: 'display',
+            summary: 'conversation.codebaseMemory.modules.summaryDraft',
+            paths: ['app/display_*.c', 'app/display.h'],
+          },
+        ],
+        shared: [],
+      },
+    });
+  });
+
+  it('re-seeds untouched expert drafts from the new index after a refresh', async () => {
+    expertsMocks.experts.mockResolvedValue({ file: EXPERTS_FILE, saved: null, cards: [], business: true });
+    expertsMocks.cards.mockResolvedValue({
+      indexPhase: 'succeeded',
+      indexDrift: { added: 1, modified: 0, deleted: 0 },
+      modules: [{ id: 'display', files: ['app/display.c'], tables: [], functions: [], experts: [] }],
+      experts: [],
+    });
+    expertsMocks.getStatus.mockResolvedValue({
+      repoPath: 'D:\\work\\project',
+      config: { version: 1, enabled: true, mode: 'full' },
+      available: true,
+      phase: 'succeeded',
+      log: '',
+    });
+    expertsMocks.startIndex.mockImplementation(async () => {
+      expertsMocks.cards.mockResolvedValue({
+        indexPhase: 'succeeded',
+        modules: [
+          {
+            id: 'display',
+            files: ['app/display.c', 'app/display_lcd.c', 'app/display_menu.c'],
+            split: { dir: 'app', base: 'display' },
+            tables: [],
+            functions: [],
+            experts: [],
+          },
+        ],
+        experts: [],
+      });
+      return {
+        repoPath: 'D:\\work\\project',
+        config: { version: 1, enabled: true, mode: 'full' },
+        available: true,
+        phase: 'succeeded',
+        log: '',
+      };
+    });
+
+    await startExpertTeam();
+    const paths = () =>
+      within(screen.getByTestId('team-expert-display')).getByPlaceholderText('team.experts.fields.pathsPlaceholder');
+    const open = () =>
+      fireEvent.click(within(screen.getByTestId('team-expert-display')).getByRole('button', { name: 'common.edit' }));
+    await screen.findByTestId('team-expert-display');
+    open();
+    expect(paths()).toHaveValue('app/display.c');
+    fireEvent.click(screen.getByTestId('team-experts-index-action'));
+
+    // The re-seeded row is a new draft, so it starts folded again.
+    await waitFor(() => expect(screen.queryByTestId('team-experts-index-banner')).toBeNull());
+    open();
+    expect(paths()).toHaveValue('app/display.c\napp/display_*.c');
+  });
+
+  it('offers Index anyway when the pre-check refused the index, and bypasses it on click', async () => {
+    expertsMocks.experts.mockResolvedValue({
+      file: EXPERTS_FILE,
+      saved: { version: 1, experts: [sensor], shared: [] },
+      cards: [],
+      business: true,
+    });
+    expertsMocks.cards.mockResolvedValue({
+      indexPhase: 'failed',
+      indexError: 'Woody reads ciphertext',
+      indexPrecheckRefused: true,
+      modules: [],
+      experts: [],
+    });
+    expertsMocks.getStatus.mockResolvedValue({
+      repoPath: 'D:\\work\\project',
+      config: { version: 1, enabled: true, mode: 'full' },
+      available: true,
+      phase: 'failed',
+      log: '',
+    });
+    expertsMocks.startIndex.mockResolvedValue({
+      repoPath: 'D:\\work\\project',
+      config: { version: 1, enabled: true, mode: 'full' },
+      available: true,
+      phase: 'running',
+      log: '',
+    });
+
+    await startExpertTeam();
+    const banner = await screen.findByTestId('team-experts-index-banner');
+    expect(banner).toHaveTextContent('team.experts.indexStatus.precheckRefused');
+    expect(screen.getByTestId('team-experts-index-action')).toHaveTextContent('team.experts.indexStatus.indexAnyway');
+    fireEvent.click(screen.getByTestId('team-experts-index-action'));
+
+    await waitFor(() =>
+      expect(expertsMocks.startIndex).toHaveBeenCalledWith({
+        repoPath: 'D:\\work\\project',
+        language: 'zh-CN',
+        bypassPrecheck: true,
+      })
     );
   });
 

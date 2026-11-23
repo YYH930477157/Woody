@@ -1,9 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ipcBridge } from '@/common';
-import type { CodebaseMemoryIndexDrift, ModuleCard, ModuleCards } from '@/common/types/codebaseMemory/types';
+import type {
+  CodebaseMemoryIndexDrift,
+  CodebaseMemoryModule,
+  ModuleCard,
+  ModuleCards,
+} from '@/common/types/codebaseMemory/types';
 import {
+  EXPERT_NAME_MAX,
+  EXPERT_SUMMARY_MAX,
   expertIssue,
   MODULE_EXPERTS_LIMIT,
+  moduleDraftValues,
   modulePaths,
   type ExpertIssue,
   type ModuleExpert,
@@ -33,20 +42,37 @@ type Loaded = {
 let nextKey = 0;
 const draftOf = (expert: ModuleExpert): ExpertDraft => ({ ...expert, key: `expert-${++nextKey}`, selected: true });
 
-function initialExperts(state: SavedExpertsState, moduleCards: ModuleCards | undefined): ModuleExpert[] {
+/** The name and summary of an expert made from one detected module, in the interface language. */
+type DescribeModule = (module: CodebaseMemoryModule) => Pick<ModuleExpert, 'name' | 'summary'>;
+
+function initialExperts(
+  state: SavedExpertsState,
+  moduleCards: ModuleCards | undefined,
+  describe: DescribeModule
+): ModuleExpert[] {
   if (state.saved?.experts) return state.saved.experts;
   if (state.cards.length > 0) {
     return state.cards.map((id) => ({ id, name: id, summary: '', paths: [] as string[] }));
   }
   if (moduleCards?.modules?.length) {
+    // Each detected module starts as a complete expert, so the team can be created as it is.
     return moduleCards.modules.map((mod) => ({
       id: mod.id,
-      name: mod.id,
-      summary: '',
+      ...describe(mod),
       paths: modulePaths(moduleCards.modules, [mod.id]),
     }));
   }
   return [];
+}
+
+/** Drafts for a fresh list, keeping who was chosen to join the team where an expert stays. */
+function seedDrafts(experts: ModuleExpert[], previous: ExpertDraft[] = []): ExpertDraft[] {
+  return experts.slice(0, MODULE_EXPERTS_LIMIT).map((expert) => {
+    const draft = draftOf(expert);
+    const before = previous.find((item) => item.id === expert.id);
+    if (before) draft.selected = before.selected;
+    return draft;
+  });
 }
 
 function resolveIndexState(
@@ -72,6 +98,7 @@ function resolveIndexState(
  * written back when the team is created.
  */
 export function useModuleExperts(workspace: string, active: boolean) {
+  const { t } = useTranslation();
   const [loaded, setLoaded] = useState<Loaded>();
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(false);
@@ -85,6 +112,17 @@ export function useModuleExperts(workspace: string, active: boolean) {
   const dirtyRef = useRef(false);
   const sessionRef = useRef(0);
   dirtyRef.current = dirty;
+  // Read through a ref: switching the language while the dialog is open must not reload the list.
+  const describeRef = useRef<DescribeModule>(() => ({ name: '', summary: '' }));
+  describeRef.current = (module) => {
+    const { id, ...values } = moduleDraftValues([module]);
+    const name = t('conversation.codebaseMemory.modules.nameDraft', { id });
+    return {
+      // A long module id can push the translated name past the limit; the id alone fits.
+      name: name.length <= EXPERT_NAME_MAX ? name : id,
+      summary: t('conversation.codebaseMemory.modules.summaryDraft', values).slice(0, EXPERT_SUMMARY_MAX),
+    };
+  };
 
   const canIndex = Boolean(
     available &&
@@ -104,12 +142,15 @@ export function useModuleExperts(workspace: string, active: boolean) {
     ]);
     if (sessionRef.current !== session) return;
     setLoaded((current) => {
-      const seeded = initialExperts(state, moduleCards).slice(0, MODULE_EXPERTS_LIMIT).map(draftOf);
-      const keepDrafts = Boolean(current && (dirtyRef.current || current.drafts.length > 0));
+      // Only the user's edits are kept: drafts seeded from the old index follow the new one.
+      const keepDrafts = Boolean(current && dirtyRef.current);
       return {
         workspace: targetWorkspace,
         file: state.file,
-        drafts: keepDrafts && current ? current.drafts : seeded,
+        drafts:
+          keepDrafts && current
+            ? current.drafts
+            : seedDrafts(initialExperts(state, moduleCards, describeRef.current), current?.drafts),
         shared: keepDrafts && current ? current.shared : (state.saved?.shared ?? []),
         saved: Boolean(state.saved),
         cards: moduleCards,
@@ -135,11 +176,10 @@ export function useModuleExperts(workspace: string, active: boolean) {
     Promise.all([ipcBridge.codebaseMemory.experts.invoke({ repoPath: workspace }), cards])
       .then(([state, moduleCards]) => {
         if (cancelled || sessionRef.current !== session) return;
-        const experts = initialExperts(state, moduleCards);
         setLoaded({
           workspace,
           file: state.file,
-          drafts: experts.slice(0, MODULE_EXPERTS_LIMIT).map(draftOf),
+          drafts: seedDrafts(initialExperts(state, moduleCards, describeRef.current)),
           shared: state.saved?.shared ?? [],
           saved: Boolean(state.saved),
           cards: moduleCards,
@@ -182,9 +222,12 @@ export function useModuleExperts(workspace: string, active: boolean) {
     return () => clearInterval(timer);
   }, [active, canIndex, loaded?.cards?.indexPhase, reloadAfterIndex, workspace]);
 
-  /** Enable codebase memory when needed and start (or refresh) the project's index. */
+  /**
+   * Enable codebase memory when needed and start (or refresh) the project's index.
+   * `bypassPrecheck`: the user says the indexer is whitelisted although Woody reads ciphertext.
+   */
   const runIndex = useCallback(
-    async (language?: string): Promise<void> => {
+    async (language?: string, options: { bypassPrecheck?: boolean } = {}): Promise<void> => {
       if (!canIndex || indexing || !workspace) return;
       const session = sessionRef.current;
       setIndexing(true);
@@ -199,7 +242,11 @@ export function useModuleExperts(workspace: string, active: boolean) {
           });
           if (sessionRef.current !== session) return;
         }
-        const started = await ipcBridge.codebaseMemory.start.invoke({ repoPath: workspace, language });
+        const started = await ipcBridge.codebaseMemory.start.invoke({
+          repoPath: workspace,
+          language,
+          ...(options.bypassPrecheck ? { bypassPrecheck: true } : {}),
+        });
         if (sessionRef.current !== session) return;
         if (started.phase === 'running') {
           setLoaded((current) =>
@@ -254,6 +301,8 @@ export function useModuleExperts(workspace: string, active: boolean) {
   const indexState = resolveIndexState(loaded?.cards, indexing, indexActionError);
   const indexDrift: CodebaseMemoryIndexDrift | undefined = loaded?.cards?.indexDrift;
   const indexError = indexActionError ?? loaded?.cards?.indexError;
+  // Retrying cannot pass a refusal: only the user's word that the indexer is whitelisted can.
+  const precheckRefused = !indexActionError && indexState === 'failed' && loaded?.cards?.indexPrecheckRefused === true;
 
   /** Write the list to the project when it changed or was never saved; returns the experts that join the team. */
   const save = useCallback(async (): Promise<{ experts: ModuleExpert[]; shared: string[] }> => {
@@ -277,6 +326,7 @@ export function useModuleExperts(workspace: string, active: boolean) {
     indexState,
     indexDrift,
     indexError,
+    precheckRefused,
     indexing: indexState === 'running',
     canIndex,
     runIndex,

@@ -271,7 +271,9 @@
       "enableAndIndex": "开启并建立索引",
       "buildIndex": "立即建立索引",
       "retryIndex": "重试索引",
-      "refreshIndex": "更新索引"
+      "refreshIndex": "更新索引",
+      "precheckRefused": "这个文件夹的代码对 Woody 是加密的，所以没有建立索引。把索引程序 codebase-memory-mcp.exe 加入加密软件的白名单后，点“仍然建立索引”。",
+      "indexAnyway": "仍然建立索引"
     }
   }
 }

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Alert, Button, Checkbox, Input, Select, Tag } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import type { CodebaseMemoryModule, ModuleCardState } from '@/common/types/codebaseMemory/types';
+import { moduleDraftValues } from '@/common/types/team/moduleExperts';
 import type { ExpertFields, ModuleListState } from './useModuleList';
 
 type Props = {
@@ -36,24 +37,11 @@ export default function ModuleList({ modules, state, disabled }: Props) {
   const nameOf = (id: string) => state.experts.find((expert) => expert.id === id)?.name ?? id;
 
   const startDraft = () => {
-    const picked = modules.filter((item) => chosen.includes(item.id));
-    const id = picked
-      .map((item) => item.id)
-      .join('-')
-      .slice(0, 40)
-      .replace(/-+$/, '');
+    const { id, ...values } = moduleDraftValues(modules.filter((item) => chosen.includes(item.id)));
     setDraft({
       id,
       name: t('conversation.codebaseMemory.modules.nameDraft', { id }),
-      summary: t('conversation.codebaseMemory.modules.summaryDraft', {
-        modules: picked.map((item) => item.id).join(', '),
-        tables: [...new Set(picked.flatMap((item) => item.tables))].join(', ') || '—',
-        functions:
-          picked
-            .flatMap((item) => item.functions)
-            .slice(0, 6)
-            .join(', ') || '—',
-      }),
+      summary: t('conversation.codebaseMemory.modules.summaryDraft', values),
     });
   };
   const issue = draft ? state.issueOf(draft, modules, chosen) : null;

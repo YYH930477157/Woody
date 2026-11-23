@@ -615,6 +615,7 @@ describe('modules and experts in the architecture panel', () => {
           'app/routine/display_task.c',
           'app/routine/display.h',
         ],
+        split: { dir: 'app/routine', base: 'display' },
         tables: ['initList', 'secondList'],
         functions: ['DISP_Init', 'DISP_SecondProc'],
         experts: [],

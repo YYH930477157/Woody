@@ -56,6 +56,11 @@ export type CodebaseMemoryModule = {
   id: string;
   /** Project-relative files. */
   files: string[];
+  /**
+   * Set when the module is a split-file family such as `display_*.c` in one folder: `dir` is
+   * the folder (`''` at the root) and `base` the lowercase name before the first `_`.
+   */
+  split?: { dir: string; base: string };
   /** Dispatch tables the module registers functions in. */
   tables: string[];
   /** The functions it registers there. */
@@ -118,6 +123,8 @@ export type ModuleCards = {
   indexPhase?: CodebaseMemoryStatus['phase'];
   /** Last index error when `indexPhase === 'failed'`. */
   indexError?: string;
+  /** The last index was refused by the ciphertext pre-check; only `bypassPrecheck` gets past it. */
+  indexPrecheckRefused?: boolean;
   /** Disk changes detected since the last completed index. */
   indexDrift?: CodebaseMemoryIndexDrift;
 };

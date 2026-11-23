@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import type { CodebaseMemoryModule } from '@/common/types/codebaseMemory/types';
 import {
   expertIssue,
   MODULE_EXPERTS_LIMIT,
+  modulePaths,
   parseExpertPaths,
   validateExpertsFile,
   type ModuleExpert,
@@ -56,5 +58,54 @@ describe('module experts file', () => {
       name: `M${i}`,
     }));
     expect(() => validateExpertsFile({ version: 1, experts: many })).toThrow(`At most ${MODULE_EXPERTS_LIMIT}`);
+  });
+});
+
+const mod = (id: string, files: string[], split?: CodebaseMemoryModule['split']): CodebaseMemoryModule => ({
+  id,
+  files,
+  tables: [],
+  functions: [],
+  experts: [],
+  ...(split ? { split } : {}),
+});
+
+describe('module paths of chosen modules', () => {
+  it('owns a split-file family as a folder pattern, keeping the exact source and header', () => {
+    const display = mod(
+      'display',
+      ['app/display.c', 'app/display_lcd.c', 'app/display_menu.c', 'app/display.h', 'app/display_cfg.h'],
+      {
+        dir: 'app',
+        base: 'display',
+      }
+    );
+    expect(modulePaths([display], ['display'])).toEqual([
+      'app/display.c',
+      'app/display_*.c',
+      'app/display.h',
+      'app/display_*.h',
+    ]);
+  });
+
+  it('never collapses files that merely share a prefix before the first underscore', () => {
+    // drv_uart.c and drv_uart_dma.c share `drv`, but the classifier did not call the module split.
+    const uart = mod('drv-uart', ['drivers/drv_uart.c', 'drivers/drv_uart_dma.c', 'drivers/drv_uart.h']);
+    expect(modulePaths([uart], ['drv-uart'])).toEqual([
+      'drivers/drv_uart.c',
+      'drivers/drv_uart_dma.c',
+      'drivers/drv_uart.h',
+    ]);
+  });
+
+  it('lists the files when the pattern would also match another module', () => {
+    const display = mod('display', ['app/display_lcd.c', 'app/display_menu.c'], { dir: 'app', base: 'display' });
+    const backlight = mod('display-backlight', ['app/display_backlight.c']);
+    expect(modulePaths([display, backlight], ['display'])).toEqual(['app/display_lcd.c', 'app/display_menu.c']);
+  });
+
+  it('keeps the case of the file names, since expert patterns match case-sensitively', () => {
+    const display = mod('display', ['Display_Lcd.c', 'Display_Menu.c'], { dir: '', base: 'display' });
+    expect(modulePaths([display], ['display'])).toEqual(['Display_*.c']);
   });
 });

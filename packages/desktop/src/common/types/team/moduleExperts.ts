@@ -39,8 +39,8 @@ export const MODULE_EXPERTS_LIMIT = 12;
 /** The PowerShell plain reader on encrypted machines returns at most 64 KiB. */
 export const MODULE_EXPERTS_MAX_BYTES = 64 * 1024;
 const EXPERT_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const NAME_MAX = 40;
-const SUMMARY_MAX = 400;
+export const EXPERT_NAME_MAX = 40;
+export const EXPERT_SUMMARY_MAX = 400;
 const PATHS_MAX = 60;
 
 export function isExpertId(value: string): boolean {
@@ -75,10 +75,10 @@ export function expertIssue(expert: ModuleExpert, others: ModuleExpert[]): Exper
   if (!isExpertId(expert.id)) return 'id';
   if (others.some((other) => other.id === expert.id)) return 'idTaken';
   const name = expert.name.trim();
-  if (!name || name.length > NAME_MAX) return 'name';
+  if (!name || name.length > EXPERT_NAME_MAX) return 'name';
   if (others.some((other) => other.name.trim() === name)) return 'nameTaken';
   const summary = expert.summary.trim();
-  if (!summary || summary.length > SUMMARY_MAX) return 'summary';
+  if (!summary || summary.length > EXPERT_SUMMARY_MAX) return 'summary';
   if (expert.paths.length === 0 || expert.paths.length > PATHS_MAX || !expert.paths.every(isProjectPath)) {
     return 'paths';
   }
@@ -119,51 +119,72 @@ export function validateExpertsFile(value: unknown): ModuleExpertsFile {
   return { version: 1, experts, shared };
 }
 
-const SPLIT_FILE = /^(?:(.+)\/)?([A-Za-z0-9]+)_[^/]+\.([A-Za-z0-9]+)$/;
+/**
+ * Values for the draft name and summary of an expert made from detected modules: the id, and
+ * the modules, tables and entry functions as text for the `modules.nameDraft` and
+ * `modules.summaryDraft` translations. Lists are short so the summary stays within its limit.
+ */
+export function moduleDraftValues(picked: CodebaseMemoryModule[]): {
+  id: string;
+  modules: string;
+  tables: string;
+  functions: string;
+} {
+  const id = picked
+    .map((item) => item.id)
+    .join('-')
+    .slice(0, 40)
+    .replace(/-+$/, '');
+  return {
+    id,
+    modules: picked.map((item) => item.id).join(', '),
+    tables: [...new Set(picked.flatMap((item) => item.tables))].slice(0, 6).join(', ') || '—',
+    functions:
+      picked
+        .flatMap((item) => item.functions)
+        .slice(0, 6)
+        .join(', ') || '—',
+  };
+}
 
-function matchesSplitPattern(dir: string, base: string, ext: string, file: string): boolean {
-  const prefix = dir ? `${dir}/` : '';
-  if (!file.startsWith(`${prefix}${base}_`) || !file.endsWith(`.${ext}`)) return false;
-  return !file.slice(prefix.length).includes('/');
+/** `dir/base_rest.ext` split into its parts, or undefined for a file in another folder or without `base_`. */
+function splitParts(file: string, dir: string, base: string): { prefix: string; ext: string } | undefined {
+  const folder = dir ? `${dir}/` : '';
+  if (!file.startsWith(folder)) return undefined;
+  const name = file.slice(folder.length);
+  const match = /^([^/_]+)_[^/]*\.([^./]+)$/.exec(name);
+  if (!match || match[1].toLowerCase() !== base) return undefined;
+  return { prefix: match[1], ext: match[2] };
 }
 
 /**
- * Files of the chosen modules, in module order, each once. When a module is split across
- * several `<dir>/<base>_*.c` (or `.h`) files, such as `display_*.c` after `display.c` is
- * split, collapse them to `<dir>/<base>_*.c` so new split files stay owned automatically.
+ * Files of the chosen modules, in module order, each once. A module the classifier found to
+ * be a split-file family (`split`), such as `display_*.c` after `display.c` was split, is owned
+ * as `<dir>/<base>_*.c` (and `.h`), so new split files stay with its expert. The pattern is
+ * used only when no other module has a file it would match; otherwise the files are listed.
  */
 export function modulePaths(modules: CodebaseMemoryModule[], ids: string[]): string[] {
   const chosenSet = new Set(ids);
   const otherFiles = modules.filter((item) => !chosenSet.has(item.id)).flatMap((item) => item.files);
   const out: string[] = [];
+  const add = (entry: string) => {
+    if (!out.includes(entry)) out.push(entry);
+  };
   for (const item of modules) {
     if (!chosenSet.has(item.id)) continue;
-    const counts = new Map<string, { dir: string; base: string; ext: string; count: number }>();
+    const split = item.split;
     for (const file of item.files) {
-      const match = SPLIT_FILE.exec(file);
-      if (!match) continue;
-      const [, dir = '', base, ext] = match;
-      const key = `${dir}\0${base.toLowerCase()}\0${ext.toLowerCase()}`;
-      const current = counts.get(key);
-      if (current) current.count += 1;
-      else counts.set(key, { dir, base, ext, count: 1 });
-    }
-    for (const file of item.files) {
-      const match = SPLIT_FILE.exec(file);
-      if (match) {
-        const [, dir = '', base, ext] = match;
-        const group = counts.get(`${dir}\0${base.toLowerCase()}\0${ext.toLowerCase()}`);
-        if (
-          group &&
-          group.count >= 2 &&
-          !otherFiles.some((other) => matchesSplitPattern(group.dir, group.base, group.ext, other))
-        ) {
-          const pattern = `${group.dir ? `${group.dir}/` : ''}${group.base}_*.${group.ext}`;
-          if (!out.includes(pattern)) out.push(pattern);
-          continue;
-        }
+      const parts = split && splitParts(file, split.dir, split.base);
+      if (!split || !parts) {
+        add(file);
+        continue;
       }
-      if (!out.includes(file)) out.push(file);
+      const pattern = `${split.dir ? `${split.dir}/` : ''}${parts.prefix}_*.${parts.ext}`;
+      const taken = otherFiles.some((other) => {
+        const otherParts = splitParts(other, split.dir, split.base);
+        return otherParts?.prefix === parts.prefix && otherParts.ext === parts.ext;
+      });
+      add(taken ? file : pattern);
     }
   }
   return out;

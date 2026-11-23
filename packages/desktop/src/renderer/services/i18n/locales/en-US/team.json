@@ -271,7 +271,9 @@
       "enableAndIndex": "Enable & index",
       "buildIndex": "Build index",
       "retryIndex": "Retry index",
-      "refreshIndex": "Refresh index"
+      "refreshIndex": "Refresh index",
+      "precheckRefused": "Woody reads this folder as encrypted, so the index was not built. Add the indexer codebase-memory-mcp.exe to the encryption software whitelist, then click Index anyway.",
+      "indexAnyway": "Index anyway"
     }
   }
 }
