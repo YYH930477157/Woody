@@ -455,6 +455,45 @@ describe('AssistantEditorSections', () => {
     expect(within(defaultsCard).getByText('User MCP, Disabled MCP, and Builtin MCP')).toBeInTheDocument();
   });
 
+  it('keeps custom skills out of selectedSkills when another skill is picked', async () => {
+    const setSelectedSkills = vi.fn();
+    const setCustomSkills = vi.fn();
+    renderWithProviders(
+      <AssistantEditorSections
+        editor={createEditor({
+          skills: {
+            availableSkills: [
+              { name: 'foo', description: 'Custom skill', location: '', is_custom: true, source: 'custom' },
+              { name: 'other', description: 'Another skill', location: '', is_custom: false, source: 'builtin' },
+            ],
+            selectedSkills: [],
+            setSelectedSkills,
+            customSkills: ['foo'],
+            setCustomSkills,
+            pendingSkills: [],
+            setDeletePendingSkillName: vi.fn(),
+            setDeleteCustomSkillName: vi.fn(),
+            builtinAutoSkills: [],
+            disabledBuiltinSkills: [],
+            setDisabledBuiltinSkills: vi.fn(),
+          },
+        })}
+        activeAssistant={null}
+      />
+    );
+
+    fireEvent.click(screen.getByTestId('select-assistant-default-skills'));
+    const option = await waitFor(() => {
+      const found = [...document.querySelectorAll('.arco-select-option')].find((item) => item.textContent === 'other');
+      if (!found) throw new Error('skill option not found');
+      return found;
+    });
+    fireEvent.click(option);
+
+    expect(setSelectedSkills).toHaveBeenLastCalledWith(['other']);
+    expect(setCustomSkills).toHaveBeenLastCalledWith(['foo']);
+  });
+
   it('includes custom_skill_names in the read-only skill summary for builtin expert assistants', () => {
     renderWithProviders(
       <AssistantEditorSections

@@ -323,7 +323,8 @@ const AssistantEditorSections: React.FC<AssistantEditorSectionsProps> = ({ edito
   };
 
   const handleSkillSelectionChange = (values: string[]) => {
-    const nextSelected = values.filter((value) => !autoSkillNames.includes(value));
+    // Custom skills are shown in the same picker but saved in custom_skill_names only.
+    const nextSelected = values.filter((value) => !autoSkillNames.includes(value) && !customSkills.includes(value));
     const nextDisabledAuto = autoSkillNames.filter((skillName) => !values.includes(skillName));
     setSelectedSkills(nextSelected);
     setCustomSkills?.(customSkills.filter((skillName) => values.includes(skillName)));
