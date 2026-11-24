@@ -596,6 +596,8 @@ describe('module expert cards in the project runtime', () => {
     git(worktree, 'commit', '-q', '-m', 'drop tick');
     // An uncommitted edit in the main checkout: the index has it, the worktree does not.
     fs.appendFileSync(path.join(repo, 'app/task.c'), '\n');
+    // graph.json is tracked but not indexed, so its edit is not listed.
+    fs.appendFileSync(path.join(repo, 'graph.json'), '\n');
 
     const result = await service.callTool(worktree, 'detect_changes', { format: 'json', scope: 'files' });
     expect(result.structuredContent).toMatchObject({

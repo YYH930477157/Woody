@@ -1759,8 +1759,9 @@ function createRuntime(options) {
   /**
    * `detect_changes` for a linked Git worktree that shares the main checkout's index: what the
    * worktree changed against the main checkout's HEAD (commits on its branch, edits and new
-   * files), the files the main checkout edited without committing (the index shows those
-   * edits, the worktree does not), and the callers of the changed files in the shared index.
+   * files), the indexed files the main checkout edited without committing (the index shows
+   * those edits, the worktree does not), and the callers of the worktree's changed files in
+   * the shared index.
    * `since` or `base_branch` replace the main checkout's HEAD as the base.
    */
   async function detectWorktreeChanges(project, bound) {
@@ -1788,10 +1789,13 @@ function createRuntime(options) {
     for (const file of nulList(gitOutput(worktree, ['ls-files', '--others', '--exclude-standard', '-z'])))
       if (!added.includes(file)) added.push(file);
     const listed = new Set([...modified, ...deleted, ...added]);
+    // Only files the index holds can show the main checkout's version instead of the worktree's.
+    const indexedList = readJson(indexedFilesPath(project));
+    const indexed = Array.isArray(indexedList) ? new Set(indexedList) : undefined;
     const mainEdited = requested
       ? []
       : nulList(gitOutput(project.root, ['diff', '--name-only', '-z', '--relative', 'HEAD', '--'])).filter(
-          (file) => !listed.has(file)
+          (file) => !listed.has(file) && (!indexed || indexed.has(file))
         );
     const against = requested ? base : `the main checkout's HEAD (${base.slice(0, 12)})`;
     const payload = {
@@ -1803,12 +1807,9 @@ function createRuntime(options) {
       added: added.sort(),
       mainEdited: mainEdited.sort(),
     };
+    // The callers of what this worktree changed; the main checkout's own edits are not its work.
     if (bound.scope !== 'files')
-      payload.impacted = await externalCallers(project, [
-        ...payload.modified,
-        ...payload.deleted,
-        ...payload.mainEdited,
-      ]);
+      payload.impacted = await externalCallers(project, [...payload.modified, ...payload.deleted]);
     return changesReply(payload, bound, 'Your worktree has no changes against that base.', [
       ['modified', 'Modified in your worktree'],
       ['deleted', 'Deleted in your worktree'],
