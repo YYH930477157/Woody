@@ -7,9 +7,9 @@ import type { CmakeAction, CmakeJob } from '@/common/types/cmake';
 import { deepEqual } from '@/common/utils/deepEqual';
 import { projectRelativePath } from '../cmakeProblems';
 import type { OpenFile } from '../CmakePanel';
-import ConfigurationActions from '../Configuration/ConfigurationActions';
+import { ConfigurationActions } from '../Configuration';
 import type { CmakeState } from '../useCmake';
-import CmakeConsole from './CmakeConsole';
+import CmakeConsole, { type ConsoleViewState } from './CmakeConsole';
 import CmakeTools from './CmakeTools';
 import styles from '../CmakePanel.module.css';
 
@@ -62,6 +62,8 @@ export default function BuildView({
   errorText,
   onShowSettings,
   onOpenFile,
+  consoleState,
+  onConsoleStateChange,
 }: {
   state: CmakeState;
   locked: boolean;
@@ -69,6 +71,8 @@ export default function BuildView({
   errorText: (text: string) => string;
   onShowSettings: () => void;
   onOpenFile?: OpenFile;
+  consoleState?: ConsoleViewState;
+  onConsoleStateChange?: (state: ConsoleViewState) => void;
 }) {
   const { t } = useTranslation();
   const project = state.project!;
@@ -226,6 +230,8 @@ export default function BuildView({
             onCopy={state.copy}
             onOpenFile={onOpenFile}
             errorText={errorText}
+            viewState={consoleState}
+            onViewStateChange={onConsoleStateChange}
           />
         </div>
       </div>

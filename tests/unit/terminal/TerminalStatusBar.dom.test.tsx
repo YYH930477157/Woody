@@ -1,8 +1,24 @@
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, render, screen } from '@testing-library/react';
-import type { TerminalConnection } from '../../../packages/desktop/src/common/types/terminal';
+import { act, cleanup, render, renderHook, screen, waitFor } from '@testing-library/react';
+import type { TerminalConnection, TerminalEvent } from '../../../packages/desktop/src/common/types/terminal';
 import TerminalStatusBar from '../../../packages/desktop/src/renderer/pages/terminal/components/TerminalStatusBar';
+import { useTerminal } from '../../../packages/desktop/src/renderer/pages/terminal/useTerminal';
+
+const bridge = vi.hoisted(() => ({
+  profiles: vi.fn().mockResolvedValue([]),
+  list: vi.fn().mockResolvedValue([]),
+  read: vi.fn(),
+}));
+vi.mock('@/common', () => ({
+  ipcBridge: {
+    terminal: {
+      profiles: { invoke: bridge.profiles },
+      list: { invoke: bridge.list },
+      read: { invoke: bridge.read },
+    },
+  },
+}));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -64,5 +80,55 @@ describe('terminal status bar', () => {
     expect(screen.getByText('20 B')).toBeInTheDocument();
     expect(screen.queryByText(/frameCount/)).not.toBeInTheDocument();
     expect(screen.queryByText(/\d:\d\d/)).not.toBeInTheDocument();
+  });
+
+  it('keeps closed serial rate at zero even when historical counters are non-zero', () => {
+    render(
+      <TerminalStatusBar
+        connection={{ ...serial, status: 'closed' }}
+        counters={{ rx: 1024, tx: 512, rxFrames: 2, txFrames: 1 }}
+      />
+    );
+    expect(screen.getAllByText('0 B/s')).toHaveLength(2);
+  });
+});
+
+describe('useTerminal frame gap resync', () => {
+  const chunk = (cursor: number, timestamp: number): TerminalEvent => ({
+    cursor,
+    timestamp,
+    direction: 'incoming',
+    source: 'transport',
+    data: Buffer.from('AB').toString('base64'),
+    byteLength: 2,
+  });
+
+  it('recomputes serial frame counts when frameGapMs changes', async () => {
+    bridge.list.mockResolvedValue([serial]);
+    bridge.read
+      .mockResolvedValueOnce({
+        cursor: 6,
+        lost: false,
+        more: false,
+        events: [chunk(2, 100), chunk(4, 140), chunk(6, 180)],
+      })
+      .mockResolvedValue({ cursor: 6, lost: false, more: false, events: [] });
+
+    const { result, rerender } = renderHook(({ gap }) => useTerminal(gap), { initialProps: { gap: 30 } });
+    act(() => result.current.setSelectedId(serial.id));
+    await waitFor(() => expect(result.current.counters.rxFrames).toBe(3));
+
+    rerender({ gap: 50 });
+    expect(result.current.counters.rxFrames).toBe(1);
+    expect(result.current.counters.rx).toBe(6);
+  });
+
+  it('reports read failures without resetting previously tallied counters', async () => {
+    bridge.list.mockResolvedValue([serial]);
+    bridge.read.mockRejectedValueOnce(new Error('read failed'));
+
+    const { result } = renderHook(() => useTerminal(30));
+    act(() => result.current.setSelectedId(serial.id));
+    await waitFor(() => expect(result.current.error).toBe('read failed'));
   });
 });

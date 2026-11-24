@@ -104,6 +104,38 @@ describe('parseCmakeProblems', () => {
     expect(problems[1].file).toBe('main.c');
   });
 
+  it('reads debug linker symbol errors with line numbers and ignores object-only paths as source files', () => {
+    const problems = parseCmakeProblems(
+      [
+        "C:/msys64/mingw64/bin/ld.exe: CMakeFiles/app.dir/src/main.c.obj: in function `main':",
+        "D:/work/project/src/main.c:42: undefined reference to `sensor_read'",
+        "C:/msys64/mingw64/bin/ld.exe: CMakeFiles/app.dir/src/init.c.obj:D:/work/project/src/init.c:17:(.text+0x8): multiple definition of `board_init'",
+        "C:/msys64/mingw64/bin/ld.exe: CMakeFiles/app.dir/src/bare.c.obj:(.text+0x4): undefined reference to `hal_tick'",
+      ].join('\n')
+    );
+    expect(problems).toEqual([
+      {
+        severity: 'error',
+        file: 'D:/work/project/src/main.c',
+        line: 42,
+        message: "undefined reference to `sensor_read'",
+        outputLine: 1,
+      },
+      {
+        severity: 'error',
+        file: 'D:/work/project/src/init.c',
+        line: 17,
+        message: "multiple definition of `board_init'",
+        outputLine: 2,
+      },
+      {
+        severity: 'error',
+        message: "undefined reference to `hal_tick'",
+        outputLine: 3,
+      },
+    ]);
+  });
+
   it('keeps the collect2 summary when it is the only error and reads tool errors', () => {
     expect(parseCmakeProblems('collect2.exe: error: ld returned 1 exit status')[0].message).toBe(
       'collect2.exe: ld returned 1 exit status'

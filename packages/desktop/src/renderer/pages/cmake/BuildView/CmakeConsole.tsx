@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Button, Tooltip } from '@arco-design/web-react';
 import { Attention, CloseOne, Copy, Down, FileCode, Right } from '@icon-park/react';
 import classNames from 'classnames';
@@ -15,7 +15,13 @@ import {
 import type { OpenFile } from '../CmakePanel';
 import styles from './CmakeConsole.module.css';
 
-type ConsoleTab = 'problems' | 'output';
+export type ConsoleTab = 'problems' | 'output';
+export type ConsoleViewState = {
+  projectPath: string;
+  jobKey: string;
+  tab: ConsoleTab;
+  highlight?: number;
+};
 const FOLLOW_THRESHOLD_PX = 40;
 
 const baseName = (file: string) => file.split(/[\\/]/).pop() || file;
@@ -33,6 +39,8 @@ export default function CmakeConsole({
   onCopy,
   onOpenFile,
   errorText,
+  viewState,
+  onViewStateChange,
 }: {
   job?: CmakeJob;
   output: string;
@@ -42,6 +50,8 @@ export default function CmakeConsole({
   onCopy: (text: string) => Promise<void>;
   onOpenFile?: OpenFile;
   errorText: (text: string) => string;
+  viewState?: ConsoleViewState;
+  onViewStateChange?: (state: ConsoleViewState) => void;
 }) {
   const { t } = useTranslation();
   const lines = useMemo(() => splitOutputLines(output), [output]);
@@ -49,35 +59,49 @@ export default function CmakeConsole({
   const kinds = useMemo(() => classifyOutputLines(lines), [lines]);
   const errors = problems.filter((problem) => problem.severity === 'error').length;
   const warnings = problems.length - errors;
-  const [tab, setTab] = useState<ConsoleTab>('output');
-  const [highlight, setHighlight] = useState<number>();
+  const [internalState, setInternalState] = useState<ConsoleViewState>();
+  const currentState = onViewStateChange ? viewState : internalState;
+  const updateState = onViewStateChange ?? setInternalState;
   const [behind, setBehind] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   const following = useRef(true);
   const hasOutput = output.length > 0;
 
-  // A running job is read in the output; a failed one opens on what went wrong.
+  // A running job is read in the output; a failed one opens on what went wrong, while view switches keep the user's choice.
   const finishedWithProblems = job?.status === 'failed' && problems.length > 0;
-  useEffect(() => {
-    if (job?.status === 'running') setTab('output');
-    else if (finishedWithProblems) setTab('problems');
-    setHighlight(undefined);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- switch once per job state, not on every log append
-  }, [job?.id, job?.status]);
+  const jobKey = `${job?.id ?? ''}:${job?.status ?? ''}`;
+  const matching =
+    currentState?.projectPath === projectPath && currentState.jobKey === jobKey ? currentState : undefined;
+  const tab: ConsoleTab =
+    matching?.tab ??
+    (job?.status === 'running'
+      ? 'output'
+      : finishedWithProblems
+        ? 'problems'
+        : currentState?.projectPath === projectPath
+          ? currentState.tab
+          : 'output');
+  const highlight = matching?.highlight;
+  const setConsoleView = (nextTab: ConsoleTab, nextHighlight?: number) => {
+    updateState({ projectPath, jobKey, tab: nextTab, highlight: nextHighlight });
+  };
 
   useLayoutEffect(() => {
     const element = scroller.current;
-    if (!element || tab !== 'output' || highlight !== undefined) return;
+    if (!element || tab !== 'output') return;
+    if (highlight !== undefined) {
+      element.querySelector(`[data-line="${highlight}"]`)?.scrollIntoView?.({ block: 'center' });
+      return;
+    }
     if (following.current) element.scrollTop = element.scrollHeight;
     else setBehind(true);
   }, [lines, tab, highlight]);
 
   const showInOutput = (problem: CmakeProblem) => {
     following.current = false;
-    setTab('output');
-    setHighlight(problem.outputLine);
+    setConsoleView('output', problem.outputLine);
     requestAnimationFrame(() => {
-      scroller.current?.querySelector(`[data-line="${problem.outputLine}"]`)?.scrollIntoView({ block: 'center' });
+      scroller.current?.querySelector(`[data-line="${problem.outputLine}"]`)?.scrollIntoView?.({ block: 'center' });
     });
   };
   const open = (problem: CmakeProblem) => {
@@ -88,7 +112,7 @@ export default function CmakeConsole({
   const jumpToLatest = () => {
     following.current = true;
     setBehind(false);
-    setHighlight(undefined);
+    setConsoleView('output', undefined);
     if (scroller.current) scroller.current.scrollTop = scroller.current.scrollHeight;
   };
 
@@ -98,7 +122,7 @@ export default function CmakeConsole({
       size='small'
       aria-pressed={tab === value}
       className={classNames(styles.tab, tab === value && styles.tabActive)}
-      onClick={() => setTab(value)}
+      onClick={() => setConsoleView(value, highlight)}
     >
       {label}
     </Button>

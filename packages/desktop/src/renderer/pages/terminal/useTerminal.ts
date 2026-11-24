@@ -22,10 +22,15 @@ export function useTerminal(frameGapMs = DEFAULT_FRAME_GAP_MS) {
   const [lost, setLost] = useState(false);
   const [error, setError] = useState('');
   const cursor = useRef(0);
+  const eventsRef = useRef<TerminalEvent[]>([]);
   const frames = useRef<FrameTally>({ rx: 0, tx: 0 });
   const gap = useRef(frameGapMs);
   useEffect(() => {
+    if (gap.current === frameGapMs) return;
     gap.current = frameGapMs;
+    const retallied = tallyFrames({ rx: 0, tx: 0 }, eventsRef.current, frameGapMs);
+    frames.current = retallied;
+    setCounters((previous) => ({ ...previous, rxFrames: retallied.rx, txFrames: retallied.tx }));
   }, [frameGapMs]);
   const generation = useRef(0);
   const wake = useRef<() => void>(() => undefined);
@@ -63,6 +68,7 @@ export function useTerminal(frameGapMs = DEFAULT_FRAME_GAP_MS) {
     let again = false;
     const current = ++generation.current;
     cursor.current = 0;
+    eventsRef.current = [];
     frames.current = { rx: 0, tx: 0 };
     setEvents([]);
     setCounters(EMPTY_COUNTERS);
@@ -91,12 +97,12 @@ export function useTerminal(frameGapMs = DEFAULT_FRAME_GAP_MS) {
           frames.current = tallyFrames(frames.current, result.events, gap.current);
           const { rx: rxFrames, tx: txFrames } = frames.current;
           setCounters((previous) => ({ rx: previous.rx + rx, tx: previous.tx + tx, rxFrames, txFrames }));
-          setEvents((previous) => {
-            const next = [...previous, ...result.events];
-            let size = next.reduce((sum, event) => sum + event.byteLength, 0);
-            while (size > VIEW_BYTES && next.length > 1) size -= next.shift()!.byteLength;
-            return next.slice(-VIEW_EVENTS);
-          });
+          const next = [...eventsRef.current, ...result.events];
+          let size = next.reduce((sum, event) => sum + event.byteLength, 0);
+          while (size > VIEW_BYTES && next.length > 1) size -= next.shift()!.byteLength;
+          const retained = next.slice(-VIEW_EVENTS);
+          eventsRef.current = retained;
+          setEvents(retained);
         }
         delay = result.more ? 0 : result.events.length ? POLL_ACTIVE_MS : POLL_IDLE_MS;
       } catch (error) {
@@ -126,6 +132,7 @@ export function useTerminal(frameGapMs = DEFAULT_FRAME_GAP_MS) {
     };
   }, [selectedId, report]);
   const clear = useCallback(() => {
+    eventsRef.current = [];
     frames.current = { rx: 0, tx: 0 };
     setEvents([]);
     setCounters(EMPTY_COUNTERS);

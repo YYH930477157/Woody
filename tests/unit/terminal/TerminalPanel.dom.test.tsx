@@ -8,8 +8,11 @@ import SerialAccessSettings from '../../../packages/desktop/src/renderer/pages/s
 const mocks = vi.hoisted(() => ({
   owner: 'ai' as 'ai' | 'manual',
   aiAccessBlocked: false,
+  selectedOverride: undefined as TerminalConnection | undefined,
+  shellData: undefined as ((text: string) => void) | undefined,
   resumeAi: vi.fn().mockResolvedValue(undefined),
   send: vi.fn().mockResolvedValue({ status: 'completed', writtenBytes: 3 }),
+  resize: vi.fn().mockResolvedValue(undefined),
   takeover: vi.fn().mockResolvedValue(undefined),
   profiles: [] as TerminalProfile[],
   connections: [] as TerminalConnection[],
@@ -22,6 +25,29 @@ const mocks = vi.hoisted(() => ({
   accessMode: vi.fn().mockResolvedValue('ask'),
   setAccessMode: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock('@xterm/xterm', () => ({
+  Terminal: class {
+    options: Record<string, unknown> = {};
+    cols = 80;
+    rows = 24;
+    loadAddon() {}
+    open() {}
+    attachCustomKeyEventHandler() {}
+    onData(listener: (text: string) => void) {
+      mocks.shellData = listener;
+      return { dispose: () => undefined };
+    }
+    write() {}
+    clear() {}
+    dispose() {}
+  },
+}));
+vi.mock('@xterm/addon-fit', () => ({
+  FitAddon: class {
+    fit() {}
+  },
+}));
+vi.mock('@xterm/xterm/css/xterm.css', () => ({}));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'zh-CN' } }),
 }));
@@ -31,6 +57,7 @@ vi.mock('../../../packages/desktop/src/common', () => ({
       serialAccessMode: { invoke: mocks.accessMode },
       setSerialAccessMode: { invoke: mocks.setAccessMode },
       send: { invoke: mocks.send },
+      resize: { invoke: mocks.resize },
       takeover: { invoke: mocks.takeover },
       resumeAi: { invoke: mocks.resumeAi },
       saveProfile: { invoke: mocks.saveProfile },
@@ -43,10 +70,10 @@ vi.mock('../../../packages/desktop/src/renderer/pages/terminal/useTerminal', () 
   useTerminal: () => ({
     profiles: mocks.profiles,
     connections: mocks.connections,
-    selectedId: 'shared-device',
+    selectedId: mocks.selectedOverride?.id ?? 'shared-device',
     setSelectedId: mocks.setSelectedId,
     events: [],
-    counters: { rx: 0, tx: 0 },
+    counters: { rx: 0, tx: 0, rxFrames: 0, txFrames: 0 },
     lost: false,
     error: '',
     setError: vi.fn(),
@@ -55,7 +82,7 @@ vi.mock('../../../packages/desktop/src/renderer/pages/terminal/useTerminal', () 
     refreshConnections: mocks.refreshConnections,
     refresh: vi.fn(),
     clear: vi.fn(),
-    selected: {
+    selected: mocks.selectedOverride ?? {
       id: 'shared-device',
       owner: mocks.owner,
       aiAccessBlocked: mocks.aiAccessBlocked,
@@ -112,6 +139,8 @@ describe('manual terminal controls', () => {
     localStorage.clear();
     mocks.owner = 'ai';
     mocks.aiAccessBlocked = false;
+    mocks.selectedOverride = undefined;
+    mocks.shellData = undefined;
     mocks.profiles = [];
     mocks.connections = [];
     mocks.send.mockReset().mockResolvedValue({ status: 'completed', writtenBytes: 3 });
@@ -336,5 +365,86 @@ describe('manual terminal controls', () => {
     expect(mocks.open).not.toHaveBeenCalled();
     expect(mocks.refreshConnections).toHaveBeenCalled();
     expect(screen.getAllByRole('button', { name: 'Shell profile' })).toHaveLength(2);
+  });
+
+  const shellConnection = (id: string): TerminalConnection => ({
+    id,
+    owner: 'manual',
+    status: 'open',
+    createdAt: 1,
+    profile: { id: `profile-${id}`, kind: 'shell', name: id },
+  });
+
+  it('keeps per-session shell input queues isolated when switching sessions mid-write', async () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      }
+    );
+    const pendingSends: Array<() => void> = [];
+    mocks.send.mockImplementation(
+      () =>
+        new Promise<TerminalSendResult>((resolve) => {
+          pendingSends.push(() => resolve({ status: 'completed', writtenBytes: 1 }));
+        })
+    );
+    mocks.selectedOverride = shellConnection('shell-a');
+    const { rerender } = render(<TerminalPanel />);
+    mocks.shellData?.('1');
+    mocks.shellData?.('2');
+
+    mocks.selectedOverride = shellConnection('shell-b');
+    rerender(<TerminalPanel />);
+    mocks.shellData?.('l');
+    mocks.shellData?.('s');
+
+    // Finishing shell-a's first write must flush shell-a's queued '2' without unlocking shell-b early.
+    await act(async () => pendingSends[0]());
+    expect(mocks.send.mock.calls.map(([arg]) => [arg.id, arg.request.data])).toEqual([
+      ['shell-a', '1'],
+      ['shell-b', 'l'],
+      ['shell-a', '2'],
+    ]);
+
+    mocks.shellData?.('a');
+    expect(mocks.send).toHaveBeenCalledTimes(3);
+
+    await act(async () => pendingSends[1]());
+    expect(mocks.send.mock.calls.at(-1)?.[0]).toMatchObject({ id: 'shell-b', request: { data: 'sa' } });
+    vi.unstubAllGlobals();
+  });
+
+  it('reports a rejected shell write and still flushes queued keystrokes', async () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      }
+    );
+    let rejectFirst!: (reason: Error) => void;
+    mocks.send
+      .mockImplementationOnce(
+        () =>
+          new Promise<TerminalSendResult>((_resolve, reject) => {
+            rejectFirst = reject;
+          })
+      )
+      .mockResolvedValue({ status: 'completed', writtenBytes: 1 });
+    mocks.selectedOverride = shellConnection('shell-a');
+    render(<TerminalPanel />);
+    mocks.shellData?.('x');
+    mocks.shellData?.('y');
+
+    await act(async () => rejectFirst(new Error('terminal.disconnected')));
+    expect(mocks.report).toHaveBeenCalledWith(new Error('tools.terminal.notConnected'));
+    expect(mocks.send).toHaveBeenCalledTimes(2);
+    expect(mocks.send).toHaveBeenLastCalledWith({
+      id: 'shell-a',
+      request: { data: 'y', encoding: 'utf8', ending: 'none' },
+    });
+    vi.unstubAllGlobals();
   });
 });

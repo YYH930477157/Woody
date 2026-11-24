@@ -36,14 +36,23 @@ const CMAKE = /^CMake (Error|Warning)(?: \(([^)]*)\))?(?: at (.+?):(\d+)(?: \([^
  * were not used" (unused-cli). The user cannot act on it; leave it in the log only.
  */
 const IGNORED_CMAKE_CATEGORIES = new Set(['unused-cli']);
-/** `main.c:(.text+0x1e): undefined reference to 'sensor_read'`. */
-const UNDEFINED = new RegExp(String.raw`^(${FILE}):\(.*?\):\s+(undefined reference to .+|multiple definition of .+)$`);
+const LD_TOOL = /^(?:.*?[\\/])?(?:ld|ld\.lld)(?:\.exe)?:\s+/i;
+const OBJECT_PREFIX = /^(?:[A-Za-z]:)?[^:\s]+?\.(?:o|obj)\)?:\s*/i;
+/**
+ * Linker symbol errors with a source location (`src/main.c:42: undefined reference to ...` in `-g` builds, or
+ * `main.c:(.text+0x1e): undefined reference to ...`), optionally preceded by `ld.exe: foo.obj:`.
+ */
+const UNDEFINED = new RegExp(
+  String.raw`^(${FILE}):(?:(\d+)(?::\([^)]*\))?|\([^)]*\)):\s*(undefined reference to .+|multiple definition of .+)$`
+);
+const UNDEFINED_OBJECT_ONLY = /^(?:\([^)]*\):\s*)?(undefined reference to .+|multiple definition of .+)$/;
 /** A tool that names itself: `gcc: error: unrecognized option`, `collect2.exe: error: ld returned 1 exit status`. */
 const TOOL = /^((?:[A-Za-z]:)?[^\s:]+):\s+(fatal error|error|warning):\s+(.+)$/;
 /** The linker without a source location: `.../ld.exe: cannot find -lfoo: No such file or directory`. */
 const LINKER = /^(?:.*?[\\/])?(?:ld|ld\.lld|lld-link|link)(?:\.exe)?:\s+(.+)$/i;
 const LINKER_ERROR = /cannot find|cannot open|undefined reference|multiple definition|unresolved external/i;
 const COLLECT2_SUMMARY = /ld returned \d+ exit status/;
+const normalizeSlashes = (value: string) => value.replace(/\\/g, '/').replace(/\/+$/, '');
 
 function severityOf(kind: string): CmakeProblemSeverity {
   return kind.toLowerCase().includes('warning') ? 'warning' : 'error';
@@ -101,8 +110,22 @@ function problemAt(lines: string[], outputLine: number): CmakeProblem | undefine
       outputLine,
     };
   }
-  match = UNDEFINED.exec(text);
-  if (match) return { severity: 'error', file: match[1].trim(), message: match[2].trim(), outputLine };
+  const withoutLd = text.replace(LD_TOOL, '');
+  const withoutObject = withoutLd.replace(OBJECT_PREFIX, '');
+  match = UNDEFINED.exec(withoutObject);
+  if (match && !/\.(?:o|obj)$/i.test(match[1])) {
+    return {
+      severity: 'error',
+      file: match[1].trim(),
+      line: toNumber(match[2]),
+      message: match[3].trim(),
+      outputLine,
+    };
+  }
+  if (withoutObject !== withoutLd) {
+    match = UNDEFINED_OBJECT_ONLY.exec(withoutObject);
+    if (match) return { severity: 'error', message: match[1].trim(), outputLine };
+  }
   match = TOOL.exec(text);
   if (match) {
     return {
@@ -152,9 +175,8 @@ export function resolveProblemPath(file: string, projectPath: string): string {
 
 /** A path inside the project as `build/debug`; anything else unchanged. Windows paths compare case-insensitively. */
 export function projectRelativePath(path: string, projectPath: string): string {
-  const normalize = (value: string) => value.replace(/\\/g, '/').replace(/\/+$/, '');
-  const root = normalize(projectPath);
-  const target = normalize(path);
+  const root = normalizeSlashes(projectPath);
+  const target = normalizeSlashes(path);
   if (!root || target.length <= root.length + 1 || target[root.length] !== '/') return path;
   const head = target.slice(0, root.length);
   const windows = /^[A-Za-z]:\//.test(root);

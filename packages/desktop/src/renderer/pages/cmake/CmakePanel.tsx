@@ -5,7 +5,8 @@ import { useTranslation } from 'react-i18next';
 import type { CmakeConfiguration } from '@/common/types/cmake';
 import { deepEqual } from '@/common/utils/deepEqual';
 import BuildView from './BuildView';
-import ConfigurationAlerts from './Configuration/ConfigurationAlerts';
+import type { ConsoleViewState } from './BuildView/CmakeConsole';
+import { ConfigurationAlerts } from './Configuration';
 import GdbPanel from './GdbPanel';
 import SettingsView from './SettingsView';
 import { useCmake } from './useCmake';
@@ -28,11 +29,12 @@ const settingsChanged = (draft?: CmakeConfiguration, saved?: CmakeConfiguration)
 export default function CmakePanel({ projectPath, onOpenFile }: { projectPath: string; onOpenFile?: OpenFile }) {
   const { t } = useTranslation();
   const state = useCmake(projectPath);
-  const debug = useGdb(state.project?.projectPath || '');
+  const debug = useGdb(state.project?.projectPath || '', state.acceptSaved);
   const { project, draft, job, pending } = state;
   const running = job?.status === 'running' || project?.latestJob?.status === 'running';
   const locked = running || pending || debug.active || debug.pending || state.discovering;
   const [view, setView] = useState<CmakeView>('build');
+  const [consoleState, setConsoleState] = useState<ConsoleViewState>();
   const [projectChange, setProjectChange] = useState<() => void>();
   const changeProject = (action: () => void) => {
     if (locked) return;
@@ -178,10 +180,13 @@ export default function CmakePanel({ projectPath, onOpenFile }: { projectPath: s
           errorText={errorText}
           onShowSettings={() => setView('settings')}
           onOpenFile={onOpenFile}
+          consoleState={consoleState}
+          onConsoleStateChange={setConsoleState}
         />
       ) : view === 'debug' ? (
         <GdbPanel
           key={project.projectPath}
+          projectPath={project.projectPath}
           debug={debug}
           draft={draft}
           onChange={state.setDraft}

@@ -128,7 +128,10 @@ export default function ShellTerminal({
     };
   }, []);
 
+  const lastClearKey = useRef(clearKey);
   useEffect(() => {
+    if (lastClearKey.current === clearKey) return;
+    lastClearKey.current = clearKey;
     terminal.current?.clear();
   }, [clearKey]);
 

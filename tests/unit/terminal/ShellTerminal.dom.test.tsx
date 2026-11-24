@@ -122,7 +122,8 @@ describe('shell terminal', () => {
     const { rerender } = render(<ShellTerminal {...props} onResize={onResize} events={[]} />);
     vi.advanceTimersByTime(200);
     expect(onResize).toHaveBeenCalledWith(100, 30);
+    expect(xterm.instances[0].cleared).toBe(0);
     rerender(<ShellTerminal {...props} onResize={onResize} clearKey={1} events={[]} />);
-    expect(xterm.instances[0].cleared).toBeGreaterThan(0);
+    expect(xterm.instances[0].cleared).toBe(1);
   });
 });

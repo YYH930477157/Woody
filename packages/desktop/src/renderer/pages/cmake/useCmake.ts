@@ -196,6 +196,12 @@ export function useCmake(projectPath: string) {
     aiEnabled,
     saveAndStart,
     reloadConfiguration,
+    acceptSaved: (saved: CmakeProject) => {
+      if (saved.projectPath !== project?.projectPath) return;
+      revision.current++;
+      setProject(saved);
+      setDraft(saved.config);
+    },
     revealConfiguration: () =>
       perform(async () => {
         if (project) await cmake.revealConfiguration.invoke({ projectPath: project.projectPath });

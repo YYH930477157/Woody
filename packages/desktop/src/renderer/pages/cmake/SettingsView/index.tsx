@@ -4,8 +4,7 @@ import { Check, Save } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { deepEqual } from '@/common/utils/deepEqual';
 import { ReadinessTag, TOOL_LABELS, ToolStatusIcon, toolReadiness, toolRows } from '../BuildView/CmakeTools';
-import ConfigurationActions from '../Configuration/ConfigurationActions';
-import ReaderSettings from '../Configuration/ReaderSettings';
+import { ConfigurationActions, ReaderSettings } from '../Configuration';
 import type { CmakeState } from '../useCmake';
 import panel from '../CmakePanel.module.css';
 import styles from './SettingsView.module.css';
@@ -130,7 +129,9 @@ export default function SettingsView({
                   aria-label={t('tools.cmake.runArguments')}
                   autoSize={{ minRows: 2, maxRows: 6 }}
                   value={value.runArguments.join('\n')}
-                  onChange={(text) => onChange({ ...value, runArguments: text ? text.split('\n') : [] })}
+                  onChange={(text) =>
+                    onChange({ ...value, runArguments: text ? text.replace(/\r\n?/g, '\n').split('\n') : [] })
+                  }
                 />
               </Form.Item>
             </Form>

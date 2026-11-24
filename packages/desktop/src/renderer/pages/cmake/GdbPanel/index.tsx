@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useRef, useState } from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import { Alert, Button, Form, Input, InputNumber, Switch, Tooltip } from '@arco-design/web-react';
 import {
   Add,
@@ -18,15 +18,14 @@ import classNames from 'classnames';
 import { useTranslation } from 'react-i18next';
 import type { CmakeConfiguration } from '@/common/types/cmake';
 import type { GdbReply, GdbSession } from '@/common/types/cmake/gdb';
+import { resolveProblemPath } from '../cmakeProblems';
 import type { OpenFile } from '../CmakePanel';
-import type { useGdb } from '../useGdb';
+import type { GdbReading, GdbWatch, useGdb } from '../useGdb';
 import panel from '../CmakePanel.module.css';
 import styles from './GdbPanel.module.css';
 
 type DebugState = ReturnType<typeof useGdb>;
-type Reading = { id: string; revision: number; reply: GdbReply };
-type Watch = { expression: string; reading?: Reading };
-const reading = (reply?: GdbReply): Reading | undefined =>
+const reading = (reply?: GdbReply): GdbReading | undefined =>
   reply?.session?.state === 'stopped' ? { id: reply.session.id, revision: reply.session.revision, reply } : undefined;
 
 function StatePill({ state }: { state: GdbSession['state'] | 'idle' }) {
@@ -71,6 +70,7 @@ function DebugOutput({ text, empty, label }: { text: string; empty: string; labe
 }
 
 export default function GdbPanel({
+  projectPath,
   debug,
   draft,
   onChange,
@@ -78,6 +78,7 @@ export default function GdbPanel({
   configurationInvalid = false,
   onOpenFile,
 }: {
+  projectPath?: string;
   debug: DebugState;
   draft: CmakeConfiguration;
   onChange: (value: CmakeConfiguration) => void;
@@ -86,21 +87,33 @@ export default function GdbPanel({
   onOpenFile?: OpenFile;
 }) {
   const { t } = useTranslation();
-  const [location, setLocation] = useState('');
-  const [expression, setExpression] = useState('');
-  const [watches, setWatches] = useState<Watch[]>([]);
-  const [stack, setStack] = useState<Reading>();
-  const [locals, setLocals] = useState<Reading>();
-  const [memory, setMemory] = useState<Reading>();
-  const [address, setAddress] = useState('');
-  const [count, setCount] = useState(32);
-  const { session, pending, active } = debug;
+  const {
+    session,
+    pending,
+    active,
+    location,
+    setLocation,
+    expression,
+    setExpression,
+    watches,
+    setWatches,
+    stack,
+    setStack,
+    locals,
+    setLocals,
+    memory,
+    setMemory,
+    address,
+    setAddress,
+    count,
+    setCount,
+  } = debug;
   const stopped = session?.state === 'stopped';
   const canInspect = stopped && !pending;
   const label = (key: string) => t(`tools.gdb.${key}` as 'tools.gdb.start');
   const errorText = (text: string) =>
     text.replace(/^((?:gdb|cmake)\.[A-Za-z]+)/, (key) => t(`tools.${key}` as 'tools.gdb.failed'));
-  const current = (snapshot?: Reading) =>
+  const current = (snapshot?: GdbReading) =>
     !!snapshot && stopped && snapshot.id === session.id && snapshot.revision === session.revision;
   const control = (key: string, icon: React.ReactNode, disabled: boolean, action: () => void) => (
     <Tooltip key={key} content={label(key)}>
@@ -112,7 +125,7 @@ export default function GdbPanel({
       <Button size='mini' type='text' aria-label={label(key)} icon={icon} disabled={disabled} onClick={action} />
     </Tooltip>
   );
-  async function refreshWatch(item: Watch) {
+  async function refreshWatch(item: GdbWatch) {
     const result = reading(await debug.execute({ operation: 'evaluate', expression: item.expression }));
     if (result)
       setWatches((previous) =>
@@ -232,7 +245,9 @@ export default function GdbPanel({
                   aria-label={t('tools.cmake.runArguments')}
                   autoSize={{ minRows: 1, maxRows: 4 }}
                   value={draft.runArguments.join('\n')}
-                  onChange={(value) => onChange({ ...draft, runArguments: value ? value.split('\n') : [] })}
+                  onChange={(value) =>
+                    onChange({ ...draft, runArguments: value ? value.replace(/\r\n?/g, '\n').split('\n') : [] })
+                  }
                 />
               </Form.Item>
             </Form>
@@ -330,7 +345,9 @@ export default function GdbPanel({
                     className={styles.frameFile}
                     icon={<FileCode />}
                     disabled={!onOpenFile}
-                    onClick={() => onOpenFile?.(frameFile, frameLine)}
+                    onClick={() =>
+                      onOpenFile?.(projectPath ? resolveProblemPath(frameFile, projectPath) : frameFile, frameLine)
+                    }
                   >
                     {frameFile.split(/[\\/]/).pop()}
                     {frame.line ? `:${frame.line}` : ''}

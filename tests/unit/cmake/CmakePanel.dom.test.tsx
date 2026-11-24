@@ -624,6 +624,90 @@ describe('CMake build panel', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'tools.cmake.cancel' }));
     await waitFor(() => expect(mocks.cancel).toHaveBeenCalledWith({ jobId: 'waiting-for-output' }));
   });
+  it('preserves debug watches and chosen console tab across Build, Debug and Settings views', async () => {
+    const failedBuild = {
+      id: 'failed-build',
+      projectPath: project.projectPath,
+      action: 'build' as const,
+      status: 'failed' as const,
+      startedAt: '2026-11-24T00:00:00Z',
+      finishedAt: '2026-11-24T00:00:02Z',
+      buildDirectory: project.buildDirectory,
+      selection: {},
+    };
+    const debugSession = {
+      id: 'debug',
+      projectPath: project.projectPath,
+      state: 'stopped' as const,
+      revision: 1,
+      breakpoints: [],
+      output: '',
+    };
+    mocks.inspect.mockResolvedValue({ ...project, latestJob: failedBuild });
+    mocks.read.mockResolvedValue({
+      job: failedBuild,
+      output: 'src/logger.c:12:3: error: broken',
+      cursor: 31,
+      truncated: false,
+    });
+    mocks.debug.mockImplementation(async (request) =>
+      request.operation === 'evaluate' ? { session: debugSession, value: '12345' } : { session: debugSession }
+    );
+    render(<CmakePanel projectPath={project.projectPath} />);
+    await screen.findByRole('list', { name: 'tools.cmake.problems' });
+    fireEvent.click(screen.getByRole('button', { name: 'tools.cmake.output' }));
+    expect(screen.getByRole('log', { name: 'tools.cmake.output' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('tools.gdb.debugTab'));
+    fireEvent.change(screen.getByRole('textbox', { name: 'tools.gdb.expression' }), { target: { value: 'counter' } });
+    fireEvent.click(screen.getByRole('button', { name: 'tools.gdb.addWatch' }));
+    fireEvent.click(screen.getByRole('button', { name: 'tools.gdb.refresh' }));
+    await screen.findByText('12345');
+
+    fireEvent.click(screen.getByText('tools.cmake.settings'));
+    fireEvent.click(screen.getByText('tools.gdb.buildTab'));
+    expect(screen.getByRole('log', { name: 'tools.cmake.output' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('tools.gdb.debugTab'));
+    expect(screen.getByText('counter')).toBeInTheDocument();
+    expect(screen.getByText('12345')).toBeInTheDocument();
+  });
+  it('resolves a relative paused GDB frame path against the project when opening in preview', async () => {
+    const onOpenFile = vi.fn();
+    mocks.debug.mockResolvedValue({
+      session: {
+        id: 'debug',
+        projectPath: project.projectPath,
+        state: 'stopped',
+        revision: 1,
+        frame: { level: 0, addr: '0x0800', func: 'main', file: 'src/main.c', line: 28 },
+        breakpoints: [],
+        output: '',
+      },
+    });
+    render(<CmakePanel projectPath={project.projectPath} onOpenFile={onOpenFile} />);
+    fireEvent.click(await screen.findByText('tools.gdb.debugTab'));
+    fireEvent.click(await screen.findByRole('button', { name: 'main.c:28' }));
+    expect(onOpenFile).toHaveBeenCalledWith('D:/meter/src/main.c', 28);
+  });
+  it('clears the unsaved indicator immediately on debug save and strips CR from pasted arguments', async () => {
+    // Keep polling pinned to the old config so only the debug save callback can clear the dirty dot.
+    mocks.inspect.mockResolvedValue(project);
+    render(<CmakePanel projectPath={project.projectPath} />);
+    fireEvent.click(await screen.findByText('tools.gdb.debugTab'));
+    fireEvent.change(screen.getByRole('textbox', { name: 'tools.cmake.runArguments' }), {
+      target: { value: '--port\r\n9600' },
+    });
+    expect(screen.getByLabelText('tools.cmake.unsavedChanges')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'tools.cmake.save' }));
+    await waitFor(() =>
+      expect(mocks.save).toHaveBeenCalledWith({
+        projectPath: project.projectPath,
+        config: { ...project.config, runArguments: ['--port', '9600'] },
+      })
+    );
+    await waitFor(() => expect(screen.queryByLabelText('tools.cmake.unsavedChanges')).not.toBeInTheDocument());
+  });
 });
 describe('CMake tool card', () => {
   const found: CmakeToolCheck[] = Object.keys(project.config.tools).map((name) => ({

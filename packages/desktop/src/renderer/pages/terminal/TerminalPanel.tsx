@@ -260,17 +260,21 @@ export default function TerminalPanel({
     void run(() => transmit(connection, payload(command.data, command.encoding, command.ending)));
   };
 
-  // Keystrokes from the shell view: sent in order, batching whatever is typed while a write is in flight.
-  const shellQueue = useRef<{ id: string; pending: string; busy: boolean }>({ id: '', pending: '', busy: false });
+  // Keystrokes from the shell view: sent in order per session, batching whatever is typed while a write is in flight.
+  const shellQueues = useRef(new Map<string, { pending: string; busy: boolean }>());
   const sendShellInput = useCallback(
     (id: string, data: string) => {
-      const queue = shellQueue.current;
-      if (queue.id !== id) Object.assign(queue, { id, pending: '', busy: false });
+      let queue = shellQueues.current.get(id);
+      if (!queue) {
+        queue = { pending: '', busy: false };
+        shellQueues.current.set(id, queue);
+      }
       queue.pending += data;
       if (queue.busy) return;
       const flush = (): void => {
-        if (!queue.pending || queue.id !== id) {
+        if (!queue.pending) {
           queue.busy = false;
+          shellQueues.current.delete(id);
           model.refresh();
           return;
         }
