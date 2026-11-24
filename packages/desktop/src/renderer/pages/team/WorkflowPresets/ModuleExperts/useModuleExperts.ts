@@ -52,7 +52,14 @@ function initialExperts(
 ): ModuleExpert[] {
   if (state.saved?.experts) return state.saved.experts;
   if (state.cards.length > 0) {
-    return state.cards.map((id) => ({ id, name: id, summary: '', paths: [] as string[] }));
+    // A card named after a detected module starts complete; the others still need their files.
+    const modules = moduleCards?.modules ?? [];
+    return state.cards.map((id) => {
+      const mod = modules.find((item) => item.id === id);
+      return mod
+        ? { id, ...describe(mod), paths: modulePaths(modules, [id]) }
+        : { id, name: id, summary: '', paths: [] as string[] };
+    });
   }
   if (moduleCards?.modules?.length) {
     // Each detected module starts as a complete expert, so the team can be created as it is.

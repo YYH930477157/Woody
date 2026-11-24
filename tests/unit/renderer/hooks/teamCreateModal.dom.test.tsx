@@ -675,6 +675,31 @@ describe('TeamCreateModal', () => {
     expect(expertsMocks.save.mock.invocationCallOrder[0]).toBeLessThan(prepareRolesMock.mock.invocationCallOrder[0]);
   });
 
+  it('completes a card-based expert from the detected module with the same id', async () => {
+    expertsMocks.experts.mockResolvedValue({
+      file: EXPERTS_FILE,
+      saved: null,
+      cards: ['clock', 'qos'],
+      business: true,
+    });
+    expertsMocks.cards.mockResolvedValue({
+      indexPhase: 'succeeded',
+      modules: [
+        { id: 'clock', files: ['app/clock.c', 'app/clock.h'], tables: ['secondList'], functions: [], experts: [] },
+      ],
+      experts: [],
+    });
+    await startExpertTeam();
+    const clock = await screen.findByTestId('team-expert-clock');
+    expect(within(clock).queryByText(/team\.experts\.issues/)).toBeNull();
+    fireEvent.click(within(clock).getByRole('button', { name: 'common.edit' }));
+    expect(within(clock).getByPlaceholderText('team.experts.fields.pathsPlaceholder')).toHaveValue(
+      'app/clock.c\napp/clock.h'
+    );
+    // No module is called qos: that card still needs its files.
+    expect(within(screen.getByTestId('team-expert-qos')).getByText('team.experts.issues.summary')).toBeInTheDocument();
+  });
+
   it('creates nothing when the expert list cannot be saved', async () => {
     expertsMocks.experts.mockResolvedValue({
       file: EXPERTS_FILE,
