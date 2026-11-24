@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { modulePaths } from '@/common/types/team/moduleExperts';
 
 const require = createRequire(import.meta.url);
 const architecture = require(path.resolve('resources/bundled-mcp/codebase-memory/lib/architecture.cjs'));
@@ -247,6 +248,96 @@ describe('module classification', () => {
     const found = modules.classify({ model, functions, files: Object.keys(files) });
     expect(found.map((item: { id: string }) => item.id)).toEqual(['factory', 'lvgl-task', 'sensor', 'tick', 'ui']);
     expect(modules.suggestShared({ model })).toEqual(['app/datastore.h', 'app/eeprom_addr_table.h', 'app/mtask.c']);
+  });
+});
+
+describe('a module split into a qos_*.c family', () => {
+  // The QoS statistics move out of a shared quality.c into qos_calc.c and other qos_*.c files.
+  const files: Record<string, string> = {
+    'app/task.c': [
+      'static const tTask appList[] = { TASK(QOS_SecondProc), TASK(QTY_SecondProc) };',
+      'static const tTask pdList[] = { TASK(QOS_PwrDwnSave) };',
+      'void vMainTask(void *p)',
+      '{',
+      '    for (int i = 0; i < 2; i++) appList[i].func();',
+      '    for (int i = 0; i < 1; i++) pdList[i].func();',
+      '    vTaskDelay(25);',
+      '}',
+      'void appInit(void) { xTaskCreate(vMainTask, "main", 512, NULL, 3, NULL); }',
+      '',
+    ].join('\n'),
+    'app/routine/qos_calc.c': 'void QOS_SecondProc(void)\n{\n}\n',
+    'app/routine/qos_store.c': 'void QOS_PwrDwnSave(void)\n{\n}\n',
+    'app/routine/qos_para.c': 'int QOS_ParaGet(void)\n{\n    return 0;\n}\n',
+    'app/routine/qos.h': 'void QOS_SecondProc(void);\n',
+    'app/routine/quality.c': 'void QTY_SecondProc(void)\n{\n}\n',
+    'app/routine/quality.h': 'void QTY_SecondProc(void);\n',
+  };
+  const functions: Row[] = [
+    ['vMainTask', 'app/task.c', '3', '8'],
+    ['appInit', 'app/task.c', '9', '9'],
+    ['QOS_SecondProc', 'app/routine/qos_calc.c', '1', '3'],
+    ['QOS_PwrDwnSave', 'app/routine/qos_store.c', '1', '3'],
+    ['QOS_ParaGet', 'app/routine/qos_para.c', '1', '4'],
+    ['QTY_SecondProc', 'app/routine/quality.c', '1', '3'],
+  ];
+
+  it('becomes one qos module, apart from what is left of quality.c, owned by qos_*.c patterns', async () => {
+    const model = await analysis(files, functions);
+    const found = modules.classify({ model, functions, files: Object.keys(files), experts: [], shared: [] });
+    const qos = found.find((item: { id: string }) => item.id === 'qos');
+    expect(qos).toMatchObject({
+      split: { dir: 'app/routine', base: 'qos' },
+      files: ['app/routine/qos_calc.c', 'app/routine/qos_para.c', 'app/routine/qos_store.c', 'app/routine/qos.h'],
+    });
+    expect(found.find((item: { id: string }) => item.id === 'quality')?.files).toEqual([
+      'app/routine/quality.c',
+      'app/routine/quality.h',
+    ]);
+    expect(modulePaths(found, ['qos'])).toEqual(['app/routine/qos_*.c', 'app/routine/qos.h']);
+  });
+
+  it('reports a new qos_*.c file as unowned in the qos module until the expert owns the family', async () => {
+    const model = await analysis(files, functions);
+    // An expert saved before the split owns only the first new file.
+    const experts = [{ id: 'qos', name: 'QoS 专家', paths: ['app/routine/qos_calc.c', 'app/routine/qos.h'] }];
+    const found = modules.classify({ model, functions, files: Object.keys(files), experts, shared: [] });
+    const data = modules.collect({
+      expert: experts[0],
+      experts,
+      shared: [],
+      model,
+      functions,
+      files: Object.keys(files),
+      calls: [],
+      variables: [],
+      coverage: new Map(),
+      source: source(files),
+      modules: found,
+    });
+    expect(data.driftFiles).toEqual(['app/routine/qos_para.c', 'app/routine/qos_store.c']);
+
+    const patterns = [{ id: 'qos', name: 'QoS 专家', paths: ['app/routine/qos_*.c', 'app/routine/qos.h'] }];
+    const owned = modules.collect({
+      expert: patterns[0],
+      experts: patterns,
+      shared: [],
+      model,
+      functions,
+      files: Object.keys(files),
+      calls: [],
+      variables: [],
+      coverage: new Map(),
+      source: source(files),
+      modules: modules.classify({ model, functions, files: Object.keys(files), experts: patterns, shared: [] }),
+    });
+    expect(owned.driftFiles).toEqual([]);
+    expect(owned.owned).toEqual([
+      'app/routine/qos.h',
+      'app/routine/qos_calc.c',
+      'app/routine/qos_para.c',
+      'app/routine/qos_store.c',
+    ]);
   });
 });
 
