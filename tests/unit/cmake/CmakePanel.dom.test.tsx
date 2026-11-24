@@ -1,10 +1,9 @@
 import React from 'react';
-import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, getByText, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { CmakeProject, CmakeToolCheck } from '@/common/types/cmake';
 import CmakePanel from '@/renderer/pages/cmake/CmakePanel';
-import CmakeTools from '@/renderer/pages/cmake/CmakeTools';
+import CmakeTools from '@/renderer/pages/cmake/BuildView/CmakeTools';
 
 const mocks = vi.hoisted(() => ({
   discover: vi.fn(),
@@ -119,7 +118,7 @@ describe('CMake build panel', () => {
       expect(mocks.setAiEnabled).toHaveBeenCalledWith({ projectPath: project.projectPath, enabled: true })
     );
   });
-  it('shows the root directory name instead of a dot and keeps idle logs collapsed', async () => {
+  it('shows the root directory name instead of a dot and an idle console without a cancel button', async () => {
     mocks.discover.mockResolvedValue({
       workspacePath: project.projectPath,
       projects: [{ projectPath: project.projectPath, relativePath: '.' }],
@@ -128,7 +127,7 @@ describe('CMake build panel', () => {
     render(<CmakePanel projectPath={project.projectPath} />);
     await screen.findByRole('button', { name: 'tools.cmake.build' });
     expect(screen.getByRole('heading', { name: 'meter' })).toBeInTheDocument();
-    expect(screen.queryByText('tools.cmake.noOutput')).not.toBeInTheDocument();
+    expect(screen.getByText('tools.cmake.consoleIdle')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'tools.cmake.cancel' })).not.toBeInTheDocument();
   });
   it('explains a folder scan caused by unreadable VS Code settings and keeps reader settings reachable', async () => {
@@ -143,12 +142,11 @@ describe('CMake build panel', () => {
     expect(screen.getByText('tools.cmake.readPowerShellMissing')).toBeInTheDocument();
     expect(await screen.findByText('tools.cmake.readSettings')).toBeInTheDocument();
   });
-  it('keeps unverified tool paths collapsed while tool inspection stays available', async () => {
+  it('lists every tool as unchecked until a check runs', async () => {
     render(<CmakePanel projectPath={project.projectPath} />);
     await screen.findByRole('button', { name: 'tools.cmake.check' });
-    expect(screen.queryByRole('table')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText('tools.cmake.toolPathColumn'));
-    expect(screen.getByRole('table')).toBeInTheDocument();
+    expect(screen.getByText('tools.cmake.toolsUnchecked')).toBeInTheDocument();
+    expect(screen.getAllByLabelText('tools.cmake.toolUnchecked')).toHaveLength(5);
   });
   it('shows verified canonical tool paths even when they differ from saved path spelling', async () => {
     mocks.inspect.mockResolvedValue({
@@ -157,8 +155,7 @@ describe('CMake build panel', () => {
       toolChecks: [{ name: 'cmake', path: 'D:\\real-tools\\cmake.exe', status: 'found', version: '3.29' }],
     });
     render(<CmakePanel projectPath={project.projectPath} />);
-    fireEvent.click(await screen.findByText('tools.cmake.toolPathColumn'));
-    expect(screen.getByText('tools.cmake.toolFound')).toBeInTheDocument();
+    expect(await screen.findByLabelText('tools.cmake.toolFound')).toBeInTheDocument();
     expect(screen.getByText('D:\\real-tools\\cmake.exe')).toBeInTheDocument();
   });
   it('checks tools while invalid variants block builds', async () => {
@@ -304,7 +301,7 @@ describe('CMake build panel', () => {
       target: { value: 'D:/custom/cmake.exe' },
     });
     mocks.inspect.mockResolvedValue(project);
-    await waitFor(() => expect(screen.getByRole('button', { name: 'tools.cmake.build' })).toBeEnabled(), {
+    await waitFor(() => expect(screen.queryByText(/tools.cmake.invalidVariants/)).not.toBeInTheDocument(), {
       timeout: 3000,
     });
     fireEvent.click(screen.getByRole('button', { name: 'tools.cmake.save' }));
@@ -537,6 +534,8 @@ describe('CMake build panel', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'tools.cmake.cmakePath' }), {
       target: { value: 'D:/tools/cmake.exe' },
     });
+    expect(screen.getByLabelText('tools.cmake.unsavedChanges')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('tools.gdb.buildTab'));
     fireEvent.click(screen.getByRole('button', { name: 'tools.cmake.build' }));
     await waitFor(() => expect(mocks.start).toHaveBeenCalled());
     expect(mocks.save.mock.calls[0][0].config.tools.cmake).toBe('D:/tools/cmake.exe');
@@ -626,66 +625,46 @@ describe('CMake build panel', () => {
     await waitFor(() => expect(mocks.cancel).toHaveBeenCalledWith({ jobId: 'waiting-for-output' }));
   });
 });
-describe('CMake tool details', () => {
-  const found: CmakeToolCheck[] = [{ name: 'cmake', path: 'D:/tools/cmake.exe', status: 'found', version: '3.29' }];
-  const missing: CmakeToolCheck[] = [{ name: 'cmake', path: 'D:/tools/cmake.exe', status: 'missing' }];
-  const tools = (checks?: CmakeToolCheck[]) => (
+describe('CMake tool card', () => {
+  const found: CmakeToolCheck[] = Object.keys(project.config.tools).map((name) => ({
+    name: name as CmakeToolCheck['name'],
+    path: `D:/tools/${name}.exe`,
+    status: 'found',
+    version: '3.29',
+  }));
+  const missing: CmakeToolCheck[] = [
+    { name: 'cmake', path: 'D:/tools/cmake.exe', status: 'missing', error: 'cmake.toolNotFound' },
+  ];
+  const tools = (checks?: CmakeToolCheck[], onCheck = async () => {}) => (
     <CmakeTools
       checks={checks}
       tools={project.config.tools}
       disabled={false}
       invalid={false}
-      onCheck={async () => {}}
-      errorText={(text) => text}
+      onCheck={onCheck}
+      errorText={(text) => `translated:${text}`}
     />
   );
 
-  it('keeps a click that lands before the first render has settled', async () => {
-    // Outside act, a non-urgent render commits before its effects run. Clicking in that gap is what a slow test
-    // machine does after findBy* resolves; the details must still open.
-    const actEnvironment = (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT;
-    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = false;
-    const container = document.body.appendChild(document.createElement('div'));
-    const root = createRoot(container);
-    try {
-      const committed = new Promise<void>((resolve) => {
-        const observer = new MutationObserver(() => {
-          observer.disconnect();
-          resolve();
-        });
-        observer.observe(container, { childList: true, subtree: true });
-      });
-      root.render(tools(found));
-      await committed;
-      fireEvent.click(getByText(container, 'tools.cmake.toolPathColumn'));
-      await waitFor(() => expect(within(container).getByText('tools.cmake.toolFound')).toBeInTheDocument());
-    } finally {
-      root.unmount();
-      container.remove();
-      (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = actEnvironment;
-    }
-  });
-
-  it('collapses the details when the header is clicked again', () => {
+  it('shows every verified tool with its path and version', () => {
     render(tools(found));
-    fireEvent.click(screen.getByText('tools.cmake.toolPathColumn'));
-    expect(screen.getByText('tools.cmake.toolFound')).toBeVisible();
-    fireEvent.click(screen.getAllByText('tools.cmake.toolPathColumn')[0]);
-    expect(screen.getByRole('button', { name: 'tools.cmake.toolPathColumn' })).toHaveAttribute(
-      'aria-expanded',
-      'false'
-    );
+    expect(screen.getByText('tools.cmake.toolsReady')).toBeInTheDocument();
+    expect(screen.getAllByLabelText('tools.cmake.toolFound')).toHaveLength(5);
+    expect(screen.getByText('D:/tools/cmake.exe')).toBeInTheDocument();
+    expect(screen.getAllByText('3.29')).toHaveLength(5);
   });
 
-  it('opens the details when a later check fails and closes them once it passes', () => {
-    const { rerender } = render(tools(found));
-    expect(screen.queryByText('tools.cmake.toolMissing')).not.toBeInTheDocument();
-    rerender(tools(missing));
-    expect(screen.getByText('tools.cmake.toolMissing')).toBeInTheDocument();
-    rerender(tools(found));
-    expect(screen.getByRole('button', { name: 'tools.cmake.toolPathColumn' })).toHaveAttribute(
-      'aria-expanded',
-      'false'
-    );
+  it('marks the card blocked and explains a missing tool', () => {
+    render(tools(missing));
+    expect(screen.getByText('tools.cmake.toolsBlocked')).toBeInTheDocument();
+    expect(screen.getByLabelText('tools.cmake.toolMissing')).toBeInTheDocument();
+    expect(screen.getByText('translated:cmake.toolNotFound')).toBeInTheDocument();
+  });
+
+  it('runs a check from the card', () => {
+    const onCheck = vi.fn(async () => {});
+    render(tools(undefined, onCheck));
+    fireEvent.click(screen.getByRole('button', { name: 'tools.cmake.check' }));
+    expect(onCheck).toHaveBeenCalledTimes(1);
   });
 });

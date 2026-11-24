@@ -61,6 +61,8 @@ export type TerminalTransport = {
   close(): Promise<void>;
   interrupt?(): Promise<void>;
   setBaud?(baudRate: number): Promise<void>;
+  /** Shell only. Match the pseudo-terminal to the size the user sees. */
+  resize?(cols: number, rows: number): Promise<void>;
   onData(listener: (data: Buffer) => void): () => void;
   onClose(listener: (error?: string) => void): () => void;
 };

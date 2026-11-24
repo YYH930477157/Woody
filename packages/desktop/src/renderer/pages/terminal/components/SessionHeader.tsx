@@ -133,27 +133,31 @@ export default function SessionHeader({
             />
           </Tooltip>
         )}
-        <Radio.Group
-          type='button'
-          size='small'
-          value={view.display}
-          onChange={(display) => onViewChange({ display })}
-          options={[
-            { value: 'text', label: label('encodingText') },
-            { value: 'hex', label: label('hex') },
-            { value: 'hexdump', label: label('hexdump') },
-          ]}
-        />
-        <Popover trigger='click' position='br' title={label('displaySettings')} content={settings}>
-          <Tooltip content={label('displaySettings')} mini>
-            <Button
-              size='small'
-              type='text'
-              aria-label={label('displaySettings')}
-              icon={<SettingTwo theme='outline' fill='currentColor' size='15' />}
-            />
-          </Tooltip>
-        </Popover>
+        {serial && (
+          <Radio.Group
+            type='button'
+            size='small'
+            value={view.display}
+            onChange={(display) => onViewChange({ display })}
+            options={[
+              { value: 'text', label: label('encodingText') },
+              { value: 'hex', label: label('hex') },
+              { value: 'hexdump', label: label('hexdump') },
+            ]}
+          />
+        )}
+        {serial && (
+          <Popover trigger='click' position='br' title={label('displaySettings')} content={settings}>
+            <Tooltip content={label('displaySettings')} mini>
+              <Button
+                size='small'
+                type='text'
+                aria-label={label('displaySettings')}
+                icon={<SettingTwo theme='outline' fill='currentColor' size='15' />}
+              />
+            </Tooltip>
+          </Popover>
+        )}
         <Tooltip content={label('clear')} mini>
           <Button
             size='small'

@@ -4,6 +4,27 @@ Woody uses the installed Windows CMake/CTest and MinGW tools. It does not downlo
 or bundle a compiler. Open a project conversation and select the build icon next
 to the terminal icon in the conversation header.
 
+## Panel layout
+
+The header shows the project (or a selector when the workspace holds several),
+Rescan, the Build / Debug / Settings views and the AI access switch. A dot on
+Settings marks unsaved edits.
+
+- **Build**: the toolbar holds the build options from the variants file, Build,
+  Configure, CTest and Run, Cancel while a job runs, and the last job's status
+  with a live timer. The sidebar shows the project paths (relative to the
+  project where possible), the local tools with their check results, and the run
+  settings. The console on the right has two tabs. Build output colors errors,
+  warnings and command lines. Problems lists the errors and warnings read from
+  gcc/clang, MSVC, the linker and CMake itself; a failed job opens on it.
+  Selecting a problem with a file opens that file at the reported line in the
+  preview beside the chat; Show in output jumps to the line in the log.
+- **Debug**: see `gdb-workbench.md`.
+- **Settings**: tool paths with their check results, build options (target,
+  parallel jobs, timeout, 32-bit verification), the program to run, and how the
+  variants file is read. Save stores them; Build and the other actions also save
+  current edits first.
+
 ## Project setup
 
 Woody first checks `CMakeLists.txt` in the current conversation's project directory.

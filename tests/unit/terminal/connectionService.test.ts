@@ -21,6 +21,7 @@ class MemoryTransport implements TerminalTransport {
   writeImpl: (data: Buffer) => Promise<number> = async (data) => data.length;
   closed = false;
   interrupts = 0;
+  sizes: Array<[number, number]> = [];
   async write(data: Buffer) {
     this.writes.push(Buffer.from(data));
     return this.writeImpl(data);
@@ -31,6 +32,9 @@ class MemoryTransport implements TerminalTransport {
   }
   async interrupt() {
     this.interrupts++;
+  }
+  async resize(cols: number, rows: number) {
+    this.sizes.push([cols, rows]);
   }
   onData(listener: (data: Buffer) => void) {
     this.dataListeners.add(listener);
@@ -541,5 +545,15 @@ describe('temporary terminal capabilities', () => {
     ready.resolve(transport);
     await expect(opening).rejects.toThrow();
     expect([transport.closed, service.list().length]).toEqual([true, 0]);
+  });
+  it('resizes an open shell even while AI holds it, and refuses bad sizes and closed sessions', async () => {
+    const { transport, service, id } = await setup();
+    service.grant({ connectionId: id, conversationId: 'chat' });
+    await service.resize(id, 132, 40);
+    await expect(service.resize(id, 1, 40)).rejects.toThrow('Invalid terminal size');
+    await expect(service.resize(id, 80, 1.5)).rejects.toThrow('Invalid terminal size');
+    expect(transport.sizes).toEqual([[132, 40]]);
+    await service.close(id);
+    await expect(service.resize(id, 80, 24)).rejects.toThrow();
   });
 });

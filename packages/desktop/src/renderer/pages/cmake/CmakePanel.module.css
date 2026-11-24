@@ -1,59 +1,266 @@
+/* Shared layout for the CMake drawer: a header, a toolbar per view, and a sidebar beside a main area. */
 .panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  height: 100%;
+  min-height: 0;
   min-width: 0;
   color: var(--color-text-1);
+  background: var(--bg-base);
 }
+/* icon-park icons are not Arco icons, so Arco leaves no gap between them and the label. */
+.panel :global(.arco-btn > .i-icon + span),
+.panel :global(.arco-btn > span + .i-icon) {
+  margin-left: 6px;
+}
+/* Like dialog fields (arco-override.css): give idle fields an outline so they don't vanish into the cards. */
+.panel :global(.arco-input:not(.arco-input-disabled):not(.arco-input-error):not(.arco-input-focus):not(:focus)),
+.panel :global(.arco-input-inner-wrapper:not(.arco-input-inner-wrapper-disabled):not(.arco-input-inner-wrapper-focus)),
+.panel :global(.arco-textarea:not(.arco-textarea-disabled):not(.arco-textarea-focus):not(:focus)),
+.panel :global(.arco-select:not(.arco-select-disabled):not(.arco-select-focused) .arco-select-view) {
+  border-color: var(--border-base) !important;
+  background-color: var(--bg-base);
+}
+/* The input inside a wrapper (number fields, prefixed inputs) keeps the wrapper's single outline. */
+.panel :global(.arco-input-inner-wrapper .arco-input) {
+  border-color: transparent !important;
+  background-color: transparent;
+}
+.state {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+}
+
+/* Header: project, view switch, AI access */
 .header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  gap: 12px 16px;
   flex-wrap: wrap;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border-base);
 }
-.projectSelector {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 32px;
-  gap: 8px;
+.project {
+  display: flex;
   align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.projectIcon {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--brand-light);
+  color: var(--brand);
 }
 .projectTitle {
   margin: 0;
   min-width: 0;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
-  line-height: 1.4;
+  line-height: 1.3;
   overflow-wrap: anywhere;
 }
-.path {
-  overflow-wrap: anywhere;
-  min-width: 0;
-  font-size: 12px;
+.projectSelect {
+  width: 260px;
+  max-width: 100%;
 }
-.section {
+.headerEnd {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.dirtyDot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 6px;
+  border-radius: 50%;
+  vertical-align: middle;
+  background: var(--warning);
+}
+.alerts {
   display: flex;
   flex-direction: column;
-  min-width: 0;
-  gap: 10px;
-  padding: 12px 0;
-  border-top: 1px solid var(--color-border-2);
+  gap: 8px;
+  padding: 12px 20px 0;
 }
-.sectionTitle {
+.alerts:empty {
+  display: none;
+}
+
+/* Toolbar under the header, one per view */
+.toolbar {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px 16px;
+  flex-wrap: wrap;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border-base);
+  background: var(--bg-1);
+}
+.variant {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 150px;
+  max-width: 240px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.variantLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.toolbarEnd {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+}
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 14px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  background: var(--bg-2);
+  color: var(--text-secondary);
+}
+.statusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.statusRunning {
+  color: var(--primary);
+  background: var(--message-tips-bg);
+}
+.statusRunning .statusDot {
+  animation: cmake-status-pulse 1.2s ease-in-out infinite;
+}
+.statusSucceeded {
+  color: var(--success);
+}
+.statusFailed {
+  color: var(--danger);
+}
+@keyframes cmake-status-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Sidebar beside a main area */
+.split {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+}
+.sidebar {
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border-right: 1px solid var(--border-base);
+  background: var(--bg-1);
+}
+.main {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  overflow: auto;
+}
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border-base);
+  border-radius: 8px;
+  background: var(--bg-base);
+}
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+.cardTitle {
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
 }
-.readiness {
+.cardActions {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
-.readiness :global(.arco-tag),
-.toolTable :global(.arco-tag) {
+.cardActions :global(.arco-btn),
+.actions :global(.arco-btn) {
   height: auto;
+  min-height: 28px;
   white-space: normal;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 12px;
+}
+.fieldLabel {
+  color: var(--text-secondary);
+}
+.fieldValue {
   overflow-wrap: anywhere;
+  color: var(--color-text-1);
+}
+/* Long paths: two lines at most, the full path on hover. */
+.pathValue {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono, ui-monospace, Menlo, Consolas, monospace);
+  font-size: 11.5px;
+  color: var(--color-text-1);
 }
 .muted,
 .identifier {
@@ -62,61 +269,87 @@
   overflow-wrap: anywhere;
 }
 .identifier {
-  font-family: monospace;
+  font-family: var(--font-mono, monospace);
 }
-.toolTable {
-  width: 100%;
-  min-width: 0;
-}
-.toolTable :global(table) {
-  table-layout: fixed;
-}
-.toolTable :global(.arco-table-th),
-.toolTable :global(.arco-table-td) {
-  overflow-wrap: anywhere;
-  white-space: normal;
-}
-.logTools {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 8px;
-}
-.access {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-}
-.variants,
-.settings {
+.formGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
   gap: 0 16px;
 }
-.toolbar {
+.formGrid :global(.arco-form-item) {
+  margin-bottom: 12px;
+}
+.formWide {
+  grid-column: 1 / -1;
+}
+.tagRow {
   display: flex;
-  align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
-.toolbar :global(.arco-btn) {
+.tagRow :global(.arco-tag) {
   height: auto;
-  min-height: 32px;
   white-space: normal;
-}
-.output {
-  flex: 1;
-  min-height: 40px;
-  max-height: 55vh;
-  overflow: auto;
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* Tool list: one row per executable */
+.toolList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   margin: 0;
-  padding: 12px;
-  background: var(--color-fill-1);
-  border: 1px solid var(--color-border-2);
-  border-radius: 4px;
-  font-family: monospace;
+  padding: 0;
+  list-style: none;
+}
+.toolRow {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+  padding: 6px 4px;
+  border-radius: 6px;
   font-size: 12px;
-  line-height: 1.6;
+}
+.toolRow:hover {
+  background: var(--bg-hover);
+}
+.toolIcon {
+  display: flex;
+  padding-top: 1px;
+}
+.toolFound {
+  color: var(--success);
+}
+.toolBad {
+  color: var(--danger);
+}
+.toolIdle {
+  color: var(--color-text-3);
+}
+.toolName {
+  font-weight: 500;
+}
+.toolPath {
+  color: var(--color-text-3);
+  overflow-wrap: anywhere;
+}
+.toolVersion {
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(320px, 1fr);
+  }
+  .sidebar {
+    max-height: 45vh;
+    border-right: 0;
+    border-bottom: 1px solid var(--border-base);
+  }
+  .toolbarEnd {
+    margin-left: 0;
+  }
 }

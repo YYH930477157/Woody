@@ -57,7 +57,12 @@
     "stale": "暂无当前值",
     "truncated": "较早的调试输出已丢弃。",
     "output": "调试输出",
-    "noOutput": "暂无调试输出。"
+    "noOutput": "暂无调试输出。",
+    "launch": "启动配置",
+    "noBreakpoints": "暂无断点",
+    "inspectWhenPaused": "程序暂停后可以添加断点",
+    "notPaused": "程序没有暂停，暂停后可查看当前位置",
+    "notStarted": "调试尚未启动"
   },
   "cmake": {
     "workspaceDirectory": "工作区目录",
@@ -81,7 +86,7 @@
     "run": "运行",
     "cancel": "取消",
     "save": "保存",
-    "settings": "工具链与运行设置",
+    "settings": "设置",
     "cmakePath": "CMake 可执行文件",
     "ctestPath": "CTest 可执行文件",
     "cCompilerPath": "C 编译器（GCC）",
@@ -189,7 +194,18 @@
     "variantCompatibility": "配置兼容提示",
     "descriptionAlias": "已将该说明字段按 long 兼容读取，未修改配置文件。",
     "descriptionShadowed": "两个字段同时存在，优先使用 long，未修改配置文件。",
-    "supportedVariantFields": "此位置支持的字段"
+    "supportedVariantFields": "此位置支持的字段",
+    "problems": "问题",
+    "noProblems": "没有发现错误或警告",
+    "consoleIdle": "还没有运行过任务。点击上方的“编译”开始。",
+    "openFile": "打开文件",
+    "showInOutput": "在输出中定位",
+    "runSection": "运行",
+    "buildSection": "构建",
+    "editSettings": "编辑",
+    "allTargets": "全部目标",
+    "settingsSaved": "设置已保存",
+    "runExecutablePlaceholder": "例如 app.exe 或 bin/app.exe"
   },
   "unknownFile": "未知文件",
   "newFile": "新文件",
@@ -408,6 +424,10 @@
     "saveAndConnect": "保存并连接",
     "portPlaceholder": "选择或输入串口",
     "noPorts": "未发现串口",
-    "namePlaceholder": "可选"
+    "namePlaceholder": "可选",
+    "statsReceived": "已接收：总量 · 近 3 秒速率 · 帧数",
+    "statsSent": "已发送：总量 · 近 3 秒速率 · 帧数",
+    "frameCount_one": "{{count}} 帧",
+    "frameCount_other": "{{count}} 帧"
   }
 }

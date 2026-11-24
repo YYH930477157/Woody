@@ -1,23 +1,32 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ipcBridge } from '@/common';
 import type { TerminalConnection, TerminalEvent, TerminalProfile } from '@/common/types/terminal';
+import { tallyFrames, type FrameTally } from './terminalView';
 
 const VIEW_BYTES = 256 * 1024;
 const VIEW_EVENTS = 2000;
 const POLL_ACTIVE_MS = 120;
 const POLL_IDLE_MS = 400;
 
-export type TerminalCounters = { rx: number; tx: number };
+export type TerminalCounters = { rx: number; tx: number; rxFrames: number; txFrames: number };
+const EMPTY_COUNTERS: TerminalCounters = { rx: 0, tx: 0, rxFrames: 0, txFrames: 0 };
+const DEFAULT_FRAME_GAP_MS = 30;
 
-export function useTerminal() {
+/** `frameGapMs` groups received chunks into frames for the frame counters, as the HEX view does. */
+export function useTerminal(frameGapMs = DEFAULT_FRAME_GAP_MS) {
   const [profiles, setProfiles] = useState<TerminalProfile[]>([]);
   const [connections, setConnections] = useState<TerminalConnection[]>([]);
   const [selectedId, setSelectedId] = useState<string>();
   const [events, setEvents] = useState<TerminalEvent[]>([]);
-  const [counters, setCounters] = useState<TerminalCounters>({ rx: 0, tx: 0 });
+  const [counters, setCounters] = useState<TerminalCounters>(EMPTY_COUNTERS);
   const [lost, setLost] = useState(false);
   const [error, setError] = useState('');
   const cursor = useRef(0);
+  const frames = useRef<FrameTally>({ rx: 0, tx: 0 });
+  const gap = useRef(frameGapMs);
+  useEffect(() => {
+    gap.current = frameGapMs;
+  }, [frameGapMs]);
   const generation = useRef(0);
   const wake = useRef<() => void>(() => undefined);
   const report = useCallback((error: unknown) => setError(error instanceof Error ? error.message : String(error)), []);
@@ -54,8 +63,9 @@ export function useTerminal() {
     let again = false;
     const current = ++generation.current;
     cursor.current = 0;
+    frames.current = { rx: 0, tx: 0 };
     setEvents([]);
-    setCounters({ rx: 0, tx: 0 });
+    setCounters(EMPTY_COUNTERS);
     setLost(false);
     const poll = async () => {
       if (running) {
@@ -78,7 +88,9 @@ export function useTerminal() {
             if (event.direction === 'incoming') rx += event.byteLength;
             else if (event.direction === 'outgoing') tx += event.byteLength;
           }
-          setCounters((previous) => ({ rx: previous.rx + rx, tx: previous.tx + tx }));
+          frames.current = tallyFrames(frames.current, result.events, gap.current);
+          const { rx: rxFrames, tx: txFrames } = frames.current;
+          setCounters((previous) => ({ rx: previous.rx + rx, tx: previous.tx + tx, rxFrames, txFrames }));
           setEvents((previous) => {
             const next = [...previous, ...result.events];
             let size = next.reduce((sum, event) => sum + event.byteLength, 0);
@@ -114,8 +126,9 @@ export function useTerminal() {
     };
   }, [selectedId, report]);
   const clear = useCallback(() => {
+    frames.current = { rx: 0, tx: 0 };
     setEvents([]);
-    setCounters({ rx: 0, tx: 0 });
+    setCounters(EMPTY_COUNTERS);
   }, []);
   /** Read new history right away, e.g. right after a send. */
   const refresh = useCallback(() => wake.current(), []);

@@ -257,6 +257,48 @@ export function parseHexInput(text: string): HexInput {
   return { ok: true, hex: (compact.match(/../g) ?? []).join(' ').toUpperCase(), bytes: compact.length / 2 };
 }
 
+/** Running frame counts; `last` is the frame the next event may join. */
+export type FrameTally = {
+  rx: number;
+  tx: number;
+  last?: { direction: TerminalEvent['direction']; source: TerminalEvent['source']; timestamp: number; status?: string };
+};
+
+/** Count frames incrementally with the same joining rule as `groupTerminalFrames`, so totals match the HEX view. */
+export function tallyFrames(previous: FrameTally, events: TerminalEvent[], gapMs: number): FrameTally {
+  let { rx, tx, last } = previous;
+  for (const event of events) {
+    const joins =
+      !!last &&
+      last.direction === event.direction &&
+      last.source === event.source &&
+      event.direction !== 'system' &&
+      (event.direction === 'incoming'
+        ? event.timestamp - last.timestamp <= gapMs
+        : event.timestamp === last.timestamp && last.status === event.status);
+    if (!joins) {
+      if (event.direction === 'incoming') rx++;
+      else if (event.direction === 'outgoing') tx++;
+    }
+    last = { direction: event.direction, source: event.source, timestamp: event.timestamp, status: event.status };
+  }
+  return { rx, tx, last };
+}
+
+/** Bytes per second, short enough for a status bar. */
+export function formatByteRate(bytesPerSecond: number): string {
+  return `${formatByteSize(Math.round(bytesPerSecond))}/s`;
+}
+
+/** Elapsed time as h:mm:ss, or m:ss under an hour. */
+export function formatDuration(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  return hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${minutes}:${pad(seconds)}`;
+}
+
 export function formatByteSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;

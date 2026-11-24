@@ -4,7 +4,7 @@ import { Close, Keyboard, Lightning, SendOne, SettingTwo } from '@icon-park/reac
 import classNames from 'classnames';
 import { useTranslation } from 'react-i18next';
 import type { TerminalWait } from '@/common/types/terminal';
-import { formatByteSize, parseHexInput, terminalKeyInput, type TerminalBackspace } from '../terminalView';
+import { parseHexInput, terminalKeyInput, type TerminalBackspace } from '../terminalView';
 import type {
   HistoryEntry,
   QuickCommand,
@@ -59,7 +59,6 @@ export default function TerminalComposer({
   onRunQuick,
   onSaveQuick,
   onRemoveQuick,
-  counters,
   result,
 }: {
   kind: TerminalKind;
@@ -89,7 +88,6 @@ export default function TerminalComposer({
   onRunQuick: (command: QuickCommand) => void;
   onSaveQuick: (name: string) => void;
   onRemoveQuick: (id: string) => void;
-  counters: { rx: number; tx: number };
   result?: { text: string; tone: 'normal' | 'error' };
 }) {
   const { t } = useTranslation();
@@ -397,9 +395,6 @@ export default function TerminalComposer({
             {result.text}
           </span>
         )}
-        <span className='shrink-0 tabular-nums'>
-          {label('rxBadge')} {formatByteSize(counters.rx)} · {label('txBadge')} {formatByteSize(counters.tx)}
-        </span>
         {serial && (
           <Popover trigger='click' position='tr' title={label('sendOptions')} content={sendOptions}>
             <Button size='mini' type='text' className='!text-t-secondary'>

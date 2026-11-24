@@ -57,7 +57,12 @@
     "stale": "No current value",
     "truncated": "Earlier debug output was discarded.",
     "output": "Debug output",
-    "noOutput": "No debug output yet."
+    "noOutput": "No debug output yet.",
+    "launch": "Launch",
+    "noBreakpoints": "No breakpoints",
+    "inspectWhenPaused": "Pause the program to add breakpoints",
+    "notPaused": "The program is not paused. Pause it to see where it is.",
+    "notStarted": "Debugging has not started"
   },
   "cmake": {
     "workspaceDirectory": "Workspace directory",
@@ -81,7 +86,7 @@
     "run": "Run",
     "cancel": "Cancel",
     "save": "Save",
-    "settings": "Toolchain and run settings",
+    "settings": "Settings",
     "cmakePath": "CMake executable",
     "ctestPath": "CTest executable",
     "cCompilerPath": "C compiler (GCC)",
@@ -189,7 +194,18 @@
     "variantCompatibility": "Configuration compatibility",
     "descriptionAlias": "This description was read as long. The configuration file is unchanged.",
     "descriptionShadowed": "Both fields are present; long takes precedence. The configuration file is unchanged.",
-    "supportedVariantFields": "Supported fields at this location"
+    "supportedVariantFields": "Supported fields at this location",
+    "problems": "Problems",
+    "noProblems": "No errors or warnings found",
+    "consoleIdle": "Nothing has run yet. Click Build above to start.",
+    "openFile": "Open file",
+    "showInOutput": "Show in output",
+    "runSection": "Run",
+    "buildSection": "Build",
+    "editSettings": "Edit",
+    "allTargets": "All targets",
+    "settingsSaved": "All changes saved",
+    "runExecutablePlaceholder": "e.g. app.exe or bin/app.exe"
   },
   "unknownFile": "Unknown file",
   "newFile": "New File",
@@ -408,6 +424,10 @@
     "saveAndConnect": "Save and connect",
     "portPlaceholder": "Select or enter a port",
     "noPorts": "No serial ports found",
-    "namePlaceholder": "Optional"
+    "namePlaceholder": "Optional",
+    "statsReceived": "Received: total · rate over 3 s · frames",
+    "statsSent": "Sent: total · rate over 3 s · frames",
+    "frameCount_one": "{{count}} frame",
+    "frameCount_other": "{{count}} frames"
   }
 }

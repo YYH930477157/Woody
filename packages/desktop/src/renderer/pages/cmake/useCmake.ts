@@ -215,3 +215,5 @@ export function useCmake(projectPath: string) {
       }),
   };
 }
+
+export type CmakeState = ReturnType<typeof useCmake>;

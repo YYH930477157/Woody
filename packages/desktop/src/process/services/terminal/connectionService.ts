@@ -357,6 +357,19 @@ export class TerminalConnectionService {
     return this.snapshot(state);
   }
 
+  /**
+   * Size the shell's pseudo-terminal to the view. Only the screen layout changes, so this needs no write authority:
+   * the user may resize while AI holds the connection.
+   */
+  async resize(id: string, cols: number, rows: number): Promise<void> {
+    const state = this.connection(id);
+    if (state.info.status !== 'open') throw new Error('Terminal connection is closed');
+    if (state.info.profile.kind !== 'shell') throw new Error('Resizing applies to shell connections only');
+    if (![cols, rows].every((value) => Number.isInteger(value) && value >= 2 && value <= 1000))
+      throw new Error('Invalid terminal size');
+    await state.transport.resize?.(cols, rows);
+  }
+
   /** Interrupt the underlying shell only while the caller still has write authority. */
   async interrupt(id: string, actor?: TerminalActor): Promise<void> {
     const state = this.authorizeControl(id, actor);

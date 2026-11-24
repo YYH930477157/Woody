@@ -126,6 +126,9 @@ export async function createNativeTransport(profile: TerminalProfile): Promise<T
         if (closed) throw new Error('terminal.disconnected');
         terminal.write('\x03');
       },
+      resize: async (cols, rows) => {
+        if (!closed) terminal.resize(cols, rows);
+      },
       close: async () => {
         if (!closed) terminal.kill();
       },

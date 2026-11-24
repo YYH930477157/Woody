@@ -1,10 +1,12 @@
 # GDB Workbench
 
-The CMake workbench has Build and Debug tabs. Opening Debug only reads the shared session status. GDB starts after the user selects Start debugging or an authorized AI requests a start.
+The CMake workbench has Build, Debug and Settings views. Opening Debug only reads the shared session status.
+
+The Debug view has the session controls and state in its toolbar, the launch settings, breakpoints and watches in the sidebar, and the current location, call stack, locals, memory and debug output on the right. Selecting the current file opens it at the paused line in the preview beside the chat. GDB starts after the user selects Start debugging or an authorized AI requests a start.
 
 ## Local setup
 
-Install a compatible GDB locally. Set the GDB executable in Debug, or leave it empty for local discovery. Use a Debug build with symbols and select the executable and arguments in the saved CMake configuration. Arguments use one line per argument. The Save toolbar button saves these settings without starting a debugger, ready for a later manual or AI start. Start debugging also saves the current configuration first; a save failure prevents launch.
+Install a compatible GDB locally. Set the GDB executable in Debug, or leave it empty for local discovery. Use a Debug build with symbols and select the executable and arguments in the saved CMake configuration. Arguments use one line per argument. The Save button on the launch card saves these settings without starting a debugger, ready for a later manual or AI start. Start debugging also saves the current configuration first; a save failure prevents launch.
 
 The debugger launches the selected executable from its CMake build directory. It does not attach to existing processes. Only one GDB session can run in the application. Builds and debugging cannot run concurrently for the same project. Configuration and build controls remain disabled while that project's debugger is active.
 

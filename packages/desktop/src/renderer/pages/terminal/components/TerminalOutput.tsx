@@ -25,7 +25,9 @@ function Badge({ frame }: { frame: TerminalFrame }) {
     <span
       className={classNames(
         'shrink-0 select-none inline-flex items-center gap-3px h-18px mt-1px px-6px rd-4px text-11px font-600 leading-none',
-        outgoing ? 'bg-primary-light-1 text-primary' : 'bg-success-light-1 text-success'
+        outgoing
+          ? 'bg-[var(--console-hover)] text-[var(--console-info)]'
+          : 'bg-[var(--console-hover)] text-[var(--console-success)]'
       )}
     >
       {outgoing && frame.source === 'ai' && <Robot theme='outline' fill='currentColor' size='11' />}
@@ -37,14 +39,14 @@ function Badge({ frame }: { frame: TerminalFrame }) {
 function Divider({ timestamp, error, showTime }: { timestamp: number; error?: string; showTime: boolean }) {
   const { t } = useTranslation();
   return (
-    <div className='flex items-center gap-10px my-8px text-12px text-t-tertiary select-none'>
-      <span className='h-1px flex-1 bg-3' />
+    <div className='flex items-center gap-10px my-8px text-12px text-[var(--console-muted)] select-none'>
+      <span className='h-1px flex-1 bg-[var(--console-border)]' />
       <span>
         {showTime && `${formatClock(timestamp)} · `}
         {t('tools.terminal.disconnectedLine')}
         {error ? ` · ${error}` : ''}
       </span>
-      <span className='h-1px flex-1 bg-3' />
+      <span className='h-1px flex-1 bg-[var(--console-border)]' />
     </div>
   );
 }
@@ -52,14 +54,16 @@ function Divider({ timestamp, error, showTime }: { timestamp: number; error?: st
 function TextLine({ line, showTime }: { line: TerminalTextLine; showTime: boolean }) {
   return (
     <div className='flex gap-12px min-h-20px font-mono'>
-      {showTime && <span className='shrink-0 select-none text-t-tertiary'>{formatClock(line.timestamp)}</span>}
+      {showTime && (
+        <span className='shrink-0 select-none text-[var(--console-muted)]'>{formatClock(line.timestamp)}</span>
+      )}
       <div className='min-w-0 flex-1 whitespace-pre-wrap break-all'>
         {line.segments.map((segment, index) => (
-          <span key={index} className={segment.direction === 'outgoing' ? 'text-primary' : undefined}>
+          <span key={index} className={segment.direction === 'outgoing' ? 'text-[var(--console-info)]' : undefined}>
             {segment.text}
           </span>
         ))}
-        {line.error && <span className='text-danger'> {line.error}</span>}
+        {line.error && <span className='text-[var(--console-error)]'> {line.error}</span>}
       </div>
     </div>
   );
@@ -85,9 +89,11 @@ function FrameRow({
     );
   };
   return (
-    <div className='group flex items-start gap-10px -mx-8px px-8px py-3px rd-6px hover:bg-fill-1'>
+    <div className='group flex items-start gap-10px -mx-8px px-8px py-3px rd-6px hover:bg-[var(--console-hover)]'>
       {showTime && (
-        <span className='shrink-0 select-none font-mono text-t-tertiary'>{formatClock(frame.timestamp)}</span>
+        <span className='shrink-0 select-none font-mono text-[var(--console-muted)]'>
+          {formatClock(frame.timestamp)}
+        </span>
       )}
       <Badge frame={frame} />
       <div className='min-w-0 flex-1'>
@@ -96,9 +102,11 @@ function FrameRow({
         ) : (
           <div className='font-mono break-all'>{hex}</div>
         )}
-        {frame.status === 'failed' && frame.error && <div className='text-12px text-danger'>{frame.error}</div>}
+        {frame.status === 'failed' && frame.error && (
+          <div className='text-12px text-[var(--console-error)]'>{frame.error}</div>
+        )}
       </div>
-      <span className='shrink-0 select-none text-12px leading-20px text-t-tertiary tabular-nums'>
+      <span className='shrink-0 select-none text-12px leading-20px text-[var(--console-muted)] tabular-nums'>
         {t('tools.terminal.byteCount', { count: frame.bytes.length })}
       </span>
       <div className='shrink-0 flex items-center gap-2px opacity-0 group-hover:opacity-100 transition-opacity'>
@@ -107,6 +115,7 @@ function FrameRow({
             size='mini'
             type='text'
             aria-label={t('common.copy')}
+            className='!text-[var(--console-muted)] hover:!text-[var(--console-fg)]'
             icon={<Copy theme='outline' fill='currentColor' size='13' />}
             onClick={copy}
           />
@@ -117,6 +126,7 @@ function FrameRow({
               size='mini'
               type='text'
               aria-label={t('tools.terminal.resend')}
+              className='!text-[var(--console-muted)] hover:!text-[var(--console-fg)]'
               icon={<Redo theme='outline' fill='currentColor' size='13' />}
               onClick={() => onResend(frame)}
             />
@@ -178,7 +188,7 @@ export default function TerminalOutput({
       <div
         role='log'
         aria-label={t('tools.terminal.output')}
-        className='flex-1 min-h-160px flex-center px-20px text-13px text-t-tertiary select-none'
+        className='flex-1 min-h-160px flex-center px-20px rd-8px border border-[var(--console-border)] bg-[var(--console-bg)] text-13px text-[var(--console-muted)] select-none'
       >
         {emptyText}
       </div>
@@ -186,7 +196,7 @@ export default function TerminalOutput({
   }
 
   return (
-    <div className='relative flex-1 min-h-0'>
+    <div className='relative flex-1 min-h-0 overflow-hidden rd-8px border border-[var(--console-border)] bg-[var(--console-bg)]'>
       <div
         ref={scroller}
         role='log'
@@ -196,7 +206,7 @@ export default function TerminalOutput({
           following.current = element.scrollHeight - element.scrollTop - element.clientHeight < FOLLOW_THRESHOLD_PX;
           if (following.current) setBehind(false);
         }}
-        className='h-full overflow-auto px-20px py-12px text-13px leading-20px text-t-primary'
+        className='h-full overflow-auto px-16px py-10px text-13px leading-20px text-[var(--console-fg)] selection:bg-[var(--console-selection)]'
       >
         {view.display === 'text'
           ? lines.map((line) =>

@@ -1,0 +1,194 @@
+/* A dark console: build output and the problems found in it. */
+.console {
+  flex: 1;
+  min-height: 280px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--console-border);
+  border-radius: 8px;
+  background: var(--console-bg);
+  color: var(--console-fg);
+}
+.header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 40px;
+  padding: 0 8px 0 4px;
+  border-bottom: 1px solid var(--console-border);
+  background: var(--console-bg-2);
+}
+.tab {
+  height: 40px !important;
+  padding: 0 12px !important;
+  border-radius: 0 !important;
+  color: var(--console-muted) !important;
+  background: transparent !important;
+  border-bottom: 2px solid transparent !important;
+}
+.tab:hover {
+  color: var(--console-fg) !important;
+}
+.tabActive {
+  color: var(--console-fg) !important;
+  border-bottom-color: var(--console-info) !important;
+}
+.count {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 6px;
+  font-size: 12px;
+}
+.countError {
+  color: var(--console-error);
+}
+.countWarning {
+  color: var(--console-warning);
+}
+.summary {
+  margin-left: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--console-muted);
+}
+.iconButton {
+  color: var(--console-muted) !important;
+}
+.iconButton:hover:not(:disabled) {
+  color: var(--console-fg) !important;
+  background: var(--console-hover) !important;
+}
+.notice {
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--console-warning);
+  background: var(--console-warning-bg);
+}
+.errorBanner {
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 96px;
+  overflow: auto;
+  color: var(--console-error);
+  background: var(--console-error-bg);
+}
+.body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+.scroll {
+  height: 100%;
+  overflow: auto;
+  outline: none;
+}
+.output {
+  padding: 10px 0;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 12px;
+  line-height: 1.65;
+}
+.line {
+  padding: 0 14px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.line::selection,
+.line *::selection {
+  background: var(--console-selection);
+}
+.command {
+  color: var(--console-info);
+}
+.error {
+  color: var(--console-error);
+  background: var(--console-error-bg);
+}
+.warning {
+  color: var(--console-warning);
+  background: var(--console-warning-bg);
+}
+.highlight {
+  box-shadow: inset 3px 0 0 var(--console-info);
+  background: var(--console-hover);
+}
+.empty {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  font-size: 13px;
+  color: var(--console-muted);
+  text-align: center;
+}
+.problems {
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+}
+.problem {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  padding: 7px 14px;
+  font-size: 12px;
+  line-height: 1.55;
+  cursor: pointer;
+  outline: none;
+}
+.problem:hover,
+.problem:focus-visible {
+  background: var(--console-hover);
+}
+.problemIcon {
+  padding-top: 2px;
+  display: flex;
+}
+.problemMessage {
+  overflow-wrap: anywhere;
+}
+.problemLocation {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--font-mono, ui-monospace, Menlo, Consolas, monospace);
+  color: var(--console-muted);
+}
+.problemActions {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+}
+.problem:hover .problemActions,
+.problem:focus-within .problemActions {
+  opacity: 1;
+}
+.jump {
+  position: absolute;
+  right: 16px;
+  bottom: 12px;
+}
+/* A small preformatted block on a light card, e.g. diagnostic JSON. */
+.snippet {
+  margin: 0;
+  max-height: 240px;
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: 6px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono, ui-monospace, Menlo, Consolas, monospace);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--console-fg);
+  background: var(--console-bg);
+}

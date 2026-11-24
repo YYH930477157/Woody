@@ -1,89 +1,189 @@
-.panel {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-width: 0;
-  color: var(--color-text-1);
+.controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border-base);
+  border-radius: 8px;
+  background: var(--bg-base);
 }
-.toolbar,
-.row,
+.controls :global(.arco-btn) {
+  width: 30px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.controls :global(.arco-btn:not(:disabled):hover) {
+  background: var(--bg-hover);
+}
 .access {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-width: 0;
-}
-.toolbar {
-  flex-wrap: wrap;
-}
-.toolbar :global(.arco-btn),
-.row :global(.arco-btn) {
-  width: 32px;
-  height: 32px;
-  flex: 0 0 32px;
-}
-.access {
-  margin-left: auto;
   font-size: 13px;
-  flex-wrap: wrap;
+  color: var(--text-secondary);
 }
-.settings,
-.inspection {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
-  gap: 12px;
+.statePaused {
+  color: var(--warning);
+}
+.form :global(.arco-form-item) {
+  margin-bottom: 10px;
+}
+.form :global(.arco-form-item:last-child) {
+  margin-bottom: 0;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
 }
-.section {
+.row :global(.arco-input-wrapper),
+.row :global(.arco-input) {
+  min-width: 0;
+}
+.row > :global(.arco-btn) {
+  flex: none;
+}
+.count {
+  width: 96px;
+  flex: none;
+}
+.list,
+.table {
   display: flex;
   flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+.item,
+.table li {
+  display: flex;
+  align-items: flex-start;
   gap: 8px;
   min-width: 0;
-  padding: 12px 0;
-  border-top: 1px solid var(--color-border-2);
-  font-size: 13px;
+  padding: 5px 4px;
+  border-radius: 6px;
+}
+.item:hover,
+.table li:hover {
+  background: var(--bg-hover);
+}
+.table {
+  max-height: 260px;
+  overflow: auto;
+}
+.badge {
+  flex: none;
+  min-width: 20px;
+  padding: 0 5px;
+  border-radius: 4px;
+  text-align: center;
+  font-size: 11px;
+  line-height: 18px;
+  color: var(--text-secondary);
+  background: var(--bg-2);
 }
 .grow {
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.row :global(.arco-input-wrapper) {
-  min-width: 0;
+.name {
+  flex: none;
+  font-weight: 600;
 }
-.count {
-  width: 84px;
-  flex: 0 0 84px;
+.where {
+  flex: none;
+  color: var(--color-text-3);
 }
-.metadata {
-  font-size: 12px;
-  overflow-wrap: anywhere;
-}
-.value,
-.values {
-  font-family: monospace;
+.value {
+  font-family: var(--font-mono, ui-monospace, Menlo, Consolas, monospace);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  margin: 0;
-  max-height: 220px;
-  overflow: auto;
+  color: var(--primary);
 }
 .stale {
   color: var(--color-text-3);
   font-size: 12px;
 }
-.output {
+.location {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.frameFunc {
+  font-family: var(--font-mono, ui-monospace, Menlo, Consolas, monospace);
+  font-size: 14px;
+  font-weight: 600;
+}
+.frameFile {
+  font-family: var(--font-mono, ui-monospace, Menlo, Consolas, monospace);
+}
+.executable {
+  margin-left: auto;
+}
+.inspection {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+  gap: 12px;
+}
+.memory {
   margin: 0;
-  padding: 12px;
-  min-height: 160px;
-  max-height: 40vh;
+  max-height: 200px;
   overflow: auto;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  background: var(--color-fill-1);
-  border: 1px solid var(--color-border-2);
-  border-radius: 4px;
-  font-family: monospace;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-family: var(--font-mono, ui-monospace, Menlo, Consolas, monospace);
   font-size: 12px;
   line-height: 1.6;
+  white-space: pre;
+  color: var(--console-fg);
+  background: var(--console-bg);
+}
+.console {
+  flex: 1;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--console-border);
+  border-radius: 8px;
+  background: var(--console-bg);
+}
+.consoleHeader {
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--console-muted);
+  border-bottom: 1px solid var(--console-border);
+  background: var(--console-bg-2);
+}
+.consoleNotice {
+  padding: 6px 14px;
+  font-size: 12px;
+  color: var(--console-warning);
+  background: var(--console-warning-bg);
+}
+.output {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 10px 14px;
+  overflow: auto;
+  outline: none;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono, ui-monospace, Menlo, Consolas, monospace);
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--console-fg);
+}
+.outputEmpty {
+  color: var(--console-muted);
 }

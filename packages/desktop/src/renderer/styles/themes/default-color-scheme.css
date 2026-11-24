@@ -71,6 +71,21 @@
   --fill-white-to-black: #ffffff; /* 白到黑填充色 */
   --border-special: var(--bg-3); /* 特殊边框色 */
   --color-guid-agent-bar: #eaecf7; /* 首页 Agent 选择条背景 - 亮色 */
+
+  /* Console Colors - build output, serial and shell views stay dark in both modes */
+  --console-bg: #1d1f24;
+  --console-bg-2: #25282e;
+  --console-fg: #d6d9df;
+  --console-muted: #8a909b;
+  --console-border: #33363d;
+  --console-hover: rgba(255, 255, 255, 0.06);
+  --console-selection: rgba(96, 165, 250, 0.3);
+  --console-error: #f47c7c;
+  --console-error-bg: rgba(244, 124, 124, 0.12);
+  --console-warning: #f5c35b;
+  --console-warning-bg: rgba(245, 195, 91, 0.1);
+  --console-info: #6cb2ff;
+  --console-success: #5fd38d;
 }
 
 /* Dark Mode */
@@ -143,4 +158,19 @@
   --fill-0: rgba(255, 255, 255, 0.08); /* 填充色 0 - 暗色模式下为半透明白色 */
   --fill-white-to-black: #000000; /* 白到黑填充色（暗色模式下为黑色） */
   --border-special: #60677e; /* 特殊边框色 */
+
+  /* Console Colors - a step darker than the app background so the console still reads as its own area */
+  --console-bg: #121317;
+  --console-bg-2: #1b1d22;
+  --console-fg: #d6d9df;
+  --console-muted: #868c97;
+  --console-border: #2c2f36;
+  --console-hover: rgba(255, 255, 255, 0.05);
+  --console-selection: rgba(96, 165, 250, 0.3);
+  --console-error: #f47c7c;
+  --console-error-bg: rgba(244, 124, 124, 0.12);
+  --console-warning: #f5c35b;
+  --console-warning-bg: rgba(245, 195, 91, 0.1);
+  --console-info: #6cb2ff;
+  --console-success: #5fd38d;
 }

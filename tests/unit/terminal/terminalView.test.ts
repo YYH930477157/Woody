@@ -5,10 +5,13 @@ import {
   buildTextLines,
   describeProfile,
   displayedTerminalEvents,
+  formatByteRate,
   formatByteSize,
+  formatDuration,
   groupTerminalFrames,
   parseHexInput,
   renderTerminalEvents,
+  tallyFrames,
   terminalKeyInput,
   toHex,
 } from '../../../packages/desktop/src/renderer/pages/terminal/terminalView';
@@ -273,5 +276,36 @@ describe('terminal input and labels', () => {
       '2.0 KB',
       '3.0 MB',
     ]);
+  });
+});
+
+describe('terminal status counters', () => {
+  it('counts frames incrementally exactly as the HEX view groups them', () => {
+    const events = [
+      timed('AB', 2, 100),
+      timed('CD', 4, 110),
+      timed('EF', 6, 200),
+      timed([0x68], 7, 210, 'outgoing', 'manual'),
+      timed([0x16], 8, 210, 'outgoing', 'manual'),
+      timed('GH', 10, 215),
+      timed('', 10, 300, 'system'),
+      timed('IJ', 12, 305),
+    ];
+    const frames = groupTerminalFrames(events, 30);
+    const expected = {
+      rx: frames.filter((frame) => frame.direction === 'incoming').length,
+      tx: frames.filter((frame) => frame.direction === 'outgoing').length,
+    };
+    const split = tallyFrames(tallyFrames({ rx: 0, tx: 0 }, events.slice(0, 3), 30), events.slice(3), 30);
+    expect({ rx: split.rx, tx: split.tx }).toEqual(expected);
+    expect(expected).toEqual({ rx: 4, tx: 1 });
+  });
+
+  it('formats rates and connection time', () => {
+    expect(formatByteRate(0)).toBe('0 B/s');
+    expect(formatByteRate(1536)).toBe('1.5 KB/s');
+    expect(formatDuration(65_400)).toBe('1:05');
+    expect(formatDuration(3_725_000)).toBe('1:02:05');
+    expect(formatDuration(-5)).toBe('0:00');
   });
 });

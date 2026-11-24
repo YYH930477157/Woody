@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button } from '@arco-design/web-react';
 import { Robot, Terminal, Usb } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
@@ -15,8 +15,10 @@ import IconText from './components/IconText';
 import ProfileEditor, { newTerminalProfile } from './components/ProfileEditor';
 import SessionHeader from './components/SessionHeader';
 import SessionSidebar from './components/SessionSidebar';
+import ShellTerminal from './components/ShellTerminal';
 import TerminalComposer, { type ComposerInputMode, type ComposerWait } from './components/TerminalComposer';
 import TerminalOutput from './components/TerminalOutput';
+import TerminalStatusBar from './components/TerminalStatusBar';
 import { describeProfile, displayedTerminalEvents, parseHexInput, renderTerminalEvents, toHex } from './terminalView';
 import { useTerminal } from './useTerminal';
 import {
@@ -47,8 +49,9 @@ export default function TerminalPanel({
 }) {
   const { t, i18n } = useTranslation();
   const label = (key: string, options?: Record<string, unknown>) => t(`tools.terminal.${key}`, options);
-  const model = useTerminal();
   const prefs = useTerminalPreferences();
+  const model = useTerminal(prefs.view.serial.frameGapMs);
+  const [clearKey, setClearKey] = useState(0);
   const [editing, setEditing] = useState<{ profile: TerminalProfile; isNew: boolean }>();
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const draftRevisions = useRef<Record<string, number>>({});
@@ -257,6 +260,40 @@ export default function TerminalPanel({
     void run(() => transmit(connection, payload(command.data, command.encoding, command.ending)));
   };
 
+  // Keystrokes from the shell view: sent in order, batching whatever is typed while a write is in flight.
+  const shellQueue = useRef<{ id: string; pending: string; busy: boolean }>({ id: '', pending: '', busy: false });
+  const sendShellInput = useCallback(
+    (id: string, data: string) => {
+      const queue = shellQueue.current;
+      if (queue.id !== id) Object.assign(queue, { id, pending: '', busy: false });
+      queue.pending += data;
+      if (queue.busy) return;
+      const flush = (): void => {
+        if (!queue.pending || queue.id !== id) {
+          queue.busy = false;
+          model.refresh();
+          return;
+        }
+        const chunk = queue.pending;
+        queue.pending = '';
+        queue.busy = true;
+        ipcBridge.terminal.send
+          .invoke({ id, request: { data: chunk, encoding: 'utf8', ending: 'none' } })
+          .catch((error: unknown) => {
+            model.report(new Error(localizeError(error instanceof Error ? error.message : String(error))));
+          })
+          .finally(flush);
+      };
+      flush();
+    },
+    // localizeError only reads translations; the model callbacks are stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [model.report, model.refresh]
+  );
+  const resizeShell = useCallback((id: string, cols: number, rows: number) => {
+    void ipcBridge.terminal.resize.invoke({ id, cols, rows }).catch((): void => undefined);
+  }, []);
+
   const exportLog = async () => {
     if (!selected) return;
     const records = [];
@@ -422,7 +459,10 @@ export default function TerminalPanel({
               canGrant={Boolean(conversationId)}
               onBaudChange={changeBaud}
               onViewChange={(patch) => prefs.updateView(kind, patch)}
-              onClear={model.clear}
+              onClear={() => {
+                model.clear();
+                setClearKey((key) => key + 1);
+              }}
               onExport={() => void run(exportLog)}
               onDisconnect={() =>
                 void run(async () => {
@@ -462,53 +502,72 @@ export default function TerminalPanel({
                 {label('historyLost')}
               </div>
             )}
-            <TerminalOutput
-              events={displayedTerminalEvents(model.events, kind === 'serial' && effectiveInputMode === 'keys')}
-              view={view}
-              emptyText={label(selected.status === 'open' ? 'waitingOutput' : 'closedOutput')}
-              onResend={
-                enabled
-                  ? (frame) =>
-                      void run(() => transmit(selected, { data: toHex(frame.bytes), encoding: 'hex', ending: 'none' }))
-                  : undefined
-              }
-            />
-            <TerminalComposer
-              kind={kind}
-              enabled={Boolean(enabled)}
-              disabledReason={label(selected.status !== 'open' ? 'notConnected' : 'aiControlling')}
-              value={drafts[selected.id] ?? ''}
-              onValueChange={(value) => {
-                draftRevisions.current[selected.id] = (draftRevisions.current[selected.id] ?? 0) + 1;
-                setDrafts((previous) => ({ ...previous, [selected.id]: value }));
-              }}
-              encoding={encoding}
-              onEncodingChange={(next) => prefs.updateView(kind, { encoding: next })}
-              ending={view.ending}
-              onEndingChange={(ending) => prefs.updateView(kind, { ending })}
-              inputMode={effectiveInputMode}
-              onInputModeChange={setInputMode}
-              backspace={view.backspace}
-              onBackspaceChange={(backspace) => prefs.updateView(kind, { backspace })}
-              wait={wait}
-              onWaitChange={setWait}
-              slowSend={slowSend}
-              onSlowSendChange={setSlowSend}
-              sending={sending}
-              history={prefs.history[kind]}
-              onSend={send}
-              onSendKeys={sendKeys}
-              onCancelWait={() => void run(() => ipcBridge.terminal.cancel.invoke({ id: selected.id }))}
-              onInterrupt={() => void run(() => ipcBridge.terminal.interrupt.invoke({ id: selected.id }))}
-              quickCommands={prefs.quickCommands.filter((command) => command.kind === kind)}
-              onRunQuick={runQuick}
-              onSaveQuick={(name) =>
-                prefs.saveQuickCommand({ kind, name, data: drafts[selected.id] ?? '', encoding, ending: view.ending })
-              }
-              onRemoveQuick={prefs.removeQuickCommand}
-              counters={model.counters}
-              result={results[selected.id]}
-            />
+            <div className='flex-1 min-h-0 flex flex-col px-16px py-12px'>
+              {kind === 'shell' ? (
+                <ShellTerminal
+                  key={selected.id}
+                  events={model.events}
+                  enabled={Boolean(enabled)}
+                  clearKey={clearKey}
+                  ariaLabel={label('output')}
+                  disconnectedText={label('disconnectedLine')}
+                  onInput={(data) => sendShellInput(selected.id, data)}
+                  onResize={(cols, rows) => resizeShell(selected.id, cols, rows)}
+                />
+              ) : (
+                <TerminalOutput
+                  events={displayedTerminalEvents(model.events, effectiveInputMode === 'keys')}
+                  view={view}
+                  emptyText={label(selected.status === 'open' ? 'waitingOutput' : 'closedOutput')}
+                  onResend={
+                    enabled
+                      ? (frame) =>
+                          void run(() =>
+                            transmit(selected, { data: toHex(frame.bytes), encoding: 'hex', ending: 'none' })
+                          )
+                      : undefined
+                  }
+                />
+              )}
+            </div>
+            {kind === 'serial' && (
+              <TerminalComposer
+                kind={kind}
+                enabled={Boolean(enabled)}
+                disabledReason={label(selected.status !== 'open' ? 'notConnected' : 'aiControlling')}
+                value={drafts[selected.id] ?? ''}
+                onValueChange={(value) => {
+                  draftRevisions.current[selected.id] = (draftRevisions.current[selected.id] ?? 0) + 1;
+                  setDrafts((previous) => ({ ...previous, [selected.id]: value }));
+                }}
+                encoding={encoding}
+                onEncodingChange={(next) => prefs.updateView(kind, { encoding: next })}
+                ending={view.ending}
+                onEndingChange={(ending) => prefs.updateView(kind, { ending })}
+                inputMode={effectiveInputMode}
+                onInputModeChange={setInputMode}
+                backspace={view.backspace}
+                onBackspaceChange={(backspace) => prefs.updateView(kind, { backspace })}
+                wait={wait}
+                onWaitChange={setWait}
+                slowSend={slowSend}
+                onSlowSendChange={setSlowSend}
+                sending={sending}
+                history={prefs.history[kind]}
+                onSend={send}
+                onSendKeys={sendKeys}
+                onCancelWait={() => void run(() => ipcBridge.terminal.cancel.invoke({ id: selected.id }))}
+                onInterrupt={() => void run(() => ipcBridge.terminal.interrupt.invoke({ id: selected.id }))}
+                quickCommands={prefs.quickCommands.filter((command) => command.kind === kind)}
+                onRunQuick={runQuick}
+                onSaveQuick={(name) =>
+                  prefs.saveQuickCommand({ kind, name, data: drafts[selected.id] ?? '', encoding, ending: view.ending })
+                }
+                onRemoveQuick={prefs.removeQuickCommand}
+                result={results[selected.id]}
+              />
+            )}
+            <TerminalStatusBar connection={selected} counters={model.counters} />
           </>
         ) : (
           emptyState
