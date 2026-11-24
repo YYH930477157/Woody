@@ -11,7 +11,7 @@ import { useConversationRuntimeView } from '@/renderer/pages/conversation/runtim
 import { getChatSurfaceWidthClass } from '@/renderer/pages/conversation/utils/chatSurfaceWidth';
 import { iconColors } from '@/renderer/styles/colors';
 import { CHAT_MESSAGE_JUMP_EVENT, type ChatMessageJumpDetail } from '@/renderer/utils/chat/chatMinimapEvents';
-import { collectAiCopyRows, type TurnCopyItem } from '@/renderer/utils/chat/turnCopy';
+import { collectAiCopyRows, startsAgentTurn, type TurnCopyItem } from '@/renderer/utils/chat/turnCopy';
 import { Image } from '@arco-design/web-react';
 import { Down } from '@icon-park/react';
 import MessageAcpPermission from '@renderer/pages/conversation/Messages/acp/MessageAcpPermission';
@@ -182,7 +182,9 @@ export const mergeTurnActivities = (items: Array<IMessageVO>): Array<IMessageVO>
       summary.sourceMessageIds.push(...item.sourceMessageIds);
     } else {
       merged.push(item);
-      if ('position' in item && item.position === 'right') {
+      // A team member's chat has no user message: each turn opens with a
+      // teammate message instead, so that must close the summary too.
+      if (startsAgentTurn(item)) {
         activeSummary = undefined;
       }
     }
@@ -770,8 +772,12 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
       );
     }
     const message = item as TMessage;
-    // User messages keep their own copy row; AI text only shows it at the turn end.
-    const showCopyRow = message.position !== 'left' || message.type !== 'text' || aiCopyRowTextIds.has(message.id);
+    // User and teammate messages keep their own copy row; AI text only shows it at the turn end.
+    const showCopyRow =
+      message.position !== 'left' ||
+      message.type !== 'text' ||
+      startsAgentTurn(message) ||
+      aiCopyRowTextIds.has(message.id);
     return (
       <MessageItem
         message={message}

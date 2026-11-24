@@ -35,11 +35,26 @@ export interface AiCopyRows {
 const PSEUDO_TYPES = new Set(['file_summary', 'tool_summary', 'artifact']);
 
 /**
- * Group the visible timeline into AI turns. A turn runs until the next user
- * (right) message; tool/thinking/pseudo items neither end it nor contribute
- * text. While the conversation is still streaming, the final turn's row (and
- * its texts) is withheld so the row does not appear and then shift down as
- * more text streams in.
+ * Whether a timeline item hands the agent new work and so opens a new turn:
+ * the user's own message, or, in a team, a message from another member or the
+ * team itself. Those arrive on the left, so position alone would run every
+ * turn of a member's chat together.
+ */
+export function startsAgentTurn(item: TurnCopyItem): boolean {
+  if (item.position === 'right') return true;
+  return (
+    item.position === 'left' &&
+    item.type === 'text' &&
+    (item.content as { teammateMessage?: unknown } | undefined)?.teammateMessage === true
+  );
+}
+
+/**
+ * Group the visible timeline into AI turns. A turn runs until the next message
+ * that starts one (see `startsAgentTurn`); tool/thinking/pseudo items neither
+ * end it nor contribute text. While the conversation is still streaming, the
+ * final turn's row (and its texts) is withheld so the row does not appear and
+ * then shift down as more text streams in.
  */
 export function collectAiCopyRows(items: TurnCopyItem[], isProcessing: boolean): AiCopyRows {
   const copyRowIds = new Set<string>();
@@ -60,7 +75,7 @@ export function collectAiCopyRows(items: TurnCopyItem[], isProcessing: boolean):
     if (item.type && PSEUDO_TYPES.has(item.type)) {
       continue;
     }
-    if (item.position === 'right') {
+    if (startsAgentTurn(item)) {
       flush();
       continue;
     }

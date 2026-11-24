@@ -241,6 +241,14 @@ function createToolGroup(content: IMessageToolGroup['content'], id = 'tool-group
   };
 }
 
+function teammate(id: string, created_at: number) {
+  return { id, type: 'text', position: 'left', content: { content: id, teammateMessage: true }, created_at };
+}
+
+function thinking(id: string, status: 'thinking' | 'done', created_at: number) {
+  return { id, type: 'thinking', position: 'left', content: { content: id, status }, created_at };
+}
+
 function Wrapper({
   children,
   messages = [createTextMessage()],
@@ -366,6 +374,54 @@ describe('MessageList', () => {
       expect(finalSummary.activities.map((activity) => activity.type)).toEqual(['thinking']);
       expect(finalSummary.sourceMessageIds).toEqual(['thinking-3']);
     }
+  });
+
+  it('starts a new activity summary at each teammate message in a team chat', () => {
+    // A member chat has no user (right) message: every turn is opened by a
+    // message from the lead or the team, which arrives on the left.
+    const reply = { id: 'reply-1', type: 'text', position: 'left', content: { content: 'reply' }, created_at: 3 };
+
+    const merged = mergeTurnActivities([
+      teammate('lead-1', 1),
+      thinking('thinking-1', 'done', 2),
+      reply,
+      thinking('thinking-2', 'done', 4),
+      teammate('lead-2', 5),
+      thinking('thinking-3', 'thinking', 6),
+    ] as unknown as Parameters<typeof mergeTurnActivities>[0]);
+
+    expect(merged.map((item) => item.id)).toEqual([
+      'lead-1',
+      'turn-activity-thinking-1',
+      'reply-1',
+      'lead-2',
+      'turn-activity-thinking-3',
+    ]);
+    const [, firstSummary, , , secondSummary] = merged;
+    if (firstSummary.type !== 'turn_activity_summary' || secondSummary.type !== 'turn_activity_summary') {
+      throw new Error('expected two activity summaries');
+    }
+    expect(firstSummary.sourceMessageIds).toEqual(['thinking-1', 'thinking-2']);
+    expect(secondSummary.sourceMessageIds).toEqual(['thinking-3']);
+  });
+
+  it('keeps finished team turns collapsed while a later turn runs', () => {
+    const messages = [
+      teammate('lead-1', 1),
+      thinking('think-1', 'done', 2),
+      { id: 'reply-1', type: 'text', position: 'left', content: { content: 'done one' }, created_at: 3 },
+      teammate('lead-2', 4),
+      thinking('think-2', 'thinking', 5),
+    ] as unknown as IMessageText[];
+
+    const { container } = render(<MessageList />, {
+      wrapper: ({ children }) => <Wrapper messages={messages}>{children}</Wrapper>,
+    });
+
+    const bodies = container.querySelectorAll('.turn-activity-summary__body');
+    expect(bodies).toHaveLength(2);
+    expect(bodies[0]).toHaveClass('turn-activity-summary__body--collapsed');
+    expect(bodies[1]).not.toHaveClass('turn-activity-summary__body--collapsed');
   });
 
   it('never renders a plan as a stream row (it belongs to ConversationPlanBar)', () => {
@@ -497,6 +553,23 @@ describe('MessageList', () => {
     expect(screen.getByTestId('msgtext-user-1').getAttribute('data-copy-row')).toBe('true');
     // Turn 2's only/last text keeps the row.
     expect(screen.getByTestId('msgtext-text-c').getAttribute('data-copy-row')).toBe('true');
+  });
+
+  it('gives each teammate message its own copy row and ends the reply turn there', () => {
+    const messages = [
+      teammate('lead-1', 1),
+      { id: 'reply-1', type: 'text', position: 'left', content: { content: 'reply one' }, created_at: 2 },
+      teammate('lead-2', 3),
+      { id: 'reply-2', type: 'text', position: 'left', content: { content: 'reply two' }, created_at: 4 },
+    ] as unknown as IMessageText[];
+
+    render(<MessageList />, {
+      wrapper: ({ children }) => <Wrapper messages={messages}>{children}</Wrapper>,
+    });
+
+    for (const id of ['lead-1', 'reply-1', 'lead-2', 'reply-2']) {
+      expect(screen.getByTestId('msgtext-' + id)).toHaveAttribute('data-copy-row', 'true');
+    }
   });
 
   it('propagates fork anchors carried by thinking messages inside merged turn activity summaries', () => {

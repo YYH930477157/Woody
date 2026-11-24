@@ -11,6 +11,12 @@ const user = (id: string) => ({ id, type: 'text', position: 'right', content: { 
 const aiText = (id: string, content: string) => ({ id, type: 'text', position: 'left', content: { content } });
 const tool = (id: string) => ({ id, type: 'tool_call', position: 'left', content: {} });
 const thinking = (id: string) => ({ id, type: 'thinking', position: 'left', content: { content: 'hmm' } });
+const teammate = (id: string, content: string) => ({
+  id,
+  type: 'text',
+  position: 'left',
+  content: { content, teammateMessage: true },
+});
 
 describe('collectAiCopyRows', () => {
   it('puts the row on a simple single-text turn and carries its text', () => {
@@ -46,6 +52,17 @@ describe('collectAiCopyRows', () => {
     );
     expect([...copyRowIds]).toEqual(['a1']);
     expect(turnTextsById.has('b1')).toBe(false);
+  });
+
+  it('starts a new turn at each teammate message and never copies it as reply text', () => {
+    // A team member's chat has no user message: the lead's messages open its turns.
+    const { copyRowIds, turnTextsById } = collectAiCopyRows(
+      [teammate('m1', 'task one'), aiText('a1', 'reply one'), teammate('m2', 'task two'), aiText('b1', 'reply two')],
+      false
+    );
+    expect([...copyRowIds]).toEqual(['a1', 'b1']);
+    expect(turnTextsById.get('a1')).toEqual(['reply one']);
+    expect(turnTextsById.get('b1')).toEqual(['reply two']);
   });
 
   it('ignores pseudo entries without breaking the turn', () => {
