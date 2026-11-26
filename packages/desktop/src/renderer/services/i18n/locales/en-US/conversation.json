@@ -572,6 +572,69 @@
     "complete": "Thought complete",
     "label": "Thinking..."
   },
+  "process": {
+    "turn": {
+      "running": "Working, {{duration}} so far ···",
+      "runningNoTime": "Working ···",
+      "done": "Done in {{duration}}",
+      "doneNoTime": "Done",
+      "show": "Show the steps of this turn",
+      "hide": "Hide the steps of this turn"
+    },
+    "running": {
+      "analysis": "Analyzing the request",
+      "read": "Reading files",
+      "readImage": "Reading images",
+      "search": "Searching code",
+      "write": "Writing files",
+      "edit": "Editing files",
+      "commands": "Running commands",
+      "code": "Running code",
+      "webSearch": "Searching the web",
+      "webFetch": "Fetching web pages",
+      "subagents": "Coordinating agents",
+      "plan": "Updating the plan",
+      "questions": "Waiting for you",
+      "tools": "Calling tools"
+    },
+    "done": {
+      "analysis": "Finished analysis",
+      "read": "Read files",
+      "readImage": "Read images",
+      "search": "Searched code",
+      "write": "Wrote files",
+      "edit": "Edited files",
+      "commands": "Ran commands",
+      "code": "Ran code",
+      "webSearch": "Searched the web",
+      "webFetch": "Fetched web pages",
+      "subagents": "Coordinated agents",
+      "plan": "Updated the plan",
+      "questions": "Asked you a question",
+      "tools": "Called tools"
+    },
+    "doneFollowing": {
+      "analysis": "finished analysis",
+      "read": "read files",
+      "readImage": "read images",
+      "search": "searched code",
+      "write": "wrote files",
+      "edit": "edited files",
+      "commands": "ran commands",
+      "code": "ran code",
+      "webSearch": "searched the web",
+      "webFetch": "fetched web pages",
+      "subagents": "coordinated agents",
+      "plan": "updated the plan",
+      "questions": "asked you a question",
+      "tools": "called tools"
+    },
+    "join": {
+      "two": "{{first}} and {{second}}",
+      "three": "{{first}}, {{second}}, {{third}}",
+      "more": "{{first}}, {{second}}, {{third}} and more"
+    }
+  },
   "skills": {
     "loaded": "Loaded Skills",
     "slashHint": "Skill"

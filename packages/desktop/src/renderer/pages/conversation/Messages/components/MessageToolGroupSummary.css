@@ -76,6 +76,16 @@
   background: var(--aou-1);
 }
 
+/* Inside a process group the calls are plain rows: the group is the card. */
+.tool-group-summary__body.tool-group-summary__body--flat,
+[data-theme='dark'] .tool-group-summary__body.tool-group-summary__body--flat {
+  gap: 4px;
+  padding: 0;
+  margin: 0;
+  background: none;
+  border-radius: 0;
+}
+
 .tool-detail-panel {
   border-inline-start: 2px solid var(--color-border-2, #e5e6eb);
   padding-inline-start: 10px;

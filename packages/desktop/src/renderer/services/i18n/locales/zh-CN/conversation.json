@@ -572,6 +572,69 @@
     "complete": "思考完成",
     "label": "思考中..."
   },
+  "process": {
+    "turn": {
+      "running": "正在处理，已用时 {{duration}} ···",
+      "runningNoTime": "正在处理 ···",
+      "done": "已完成，用时 {{duration}}",
+      "doneNoTime": "已完成",
+      "show": "展开这一轮的过程",
+      "hide": "收起这一轮的过程"
+    },
+    "running": {
+      "analysis": "正在分析请求",
+      "read": "正在读取文件",
+      "readImage": "正在读取图片",
+      "search": "正在搜索代码",
+      "write": "正在写入文件",
+      "edit": "正在编辑文件",
+      "commands": "正在运行命令",
+      "code": "正在运行代码",
+      "webSearch": "正在搜索网页",
+      "webFetch": "正在访问网页",
+      "subagents": "正在协调子代理",
+      "plan": "正在更新计划",
+      "questions": "等待你的操作",
+      "tools": "正在调用工具"
+    },
+    "done": {
+      "analysis": "已完成分析",
+      "read": "已读取文件",
+      "readImage": "已读取图片",
+      "search": "已搜索代码",
+      "write": "已写入文件",
+      "edit": "修改了文件",
+      "commands": "执行了命令",
+      "code": "运行了代码",
+      "webSearch": "已搜索网页",
+      "webFetch": "已访问网页",
+      "subagents": "已协调子代理",
+      "plan": "更新了计划",
+      "questions": "向你提出了问题",
+      "tools": "已调用工具"
+    },
+    "doneFollowing": {
+      "analysis": "完成分析",
+      "read": "读取文件",
+      "readImage": "读取图片",
+      "search": "搜索代码",
+      "write": "写入文件",
+      "edit": "修改了文件",
+      "commands": "执行了命令",
+      "code": "运行了代码",
+      "webSearch": "搜索网页",
+      "webFetch": "访问网页",
+      "subagents": "协调子代理",
+      "plan": "更新了计划",
+      "questions": "向你提出了问题",
+      "tools": "调用工具"
+    },
+    "join": {
+      "two": "{{first}}并{{second}}",
+      "three": "{{first}}，{{second}}，{{third}}",
+      "more": "{{first}}，{{second}}，{{third}}等"
+    }
+  },
   "skills": {
     "loaded": "已加载技能",
     "slashHint": "技能"

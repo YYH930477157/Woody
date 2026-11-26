@@ -46,7 +46,13 @@ import MessageCronTrigger from './components/MessageCronTrigger';
 import MessageSkillSuggest from './components/MessageSkillSuggest';
 import MessageText from './components/MessageText';
 import MessageThinking from './components/MessageThinking';
-import MessageTurnActivitySummary, { type TurnActivity } from './components/MessageTurnActivitySummary';
+import {
+  ProcessGroup,
+  TurnProcessControl,
+  groupTurnProcess,
+  type ProcessGroupItem,
+  type TurnProcessItem,
+} from './components/TurnProcess';
 import type { WriteFileResult } from './types';
 import { useAutoScroll } from './useAutoScroll';
 import SelectionReplyButton from './components/SelectionReplyButton';
@@ -61,13 +67,8 @@ type IMessageVO =
       sourceMessageIds: string[];
       created_at: number;
     }
-  | {
-      type: 'turn_activity_summary';
-      id: string;
-      activities: TurnActivity[];
-      sourceMessageIds: string[];
-      created_at: number;
-    };
+  | ProcessGroupItem
+  | TurnProcessItem;
 type IArtifactVO = { type: 'artifact'; id: string; artifact: IConversationArtifact; created_at: number };
 type IProcessedItem = IMessageVO | IArtifactVO;
 
@@ -128,6 +129,9 @@ const getProcessedItemSourceMessageIds = (item: IProcessedItem): string[] => {
   if ('type' in item && item.type === 'turn_activity_summary') {
     return item.sourceMessageIds;
   }
+  if ('type' in item && item.type === 'turn_process') {
+    return [];
+  }
   if ('type' in item && item.type === 'file_summary') {
     return item.sourceMessageIds;
   }
@@ -147,49 +151,13 @@ const getProcessedItemAnchorId = (item: IProcessedItem): string => {
 };
 
 const getProcessedItemCreatedAt = (item: IProcessedItem): number => {
-  if ('type' in item && ['file_summary', 'tool_summary', 'turn_activity_summary', 'artifact'].includes(item.type)) {
+  if (
+    'type' in item &&
+    ['file_summary', 'tool_summary', 'turn_activity_summary', 'turn_process', 'artifact'].includes(item.type)
+  ) {
     return item.created_at;
   }
   return item.created_at ?? 0;
-};
-
-export const mergeTurnActivities = (items: Array<IMessageVO>): Array<IMessageVO> => {
-  const merged: Array<IMessageVO> = [];
-  let activeSummary: Extract<IMessageVO, { type: 'turn_activity_summary' }> | undefined;
-
-  const ensureSummary = (id: string, createdAt: number) => {
-    if (activeSummary) return activeSummary;
-
-    activeSummary = {
-      type: 'turn_activity_summary',
-      id: 'turn-activity-' + id,
-      activities: [],
-      sourceMessageIds: [],
-      created_at: createdAt,
-    };
-    merged.push(activeSummary);
-    return activeSummary;
-  };
-
-  for (const item of items) {
-    if (item.type === 'thinking') {
-      const summary = ensureSummary(item.id, item.created_at ?? 0);
-      summary.activities.push({ type: 'thinking', message: item });
-      summary.sourceMessageIds.push(item.id);
-    } else if (item.type === 'tool_summary') {
-      const summary = ensureSummary(item.sourceMessageIds[0] ?? item.id, item.created_at);
-      summary.activities.push({ type: 'tools', messages: item.messages });
-      summary.sourceMessageIds.push(...item.sourceMessageIds);
-    } else {
-      merged.push(item);
-      // A team member's chat has no user message: each turn opens with a
-      // teammate message instead, so that must close the summary too.
-      if (startsAgentTurn(item)) {
-        activeSummary = undefined;
-      }
-    }
-  }
-  return merged;
 };
 
 const highlightStyle: React.CSSProperties = {
@@ -504,10 +472,40 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
         created_at: artifact.created_at,
       }));
 
-    return [...mergeTurnActivities(result), ...visibleArtifacts].toSorted(
+    return [...groupTurnProcess(result, isProcessing), ...visibleArtifacts].toSorted(
       (a, b) => getProcessedItemCreatedAt(a) - getProcessedItemCreatedAt(b)
     );
-  }, [artifacts, list]);
+  }, [artifacts, isProcessing, list]);
+
+  // Finished turns fold their process by default; the reader's choice per turn wins.
+  const [turnFoldChoices, setTurnFoldChoices] = useState<Record<string, boolean>>({});
+  const runningTurnIds = useMemo(
+    () =>
+      new Set(
+        processedList.flatMap((item) =>
+          'type' in item && item.type === 'turn_process' && item.running ? [item.turnId] : []
+        )
+      ),
+    [processedList]
+  );
+  const isTurnFolded = useCallback(
+    (turnId?: string) => !!turnId && !runningTurnIds.has(turnId) && (turnFoldChoices[turnId] ?? true),
+    [runningTurnIds, turnFoldChoices]
+  );
+  const toggleTurnFold = useCallback(
+    (turnId: string) => setTurnFoldChoices((choices) => ({ ...choices, [turnId]: !(choices[turnId] ?? true) })),
+    []
+  );
+  // A jump to a step inside a folded turn unfolds that turn first.
+  const revealItem = useCallback(
+    (item: IProcessedItem) => {
+      if ('type' in item && item.type === 'turn_activity_summary' && item.turnId && isTurnFolded(item.turnId)) {
+        const { turnId } = item;
+        setTurnFoldChoices((choices) => ({ ...choices, [turnId]: false }));
+      }
+    },
+    [isTurnFolded]
+  );
 
   // An AI reply can be split into several messages (thinking / multiple text /
   // tool blocks). The hover copy + timestamp row should appear once per turn,
@@ -534,6 +532,7 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
         (item.type === 'file_summary' ||
           item.type === 'tool_summary' ||
           item.type === 'turn_activity_summary' ||
+          item.type === 'turn_process' ||
           item.type === 'artifact')
       ) {
         continue;
@@ -562,7 +561,10 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
         if (item.messages.some((msg) => msg.backend_turn_id)) seenAnchor = true;
         continue;
       }
-      if ('type' in item && (item.type === 'file_summary' || item.type === 'artifact')) {
+      if (
+        'type' in item &&
+        (item.type === 'file_summary' || item.type === 'turn_process' || item.type === 'artifact')
+      ) {
         continue;
       }
       const message = item as TMessage;
@@ -649,6 +651,7 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
 
     handledTargetKeyRef.current = targetKey;
     loadingTargetKeyRef.current = '';
+    revealItem(processedList[targetIndex]);
     setHighlightedMessageId(targetMessageId);
     hideScrollButton();
 
@@ -665,7 +668,15 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
     }, 2400);
 
     return () => window.clearTimeout(timer);
-  }, [hideScrollButton, loadAnchorMessageWindow, location.key, processedList, scrollElementIntoView, targetMessageId]);
+  }, [
+    hideScrollButton,
+    loadAnchorMessageWindow,
+    location.key,
+    processedList,
+    revealItem,
+    scrollElementIntoView,
+    targetMessageId,
+  ]);
 
   useEffect(() => {
     const handleMessageJump = (event: Event) => {
@@ -679,6 +690,7 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
           (item as { type?: string }).type === 'file_summary' ||
           (item as { type?: string }).type === 'tool_summary' ||
           (item as { type?: string }).type === 'turn_activity_summary' ||
+          (item as { type?: string }).type === 'turn_process' ||
           (item as { type?: string }).type === 'artifact'
         ) {
           return false;
@@ -757,6 +769,25 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
         </div>
       );
     }
+    if ('type' in item && item.type === 'turn_process') {
+      return (
+        <div
+          key={item.id}
+          id={`message-${getProcessedItemAnchorId(item)}`}
+          className={`${rowWidthClass} min-w-0 message-item px-8px m-t-10px turn_process`}
+        >
+          <TurnProcessControl
+            item={item}
+            folded={isTurnFolded(item.turnId)}
+            onToggle={() => toggleTurnFold(item.turnId)}
+          />
+        </div>
+      );
+    }
+    // A folded turn hides its process groups; its replies and prompts stay in view.
+    if ('type' in item && item.type === 'turn_activity_summary' && isTurnFolded(item.turnId)) {
+      return null;
+    }
     if ('type' in item && ['file_summary', 'tool_summary', 'turn_activity_summary'].includes(item.type)) {
       return (
         <div
@@ -767,7 +798,7 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
         >
           {item.type === 'file_summary' && <MessageFileChanges diffsChanges={item.diffs} />}
           {item.type === 'tool_summary' && <MessageToolGroupSummary messages={item.messages}></MessageToolGroupSummary>}
-          {item.type === 'turn_activity_summary' && <MessageTurnActivitySummary activities={item.activities} />}
+          {item.type === 'turn_activity_summary' && <ProcessGroup activities={item.activities} closed={item.closed} />}
         </div>
       );
     }

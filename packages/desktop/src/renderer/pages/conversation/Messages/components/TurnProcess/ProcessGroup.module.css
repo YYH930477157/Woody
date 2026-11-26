@@ -1,0 +1,118 @@
+.root {
+  min-width: 0;
+}
+
+.header {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 6px;
+  color: var(--aou-6);
+  font-size: 13px;
+  line-height: 24px;
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+}
+
+.header:hover,
+.header:focus-visible {
+  color: var(--aou-7);
+}
+
+.icon,
+.arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--aou-5);
+}
+
+.status {
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--aou-5);
+  border-radius: 50%;
+}
+
+.statusRunning {
+  background: var(--aou-5);
+  animation: process-group-pulse 1.2s ease-in-out infinite;
+}
+
+.label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.arrow {
+  color: var(--aou-4);
+  transition: transform 0.2s ease;
+}
+
+.arrowOpen {
+  transform: rotate(90deg);
+}
+
+.arrow span {
+  width: 6px;
+  height: 6px;
+  border-top: 1px solid currentColor;
+  border-inline-end: 1px solid currentColor;
+  transform: rotate(45deg);
+}
+
+@keyframes process-group-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* A long group scrolls inside its own box so it never pushes the reply out of view. */
+.body {
+  max-height: min(400px, 50vh);
+  margin-top: 4px;
+  overflow-y: auto;
+  overscroll-behavior-y: auto;
+}
+
+.collapsed {
+  display: none;
+}
+
+/* Steps start under the header label, so they read as members of the group. */
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-inline-start: 14px;
+}
+
+.fadeTop {
+  mask-image: linear-gradient(to bottom, transparent 0, #000 24px, #000 100%);
+}
+
+.fadeBottom {
+  mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 24px), transparent 100%);
+}
+
+.fadeTop.fadeBottom {
+  mask-image: linear-gradient(to bottom, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arrow {
+    transition: none;
+  }
+
+  .statusRunning {
+    animation: none;
+  }
+}

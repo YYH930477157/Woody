@@ -1,0 +1,60 @@
+.root {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-base);
+  color: var(--aou-6);
+  font-size: 13px;
+  line-height: 24px;
+  user-select: none;
+  outline: none;
+}
+
+.toggle {
+  cursor: pointer;
+}
+
+.toggle:hover,
+.toggle:focus-visible {
+  color: var(--aou-7);
+}
+
+.label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  color: var(--aou-4);
+  transition: transform 0.2s ease;
+}
+
+.arrowOpen {
+  transform: rotate(180deg);
+}
+
+.arrow span {
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-bottom: 1px solid currentColor;
+  border-inline-end: 1px solid currentColor;
+  transform: rotate(45deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arrow {
+    transition: none;
+  }
+}

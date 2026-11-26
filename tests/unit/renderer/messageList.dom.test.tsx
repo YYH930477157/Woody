@@ -15,18 +15,17 @@ import {
   MessagePaginationProvider,
   useUpdateMessageList,
 } from '@/renderer/pages/conversation/Messages/hooks';
-import MessageList, { mergeTurnActivities } from '@/renderer/pages/conversation/Messages/MessageList';
+import MessageList from '@/renderer/pages/conversation/Messages/MessageList';
 
 const { parseDiffMock, useTeamPermissionMock } = vi.hoisted(() => ({
   parseDiffMock: vi.fn(),
   useTeamPermissionMock: vi.fn(),
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (_key: string, options?: { defaultValue?: string }) => options?.defaultValue ?? _key,
-  }),
-}));
+vi.mock('react-i18next', async () => {
+  const { enT } = await import('./turnProcess/enT');
+  return { useTranslation: () => ({ t: enT }) };
+});
 
 vi.mock('react-router-dom', () => ({
   useLocation: () => ({
@@ -284,144 +283,55 @@ describe('MessageList', () => {
     useTeamPermissionMock.mockReturnValue(null);
   });
 
-  it('keeps one activity summary across intermediate messages within an assistant turn', () => {
-    const thinkingOne = {
-      id: 'thinking-1',
-      type: 'thinking',
-      position: 'left',
-      content: { content: 'first thought', status: 'done' },
-      created_at: 1,
-    };
-    const permission = {
-      id: 'permission-1',
-      type: 'permission',
-      position: 'left',
-      content: { call_id: 'call-1', description: 'Allow command', options: [] },
-      created_at: 2,
-    };
-    const toolSummary = {
-      type: 'tool_summary',
-      id: 'tool-summary-1',
-      messages: [
-        {
-          id: 'tool-1',
-          type: 'tool_call',
-          position: 'left',
-          content: { call_id: 'call-1', name: 'rg', args: {}, status: 'completed' },
-          created_at: 3,
-        },
-      ],
-      sourceMessageIds: ['tool-1'],
-      created_at: 3,
-    };
-    const agentStatus = {
-      id: 'status-1',
-      type: 'agent_status',
-      position: 'center',
-      content: { backend: 'test', status: 'session_active' },
-      created_at: 4,
-    };
-    const thinkingTwo = {
-      id: 'thinking-2',
-      type: 'thinking',
-      position: 'left',
-      content: { content: 'second thought', status: 'thinking' },
-      created_at: 5,
-    };
-    const userMessage = {
-      id: 'user-1',
-      type: 'text',
-      position: 'right',
-      content: { content: 'continue' },
-      created_at: 6,
-    };
-    const thinkingAfterUser = {
-      id: 'thinking-3',
-      type: 'thinking',
-      position: 'left',
-      content: { content: 'new turn', status: 'thinking' },
-      created_at: 7,
-    };
-
-    const merged = mergeTurnActivities([
-      thinkingOne,
-      permission,
-      toolSummary,
-      agentStatus,
-      thinkingTwo,
-      userMessage,
-      thinkingAfterUser,
-    ] as unknown as Parameters<typeof mergeTurnActivities>[0]);
-
-    expect(merged.map((item) => item.type)).toEqual([
-      'turn_activity_summary',
-      'permission',
-      'agent_status',
-      'text',
-      'turn_activity_summary',
-    ]);
-
-    const firstSummary = merged[0];
-    expect(firstSummary.type).toBe('turn_activity_summary');
-    if (firstSummary.type === 'turn_activity_summary') {
-      expect(firstSummary.activities.map((activity) => activity.type)).toEqual(['thinking', 'tools', 'thinking']);
-      expect(firstSummary.sourceMessageIds).toEqual(['thinking-1', 'tool-1', 'thinking-2']);
-    }
-
-    const finalSummary = merged[4];
-    expect(finalSummary.type).toBe('turn_activity_summary');
-    if (finalSummary.type === 'turn_activity_summary') {
-      expect(finalSummary.activities.map((activity) => activity.type)).toEqual(['thinking']);
-      expect(finalSummary.sourceMessageIds).toEqual(['thinking-3']);
-    }
-  });
-
-  it('starts a new activity summary at each teammate message in a team chat', () => {
-    // A member chat has no user (right) message: every turn is opened by a
-    // message from the lead or the team, which arrives on the left.
-    const reply = { id: 'reply-1', type: 'text', position: 'left', content: { content: 'reply' }, created_at: 3 };
-
-    const merged = mergeTurnActivities([
-      teammate('lead-1', 1),
-      thinking('thinking-1', 'done', 2),
-      reply,
-      thinking('thinking-2', 'done', 4),
-      teammate('lead-2', 5),
-      thinking('thinking-3', 'thinking', 6),
-    ] as unknown as Parameters<typeof mergeTurnActivities>[0]);
-
-    expect(merged.map((item) => item.id)).toEqual([
-      'lead-1',
-      'turn-activity-thinking-1',
-      'reply-1',
-      'lead-2',
-      'turn-activity-thinking-3',
-    ]);
-    const [, firstSummary, , , secondSummary] = merged;
-    if (firstSummary.type !== 'turn_activity_summary' || secondSummary.type !== 'turn_activity_summary') {
-      throw new Error('expected two activity summaries');
-    }
-    expect(firstSummary.sourceMessageIds).toEqual(['thinking-1', 'thinking-2']);
-    expect(secondSummary.sourceMessageIds).toEqual(['thinking-3']);
-  });
-
-  it('keeps finished team turns collapsed while a later turn runs', () => {
+  it('folds a finished turn behind its turn row and keeps the running turn open', () => {
+    mockIsProcessing = true;
     const messages = [
-      teammate('lead-1', 1),
+      teammate('lead-1', 1000),
+      thinking('think-1', 'done', 2000),
+      { id: 'reply-1', type: 'text', position: 'left', content: { content: 'done one' }, created_at: 9000 },
+      teammate('lead-2', 10000),
+      thinking('think-2', 'thinking', 11000),
+    ] as unknown as IMessageText[];
+
+    render(<MessageList />, {
+      wrapper: ({ children }) => <Wrapper messages={messages}>{children}</Wrapper>,
+    });
+
+    const [finished, running] = screen.getAllByTestId('turn-process');
+    expect(finished).toHaveAttribute('data-folded', 'true');
+    expect(finished).toHaveTextContent('Done in 8s');
+    expect(running).toHaveAttribute('data-running', 'true');
+    // Only the running turn's group is on screen, open; the finished turn's reply stays visible.
+    expect(screen.getAllByTestId('process-group')).toHaveLength(1);
+    expect(screen.getByTestId('process-group-body')).toHaveAttribute('data-expanded', 'true');
+    expect(screen.getByTestId('msgtext-reply-1')).toBeInTheDocument();
+
+    fireEvent.click(finished);
+    expect(finished).toHaveAttribute('data-folded', 'false');
+    const bodies = screen.getAllByTestId('process-group-body');
+    expect(bodies).toHaveLength(2);
+    // The unfolded turn shows its group header, closed until opened.
+    expect(bodies[0]).toHaveAttribute('data-expanded', 'false');
+  });
+
+  it('keeps steps after a reply below that reply instead of merging them upward', () => {
+    const messages = [
+      { id: 'user-1', type: 'text', position: 'right', content: { content: 'q' }, created_at: 1 },
       thinking('think-1', 'done', 2),
-      { id: 'reply-1', type: 'text', position: 'left', content: { content: 'done one' }, created_at: 3 },
-      teammate('lead-2', 4),
-      thinking('think-2', 'thinking', 5),
+      { id: 'reply-1', type: 'text', position: 'left', content: { content: 'progress' }, created_at: 3 },
+      thinking('think-2', 'done', 4),
+      { id: 'reply-2', type: 'text', position: 'left', content: { content: 'answer' }, created_at: 5 },
     ] as unknown as IMessageText[];
 
     const { container } = render(<MessageList />, {
       wrapper: ({ children }) => <Wrapper messages={messages}>{children}</Wrapper>,
     });
+    fireEvent.click(screen.getByTestId('turn-process'));
 
-    const bodies = container.querySelectorAll('.turn-activity-summary__body');
-    expect(bodies).toHaveLength(2);
-    expect(bodies[0]).toHaveClass('turn-activity-summary__body--collapsed');
-    expect(bodies[1]).not.toHaveClass('turn-activity-summary__body--collapsed');
+    const order = [...container.querySelectorAll('[data-testid="process-group"], [data-testid^="msgtext-"]')].map(
+      (element) => element.getAttribute('data-testid')
+    );
+    expect(order).toEqual(['msgtext-user-1', 'process-group', 'msgtext-reply-1', 'process-group', 'msgtext-reply-2']);
   });
 
   it('never renders a plan as a stream row (it belongs to ConversationPlanBar)', () => {

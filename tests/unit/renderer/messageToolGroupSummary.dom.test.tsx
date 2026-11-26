@@ -65,6 +65,33 @@ describe('MessageToolGroupSummary', () => {
     expect(screen.queryByText('rg')).not.toBeInTheDocument();
   });
 
+  it('lists finished calls without its own toggle when flat inside a process group', () => {
+    render(
+      <MessageToolGroupSummary
+        flat
+        messages={[
+          {
+            id: 'message-1',
+            conversation_id: 'conversation-1',
+            type: 'acp_tool_call',
+            content: {
+              update: {
+                session_update: 'tool_call',
+                tool_call_id: 'tool-1',
+                status: 'completed',
+                title: 'rg',
+                kind: 'search',
+              },
+            },
+          } as unknown as ToolMessage,
+        ]}
+      />
+    );
+
+    expect(screen.getByText('rg')).toBeInTheDocument();
+    expect(screen.queryByText(/View Steps/)).not.toBeInTheDocument();
+  });
+
   it('loads full tool content when expanding a compact history item', async () => {
     const invoke = vi.mocked(ipcBridge.database.getConversationMessage.invoke);
     invoke.mockResolvedValue({

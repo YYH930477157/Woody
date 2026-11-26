@@ -140,7 +140,11 @@ const ToolItemDetail: React.FC<{ item: NormalizedToolCall }> = ({ item }) => {
   );
 };
 
-const MessageToolGroupSummary: React.FC<{ messages: ToolMessage[] }> = ({ messages }) => {
+/**
+ * Tool calls behind a "View Steps" toggle. `flat` lists the calls directly, for
+ * a process group whose own header already summarizes and folds them.
+ */
+const MessageToolGroupSummary: React.FC<{ messages: ToolMessage[]; flat?: boolean }> = ({ messages, flat }) => {
   const hasRunning = hasRunningToolMessages(messages);
   const [showMore, setShowMore] = useState(hasRunning);
 
@@ -152,6 +156,16 @@ const MessageToolGroupSummary: React.FC<{ messages: ToolMessage[] }> = ({ messag
   }, [hasRunning]);
 
   const tools = useMemo(() => normalizeToolMessages(messages), [messages]);
+
+  if (flat) {
+    return (
+      <div className='tool-group-summary__body tool-group-summary__body--flat'>
+        {tools.map((item) => (
+          <ToolItemDetail key={item.key} item={item} />
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className='tool-group-summary'>
