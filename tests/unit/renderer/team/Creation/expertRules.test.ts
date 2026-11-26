@@ -122,6 +122,25 @@ describe('module expert team roles', () => {
     expect(verifier.rules).toContain('check each one in the combined change');
   });
 
+  it('makes the dispatcher read requirement tables by header and check verdicts before reporting them', () => {
+    const [dispatcher, expert] = buildExpertTeamRoles(plan);
+    expect(dispatcher.rules).toContain('prints every data row as `header name = value` pairs');
+    expect(dispatcher.rules).toContain('never index columns by number or assume their order');
+    expect(dispatcher.rules).toContain('a garbled or failed printout means the table is not read yet');
+    expect(dispatcher.rules).toContain('put the column names to judge by in each expert task');
+    expect(dispatcher.rules).toContain('Before you report or plan on an expert’s verdict, check it');
+    // The team lead prompt leaves implementation to teammates; checking must not count as that.
+    expect(dispatcher.rules).toContain('checking is your own job, not implementation work to hand out');
+    expect(dispatcher.rules).toContain('every report that contradicts itself');
+    expect(dispatcher.rules).toContain('including the set handlers of the protocol objects');
+    expect(dispatcher.rules).toContain('Say in the report which verdicts you checked yourself.');
+    expect(dispatcher.rules).toContain('give each such verdict a "Checked" mark in the report');
+    expect(dispatcher.rules).toContain('code that is compiled out does not count');
+    // Two live runs wrote summary counts that did not match the verdict table.
+    expect(dispatcher.rules).toContain('only after the verdict table is written, by counting its rows one by one');
+    expect(expert.rules).not.toContain('Before you report or plan on an expert’s verdict');
+  });
+
   it('asks the dispatcher to write the overview first only when Woody kicks it off', () => {
     expect(buildExpertTeamRoles(plan)[0].rules).not.toContain('learn the project’s meter business first');
     const rules = buildExpertTeamRoles({ ...plan, businessOnboarding: true, onboarding: ['sensor'] })[0].rules;
