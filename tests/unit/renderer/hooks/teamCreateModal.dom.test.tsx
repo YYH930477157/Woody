@@ -17,6 +17,11 @@ const messageWarningMock = vi.fn();
 const sendToAgentMock = vi.fn();
 const prepareWorkflowMock = vi.fn();
 const prepareRolesMock = vi.fn();
+const memberExtrasMock = vi.fn();
+
+vi.mock('@renderer/pages/team/WorkflowPresets/memberExtras', () => ({
+  prepareTeamMemberExtras: (...args: unknown[]) => memberExtrasMock(...args),
+}));
 
 vi.mock('@renderer/pages/team/WorkflowPresets/prepareWorkflow', () => ({
   prepareWorkflow: (...args: unknown[]) => prepareWorkflowMock(...args),
@@ -172,6 +177,8 @@ describe('TeamCreateModal', () => {
     resolveDefaultTeamAgentModelMock.mockReset();
     resolveDefaultTeamAgentModelMock.mockResolvedValue(undefined);
     messageErrorMock.mockReset();
+    memberExtrasMock.mockReset();
+    memberExtrasMock.mockResolvedValue(undefined);
     prepareWorkflowMock.mockReset();
     prepareWorkflowMock.mockResolvedValue([
       { role: 'leader', assistant_id: 'workflow-leader', assistant_name: 'Requirements', model: 'configured-model' },
@@ -272,6 +279,10 @@ describe('TeamCreateModal', () => {
       workspace: 'D:\\work\\project-feature',
       workspace_mode: 'isolated',
     });
+    // Template roles carry the codebase memory tools; the team still gets its files folder.
+    expect(memberExtrasMock).toHaveBeenCalledWith(
+      expect.objectContaining({ workspace: 'D:\\work\\project', withCodebaseMemory: false })
+    );
   });
 
   it('enables and builds the index from the banner and seeds split module wildcards when no experts exist yet', async () => {
@@ -737,6 +748,42 @@ describe('TeamCreateModal', () => {
       workspace_mode: 'isolated',
     });
     expect(worktreeMocks.discard).not.toHaveBeenCalled();
+  });
+
+  it('gives members picked by hand the extras prepared on the chosen folder', async () => {
+    const extras = {
+      skills: ['woody-codebase-memory'],
+      mcp_server_ids: ['cbm-row'],
+      session_files: {
+        dir: 'D:\\work\\project\\.woody\\f\\2026-11-25_Feature',
+        work_dir: 'D:\\work\\project\\.woody\\f\\2026-11-25_Feature\\work',
+        output_dir: 'D:\\work\\project\\.woody\\f\\2026-11-25_Feature\\output',
+      },
+    };
+    memberExtrasMock.mockResolvedValue(extras);
+    render(<TeamCreateModal visible onClose={vi.fn()} onCreated={vi.fn()} />);
+    fireEvent.click(screen.getByTestId('team-create-agent-option-bare-aionrs'));
+    fireEvent.change(screen.getByTestId('team-create-name-input'), { target: { value: 'Feature' } });
+    fireEvent.click(screen.getByTestId('workspace-folder-select'));
+    fireEvent.click(await screen.findByRole('switch', { name: 'team.create.isolated.label' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Create' }));
+    await waitFor(() => expect(createTeamInvokeMock).toHaveBeenCalledTimes(1));
+
+    expect(memberExtrasMock).toHaveBeenCalledExactlyOnceWith({
+      workspace: 'D:\\work\\project',
+      teamName: 'Feature',
+      names: {
+        root: 'conversation.sessionFiles.rootFolder',
+        work: 'conversation.sessionFiles.workFolder',
+        output: 'conversation.sessionFiles.outputFolder',
+        untitled: 'conversation.sessionFiles.untitled',
+      },
+      withCodebaseMemory: true,
+    });
+    expect(createTeamInvokeMock.mock.calls[0][0]).toMatchObject({
+      workspace: 'D:\\work\\project-feature',
+      member_extras: extras,
+    });
   });
 
   it('removes an unused worktree when cancelling, and keeps the folder without the option', async () => {

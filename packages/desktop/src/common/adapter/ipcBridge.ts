@@ -2579,6 +2579,7 @@ export const team = {
       name: p.name,
       agents: p.agents.map(toBackendAssistant),
       ...(p.workspace ? { workspace: p.workspace } : {}),
+      ...(p.member_extras ? { member_extras: p.member_extras } : {}),
     })),
     fromBackendTeam
   ),

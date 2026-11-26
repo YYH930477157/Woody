@@ -157,5 +157,27 @@ describe('ipcBridge team adapter', () => {
       },
     });
     expect(JSON.stringify(httpBridgeMocks.calls.at(-1)?.body)).not.toContain('assistants');
+    // Nothing to give every member: the key stays out of the request.
+    expect(JSON.stringify(httpBridgeMocks.calls.at(-1)?.body)).not.toContain('member_extras');
+  });
+
+  it('team.create sends the extras every member gets', async () => {
+    const { team } = await import('@/common/adapter/ipcBridge');
+    const member_extras = {
+      skills: ['woody-codebase-memory'],
+      mcp_server_ids: ['cbm-row'],
+      session_files: { dir: '/ws/.woody/f/d', work_dir: '/ws/.woody/f/d/work', output_dir: '/ws/.woody/f/d/output' },
+    };
+
+    await team.create.invoke({
+      user_id: 'user-1',
+      name: 'Alpha',
+      workspace: '/tmp/ws',
+      workspace_mode: 'shared',
+      agents: [{ role: 'leader', assistant_name: 'Lead', assistant_id: 'assistant-lead', model: 'm' }],
+      member_extras,
+    });
+
+    expect(httpBridgeMocks.calls.at(-1)?.body).toMatchObject({ name: 'Alpha', member_extras });
   });
 });

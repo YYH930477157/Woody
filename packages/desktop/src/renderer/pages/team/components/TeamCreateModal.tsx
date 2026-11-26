@@ -34,6 +34,7 @@ import ModuleExperts, {
   startOnboarding,
   useModuleExperts,
 } from '../WorkflowPresets/ModuleExperts';
+import { prepareTeamMemberExtras } from '../WorkflowPresets/memberExtras';
 import IsolatedWorkspaceOption, { IsolatedWorkspaceError, useIsolatedWorkspace } from '../IsolatedWorkspace';
 
 /** Reasons the main process reports for a folder that cannot get a separate workspace. */
@@ -249,12 +250,27 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
         }));
       }
 
+      // Members picked by hand get the codebase memory tools a chat in this folder has (template
+      // roles carry them already), and the whole team gets one folder for the files it creates.
+      // Both live in the chosen folder, which outlasts a separate workspace.
+      const memberExtras = await prepareTeamMemberExtras({
+        workspace,
+        teamName: name,
+        names: {
+          root: t('conversation.sessionFiles.rootFolder'),
+          work: t('conversation.sessionFiles.workFolder'),
+          output: t('conversation.sessionFiles.outputFolder'),
+          untitled: t('conversation.sessionFiles.untitled'),
+        },
+        withCodebaseMemory: !workflowPreset,
+      });
       const team = await ipcBridge.team.create.invoke({
         user_id,
         name,
         workspace: teamWorkspace,
         workspace_mode: isolated.enabled ? 'isolated' : 'shared',
         agents,
+        ...(memberExtras ? { member_extras: memberExtras } : {}),
       });
 
       // The platform bridge swallows provider errors and returns a sentinel object

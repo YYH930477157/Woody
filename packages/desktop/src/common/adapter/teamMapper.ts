@@ -14,6 +14,7 @@ import type {
   TTeam,
   WorkspaceMode,
 } from '../types/team/teamTypes';
+import type { SessionFilesRef } from './ipcBridge';
 
 // ── Parameter types for team API calls ─────────────────────────────────
 
@@ -24,12 +25,24 @@ import type {
  */
 export type TeamAssistantInput = Pick<TeamAssistant, 'role' | 'assistant_name' | 'assistant_id' | 'model'>;
 
+/**
+ * What every member of a team gets on top of its own assistant (AionCore `TeamMemberExtras`):
+ * extra skills, MCP server rows and one folder the whole team keeps the files it creates in.
+ * Members added later get the same.
+ */
+export type TeamMemberExtras = {
+  skills?: string[];
+  mcp_server_ids?: string[];
+  session_files?: SessionFilesRef;
+};
+
 export type ICreateTeamParams = {
   user_id: string;
   name: string;
   workspace: string;
   workspace_mode: WorkspaceMode;
   agents: TeamAssistantInput[];
+  member_extras?: TeamMemberExtras;
 };
 
 export type IAddTeamAssistantParams = {
