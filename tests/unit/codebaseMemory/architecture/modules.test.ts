@@ -625,6 +625,54 @@ describe('expert brief', () => {
     ]);
   });
 
+  it('lists functions other experts call first and names the ones past the limit', () => {
+    // 22 functions called often from unowned code, and one the sensor expert calls once.
+    const names = Array.from({ length: 22 }, (_, i) => `LOGGER_Get${String(i).padStart(2, '0')}`);
+    const loggerSource = [...names, 'LOGGER_Resync'].map((name) => `void ${name}(void)\n{\n}\n`).join('');
+    const ownFiles: Record<string, string> = {
+      'app/logger.c': loggerSource,
+      'app/proto.c': 'void proto_get(void)\n{\n}\nvoid proto_set(void)\n{\n}\n',
+      'app/sensor.c': 'void SENSOR_Adjust(void)\n{\n    LOGGER_Resync();\n}\n',
+    };
+    const rows: Row[] = [
+      ...[...names, 'LOGGER_Resync'].map(
+        (name, i): Row => [name, 'app/logger.c', String(i * 3 + 1), String(i * 3 + 3)]
+      ),
+      ['proto_get', 'app/proto.c', '1', '3'],
+      ['proto_set', 'app/proto.c', '4', '6'],
+      ['SENSOR_Adjust', 'app/sensor.c', '1', '4'],
+    ];
+    const ownExperts = [
+      { id: 'logger', name: 'Logger', paths: ['app/logger.c'] },
+      { id: 'sensor', name: 'Sensor', paths: ['app/sensor.c'] },
+    ];
+    const data = modules.collect({
+      expert: ownExperts[0],
+      experts: ownExperts,
+      shared: [],
+      model: { tasks: [], tables: [], otherTables: [], smallTables: [], structTables: [] },
+      functions: rows,
+      files: Object.keys(ownFiles),
+      calls: [
+        ...names.flatMap((name) => [
+          ['proto_get', 'app/proto.c', '1', name, 'app/logger.c'],
+          ['proto_set', 'app/proto.c', '4', name, 'app/logger.c'],
+        ]),
+        ['SENSOR_Adjust', 'app/sensor.c', '1', 'LOGGER_Resync', 'app/logger.c'],
+      ],
+      variables: [],
+      coverage: new Map(),
+      source: source(ownFiles),
+    });
+    expect(data.provides[0].name).toBe('LOGGER_Resync');
+    const text = modules.renderBrief(data, labels['en-US'], { date: 'd', mode: 'full' });
+    expect(text).toContain('- `LOGGER_Resync` (app/logger.c:67) ← `SENSOR_Adjust` (app/sensor.c:3, Sensor)');
+    // 23 functions, 20 shown: the last three by name are only named.
+    expect(text).toContain(
+      '- … 3 more functions called from outside, callers not shown: `LOGGER_Get19`, `LOGGER_Get20`, `LOGGER_Get21`.'
+    );
+  });
+
   it('extracts CRLF and multiline address macros, skips #if 0 macros, and ignores indexed *ADDR* functions', () => {
     const crlfFiles: Record<string, string> = {
       'app/alarm.c': [

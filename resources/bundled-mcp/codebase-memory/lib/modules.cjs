@@ -21,6 +21,7 @@ const C_HEADER = /\.(h|hh|hpp|hxx)$/i;
 const LAYER_PREFIX_FILES = 3;
 const LIMITS = {
   provides: 20,
+  provideNames: 60,
   callers: 5,
   uses: 30,
   globals: 20,
@@ -783,6 +784,8 @@ function collect(input) {
   // Callers in other experts' files first: those are the interfaces between experts.
   const callerRank = (caller) =>
     caller.owner !== undefined && caller.owner !== 'shared' ? 0 : caller.owner === 'shared' ? 1 : caller.module ? 2 : 3;
+  // Functions other experts call come first, so a long list never hides a handoff behind
+  // functions only unowned code calls.
   const provides = [...provided.values()]
     .map((item) => ({
       ...item,
@@ -791,7 +794,12 @@ function collect(input) {
         (a, b) => callerRank(a) - callerRank(b) || a.site.localeCompare(b.site, 'en', { numeric: true })
       ),
     }))
-    .sort((a, b) => b.callers.length - a.callers.length || a.name.localeCompare(b.name));
+    .sort(
+      (a, b) =>
+        callerRank(a.callers[0]) - callerRank(b.callers[0]) ||
+        b.callers.length - a.callers.length ||
+        a.name.localeCompare(b.name)
+    );
   // Experts first, then detected modules without an expert, then everything else.
   const rank = (group) => (group.owner !== undefined ? 0 : group.module ? 1 : 2);
   const uses = [...used.values()]
@@ -1044,8 +1052,17 @@ function renderBrief(data, labels, { date, mode }) {
       .join(', ');
     out.push(`- ${code(item.name)} (${item.site}) ← ${callers}${more(item.callers, LIMITS.callers, t)}`);
   }
-  if (data.provides.length > LIMITS.provides)
-    out.push(`- ${fill(t.more, { count: data.provides.length - LIMITS.provides })}`);
+  if (data.provides.length > LIMITS.provides) {
+    // Name the rest: an expert tracing a path must still see that a function of theirs is called from outside.
+    const rest = data.provides.slice(LIMITS.provides);
+    const names = rest
+      .slice(0, LIMITS.provideNames)
+      .map((item) => code(item.name))
+      .join(', ');
+    out.push(
+      `- ${fill(t.moreProvides, { count: rest.length, names: names + (rest.length > LIMITS.provideNames ? ', …' : '') })}`
+    );
+  }
   out.push('', t.providesGap, '');
 
   out.push(`## ${t.briefUses}`, '');
