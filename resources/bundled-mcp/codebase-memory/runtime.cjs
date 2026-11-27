@@ -699,7 +699,20 @@ const QUERY_PAGE = 10000;
 const EXPERTS_MAX_BYTES = 64 * 1024;
 /** The same rule as the team dialog's: lowercase ASCII words joined by "-". */
 const EXPERT_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const COVERAGE_BATCH = 200;
+/** check_index_coverage accepts at most 128 paths and defaults path_limit to 20. */
+const COVERAGE_BATCH = 128;
+const CALLS_BATCH = 100;
+const DISK_SCAN_BUDGET = 4000;
+/** Fingerprint of the expert roster and shared paths so cross-expert ownership labels stay fresh. */
+function rosterFingerprint(saved) {
+  if (!saved) return '';
+  return sha1(
+    JSON.stringify({
+      experts: (saved.experts || []).map(({ id, name, paths }) => ({ id, name, paths })),
+      shared: saved.shared || [],
+    })
+  );
+}
 /** A file Woody writes under .woody; it must stay inside the project even through links. */
 function woodyPath(root, relative) {
   const filename = path.join(root, relative);
@@ -1648,7 +1661,12 @@ function createRuntime(options) {
     try {
       for (let offset = 0; offset < files.length; offset += COVERAGE_BATCH) {
         const paths = files.slice(offset, offset + COVERAGE_BATCH);
-        const args = boundArguments(project, 'check_index_coverage', { paths, format: 'json' }, config);
+        const args = boundArguments(
+          project,
+          'check_index_coverage',
+          { paths, path_limit: paths.length, format: 'json' },
+          config
+        );
         const result = await native(project, 'check_index_coverage', args).promise;
         const value = result.structuredContent || JSON.parse(result.content?.[0]?.text || '{}');
         for (const item of value.paths || [])
@@ -1835,13 +1853,61 @@ function createRuntime(options) {
     const reviewedUnder = before.driftSig === undefined ? plainHash : sha1(`${plainHash}\n${before.driftSig}`);
     return before.reviewedFilesHash === reviewedUnder ? { ...before, reviewedFilesHash: filesHash } : before;
   }
+  /** Bounded scan of source files on disk under experts' paths so unindexed files show in briefs. */
+  function collectExpertDiskFiles(root, experts) {
+    const extensions = cFamilyProject(root) ? C_FAMILY : SOURCE_EXTENSIONS;
+    const found = new Set();
+    const budget = { entries: DISK_SCAN_BUDGET };
+    const scannedDirs = new Set();
+    const walk = (relDir, recursive) => {
+      const key = `${recursive ? 'R' : 'S'}:${relDir}`;
+      if (scannedDirs.has(key) || budget.entries <= 0) return;
+      scannedDirs.add(key);
+      const absDir = relDir ? path.join(root, relDir) : root;
+      let entries;
+      try {
+        entries = fs.readdirSync(absDir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      budget.entries -= entries.length;
+      for (const entry of entries) {
+        if (entry.name.startsWith('.')) continue;
+        const rel = relDir ? `${relDir}/${entry.name}` : entry.name;
+        if (entry.isDirectory()) {
+          if (recursive && !SAMPLE_SKIPPED.has(entry.name.toLowerCase())) walk(rel, true);
+        } else if (entry.isFile() && extensions.has(path.extname(entry.name).toLowerCase())) {
+          found.add(rel);
+        }
+      }
+    };
+    for (const expert of experts) {
+      for (const raw of expert.paths || []) {
+        if (!raw || path.isAbsolute(raw) || /^[A-Za-z]:/.test(raw) || raw.split('/').includes('..')) continue;
+        if (raw.endsWith('/')) {
+          walk(raw.replace(/\/+$/, ''), true);
+        } else if (raw.includes('*')) {
+          const prefix = raw.slice(0, raw.indexOf('*'));
+          const relDir = prefix.includes('/') ? prefix.slice(0, prefix.lastIndexOf('/')) : '';
+          walk(relDir, false);
+        } else {
+          try {
+            if (fs.statSync(path.join(root, raw)).isFile()) found.add(raw);
+          } catch {
+            // Missing files are reported through unmatched paths.
+          }
+        }
+      }
+    }
+    return [...found].sort();
+  }
   /**
    * The generated part of each expert's feature card in .woody/features, and the card state
    * for the team dialog. `only` limits the work to some experts; the others keep their record.
    * An expert whose card cannot be written gets an error in its record; the others go on.
    */
   async function writeModuleCards(project, config, analysis, found, saved, language, previous, only) {
-    const result = { generatedAt: Date.now(), language, experts: {} };
+    const result = { generatedAt: Date.now(), language, rosterHash: rosterFingerprint(saved), experts: {} };
     if (!saved?.experts.length) return result;
     const { functions, sourceFiles, model } = analysis;
     const { text } = architecture.labelsFor(ARCHITECTURE_LABELS, language);
@@ -1850,6 +1916,7 @@ function createRuntime(options) {
     const indexed = [...new Set([...sourceFiles, ...functions.map((row) => row[1])])].filter(
       (file) => typeof file === 'string' && /^[^<:/\\][^:]*$/.test(file)
     );
+    const diskFiles = collectExpertDiskFiles(project.root, saved.experts);
     const ownedBy = new Map();
     for (const expert of saved.experts)
       if (!only || only.includes(expert.id))
@@ -1859,21 +1926,23 @@ function createRuntime(options) {
         );
     // One pass for every expert: the calls that touch any of their files, and their coverage.
     const allOwned = [...new Set([...ownedBy.values()].flat())];
-    const list = cypherList(allOwned);
     const edges = 'MATCH (a:Function)-[:CALLS|CALL_REFERENCE]->(b:Function)';
     const fields = 'RETURN a.name, a.file_path, a.start_line, b.name, b.file_path';
-    let allCalls = [];
+    const allCalls = [];
     try {
-      if (allOwned.length)
-        allCalls = [
+      for (let offset = 0; offset < allOwned.length; offset += CALLS_BATCH) {
+        const list = cypherList(allOwned.slice(offset, offset + CALLS_BATCH));
+        allCalls.push(
           ...(await queryRows(project, `${edges} WHERE b.file_path IN [${list}] ${fields}`)),
-          ...(await queryRows(project, `${edges} WHERE a.file_path IN [${list}] ${fields}`)),
-        ];
+          ...(await queryRows(project, `${edges} WHERE a.file_path IN [${list}] ${fields}`))
+        );
+      }
     } catch (error) {
       // Without the calls every brief would claim the module has no callers.
       return { ...previous, generatedAt: result.generatedAt, language, error: error.message };
     }
     const coverage = await coverageOf(project, config, allOwned);
+    const projectCache = {};
     for (const expert of saved.experts) {
       const before = previous?.experts?.[expert.id];
       if (!ownedBy.has(expert.id)) {
@@ -1896,6 +1965,8 @@ function createRuntime(options) {
           coverage,
           source,
           modules: found,
+          diskFiles,
+          cache: projectCache,
         });
         const filename = woodyPath(project.root, `${FEATURES_DIR}/${expert.id}.md`);
         const existing = readCard(filename);
@@ -1911,6 +1982,8 @@ function createRuntime(options) {
           ownHash: sha1(own),
           hasOwn: own.length > 0,
         });
+        const missingSections = own.length > 0 ? modules.missingCardSections(next, expert) : [];
+        const cardDigest = modules.digest(data);
         result.experts[expert.id] = {
           ...record,
           driftSig,
@@ -1918,7 +1991,7 @@ function createRuntime(options) {
           paths: expert.paths,
           owned,
           generatedAt: Date.now(),
-          digest: modules.digest(data),
+          digest: missingSections.length ? { ...cardDigest, missingSections } : cardDigest,
         };
       } catch (error) {
         const keep = samePaths(before, expert) ? before : undefined;
@@ -2327,9 +2400,15 @@ function createRuntime(options) {
         }
       };
       const wanted = Array.isArray(cardOptions.ids) ? cardOptions.ids : experts.map((expert) => expert.id);
+      const currentRoster = rosterFingerprint(saved);
+      const rosterChanged = Boolean(status.moduleCards?.rosterHash && status.moduleCards.rosterHash !== currentRoster);
       const outdated = experts
         .filter(
-          (expert) => !records[expert.id]?.generatedAt || !samePaths(records[expert.id], expert) || !hasBrief(expert)
+          (expert) =>
+            rosterChanged ||
+            !records[expert.id]?.generatedAt ||
+            !samePaths(records[expert.id], expert) ||
+            !hasBrief(expert)
         )
         .map((expert) => expert.id);
       const regenerate = cardOptions.refresh === true ? [...new Set([...wanted, ...outdated])] : [];
@@ -2377,8 +2456,15 @@ function createRuntime(options) {
             ownHash: sha1(own),
             hasOwn: own.length > 0,
           });
+          const missingSections = own.length > 0 ? modules.missingCardSections(text, expert) : [];
+          let nextDigest = record.digest;
+          if (nextDigest) {
+            const { missingSections: prevMissing, ...restDigest } = nextDigest;
+            nextDigest = missingSections.length ? { ...restDigest, missingSections } : restDigest;
+            if ((prevMissing || []).join('\n') !== missingSections.join('\n')) changed = true;
+          }
           if (state !== record.state || updated.reviewedFilesHash !== record.reviewedFilesHash) changed = true;
-          next.experts[expert.id] = { ...record, ...updated, state };
+          next.experts[expert.id] = { ...record, ...updated, state, ...(nextDigest ? { digest: nextDigest } : {}) };
         } catch (error) {
           next.experts[expert.id] = { ...record, state: 'error', error: error.message };
           changed = true;

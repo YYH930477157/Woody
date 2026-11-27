@@ -406,6 +406,56 @@ describe('source scanning', () => {
     expect(kind('if (a && level == 2)')).toBe('read');
     expect(kind('x = level.max;')).toBe('read');
   });
+
+  it('detects bare array pointer writes and address passing without misclassifying sizeof or read-only args', () => {
+    const kind = (text: string, isConst = false) =>
+      modules.accessKind(text, text.indexOf('alarmBuf'), 'alarmBuf', true, isConst);
+    expect(kind('memset(alarmBuf, 0, sizeof(alarmBuf));')).toBe('write');
+    expect(kind('memcpy(alarmBuf, src, 8);')).toBe('write');
+    expect(kind('memcpy(dst, alarmBuf, 8);')).toBe('read');
+    expect(kind('size_t n = sizeof(alarmBuf);')).toBe('read');
+    expect(kind('eepromRead(ADDR, alarmBuf, 16);')).toBe('address');
+    expect(kind('eepromRead(ADDR, alarmBuf, 16);', true)).toBe('read');
+  });
+
+  it('recovers globals, functions and tables after unbalanced #if braces and unwraps extern "C" / namespace blocks', () => {
+    const prepared = source({
+      'a.cpp': [
+        '#if MODEL_A',
+        'void initModel(int a)',
+        '{',
+        '#else',
+        'void initModel(void)',
+        '{',
+        '#endif',
+        '    int localOnly = 1;',
+        '}',
+        'extern "C" {',
+        'ALIGN(4) uint8_t alignedBuf[16];',
+        'void (* const handlers[])(void) = {',
+        '    NULL,',
+        '    NULL,',
+        '};',
+        'void afterUnbalanced(void)',
+        '{',
+        '}',
+        '}',
+        'namespace meter {',
+        'int nsGlobal;',
+        'void nsFn(void) {}',
+        '}',
+        '',
+      ].join('\n'),
+    })('a.cpp');
+    const globals = modules.globalsOf(prepared).map((item: { name: string }) => item.name);
+    expect(globals).toEqual(['alignedBuf', 'handlers', 'nsGlobal']);
+    expect(modules.definitionsOf(prepared).map((item: { name: string }) => item.name)).toEqual([
+      'initModel',
+      'afterUnbalanced',
+      'nsFn',
+    ]);
+    expect(modules.fileTablesOf(prepared).map((item: { name: string }) => item.name)).toEqual(['handlers']);
+  });
 });
 
 describe('expert brief', () => {
@@ -793,13 +843,233 @@ describe('expert brief', () => {
     });
     expect(profData.driftFiles).toEqual([]);
   });
+
+  it('reports external globals, header types, vector APIs, timers, ISRs, internal calls, multi-variant storage IDs and active switch values', async () => {
+    const richFiles: Record<string, string> = {
+      'app/config.h': '#define ENABLE 1\n#define ALARM_V2 ENABLE\n#define ALARM_BACKUP 0\n',
+      'app/nvm_ids.h': 'typedef enum {\n    NVM_ALARM_CFG = 10,\n} tNvmId;\n',
+      'app/measure.c': 'int g_MeasureVolt;\nint g_StatusWord;\n',
+      'app/alarm.h': [
+        'typedef struct { int thd; int delay; } tAlarmPara;',
+        'typedef enum { ALM_NONE = 0, ALM_OVERVOLT = 1 } tAlarmCode;',
+        'static inline int alarmIsHigh(int v) { return v > 250; }',
+        '#if ALARM_V2',
+        '#define ALARM_CFG_ADDR 0x2000',
+        '#else',
+        '#define ALARM_CFG_ADDR 0x1000',
+        '#endif',
+        '',
+      ].join('\n'),
+      'app/alarm.c': [
+        '#include "alarm.h"',
+        'static const tAlarmPara defaultAlarm = {',
+        '    250,',
+        '    10,',
+        '};',
+        'static void alarmHelper(void) {}',
+        'void ALARM_Second(int g_MeasureVolt)',
+        '{',
+        '    (void)g_MeasureVolt;',
+        '}',
+        'void ALARM_Check(void)',
+        '{',
+        '#if ALARM_V2 == ENABLE',
+        '    if (g_MeasureVolt > 250) g_StatusWord |= 1;',
+        '    nvmRead(ALARM_CFG_ADDR, NVM_ALARM_CFG);',
+        '    alarmHelper();',
+        '#endif',
+        '}',
+        'void ALARM_TimerCb(void *t) {}',
+        'void EXTI0_IRQHandler(void) {}',
+        'void ALARM_Start(void) { xTimerCreate("alm", 100, 1, 0, ALARM_TimerCb); }',
+        '',
+      ].join('\n'),
+    };
+    const richRows: Row[] = [
+      ['alarmHelper', 'app/alarm.c', '6', '6'],
+      ['ALARM_Second', 'app/alarm.c', '7', '10'],
+      ['ALARM_Check', 'app/alarm.c', '11', '18'],
+      ['ALARM_TimerCb', 'app/alarm.c', '19', '19'],
+      ['EXTI0_IRQHandler', 'app/alarm.c', '20', '20'],
+      ['ALARM_Start', 'app/alarm.c', '21', '21'],
+    ];
+    const richExperts: Expert[] = [
+      { id: 'alarm', name: 'Alarm expert', paths: ['app/alarm*.c', 'app/alarm.h'] },
+      { id: 'measure', name: 'Measure expert', paths: ['app/measure.c'] },
+    ];
+    const data = modules.collect({
+      expert: richExperts[0],
+      experts: richExperts,
+      shared: [],
+      model: {
+        tasks: [],
+        tables: [
+          {
+            name: 'secondList',
+            dispatchers: [{ def: { name: 'vMainTask', file: 'app/task.c' }, paths: [] }],
+            variants: [
+              {
+                file: 'app/task.c',
+                line: 1,
+                conditions: [],
+                entries: [
+                  {
+                    position: 1,
+                    defs: [{ name: 'ALARM_Check', file: 'app/alarm.c' }],
+                    conditions: [],
+                    comment: 'must run after measure',
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        otherTables: [],
+        smallTables: [],
+        structTables: [],
+        vectorApis: [
+          {
+            base: 'app1_api',
+            header: 'app/app1_api.h',
+            entries: [
+              { macro: 'API_AlarmCheck', field: 'alarm_check', def: { name: 'ALARM_Check', file: 'app/alarm.c' } },
+            ],
+          },
+        ],
+        xmacroTables: [
+          { file: 'app/alarm_items.h', macro: 'ALM_ITEM', count: 4, sites: [{ file: 'app/alarm.c', line: 1 }] },
+        ],
+      },
+      functions: richRows,
+      files: Object.keys(richFiles),
+      calls: [['ALARM_Check', 'app/alarm.c', '11', 'alarmHelper', 'app/alarm.c']],
+      variables: [],
+      coverage: new Map(),
+      source: source(richFiles),
+      diskFiles: ['app/alarm.c', 'app/alarm.h', 'app/alarm_extra.c'],
+    });
+    const text = modules.renderBrief(data, labels['en-US'], { date: 'd', mode: 'full' });
+    // Multi-line table inside a C file with functions, plus unindexed disk file check.
+    expect(text).toContain('tables: `defaultAlarm` (2-5)');
+    expect(text).toContain('app/alarm_extra.c');
+    // Dispatch comment, internal call skeleton, vector API, RTOS timer, and ISR.
+    expect(text).toContain('must run after measure; calls internally: `alarmHelper`');
+    expect(text).toContain('Inter-image API `app1_api` (app/app1_api.h): `API_AlarmCheck` → `ALARM_Check`');
+    expect(text).toContain('RTOS timer callback `ALARM_TimerCb`, created at app/alarm.c:21');
+    expect(text).toContain('Interrupt / callback handler `EXTI0_IRQHandler` (app/alarm.c:20)');
+    // External globals read/written (shadowed param in ALARM_Second skipped) and digest.writesExternal.
+    expect(text).toContain(
+      '`g_StatusWord` (app/measure.c:2, Measure expert): written in `ALARM_Check` (app/alarm.c:14)'
+    );
+    expect(text).toContain('`g_MeasureVolt` (app/measure.c:1, Measure expert): read in `ALARM_Check` (app/alarm.c:14)');
+    expect(text).not.toContain('ALARM_Second` (app/alarm.c:9)');
+    expect(modules.digest(data).writesExternal).toEqual(['g_StatusWord']);
+    // Header types, enums, inline helpers, and X-Macro tables.
+    expect(text).toContain('Structs / unions: `tAlarmPara` (app/alarm.h:1)');
+    expect(text).toContain('Enums: `tAlarmCode` (app/alarm.h:2)');
+    expect(text).toContain('Header inline / helper functions: `alarmIsHigh` (app/alarm.h:3)');
+    expect(text).toContain('app/alarm_items.h: X-Macro `ALM_ITEM` (4 entries)');
+    // Multi-variant #if address macro and enum storage ID.
+    expect(text).toContain(
+      '`ALARM_CFG_ADDR`: defined as `0x2000` at app/alarm.h:5 [only when `ALARM_V2`] / defined as `0x1000` at app/alarm.h:7 [only when `!(ALARM_V2)`]'
+    );
+    expect(text).toContain('`NVM_ALARM_CFG`: enum / X-Macro entry at app/nvm_ids.h:2');
+    // Active build switch definition while filtering ENABLE.
+    expect(text).toContain('`ALARM_V2` ×2 (defined as `ENABLE` at app/config.h:2)');
+    expect(text).not.toContain('`ENABLE` ×');
+  });
+
+  it('balances callers across experts and summarizes overflowed target groups in uses instead of dropping them silently', () => {
+    // Expert A calls coreFn from 9 functions; Expert B calls coreFn once and must not be hidden.
+    const aFns = Array.from({ length: 9 }, (_, i) => `aCall${i}`);
+    const manyFiles: Record<string, string> = {
+      'app/core.c': 'void coreFn(void)\n{\n}\n',
+      'app/a.c': aFns.map((name) => `void ${name}(void)\n{\n    coreFn();\n}\n`).join(''),
+      'app/b.c': 'void bCall(void)\n{\n    coreFn();\n}\n',
+      'app/ext1.c': Array.from({ length: 61 }, (_, i) => `void ext1_${i}(void) {}\n`).join(''),
+      'app/ext2.c': 'void ext2_0(void) {}\nvoid ext2_1(void) {}\n',
+    };
+    const rows: Row[] = [
+      ['coreFn', 'app/core.c', '1', '3'],
+      ...aFns.map((name, i): Row => [name, 'app/a.c', String(i * 4 + 1), String(i * 4 + 4)]),
+      ['bCall', 'app/b.c', '1', '4'],
+      ...Array.from({ length: 61 }, (_, i): Row => [`ext1_${i}`, 'app/ext1.c', String(i + 1), String(i + 1)]),
+      ['ext2_0', 'app/ext2.c', '1', '1'],
+      ['ext2_1', 'app/ext2.c', '2', '2'],
+    ];
+    const exps: Expert[] = [
+      { id: 'core', name: 'Core', paths: ['app/core.c'] },
+      { id: 'alpha', name: 'Alpha', paths: ['app/a.c'] },
+      { id: 'beta', name: 'Beta', paths: ['app/b.c'] },
+      { id: 'ext1', name: 'Ext1', paths: ['app/ext1.c'] },
+      { id: 'ext2', name: 'Ext2', paths: ['app/ext2.c'] },
+    ];
+    const data = modules.collect({
+      expert: exps[0],
+      experts: exps,
+      shared: [],
+      model: { tasks: [], tables: [], otherTables: [], smallTables: [], structTables: [] },
+      functions: rows,
+      files: Object.keys(manyFiles),
+      calls: [
+        ...aFns.map((name, i) => [name, 'app/a.c', String(i * 4 + 1), 'coreFn', 'app/core.c']),
+        ['bCall', 'app/b.c', '1', 'coreFn', 'app/core.c'],
+        ...Array.from({ length: 61 }, (_, i) => ['coreFn', 'app/core.c', '1', `ext1_${i}`, 'app/ext1.c']),
+        ['coreFn', 'app/core.c', '1', 'ext2_0', 'app/ext2.c'],
+        ['coreFn', 'app/core.c', '1', 'ext2_1', 'app/ext2.c'],
+      ],
+      variables: [],
+      coverage: new Map(),
+      source: source(manyFiles),
+    });
+    const text = modules.renderBrief(data, labels['en-US'], { date: 'd', mode: 'full' });
+    expect(text).toContain('`bCall` (app/b.c:3, Beta)');
+    expect(text).toContain('1 more target modules/groups called (not expanded): Ext2 (2).');
+  });
+
+  it('ignores user corrections when computing ownPart and detects missing module-card sections', () => {
+    const expert = experts[0];
+    const base = modules.mergeCard(undefined, 'Facts v1', expert, labels['en-US'], 'en-US');
+    const userOnly = `${base}\n## 用户更正\n- 阈值单位是 0.1V。\n`;
+    expect(modules.ownPart(userOnly, expert)).toBe('');
+
+    const partial = `${base}\n## 流程\n读取传感器。\n\n## 用户更正\n- 旧备注\n`;
+    const partialEditedUser = `${base}\n## 流程\n读取传感器。\n\n## 用户更正\n- 新备注\n`;
+    expect(modules.ownPart(partial, expert)).toBe(modules.ownPart(partialEditedUser, expert));
+    expect(modules.missingCardSections(partial, expert)).toEqual([
+      'files',
+      'entry',
+      'parameters',
+      'dataSources',
+      'outputs',
+      'switches',
+      'gaps',
+    ]);
+
+    const complete = [
+      base,
+      '## 概述与文件清单',
+      '## 入口、调度与生命周期',
+      '## 核心流程',
+      '## 参数、默认值与存储',
+      '## 数据来源与外部依赖',
+      '## 输出与对外接口',
+      '## 编译开关',
+      '## 索引核对与盲区',
+      '## 用户更正',
+    ].join('\n');
+    expect(modules.missingCardSections(complete, expert)).toEqual([]);
+  });
 });
 
 const signatureData = (overrides: Record<string, unknown> = {}) => ({
   unmatched: [],
   driftFiles: [],
+  unindexedFiles: [],
   tasks: [{ name: 'vSensorTask', site: 'app/main.c:40' }],
   entries: [{ table: 'secondList', position: 2, names: ['SENSOR_Second'], conditions: [] }],
+  structs: [{ type: 'tOps', field: 'read', functions: ['SENSOR_Read'] }],
+  vectorEntries: [{ base: 'app1_api', items: [{ macro: 'API_Read', target: 'SENSOR_Read' }] }],
   ...overrides,
 });
 
@@ -816,7 +1086,7 @@ describe('drift signature of a card', () => {
     expect(modules.isCurrentDriftSignature(before)).toBe(true);
   });
 
-  it('changes when the module is scheduled differently or gains unowned files', () => {
+  it('changes when the module is scheduled differently or gains unowned, unindexed, struct or vector entries', () => {
     const before = modules.driftSignature(signatureData());
     expect(modules.driftSignature(signatureData({ tasks: [] }))).not.toBe(before);
     expect(
@@ -827,9 +1097,17 @@ describe('drift signature of a card', () => {
       )
     ).not.toBe(before);
     expect(modules.driftSignature(signatureData({ driftFiles: ['app/sensor_cal.c'] }))).not.toBe(before);
+    expect(modules.driftSignature(signatureData({ unindexedFiles: ['app/sensor_extra.c'] }))).not.toBe(before);
+    expect(
+      modules.driftSignature(
+        signatureData({ structs: [{ type: 'tOps', field: 'read', functions: ['SENSOR_Read', 'SENSOR_New'] }] })
+      )
+    ).not.toBe(before);
+    expect(modules.driftSignature(signatureData({ vectorEntries: [] }))).not.toBe(before);
   });
 
   it('tells signatures of an older format apart', () => {
+    expect(modules.isCurrentDriftSignature('v2\nu:\nd:\nt:vSensorTask\ne:')).toBe(false);
     expect(modules.isCurrentDriftSignature('u:\nd:\nt:vSensorTask@app/main.c:40\ne:')).toBe(false);
     expect(modules.isCurrentDriftSignature(undefined)).toBe(false);
   });

@@ -186,7 +186,21 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
             // members keep the knowledge in the chosen folder.
             const knowledge = isolated.enabled ? experts.file.replace(/[\\/][^\\/]+$/, '') : '.woody';
             // Briefs Woody has not written yet, or that no longer match the experts, are written now.
-            const briefs = experts.hasCards ? await loadExpertBriefs(workspace, i18n.language) : undefined;
+            const loadedBriefs = experts.hasCards
+              ? Object.fromEntries(
+                  chosenExperts.experts.flatMap((expert) => {
+                    const card = experts.cardOf(expert.id);
+                    return card ? [[expert.id, { state: card.state, digest: card.digest }]] : [];
+                  })
+                )
+              : undefined;
+            const briefs = experts.hasCards
+              ? await loadExpertBriefs(
+                  workspace,
+                  i18n.language,
+                  loadedBriefs && Object.keys(loadedBriefs).length ? loadedBriefs : undefined
+                )
+              : undefined;
             const onboarding = experts.onboard ? onboardingIds(chosenExperts.experts, briefs) : [];
             // The dispatcher leads the meter business: it writes the overview a project lacks.
             const businessOnboarding = experts.onboard && experts.businessMissing;
@@ -248,6 +262,10 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
           assistant_id: member.assistant.id,
           model: modelBySelectionId.get(member.selectionId),
         }));
+        // Hand-picked built-in module experts rely on .woody/features/*.md briefs too; refresh any missing briefs best-effort.
+        if (workspace && selectedMembers.some((member) => /^woody-.+-expert$/.test(member.assistant.id))) {
+          await loadExpertBriefs(workspace, i18n.language);
+        }
       }
 
       // Members picked by hand get the codebase memory tools a chat in this folder has (template

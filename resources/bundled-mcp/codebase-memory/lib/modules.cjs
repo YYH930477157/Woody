@@ -21,26 +21,146 @@ const C_HEADER = /\.(h|hh|hpp|hxx)$/i;
 const LAYER_PREFIX_FILES = 3;
 const LIMITS = {
   provides: 20,
-  provideNames: 60,
-  callers: 5,
-  uses: 30,
-  globals: 20,
+  provideNames: 80,
+  callers: 8,
+  uses: 60,
+  globals: 25,
+  globalNames: 60,
+  externalGlobals: 25,
+  externalGlobalNames: 60,
   sites: 5,
-  statics: 30,
-  addresses: 10,
+  statics: 50,
+  addresses: 25,
+  addressNames: 60,
   addressSites: 3,
   structTables: 4,
-  fileFunctions: 40,
-  fileTables: 12,
-  switches: 25,
+  fileFunctions: 80,
+  fileTables: 16,
+  types: 25,
+  switches: 30,
   missing: 30,
+  internalCallees: 6,
   digestProvides: 8,
   digestGlobals: 8,
   digestEntries: 10,
 };
 const ADDRESS_MACRO = /\b[A-Z][A-Z0-9_]*ADDR[A-Z0-9_]*\b/g;
+const STORAGE_ID = /\b(?:NVM|EEP|EEPROM|FRAM|FLASH|PARA_ID|DATA_ID|STORAGE)_[A-Z0-9_]+\b/g;
 const DIRECTIVE_IF = /^\s*#\s*(?:if|ifdef|ifndef|elif)\b(.*)$/;
-const NOT_SWITCHES = new Set(['defined', 'if', 'ifdef', 'ifndef', 'elif']);
+const NOT_SWITCHES = new Set([
+  'defined',
+  'if',
+  'ifdef',
+  'ifndef',
+  'elif',
+  'ENABLE',
+  'DISABLE',
+  'ENABLED',
+  'DISABLED',
+  'ON',
+  'OFF',
+  'TRUE',
+  'FALSE',
+  'YES',
+  'NO',
+  'STD_ON',
+  'STD_OFF',
+  'NULL',
+  'nullptr',
+  '__cplusplus',
+]);
+const COMMON_LOCAL_NAMES = new Set([
+  'ch',
+  'id',
+  'len',
+  'cnt',
+  'idx',
+  'tmp',
+  'val',
+  'buf',
+  'ptr',
+  'ret',
+  'err',
+  'res',
+  'bit',
+  'pos',
+  'sum',
+  'max',
+  'min',
+  'num',
+  'cmd',
+  'key',
+  'msg',
+  'src',
+  'dst',
+  'arg',
+  'ctx',
+  'cfg',
+  'obj',
+  'dev',
+  'tag',
+  'row',
+  'col',
+  'data',
+  'size',
+  'type',
+  'mode',
+  'flag',
+  'code',
+  'mask',
+  'addr',
+  'time',
+  'date',
+  'year',
+  'hour',
+  'step',
+  'rate',
+  'tick',
+  'line',
+  'name',
+  'text',
+  'list',
+  'item',
+  'node',
+  'head',
+  'tail',
+  'next',
+  'prev',
+  'last',
+  'curr',
+  'temp',
+  'page',
+  'slot',
+  'port',
+  'task',
+  'func',
+  'count',
+  'state',
+  'value',
+  'index',
+  'error',
+  'level',
+  'limit',
+  'check',
+  'start',
+  'length',
+  'offset',
+  'status',
+  'result',
+  'buffer',
+  'header',
+  'config',
+  'handle',
+  'target',
+  'source',
+  'output',
+  'number',
+]);
+const TIMER_CREATE_PATTERN = /\b(xTimerCreate|xTimerCreateStatic|osTimerNew)\s*\(/g;
+const ISR_NAME_PATTERN = /(?:_IRQHandler|_ISR|_Isr|IRQ_Handler)$|^HAL_[A-Za-z0-9_]+Callback$/;
+const ARRAY_WRITE_FIRST_ARG = /^(?:memcpy|memmove|memset|strcpy|strncpy|strcat|strncat|sprintf|snprintf|bzero)$/i;
+const ARRAY_READ_LATER_ARG = /^(?:memcpy|memmove|memcmp|strcpy|strncpy|strcat|strncat|strcmp|strncmp|strlen)$/i;
+const CONFIG_HEADER_NAME = /(?:cfg|conf|config|opt|option|def|proj|feature|board)/i;
 const DECLARATION_WORDS = new Set([
   ...KEYWORDS,
   'const',
@@ -135,12 +255,34 @@ function functionName(statement) {
 }
 
 /**
+ * Closing `}` for `open`, falling back to indentation matching when `#if`/`#else` branches
+ * leave unbalanced opening braces inside a top-level block.
+ */
+function matchCloseTolerant(plain, starts, open, beginOffset) {
+  const exact = matchClose(plain, open);
+  if (exact >= 0) return exact;
+  const beginLine = lineOf(starts, beginOffset);
+  const beginSlice = plain.slice(starts[beginLine - 1], starts[beginLine] ?? plain.length);
+  const indent = (beginSlice.match(/^[ \t]*/) || [''])[0].length;
+  const startLine = lineOf(starts, open);
+  for (let line = startLine + 1; line <= starts.length; line++) {
+    const from = starts[line - 1];
+    const to = starts[line] ?? plain.length;
+    const raw = plain.slice(from, to).replace(/\r?\n$/, '');
+    const match = /^([ \t]*)\}\s*;?\s*$/.exec(raw);
+    if (match && match[1].length <= indent) return from + match[1].length;
+  }
+  return -1;
+}
+
+/**
  * Top-level statements of a file: function definitions and declarations, with the brace
- * bodies of initializers and struct definitions collapsed to `{}`. Offsets point into the
- * prepared `plain` text.
+ * bodies of initializers and struct definitions collapsed to `{}`. Unwraps `extern "C"` and
+ * C++ `namespace` blocks, and recovers from `#if`/`#else` unbalanced braces. Offsets point
+ * into the prepared `plain` text.
  */
 function topLevel(source) {
-  const { plain } = source;
+  const { plain, starts } = source;
   const result = [];
   // `begin` is where the statement started; `start` where its not yet copied text starts.
   let begin = 0;
@@ -154,11 +296,19 @@ function topLevel(source) {
   while (i < plain.length) {
     const c = plain[i];
     if (c === '{') {
-      const close = matchClose(plain, i);
-      if (close < 0) break;
       const before = text + plain.slice(start, i);
-      if (!before.includes('=') && functionName(collapse(before))) {
-        result.push({ kind: 'function', text: collapse(before), offset: begin });
+      const beforeTrim = collapse(before);
+      if (
+        /^extern\s+"[^"]*"\s*$/.test(beforeTrim) ||
+        /^namespace(?:\s+[A-Za-z_]\w*(?:::[A-Za-z_]\w*)*)?\s*$/.test(beforeTrim)
+      ) {
+        restart(i + 1);
+        continue;
+      }
+      const close = matchCloseTolerant(plain, starts, i, begin);
+      if (close < 0) break;
+      if (!before.includes('=') && functionName(beforeTrim)) {
+        result.push({ kind: 'function', text: beforeTrim, offset: begin });
         restart(close + 1);
         continue;
       }
@@ -172,7 +322,7 @@ function topLevel(source) {
       continue;
     }
     if (c === '}') {
-      // A stray closing brace (unbalanced #if branches): start over after it.
+      // A stray closing brace (unbalanced #if branches or end of extern "C" / namespace): start over after it.
       restart(i + 1);
       continue;
     }
@@ -198,14 +348,20 @@ function globalsOf(source) {
     let text = item.text
       .replace(/__attribute__\s*\(\(.*?\)\)/g, ' ')
       .replace(/\b__declspec\s*\([^)]*\)/g, ' ')
+      .replace(/\b(?:__?ALIGN\w*|ALIGN|__?SECTION|SECTION|AT_SECTION|__?PACKED|PACKED|DATA_ALIGN)\s*\([^)]*\)/g, ' ')
       .replace(/@\s*[^,;=]+/g, ' ');
     if (!text || /^(typedef|extern)\b/.test(text)) continue;
     // A struct, union or enum definition without a variable.
     if (/\{\}\s*$/.test(text) && !text.includes('=')) continue;
-    const pointerFunction = /\(\s*\*\s*([A-Za-z_]\w*)\s*\)\s*\(/.exec(text);
+    const pointerFunction = /\(\s*\*\s*(?:const\s+|volatile\s+)*([A-Za-z_]\w*)\s*((?:\[[^\]]*\]\s*)*)\)\s*\(/.exec(
+      text
+    );
     const names = [];
-    if (pointerFunction) names.push(pointerFunction[1]);
-    else {
+    let pointerArray = false;
+    if (pointerFunction) {
+      names.push(pointerFunction[1]);
+      pointerArray = Boolean(pointerFunction[2].trim());
+    } else {
       // Prototypes and macro calls; array sizes may call macros.
       if (
         text
@@ -226,6 +382,7 @@ function globalsOf(source) {
       }
     }
     const isStatic = /\bstatic\b/.test(text);
+    const isConst = /\bconst\b/.test(text.split('=')[0]);
     for (const name of names) {
       const offset = wordOffset(plain, name, item.offset);
       if (offset < 0) continue;
@@ -233,7 +390,15 @@ function globalsOf(source) {
       const guard = guards[line - 1];
       if (guard?.dead) continue;
       if (!found.has(name))
-        found.set(name, { name, file, line, isStatic, conditions: guard?.conditions || [], array: false });
+        found.set(name, {
+          name,
+          file,
+          line,
+          isStatic,
+          isConst,
+          conditions: guard?.conditions || [],
+          array: pointerArray,
+        });
       if (new RegExp(`\\b${name}\\s*\\[`).test(text)) found.get(name).array = true;
     }
   }
@@ -257,22 +422,109 @@ function definitionsOf(source) {
   return [...found.values()];
 }
 
-/** Top-level initialized arrays and structs with their start/end lines, for pure-table or unparsed files. */
+/** Struct, union and enum type definitions in a file, outside `#if 0`. */
+function typesOf(source) {
+  const { file, plain, starts, guards } = source;
+  const structs = [];
+  const enums = [];
+  const seenStruct = new Set();
+  const seenEnum = new Set();
+  const addStruct = (name, kind, line, body) => {
+    if (!name || seenStruct.has(name)) return;
+    seenStruct.add(name);
+    const fieldCount = body
+      .split(';')
+      .map((part) => part.trim())
+      .filter(Boolean).length;
+    structs.push({ name, kind, file, line, fieldCount });
+  };
+  const addEnum = (name, line, body) => {
+    if (!name || seenEnum.has(name)) return;
+    seenEnum.add(name);
+    const count = splitTopLevel(body, 0, body.length)
+      .map((part) => body.slice(part.start, part.end).trim())
+      .filter(Boolean).length;
+    enums.push({ name, file, line, count });
+  };
+  for (const match of plain.matchAll(/\btypedef\s+(struct|union|enum)(?:\s+([A-Za-z_]\w*))?\s*\{/g)) {
+    const line = lineOf(starts, match.index);
+    if (guards[line - 1]?.dead) continue;
+    const open = match.index + match[0].length - 1;
+    const close = matchCloseTolerant(plain, starts, open, match.index);
+    if (close < 0) continue;
+    const semi = plain.indexOf(';', close + 1);
+    const tail = semi < 0 ? '' : plain.slice(close + 1, semi);
+    const alias = splitTopLevel(tail, 0, tail.length)
+      .map((part) => tail.slice(part.start, part.end).trim())
+      .filter((piece) => piece && !piece.startsWith('*'))
+      .map((piece) => /^([A-Za-z_]\w*)/.exec(piece)?.[1])
+      .find(Boolean);
+    const name = alias || match[2];
+    const body = plain.slice(open + 1, close);
+    if (match[1] === 'enum') addEnum(name, line, body);
+    else addStruct(name, match[1], line, body);
+  }
+  for (const match of plain.matchAll(/\b(struct|union|enum)\s+([A-Za-z_]\w*)\s*\{/g)) {
+    const line = lineOf(starts, match.index);
+    if (guards[line - 1]?.dead) continue;
+    const before = plain.slice(Math.max(0, match.index - 16), match.index);
+    if (/\btypedef\s*$/.test(before)) continue;
+    const open = match.index + match[0].length - 1;
+    const close = matchCloseTolerant(plain, starts, open, match.index);
+    if (close < 0) continue;
+    const body = plain.slice(open + 1, close);
+    if (match[1] === 'enum') addEnum(match[2], line, body);
+    else addStruct(match[2], match[1], line, body);
+  }
+  return { structs, enums };
+}
+
+/** Top-level initialized arrays and structs with their start/end lines. */
 function fileTablesOf(source) {
   const { plain, starts, guards } = source;
   const items = [];
-  const pattern = /\b([A-Za-z_]\w*)\s*(?:\[[^\];{}]*\]\s*)?=\s*\{/g;
-  let depth = 0;
+  const pattern = /\b([A-Za-z_]\w*)\s*(?:\[[^\];{}]*\]\s*(?:\)\s*\([^;{}]*\)\s*)?)?=\s*\{/g;
+  // Walk top-level brace blocks (unwrapping extern "C" and namespace blocks) so an unbalanced #if brace
+  // inside an earlier function never masks later tables.
+  const ranges = [];
   let cursor = 0;
+  let stmtStart = 0;
+  while (cursor < plain.length) {
+    const ch = plain[cursor];
+    if (ch === ';') {
+      stmtStart = cursor + 1;
+      cursor++;
+      continue;
+    }
+    if (ch === '{') {
+      const beforeTrim = collapse(plain.slice(stmtStart, cursor));
+      if (
+        /^extern\s+"[^"]*"\s*$/.test(beforeTrim) ||
+        /^namespace(?:\s+[A-Za-z_]\w*(?:::[A-Za-z_]\w*)*)?\s*$/.test(beforeTrim)
+      ) {
+        stmtStart = cursor + 1;
+        cursor++;
+        continue;
+      }
+      const close = matchCloseTolerant(plain, starts, cursor, stmtStart);
+      if (close < 0) break;
+      ranges.push([cursor, close]);
+      cursor = stmtStart = close + 1;
+      continue;
+    }
+    if (ch === '}') stmtStart = cursor + 1;
+    cursor++;
+  }
+  let rangeIndex = 0;
   for (const match of plain.matchAll(pattern)) {
-    for (; cursor < match.index; cursor++)
-      if (plain[cursor] === '{') depth++;
-      else if (plain[cursor] === '}') depth = Math.max(0, depth - 1);
-    if (depth !== 0) continue;
+    while (rangeIndex < ranges.length && ranges[rangeIndex][1] < match.index) rangeIndex++;
+    const inside =
+      rangeIndex < ranges.length && ranges[rangeIndex][0] < match.index && match.index < ranges[rangeIndex][1];
+    if (inside) continue;
     const start = lineOf(starts, match.index);
     if (guards[start - 1]?.dead || DECLARATION_WORDS.has(match[1])) continue;
     const open = match.index + match[0].length - 1;
-    const close = matchClose(plain, open);
+    const close = matchCloseTolerant(plain, starts, open, match.index);
     if (close < 0) continue;
     items.push({ name: match[1], start, end: lineOf(starts, close) });
   }
@@ -295,8 +547,13 @@ function macroLine(prepared, line) {
   return raw;
 }
 
-/** How `plain` uses the variable whose name starts at `offset`: write, address or read. */
-function accessKind(plain, offset, name) {
+/**
+ * How `plain` uses the variable whose name starts at `offset`: write, address or read.
+ * When `isArray` is true and `!isConst`, bare array arguments decaying to a pointer are
+ * classified as `write` (first arg of memcpy/memset/...) or `address` (passed to other calls),
+ * while `sizeof(arr)` stays `read`.
+ */
+function accessKind(plain, offset, name, isArray = false, isConst = false) {
   const before = plain.slice(Math.max(0, offset - 3), offset);
   if (/(\+\+|--)\s*$/.test(before)) return 'write';
   if (/(?:^|[^&])&\s*$/.test(before)) return 'address';
@@ -319,6 +576,37 @@ function accessKind(plain, offset, name) {
   }
   const after = plain.slice(i, i + 3);
   if (/^(?:=(?!=)|[-+*/%&|^]=|<<=|>>=|\+\+|--)/.test(after)) return 'write';
+  if (isArray && !isConst && i === offset + name.length) {
+    // Check whether a bare array name decays to a pointer inside a call argument list.
+    const trail = plain.slice(i, i + 20).trimStart();
+    if (trail.startsWith(',') || trail.startsWith(')')) {
+      const lookback = plain.slice(Math.max(0, offset - 120), offset);
+      // Find the innermost unmatched `(` before `offset`.
+      let depth = 0;
+      let paren = -1;
+      let commas = 0;
+      for (let j = lookback.length - 1; j >= 0; j--) {
+        const ch = lookback[j];
+        if (ch === ')' || ch === ']' || ch === '}') depth++;
+        else if (ch === '(' || ch === '[' || ch === '{') {
+          if (depth === 0 && ch === '(') {
+            paren = j;
+            break;
+          }
+          depth--;
+        } else if (ch === ',' && depth === 0) commas++;
+      }
+      if (paren >= 0) {
+        const callee = /([A-Za-z_]\w*)\s*$/.exec(lookback.slice(0, paren))?.[1];
+        if (callee) {
+          if (callee === 'sizeof') return 'read';
+          if (commas === 0 && ARRAY_WRITE_FIRST_ARG.test(callee)) return 'write';
+          if (commas > 0 && ARRAY_READ_LATER_ARG.test(callee)) return 'read';
+          if (!KEYWORDS.has(callee)) return 'address';
+        }
+      }
+    }
+  }
   return 'read';
 }
 
@@ -636,6 +924,8 @@ function collect(input) {
   const owned = indexed.filter(mine).sort();
   const ownedSet = new Set(owned);
   const unmatched = expert.paths.filter((entry) => !indexed.some((file) => entryMatch(entry, file) >= 0));
+  const unindexedFiles = (input.diskFiles || []).filter((file) => mine(file) && !ownedSet.has(file)).sort();
+  const cache = input.cache || {};
   const defsByFile = new Map();
   for (const [name, file, start, end] of functions) {
     if (typeof file !== 'string') continue;
@@ -651,14 +941,17 @@ function collect(input) {
   const fileStates = owned.map((file) => {
     const info = coverage.get(file) || {};
     const names = (defsByFile.get(file) || []).sort((a, b) => a.start - b.start).map((def) => def.name);
-    const prepared =
-      (info.status === 'unusable' || (!names.length && C_SOURCE.test(file))) && source ? source(file) : null;
+    const scanAllTables = info.status === 'unusable' || !names.length;
+    const prepared = (scanAllTables || C_SOURCE.test(file)) && source ? source(file) : null;
+    const rawTables = prepared && (C_SOURCE.test(file) || info.status === 'unusable') ? fileTablesOf(prepared) : [];
+    // Normal C files with functions only list multi-line initialized tables (configs, defaults, lookup tables).
+    const tables = scanAllTables ? rawTables : rawTables.filter((item) => item.end - item.start >= 2);
     return {
       file,
       functions: names.length,
       // Names, so an expert compares the index with the source name by name, not by count.
       names,
-      tables: prepared ? fileTablesOf(prepared) : [],
+      tables,
       status: info.status,
       changed: info.freshness === 'metadata_changed' || info.freshness === 'missing',
       ranges: info.ranges || [],
@@ -682,7 +975,7 @@ function collect(input) {
 
   // Scheduling.
   const entries = [];
-  for (const table of model.tables)
+  for (const table of model.tables || [])
     for (const variant of table.variants)
       for (const entry of variant.entries) {
         const defs = entry.defs.filter((def) => ownedSet.has(def.file));
@@ -694,11 +987,12 @@ function collect(input) {
           position: entry.position,
           names: defs.map((def) => def.name),
           conditions: [...variant.conditions, ...entry.conditions],
+          comment: entry.comment || '',
           dispatcher: dispatcher ? dispatcher.def.name : undefined,
           task: dispatcher?.paths?.[0]?.[0]?.name,
         });
       }
-  const tasks = model.tasks
+  const tasks = (model.tasks || [])
     .filter((task) => ownedSet.has(task.entry.file))
     .map((task) => ({ name: task.entry.name, site: task.site }));
   // One line per struct type, field and functions: tables that repeat the same entries share it.
@@ -736,11 +1030,69 @@ function collect(input) {
             position: entry.position,
             names: defs.map((def) => def.name),
             conditions: [...variant.conditions, ...entry.conditions],
+            comment: entry.comment || '',
             dispatcher: table.dispatcher.name,
           });
       }
 
-  // Calls across the module boundary.
+  // Inter-image vector API entries owned by this expert.
+  const vectorEntries = [];
+  for (const api of model.vectorApis || []) {
+    const matched = (api.entries || []).filter(
+      (entry) =>
+        (entry.def && ownedSet.has(entry.def.file)) ||
+        ownedSet.has(api.header) ||
+        (api.table && ownedSet.has(api.table.file))
+    );
+    if (!matched.length) continue;
+    vectorEntries.push({
+      base: api.base,
+      header: api.header,
+      items: matched.map((entry) => ({
+        macro: entry.macro,
+        field: entry.field,
+        target: entry.def?.name || entry.field,
+      })),
+    });
+  }
+
+  // RTOS software timer callbacks pointing into this module (cached once per project scan).
+  if (!cache.timerSites) {
+    cache.timerSites = [];
+    for (const file of indexed) {
+      if (!C_SOURCE.test(file) || foreign(file)) continue;
+      const prepared = source(file);
+      if (!prepared) continue;
+      const { plain, starts, guards } = prepared;
+      for (const match of plain.matchAll(TIMER_CREATE_PATTERN)) {
+        const line = lineOf(starts, match.index);
+        if (guards[line - 1]?.dead) continue;
+        const open = match.index + match[0].length - 1;
+        const close = matchClose(plain, open);
+        if (close < 0) continue;
+        const args = splitTopLevel(plain, open + 1, close).map((part) => collapse(plain.slice(part.start, part.end)));
+        const raw = match[1] === 'osTimerNew' ? args[0] : args[4];
+        if (!raw) continue;
+        const bare = raw.replace(/^(\(\s*[A-Za-z_][\w\s*]*\)\s*)+/, '').replace(/^&\s*/, '');
+        if (/^[A-Za-z_]\w*$/.test(bare)) cache.timerSites.push({ name: bare, site: at(file, line) });
+      }
+    }
+  }
+  const ownedFnNames = new Set(owned.flatMap((file) => (defsByFile.get(file) || []).map((def) => def.name)));
+  const timers = cache.timerSites.filter((item) => ownedFnNames.has(item.name));
+
+  // Interrupt and HAL callback handlers defined inside this module.
+  const scheduledNames = new Set([...tasks.map((task) => task.name), ...entries.flatMap((entry) => entry.names)]);
+  const isrs = [];
+  for (const file of owned) {
+    for (const def of defsByFile.get(file) || []) {
+      if (ISR_NAME_PATTERN.test(def.name) && !scheduledNames.has(def.name)) {
+        isrs.push({ name: def.name, site: at(file, def.start) });
+      }
+    }
+  }
+
+  // Calls across the module boundary, plus a 1-level internal call map for entry points.
   const callSite = (file, start, name) => {
     const prepared = source(file);
     const def = (defsByFile.get(file) || []).find((item) => item.start === start);
@@ -756,6 +1108,7 @@ function collect(input) {
   };
   const provided = new Map();
   const used = new Map();
+  const internalCalls = new Map();
   for (const [callerName, callerFile, callerStart, calleeName, calleeFile] of calls) {
     if (typeof callerFile !== 'string' || typeof calleeFile !== 'string') continue;
     const inCaller = ownedSet.has(callerFile);
@@ -778,6 +1131,10 @@ function collect(input) {
       const group = `${target ?? ''}|${module ?? ''}`;
       if (!used.has(group)) used.set(group, { owner: target, module, functions: new Map() });
       used.get(group).functions.set(`${calleeName}|${calleeFile}`, { name: calleeName, file: calleeFile });
+    } else if (inCaller && inCallee && callerName !== calleeName) {
+      if (!internalCalls.has(callerName)) internalCalls.set(callerName, []);
+      const callees = internalCalls.get(callerName);
+      if (!callees.includes(calleeName)) callees.push(calleeName);
     }
   }
   const startOf = (name, file) => (defsByFile.get(file) || []).find((def) => def.name === name)?.start;
@@ -816,90 +1173,252 @@ function collect(input) {
         (a.owner ?? a.module ?? '').localeCompare(b.owner ?? b.module ?? '')
     );
 
-  // Globals, from the source.
+  // Own globals, function definitions, and module types / header inlines.
   const graphVariables = new Set(variables.filter((row) => ownedSet.has(row[1])).map((row) => `${row[0]}|${row[1]}`));
   const globals = [];
   const definitions = [];
+  const typeStructs = [];
+  const typeEnums = [];
+  const headerInlines = [];
   for (const file of owned) {
     const prepared = source(file);
     if (!prepared) continue;
+    const { structs: fileStructs, enums: fileEnums } = typesOf(prepared);
+    typeStructs.push(...fileStructs);
+    typeEnums.push(...fileEnums);
     if (C_SOURCE.test(file)) {
       for (const item of globalsOf(prepared))
         globals.push({ ...item, inGraph: graphVariables.has(`${item.name}|${file}`), users: [] });
       for (const item of definitionsOf(prepared)) definitions.push({ ...item, file });
+    } else if (C_HEADER.test(file)) {
+      for (const item of definitionsOf(prepared)) headerInlines.push({ ...item, file });
     }
   }
   const external = globals.filter((item) => !item.isStatic);
   if (external.length) {
-    const byName = new Map(external.map((item) => [item.name, item]));
+    const byName = new Map();
+    for (const item of external) {
+      if (!byName.has(item.name)) byName.set(item.name, []);
+      byName.get(item.name).push(item);
+    }
     const pattern = new RegExp(`\\b(${[...byName.keys()].join('|')})\\b`, 'g');
     for (const file of indexed) {
-      if (ownedSet.has(file) || !C_SOURCE.test(file)) continue;
+      if (ownedSet.has(file) || (!C_SOURCE.test(file) && !C_HEADER.test(file))) continue;
       const prepared = source(file);
       if (!prepared) continue;
       const { plain, starts } = prepared;
       for (const match of plain.matchAll(pattern)) {
-        const previous = plain.slice(Math.max(0, match.index - 2), match.index);
-        if (/(\.|->)\s*$/.test(previous) || /\.\s?$/.test(previous)) continue;
+        const previous = plain.slice(Math.max(0, match.index - 8), match.index);
+        if (/(?:\.|->)\s*$/.test(previous)) continue;
         const line = lineOf(starts, match.index);
         if (prepared.guards[line - 1]?.dead) continue;
         const lineText = plain.slice(starts[line - 1], starts[line] ?? plain.length);
         if (/\bextern\b/.test(lineText)) continue;
-        const item = byName.get(match[1]);
+        const items = byName.get(match[1]);
         const def = enclosing(file, line);
-        item.users.push({ file, line, function: def?.name, kind: accessKind(plain, match.index, match[1]) });
+        const siteOwner = owner(file);
+        const siteModule = moduleOf.get(file);
+        for (const item of items) {
+          item.users.push({
+            file,
+            line,
+            function: def?.name,
+            owner: siteOwner,
+            module: siteModule,
+            kind: accessKind(plain, match.index, match[1], item.array, item.isConst),
+          });
+        }
       }
     }
   }
-
   for (const item of globals) item.users.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
 
-  // Address macros used by the module, with their definitions anywhere in the project.
+  // External globals defined outside this module that this module reads or writes (data sources & side effects).
+  if (!cache.projectGlobals) {
+    cache.projectGlobals = new Map();
+    for (const file of indexed) {
+      if (!C_SOURCE.test(file) || foreign(file)) continue;
+      const prepared = source(file);
+      if (!prepared) continue;
+      for (const item of globalsOf(prepared)) {
+        if (item.isStatic) continue;
+        if (!cache.projectGlobals.has(item.name)) cache.projectGlobals.set(item.name, []);
+        cache.projectGlobals.get(item.name).push(item);
+      }
+    }
+  }
+  const ownGlobalNames = new Set(globals.map((item) => item.name));
+  const externalCandidates = new Map();
+  for (const [name, defs] of cache.projectGlobals) {
+    if (ownGlobalNames.has(name) || name.length < 3 || COMMON_LOCAL_NAMES.has(name.toLowerCase())) continue;
+    const outside = defs.filter((item) => !ownedSet.has(item.file));
+    if (!outside.length) continue;
+    externalCandidates.set(name, outside[0]);
+  }
+  const externalGlobalsMap = new Map();
+  if (externalCandidates.size) {
+    const extPattern = new RegExp(`\\b(${[...externalCandidates.keys()].join('|')})\\b`, 'g');
+    const fnParamCache = new Map();
+    const isFnParam = (prepared, def, name) => {
+      if (!def) return false;
+      const key = `${prepared.file}:${def.start}`;
+      if (!fnParamCache.has(key)) {
+        const from = prepared.starts[def.start - 1] ?? 0;
+        const brace = prepared.plain.indexOf('{', from);
+        fnParamCache.set(key, brace > from ? prepared.plain.slice(from, brace) : '');
+      }
+      const sig = fnParamCache.get(key);
+      return Boolean(sig) && new RegExp(`\\b${name}\\b`).test(sig);
+    };
+    for (const file of owned) {
+      if (!C_SOURCE.test(file) && !C_HEADER.test(file)) continue;
+      const prepared = source(file);
+      if (!prepared) continue;
+      const { plain, starts } = prepared;
+      for (const match of plain.matchAll(extPattern)) {
+        const name = match[1];
+        const previous = plain.slice(Math.max(0, match.index - 8), match.index);
+        if (/(?:\.|->)\s*$/.test(previous)) continue;
+        const line = lineOf(starts, match.index);
+        if (prepared.guards[line - 1]?.dead) continue;
+        const lineText = plain.slice(starts[line - 1], starts[line] ?? plain.length);
+        if (/\bextern\b/.test(lineText)) continue;
+        const def = enclosing(file, line);
+        if (!def && C_HEADER.test(file)) continue;
+        if (isFnParam(prepared, def, name)) continue;
+        const target = externalCandidates.get(name);
+        const key = `${name}|${target.file}`;
+        if (!externalGlobalsMap.has(key))
+          externalGlobalsMap.set(key, {
+            name,
+            file: target.file,
+            line: target.line,
+            owner: owner(target.file),
+            module: moduleOf.get(target.file),
+            sites: [],
+          });
+        const entry = externalGlobalsMap.get(key);
+        const kind = accessKind(plain, match.index, name, target.array, target.isConst);
+        if (!entry.sites.some((site) => site.file === file && site.line === line && site.kind === kind))
+          entry.sites.push({ file, line, function: def?.name, kind });
+      }
+    }
+  }
+  const externalGlobals = [...externalGlobalsMap.values()]
+    .map((item) => ({
+      ...item,
+      sites: item.sites.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line),
+    }))
+    .sort((a, b) => {
+      const score = (entry) => entry.sites.filter((site) => site.kind !== 'read').length * 1000 + entry.sites.length;
+      return score(b) - score(a) || a.name.localeCompare(b.name);
+    });
+
+  // X-Macro tables owned by or expanded in this module.
+  const xmacros = (model.xmacroTables || []).filter(
+    (item) => ownedSet.has(item.file) || (item.sites || []).some((site) => ownedSet.has(site.file))
+  );
+
+  // Storage & address macros / IDs used or defined by the module, with all active #if definitions.
   const addressUses = new Map();
+  const addAddressToken = (name, site, isDefine) => {
+    if (!addressUses.has(name)) addressUses.set(name, { sites: [], definedInOwned: false });
+    const record = addressUses.get(name);
+    if (isDefine) {
+      record.definedInOwned = true;
+      return;
+    }
+    if (site && !record.sites.some((item) => item.file === site.file && item.line === site.line))
+      record.sites.push(site);
+  };
   for (const file of owned) {
     const prepared = source(file);
     if (!prepared) continue;
-    for (const match of prepared.code.matchAll(ADDRESS_MACRO)) {
-      const line = lineOf(prepared.starts, match.index);
-      if (prepared.guards[line - 1]?.dead) continue;
-      const lineText = prepared.code.slice(prepared.starts[line - 1], prepared.starts[line] ?? prepared.code.length);
-      if (new RegExp(`^\\s*#\\s*define\\s+${match[0]}\\b`).test(lineText)) continue;
-      if (!addressUses.has(match[0])) addressUses.set(match[0], []);
-      const sites = addressUses.get(match[0]);
-      if (!sites.some((site) => site.file === file && site.line === line)) sites.push({ file, line });
+    for (const tokenPattern of [ADDRESS_MACRO, STORAGE_ID]) {
+      for (const match of prepared.code.matchAll(tokenPattern)) {
+        const line = lineOf(prepared.starts, match.index);
+        if (prepared.guards[line - 1]?.dead) continue;
+        const lineText = prepared.code.slice(prepared.starts[line - 1], prepared.starts[line] ?? prepared.code.length);
+        if (new RegExp(`^\\s*#\\s*define\\s+${match[0]}\\b`).test(lineText)) {
+          addAddressToken(match[0], null, true);
+          continue;
+        }
+        addAddressToken(match[0], { file, line }, false);
+      }
     }
   }
   const functionNames = new Set(functions.map(([name]) => name).filter((name) => typeof name === 'string'));
   const addressCandidates = [...addressUses]
-    .map(([name, sites]) => ({ name, sites }))
+    .map(([name, info]) => ({
+      name,
+      sites: info.sites,
+      definedInOwned: info.definedInOwned,
+      definitions: [],
+      enumDef: undefined,
+    }))
     .sort((a, b) => b.sites.length - a.sites.length || a.name.localeCompare(b.name))
-    .slice(0, LIMITS.addresses * 3);
+    .slice(0, LIMITS.addresses * 4);
   if (addressCandidates.length) {
     const wanted = new Map(addressCandidates.map((item) => [item.name, item]));
     const define = new RegExp(`^[ \\t]*#[ \\t]*define[ \\t]+(${[...wanted.keys()].join('|')})\\b(.*)$`, 'gm');
     // The module's own files first, then the rest of the project.
-    for (const file of [...owned, ...indexed.filter((item) => !ownedSet.has(item))]) {
-      if ([...wanted.values()].every((item) => item.definition)) break;
+    const searchOrder = [...owned, ...indexed.filter((item) => !ownedSet.has(item))];
+    for (const file of searchOrder) {
       const prepared = source(file);
       if (!prepared) continue;
       for (const match of prepared.code.matchAll(define)) {
         const item = wanted.get(match[1]);
-        if (item.definition) continue;
         const line = lineOf(prepared.starts, match.index);
         if (prepared.guards[line - 1]?.dead) continue;
+        if (item.definitions.some((known) => known.file === file && known.line === line)) continue;
         const raw = macroLine(prepared, line);
         // A function-like macro keeps its parameters with its name: NVM_ADDR(block) = (block).
         const parts = /^\s*#\s*define\s+\w+(\([^)]*\))?(.*)$/.exec(raw) || [];
-        item.definition = { file, line, params: parts[1] || '', value: collapse(parts[2] || '').slice(0, 120) };
+        item.definitions.push({
+          file,
+          line,
+          params: parts[1] || '',
+          value: collapse(parts[2] || '').slice(0, 120),
+          conditions: prepared.guards[line - 1]?.conditions || [],
+        });
+      }
+    }
+    // For storage IDs defined via enum or X-Macro (not #define), locate their header definition.
+    const unresolved = addressCandidates.filter((item) => !item.definitions.length && !functionNames.has(item.name));
+    if (unresolved.length) {
+      const enumMap = new Map(unresolved.map((item) => [item.name, item]));
+      const enumPattern = new RegExp(`\\b(${[...enumMap.keys()].join('|')})\\b`, 'g');
+      const headerOrder = searchOrder.filter((file) => C_HEADER.test(file) || ownedSet.has(file));
+      for (const file of headerOrder) {
+        if ([...enumMap.values()].every((item) => item.enumDef)) break;
+        const prepared = source(file);
+        if (!prepared) continue;
+        for (const match of prepared.plain.matchAll(enumPattern)) {
+          const item = enumMap.get(match[1]);
+          if (!item || item.enumDef) continue;
+          const line = lineOf(prepared.starts, match.index);
+          if (prepared.guards[line - 1]?.dead) continue;
+          const lineText = prepared.plain.slice(
+            prepared.starts[line - 1],
+            prepared.starts[line] ?? prepared.plain.length
+          );
+          // Match enumerator declarations (`NAME = ...`, `NAME,`) or X-Macro table rows (`ENTRY(NAME, ...)`).
+          const isEnumOrXMacro =
+            new RegExp(`^\\s*${match[1]}\\s*(?:=|,|$)`).test(lineText) ||
+            new RegExp(`\\b[A-Z][A-Z0-9_]*\\s*\\(\\s*${match[1]}\\b`).test(lineText);
+          if (isEnumOrXMacro) {
+            item.enumDef = { file, line, conditions: prepared.guards[line - 1]?.conditions || [] };
+          }
+        }
       }
     }
   }
-  // Uppercase functions such as LOG_ADDR(id) match ADDRESS_MACRO; keep them only when #defined.
-  const addresses = addressCandidates
-    .filter((item) => item.definition || !functionNames.has(item.name))
-    .slice(0, LIMITS.addresses);
+  // Uppercase functions such as LOG_ADDR(id) match ADDRESS_MACRO; keep them only when #defined or enum-defined.
+  const allAddresses = addressCandidates
+    .filter((item) => item.definitions.length || item.enumDef || !functionNames.has(item.name))
+    .map((item) => ({ ...item, definition: item.definitions[0] }));
 
-  // Build switches.
+  // Build switches and their active #define values in project headers.
   const switches = new Map();
   for (const file of owned) {
     const prepared = source(file);
@@ -912,6 +1431,34 @@ function collect(input) {
         if (NOT_SWITCHES.has(name) || /_H_*$/.test(name)) continue;
         switches.set(name, (switches.get(name) || 0) + 1);
       }
+    }
+  }
+  const sortedSwitches = [...switches].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const switchDefs = new Map();
+  if (sortedSwitches.length) {
+    if (!cache.headerDefines) {
+      cache.headerDefines = new Map();
+      const headerFiles = indexed
+        .filter((file) => C_HEADER.test(file) && !foreign(file))
+        .sort((a, b) => Number(CONFIG_HEADER_NAME.test(b)) - Number(CONFIG_HEADER_NAME.test(a)) || a.localeCompare(b));
+      for (const file of headerFiles) {
+        const prepared = source(file);
+        if (!prepared) continue;
+        for (const match of prepared.code.matchAll(/^[ \t]*#[ \t]*define[ \t]+([A-Za-z_]\w*)\b(.*)$/gm)) {
+          const name = match[1];
+          if (NOT_SWITCHES.has(name) || /_H_*$/.test(name)) continue;
+          const line = lineOf(prepared.starts, match.index);
+          if (prepared.guards[line - 1]?.dead) continue;
+          const value = collapse(match[2] || '').slice(0, 40) || 'defined';
+          if (!cache.headerDefines.has(name)) cache.headerDefines.set(name, []);
+          const list = cache.headerDefines.get(name);
+          if (!list.some((known) => known.file === file && known.line === line)) list.push({ file, line, value });
+        }
+      }
+    }
+    for (const [name] of sortedSwitches.slice(0, LIMITS.switches)) {
+      const defs = cache.headerDefines.get(name);
+      if (defs?.length) switchDefs.set(name, defs);
     }
   }
 
@@ -928,16 +1475,25 @@ function collect(input) {
   return {
     owned,
     unmatched,
+    unindexedFiles,
     driftFiles,
     fileStates,
     tasks,
     entries,
     structs,
+    vectorEntries,
+    timers,
+    isrs,
+    internalCalls,
     provides,
     uses,
     globals,
-    addresses,
-    switches: [...switches].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])),
+    externalGlobals,
+    types: { structs: typeStructs, enums: typeEnums, headerInlines },
+    xmacros,
+    addresses: allAddresses,
+    switches: sortedSwitches,
+    switchDefs,
     missingFunctions,
     expertNames: new Map(experts.map((item) => [item.id, item.name])),
   };
@@ -948,6 +1504,22 @@ function ownerLabel(owner, data, t, module) {
   if (owner === 'shared') return t.ownerShared;
   if (owner === undefined) return module ? `${module} (${t.ownerUnowned})` : t.ownerUnowned;
   return data.expertNames.get(owner) || owner;
+}
+
+/** Pick up to `max` callers while guaranteeing at least one call site per distinct expert owner. */
+function selectCallers(callers, max) {
+  if (callers.length <= max) return callers;
+  const picked = new Set();
+  const seenOwners = new Set();
+  for (let index = 0; index < callers.length && picked.size < max; index++) {
+    const item = callers[index];
+    if (item.owner !== undefined && item.owner !== 'shared' && !seenOwners.has(item.owner)) {
+      seenOwners.add(item.owner);
+      picked.add(index);
+    }
+  }
+  for (let index = 0; index < callers.length && picked.size < max; index++) picked.add(index);
+  return [...picked].sort((a, b) => a - b).map((index) => callers[index]);
 }
 
 function sitesText(list, max, t) {
@@ -994,13 +1566,25 @@ function renderBrief(data, labels, { date, mode }) {
     out.push(`- ${item.file}: ${notes.join('; ')}`);
   }
   for (const entry of data.unmatched) out.push(`- ${fill(t.entryNoFile, { entry: code(entry) })}`);
+  if (data.unindexedFiles?.length && t.unindexedFiles)
+    out.push(`- ${fill(t.unindexedFiles, { files: data.unindexedFiles.map(code).join(', ') })}`);
   if (data.driftFiles?.length && t.driftFiles)
     out.push(`- ${fill(t.driftFiles, { files: data.driftFiles.map(code).join(', ') })}`);
   out.push('');
 
+  const internalSuffix = (fnNames) => {
+    if (!data.internalCalls || !t.entryInternalCalls) return '';
+    const callees = [...new Set(fnNames.flatMap((name) => data.internalCalls.get(name) || []))];
+    if (!callees.length) return '';
+    return `; ${fill(t.entryInternalCalls, {
+      callees: callees.slice(0, LIMITS.internalCallees).map(code).join(', ') + more(callees, LIMITS.internalCallees, t),
+    })}`;
+  };
+
   out.push(`## ${t.briefEntries}`, '');
   const scheduled = [];
-  for (const task of data.tasks) scheduled.push(`- ${fill(t.taskLine, { name: code(task.name), site: task.site })}`);
+  for (const task of data.tasks)
+    scheduled.push(`- ${fill(t.taskLine, { name: code(task.name), site: task.site })}${internalSuffix([task.name])}`);
   for (const entry of data.entries) {
     const parts = [
       fill(t.entryLine, {
@@ -1016,7 +1600,8 @@ function renderBrief(data, labels, { date, mode }) {
           ? fill(t.entryRunByTask, { dispatcher: code(entry.dispatcher), task: code(entry.task) })
           : fill(t.entryRunBy, { dispatcher: code(entry.dispatcher) })
       );
-    scheduled.push(`- ${parts.join('; ')} (${entry.site})`);
+    const note = entry.comment ? ` — ${collapse(entry.comment)}` : '';
+    scheduled.push(`- ${parts.join('; ')} (${entry.site})${note}${internalSuffix(entry.names)}`);
   }
   for (const item of data.structs)
     scheduled.push(
@@ -1039,18 +1624,34 @@ function renderBrief(data, labels, { date, mode }) {
                   .join(', ') + more(item.calls, LIMITS.sites, t),
             })}`
           : ''
-      }`
+      }${internalSuffix(item.functions)}`
     );
+  for (const vec of data.vectorEntries || []) {
+    const items =
+      vec.items
+        .slice(0, LIMITS.structTables * 3)
+        .map((entry) =>
+          entry.macro !== entry.target ? `${code(entry.macro)} → ${code(entry.target)}` : code(entry.target)
+        )
+        .join(', ') + more(vec.items, LIMITS.structTables * 3, t);
+    scheduled.push(`- ${fill(t.vectorEntryLine, { base: code(vec.base), header: vec.header, items })}`);
+  }
+  for (const timer of data.timers || [])
+    scheduled.push(
+      `- ${fill(t.timerLine, { name: code(timer.name), site: timer.site })}${internalSuffix([timer.name])}`
+    );
+  for (const isr of data.isrs || [])
+    scheduled.push(`- ${fill(t.isrLine, { name: code(isr.name), site: isr.site })}${internalSuffix([isr.name])}`);
   out.push(...(scheduled.length ? scheduled : [t.entriesNone]), '');
 
   out.push(`## ${t.briefProvides}`, '');
   if (!data.provides.length) out.push(t.providesNone);
   for (const item of data.provides.slice(0, LIMITS.provides)) {
-    const callers = item.callers
-      .slice(0, LIMITS.callers)
+    const shownCallers = selectCallers(item.callers, LIMITS.callers);
+    const callers = shownCallers
       .map((caller) => `${code(caller.name)} (${caller.site}, ${ownerLabel(caller.owner, data, t, caller.module)})`)
       .join(', ');
-    out.push(`- ${code(item.name)} (${item.site}) ← ${callers}${more(item.callers, LIMITS.callers, t)}`);
+    out.push(`- ${code(item.name)} (${item.site}) ← ${callers}${more(item.callers, shownCallers.length, t)}`);
   }
   if (data.provides.length > LIMITS.provides) {
     // Name the rest: an expert tracing a path must still see that a function of theirs is called from outside.
@@ -1068,13 +1669,23 @@ function renderBrief(data, labels, { date, mode }) {
   out.push(`## ${t.briefUses}`, '');
   if (!data.uses.length) out.push(t.none);
   let shown = 0;
+  const hiddenUseGroups = [];
   for (const group of data.uses) {
-    if (shown >= LIMITS.uses) break;
+    if (shown >= LIMITS.uses) {
+      hiddenUseGroups.push(group);
+      continue;
+    }
     const list = group.functions.slice(0, LIMITS.uses - shown);
     shown += list.length;
     out.push(
       `- ${ownerLabel(group.owner, data, t, group.module)}: ${list.map((item) => `${code(item.name)} (${item.file})`).join(', ')}${more(group.functions, list.length, t)}`
     );
+  }
+  if (hiddenUseGroups.length && t.moreUses) {
+    const groups = hiddenUseGroups
+      .map((group) => `${ownerLabel(group.owner, data, t, group.module)} (${group.functions.length})`)
+      .join(', ');
+    out.push(`- ${fill(t.moreUses, { count: hiddenUseGroups.length, groups })}`);
   }
   out.push('');
 
@@ -1099,7 +1710,16 @@ function renderBrief(data, labels, { date, mode }) {
       `- ${code(item.name)} (${at(item.file, item.line)})${tags.length ? ` [${tags.join('; ')}]` : ''}: ${kinds.length ? kinds.join('; ') : t.globalUnused}`
     );
   }
-  if (exported.length > LIMITS.globals) out.push(`- ${fill(t.more, { count: exported.length - LIMITS.globals })}`);
+  if (exported.length > LIMITS.globals) {
+    const rest = exported.slice(LIMITS.globals);
+    const restNames = rest
+      .slice(0, LIMITS.globalNames)
+      .map((item) => code(item.name))
+      .join(', ');
+    out.push(
+      `- ${fill(t.moreGlobals, { count: rest.length, names: restNames + (rest.length > LIMITS.globalNames ? ', …' : '') })}`
+    );
+  }
   const names = (list) =>
     list
       .slice(0, LIMITS.statics)
@@ -1109,32 +1729,136 @@ function renderBrief(data, labels, { date, mode }) {
   if (statics.length) out.push(`- ${fill(t.globalStatics, { names: names(statics) })}`);
   out.push('');
 
+  if (data.externalGlobals?.length && t.briefExternalGlobals) {
+    out.push(`## ${t.briefExternalGlobals}`, '', t.externalGlobalsIntro, '');
+    for (const item of data.externalGlobals.slice(0, LIMITS.externalGlobals)) {
+      const kinds = ['write', 'address', 'read']
+        .map((kind) => [kind, item.sites.filter((site) => site.kind === kind)])
+        .filter(([, list]) => list.length)
+        .map(([kind, list]) => fill(t[`global_${kind}`], { sites: sitesText(list, LIMITS.sites, t) }));
+      out.push(
+        `- ${code(item.name)} (${at(item.file, item.line)}, ${ownerLabel(item.owner, data, t, item.module)}): ${kinds.join('; ')}`
+      );
+    }
+    if (data.externalGlobals.length > LIMITS.externalGlobals && t.moreExternalGlobals) {
+      const rest = data.externalGlobals.slice(LIMITS.externalGlobals);
+      const restNames = rest
+        .slice(0, LIMITS.externalGlobalNames)
+        .map((item) => code(item.name))
+        .join(', ');
+      out.push(
+        `- ${fill(t.moreExternalGlobals, { count: rest.length, names: restNames + (rest.length > LIMITS.externalGlobalNames ? ', …' : '') })}`
+      );
+    }
+    out.push('');
+  }
+
+  const hasTypes =
+    data.types?.structs.length || data.types?.enums.length || data.types?.headerInlines.length || data.xmacros?.length;
+  if (hasTypes && t.briefTypes) {
+    out.push(`## ${t.briefTypes}`, '');
+    if (data.types.structs.length) {
+      const items =
+        data.types.structs
+          .slice(0, LIMITS.types)
+          .map((item) => `${code(item.name)} (${at(item.file, item.line)})`)
+          .join(', ') + more(data.types.structs, LIMITS.types, t);
+      out.push(`- ${fill(t.typesStructs, { items })}`);
+    }
+    if (data.types.enums.length) {
+      const items =
+        data.types.enums
+          .slice(0, LIMITS.types)
+          .map((item) => `${code(item.name)} (${at(item.file, item.line)})`)
+          .join(', ') + more(data.types.enums, LIMITS.types, t);
+      out.push(`- ${fill(t.typesEnums, { items })}`);
+    }
+    if (data.types.headerInlines.length) {
+      const items =
+        data.types.headerInlines
+          .slice(0, LIMITS.types)
+          .map((item) => `${code(item.name)} (${at(item.file, item.line)})`)
+          .join(', ') + more(data.types.headerInlines, LIMITS.types, t);
+      out.push(`- ${fill(t.typesHeaderInlines, { items })}`);
+    }
+    for (const xm of data.xmacros || []) {
+      const sites = (xm.sites || [])
+        .slice(0, LIMITS.sites)
+        .map((site) => at(site.file, site.line))
+        .join(', ');
+      out.push(
+        `- ${fill(t.xmacroLine, {
+          file: xm.file,
+          macro: code(xm.macro),
+          count: xm.count,
+          sites: sites + more(xm.sites || [], LIMITS.sites, t),
+        })}`
+      );
+    }
+    out.push('');
+  }
+
   out.push(`## ${t.briefAddresses}`, '');
   if (!data.addresses.length) out.push(t.none);
-  for (const item of data.addresses) {
-    const definition = item.definition
-      ? fill(t.addressDefined, {
-          value: code(item.definition.value || '—'),
-          site: at(item.definition.file, item.definition.line),
+  for (const item of data.addresses.slice(0, LIMITS.addresses)) {
+    const defs = item.definitions?.length ? item.definitions : item.definition ? [item.definition] : [];
+    const formatDef = (def) => {
+      const base = fill(t.addressDefined, {
+        value: code(def.value || '—'),
+        site: at(def.file, def.line),
+      });
+      return def.conditions?.length
+        ? `${base} [${fill(t.onlyWhen, { condition: code(def.conditions.join(' && ')) })}]`
+        : base;
+    };
+    const definition = defs.length
+      ? defs.slice(0, 3).map(formatDef).join(' / ') + more(defs, 3, t)
+      : item.enumDef
+        ? fill(t.addressEnumDefined, { site: at(item.enumDef.file, item.enumDef.line) }) +
+          (item.enumDef.conditions?.length
+            ? ` [${fill(t.onlyWhen, { condition: code(item.enumDef.conditions.join(' && ')) })}]`
+            : '')
+        : t.addressUndefined;
+    const usage = item.sites.length
+      ? fill(t.addressUsed, {
+          sites:
+            item.sites
+              .slice(0, LIMITS.addressSites)
+              .map((site) => at(site.file, site.line))
+              .join(', ') + more(item.sites, LIMITS.addressSites, t),
         })
-      : t.addressUndefined;
-    const sites = item.sites
-      .slice(0, LIMITS.addressSites)
-      .map((site) => at(site.file, site.line))
+      : t.addressDefinedOnly;
+    out.push(`- ${code(item.name + (defs[0]?.params ?? ''))}: ${definition}; ${usage}`);
+  }
+  if (data.addresses.length > LIMITS.addresses && t.moreAddresses) {
+    const rest = data.addresses.slice(LIMITS.addresses);
+    const restNames = rest
+      .slice(0, LIMITS.addressNames)
+      .map((item) => code(item.name))
       .join(', ');
     out.push(
-      `- ${code(item.name + (item.definition?.params ?? ''))}: ${definition}; ${fill(t.addressUsed, { sites: sites + more(item.sites, LIMITS.addressSites, t) })}`
+      `- ${fill(t.moreAddresses, { count: rest.length, names: restNames + (rest.length > LIMITS.addressNames ? ', …' : '') })}`
     );
   }
   out.push('');
 
   out.push(`## ${t.briefSwitches}`, '');
+  const formatSwitch = ([name, count]) => {
+    const defs = data.switchDefs?.get(name);
+    if (!defs?.length) return `${code(name)} ×${count}`;
+    const note =
+      defs.length === 1
+        ? fill(t.switchActive, { value: code(defs[0].value), site: at(defs[0].file, defs[0].line) })
+        : fill(t.switchMultiDef, {
+            count: defs.length,
+            value: code(defs[0].value),
+            site: at(defs[0].file, defs[0].line),
+          });
+    return `${code(name)} ×${count} (${note})`;
+  };
   out.push(
     data.switches.length
-      ? data.switches
-          .slice(0, LIMITS.switches)
-          .map(([name, count]) => `${code(name)} ×${count}`)
-          .join(', ') + more(data.switches, LIMITS.switches, t)
+      ? data.switches.slice(0, LIMITS.switches).map(formatSwitch).join(', ') + more(data.switches, LIMITS.switches, t)
       : t.none,
     ''
   );
@@ -1178,30 +1902,43 @@ function checkLines(data, t) {
       })}`
     );
   for (const entry of data.unmatched) lines.push(`- ${fill(t.entryNoFile, { entry: code(entry) })}`);
+  if (data.unindexedFiles?.length && t.unindexedFiles)
+    lines.push(`- ${fill(t.unindexedFiles, { files: data.unindexedFiles.map(code).join(', ') })}`);
   if (data.driftFiles?.length && t.driftFiles)
     lines.push(`- ${fill(t.driftFiles, { files: data.driftFiles.map(code).join(', ') })}`);
   return lines;
 }
 
 /** Structural fingerprint of the expert's boundaries and schedule, so architecture shifts mark ready cards stale. */
-const DRIFT_SIGNATURE_VERSION = 'v2';
+const DRIFT_SIGNATURE_VERSION = 'v3';
 const sortedUnique = (items) => [...new Set(items)].sort();
 
 /**
  * What makes a ready card stale besides the expert's own files: paths that match nothing,
- * unowned files in the module, and where the module is scheduled. Names only: line numbers
- * and table positions move whenever other files or other modules' entries change.
+ * unowned or unindexed files in the module, and where the module is scheduled (tasks,
+ * dispatch tables, struct function tables and inter-image vector APIs). Names only: line
+ * numbers and table positions move whenever other files or other modules' entries change.
  */
 function driftSignature(data) {
   return [
     DRIFT_SIGNATURE_VERSION,
-    `u:${sortedUnique(data.unmatched).join(',')}`,
+    `u:${sortedUnique(data.unmatched || []).join(',')}`,
     `d:${sortedUnique(data.driftFiles || []).join(',')}`,
-    `t:${sortedUnique(data.tasks.map((task) => task.name)).join(',')}`,
+    `x:${sortedUnique(data.unindexedFiles || []).join(',')}`,
+    `t:${sortedUnique((data.tasks || []).map((task) => task.name)).join(',')}`,
     `e:${sortedUnique(
-      data.entries.map(
+      (data.entries || []).map(
         (entry) =>
           `${entry.table}:${entry.names.join(',')}${entry.conditions.length ? `?${entry.conditions.join('&&')}` : ''}`
+      )
+    ).join(',')}`,
+    `s:${sortedUnique(
+      (data.structs || []).map((item) => `${item.type}.${item.field}:${sortedUnique(item.functions || []).join(',')}`)
+    ).join(',')}`,
+    `v:${sortedUnique(
+      (data.vectorEntries || []).map(
+        (vec) =>
+          `${vec.base}:${sortedUnique((vec.items || []).map((entry) => `${entry.macro}->${entry.target}`)).join(',')}`
       )
     ).join(',')}`,
   ].join('\n');
@@ -1215,6 +1952,11 @@ const isCurrentDriftSignature = (signature) =>
 function digest(data) {
   const missingGlobals = data.globals.filter((item) => !item.inGraph).length;
   const drift = data.driftFiles?.length || 0;
+  const unindexed = data.unindexedFiles?.length || 0;
+  const writesExternal = (data.externalGlobals || [])
+    .filter((item) => item.sites.some((site) => site.kind !== 'read'))
+    .slice(0, LIMITS.digestGlobals)
+    .map((item) => item.name);
   return {
     files: data.owned.length,
     entries: [
@@ -1227,6 +1969,15 @@ function digest(data) {
         (item) =>
           `${item.tables[0].name}${item.tables.length > 1 ? ` (+${item.tables.length - 1})` : ''}.${item.field} = ${item.functions.join(', ')}`
       ),
+      ...(data.vectorEntries || []).map(
+        (vec) =>
+          `vector ${vec.base}: ${vec.items
+            .slice(0, 4)
+            .map((item) => item.macro)
+            .join(', ')}`
+      ),
+      ...(data.timers || []).map((timer) => `timer ${timer.name}`),
+      ...(data.isrs || []).map((isr) => `isr ${isr.name}`),
     ].slice(0, LIMITS.digestEntries),
     provides: data.provides.slice(0, LIMITS.digestProvides).map((item) => ({
       name: item.name,
@@ -1236,6 +1987,7 @@ function digest(data) {
       .filter((item) => item.users.some((user) => user.kind !== 'read'))
       .slice(0, LIMITS.digestGlobals)
       .map((item) => item.name),
+    ...(writesExternal.length ? { writesExternal } : {}),
     issues: {
       partial: data.fileStates.filter((item) => item.status === 'partial').length,
       unusable: data.fileStates.filter((item) => item.status === 'unusable').length,
@@ -1243,6 +1995,7 @@ function digest(data) {
       missingFunctions: data.missingFunctions.length,
       missingGlobals,
       unmatched: data.unmatched.length,
+      ...(unindexed ? { unindexed } : {}),
       ...(drift ? { drift } : {}),
     },
   };
@@ -1259,6 +2012,50 @@ function ownerLabelPlain(owner, data, module) {
 // ---------------------------------------------------------------------------
 
 const CARD_HEADER = (id, language) => `<!-- woody:module id=${id} version=1 language=${language} -->`;
+const USER_CORRECTIONS_HEADING =
+  /^(#{2,3})\s+(?:corrections from the user|user corrections|用户更正)(?=$|[\s:：(（—-])/i;
+
+/** Remove the user-owned corrections section so user notes never count as an expert review. */
+function stripUserCorrections(lines) {
+  const kept = [];
+  let skipLevel = 0;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const heading = /^(#{1,6})\s+/.exec(trimmed);
+    if (skipLevel > 0) {
+      if (heading && heading[1].length <= skipLevel) {
+        skipLevel = 0;
+      } else {
+        continue;
+      }
+    }
+    const corrections = USER_CORRECTIONS_HEADING.exec(trimmed);
+    if (corrections) {
+      skipLevel = corrections[1].length;
+      continue;
+    }
+    kept.push(line);
+  }
+  return kept;
+}
+
+/** Lines outside the woody:generated block, minus the leading H1 title and user corrections. */
+function ownLines(text, expert) {
+  if (text === undefined) return [];
+  const start = text.indexOf(MARK.start);
+  const end = text.indexOf(MARK.end, start);
+  let lines;
+  if (start < 0 || end < 0) {
+    lines = text.split(/\r?\n/).filter((line) => line.trim() !== `# ${expert.name}`);
+  } else {
+    const beforeLines = text.slice(0, start).split(/\r?\n/);
+    // Ignore the card's leading H1 title even if the expert was later renamed.
+    const firstContent = beforeLines.findIndex((line) => line.trim().length > 0);
+    if (firstContent >= 0 && /^#\s+\S/.test(beforeLines[firstContent].trim())) beforeLines.splice(firstContent, 1);
+    lines = [...beforeLines, ...text.slice(end + MARK.end.length).split(/\r?\n/)];
+  }
+  return stripUserCorrections(lines);
+}
 
 /**
  * The whole card. The intro sits inside the generated block, so a new card holds nothing
@@ -1283,26 +2080,33 @@ function mergeCard(existing, generated, expert, labels, language) {
 }
 
 /**
- * What the expert and the user wrote: everything outside the markers but the title Woody
- * gives a new card, with whitespace collapsed. Empty while nobody has written anything.
+ * What the expert wrote: everything outside the markers except the leading H1 title and the
+ * user's corrections section, with whitespace collapsed. Empty while the expert has written
+ * nothing (even if the user left notes in "Corrections from the user").
  */
 function ownPart(text, expert) {
-  if (text === undefined) return '';
-  const start = text.indexOf(MARK.start);
-  const end = text.indexOf(MARK.end, start);
-  if (start < 0 || end < 0) {
-    return text
-      .split(/\r?\n/)
-      .filter((line) => line.trim() !== `# ${expert.name}`)
-      .join(' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
-  const beforeLines = text.slice(0, start).split(/\r?\n/);
-  // Ignore the card's leading H1 title even if the expert was later renamed.
-  const firstContent = beforeLines.findIndex((line) => line.trim().length > 0);
-  if (firstContent >= 0 && /^#\s+\S/.test(beforeLines[firstContent].trim())) beforeLines.splice(firstContent, 1);
-  return [...beforeLines, ...text.slice(end + MARK.end.length).split(/\r?\n/)].join(' ').replace(/\s+/g, ' ').trim();
+  return ownLines(text, expert).join(' ').replace(/\s+/g, ' ').trim();
+}
+
+const REQUIRED_CARD_SECTIONS = [
+  ['files', /file|文件/i],
+  ['entry', /entry|schedul|lifecycle|入口|调度|生命周期/i],
+  ['flow', /flow|流程/i],
+  ['parameters', /param|storage|default|nvm|eeprom|参数|存储|默认/i],
+  ['dataSources', /data\s*source|dependenc|数据来源|外部依赖/i],
+  ['outputs', /output|interface|api|输出|接口/i],
+  ['switches', /switch|variant|build|开关|宏|编译/i],
+  ['gaps', /gap|index\s*check|盲区|索引核对|核对/i],
+];
+
+/** Key module-card sections missing from the expert-authored portion of a card. */
+function missingCardSections(text, expert) {
+  const headings = ownLines(text, expert)
+    .map((line) => /^#{2,3}\s+(.+)$/.exec(line.trim())?.[1])
+    .filter(Boolean);
+  return REQUIRED_CARD_SECTIONS.filter(([, pattern]) => !headings.some((title) => pattern.test(title))).map(
+    ([id]) => id
+  );
 }
 
 /** Language of an existing card, from its generated header. */
@@ -1334,6 +2138,7 @@ module.exports = {
   isCurrentDriftSignature,
   mergeCard,
   ownPart,
+  missingCardSections,
   cardLanguage,
   cardState,
   ownerOf,
@@ -1341,6 +2146,7 @@ module.exports = {
   sourceCache,
   globalsOf,
   definitionsOf,
+  typesOf,
   fileTablesOf,
   accessKind,
 };

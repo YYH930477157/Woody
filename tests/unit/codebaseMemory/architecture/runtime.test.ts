@@ -618,4 +618,131 @@ describe('module expert cards in the project runtime', () => {
     const main = await service.callTool(repo, 'index_status', {});
     expect(JSON.stringify(main)).not.toContain('you work in the Git worktree');
   });
+
+  it('batches check_index_coverage within 128 paths and passes path_limit so files past #20 keep coverage', async () => {
+    // 135 files owned by one expert: exceeds both default path_limit (20) and maxItems (128).
+    const allFiles = ['app/task.c'];
+    const allFns: Array<[string, string, string, string]> = [
+      ['vMainTask', 'app/task.c', '6', '9'],
+      ['appInit', 'app/task.c', '10', '13'],
+    ];
+    for (let i = 0; i < 135; i++) {
+      const file = `app/mod/f_${String(i).padStart(3, '0')}.c`;
+      write(file, `void FN_${i}(void)\n{\n}\n`);
+      allFiles.push(file);
+      allFns.push([`FN_${i}`, file, '1', '3']);
+    }
+    write(
+      'graph.json',
+      JSON.stringify({ functions: allFns, callers: [['appInit', 'app/task.c', 'main']], files: allFiles })
+    );
+    fs.writeFileSync(
+      path.join(root, 'fixture.cjs'),
+      `
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+const tool = args[args.indexOf('--json') + 1];
+let result = { nodes: 1 };
+if (tool === 'query_graph') {
+  const graph = JSON.parse(fs.readFileSync('graph.json', 'utf8'));
+  const query = JSON.parse(args[args.length - 1]).query;
+  const rows = query.includes('a.start_line') ? [] : query.includes('CALLS') ? graph.callers : query.includes('Variable') ? [] : query.includes('(f:File)') ? graph.files.map((f) => [f]) : graph.functions;
+  result = { rows, has_more: false };
+}
+if (tool === 'check_index_coverage') {
+  const payload = JSON.parse(args[args.length - 1]);
+  const limit = payload.path_limit ?? 20;
+  const log = fs.existsSync('coverage-calls.json') ? JSON.parse(fs.readFileSync('coverage-calls.json', 'utf8')) : [];
+  log.push({ count: payload.paths.length, path_limit: payload.path_limit });
+  fs.writeFileSync('coverage-calls.json', JSON.stringify(log));
+  result = {
+    paths: payload.paths.slice(0, limit).map((p) => ({
+      path: p,
+      status: p.endsWith('f_134.c') ? 'unusable' : 'indexed',
+      freshness: 'metadata_match',
+      coverage: [],
+    })),
+  };
+}
+console.log(JSON.stringify({ isError: false, structuredContent: result }));
+`
+    );
+    experts(['app/mod/']);
+    const service = runtime();
+    await service.save(repo, { version: 1, enabled: true, mode: 'full' });
+    await indexed(service, 'en-US');
+
+    const calls = JSON.parse(fs.readFileSync(path.join(repo, 'coverage-calls.json'), 'utf8')) as Array<{
+      count: number;
+      path_limit: number;
+    }>;
+    expect(calls).toEqual([
+      { count: 128, path_limit: 128 },
+      { count: 7, path_limit: 7 },
+    ]);
+    expect(card()).toContain('app/mod/f_134.c: the index could not parse this file');
+  });
+
+  it('keeps a stale card stale when only user corrections change, reports missingSections, and refreshes cross-expert labels on roster changes', async () => {
+    const service = runtime();
+    await service.save(repo, { version: 1, enabled: true, mode: 'full' });
+    await indexed(service, 'en-US');
+    // Partial card reports missingSections and becomes ready.
+    fs.appendFileSync(
+      path.join(repo, '.woody', 'features', 'sensor.md'),
+      '\n## Flow\n\nReads sensor.\n\n## Corrections from the user\n- initial note\n'
+    );
+    let cards = await service.moduleCards(repo, {});
+    expect(cards.experts[0].state).toBe('ready');
+    expect(cards.experts[0].digest?.missingSections).toContain('parameters');
+
+    // Source changes -> stale. Editing only "Corrections from the user" must NOT mark it ready.
+    write('app/sensor.c', 'int sensorLevel;\nvoid SENSOR_Second(void)\n{\n    sensorLevel += 5;\n}\n');
+    expect((await service.moduleCards(repo, {})).experts[0].state).toBe('stale');
+    const updatedUserOnly = card().replace('- initial note', '- updated user note');
+    write('.woody/features/sensor.md', updatedUserOnly);
+    expect((await service.moduleCards(repo, {})).experts[0].state).toBe('stale');
+
+    // Adding a second expert refreshes sensor's cross-expert caller label from unowned to Tick expert.
+    write(
+      '.woody/experts.json',
+      JSON.stringify({
+        version: 1,
+        experts: [
+          { id: 'sensor', name: 'Sensor expert', summary: 'Reads the sensor.', paths: ['app/sensor.c'] },
+          { id: 'tick', name: 'Tick expert', summary: 'Counts ticks.', paths: ['app/tick.c'] },
+        ],
+        shared: ['app/task.c'],
+      })
+    );
+    cards = await service.moduleCards(repo, { refresh: true, ids: [] });
+    expect(cards.experts.find((item) => item.id === 'sensor')?.state).toBe('stale');
+    expect(card()).toContain('Tick expert');
+    expect(card()).not.toContain('tick (unowned)');
+  });
+
+  it('reports unindexed source files on disk under an expert folder in the brief and digest', async () => {
+    write('app/sensor/sensor.c', 'void SENSOR_Second(void)\n{\n}\n');
+    write('app/sensor/skipped_extra.c', 'void SENSOR_Extra(void)\n{\n}\n');
+    write(
+      'graph.json',
+      JSON.stringify({
+        functions: [
+          ['vMainTask', 'app/task.c', '6', '9'],
+          ['appInit', 'app/task.c', '10', '13'],
+          ['SENSOR_Second', 'app/sensor/sensor.c', '1', '3'],
+        ],
+        callers: [['appInit', 'app/task.c', 'main']],
+        files: ['app/task.c', 'app/sensor/sensor.c'],
+      })
+    );
+    experts(['app/sensor/']);
+    const service = runtime();
+    await service.save(repo, { version: 1, enabled: true, mode: 'full' });
+    await indexed(service, 'en-US');
+
+    expect(card()).toContain('app/sensor/skipped_extra.c');
+    const cards = await service.moduleCards(repo, {});
+    expect(cards.experts[0].digest?.issues.unindexed).toBe(1);
+  });
 });

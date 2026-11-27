@@ -6,12 +6,14 @@ import type { ExpertBrief } from './expertRules';
 
 /**
  * The card state and brief digest of every expert, after Woody wrote the briefs that were
- * missing or outdated. Undefined when the project has no usable index: the team then starts
- * without briefs and the experts learn their modules from the source.
+ * missing or outdated. Falls back to `fallback` (last loaded card states) on transient errors
+ * so already-learned experts are not needlessly sent back to onboarding; returns undefined
+ * when the project has no usable index.
  */
 export async function loadExpertBriefs(
   workspace: string,
-  language: string
+  language: string,
+  fallback?: Record<string, ExpertBrief>
 ): Promise<Record<string, ExpertBrief> | undefined> {
   try {
     const cards = await ipcBridge.codebaseMemory.moduleCards.invoke({
@@ -22,7 +24,7 @@ export async function loadExpertBriefs(
     });
     return Object.fromEntries(cards.experts.map((card) => [card.id, { state: card.state, digest: card.digest }]));
   } catch {
-    return undefined;
+    return fallback;
   }
 }
 

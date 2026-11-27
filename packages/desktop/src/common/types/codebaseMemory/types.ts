@@ -86,6 +86,10 @@ export type ModuleCardDigest = {
   provides: Array<{ name: string; callers: string[] }>;
   /** Globals of the module that other files write or take the address of. */
   writtenOutside: string[];
+  /** External globals defined outside the module that this module writes or takes the address of. */
+  writesExternal?: string[];
+  /** Required module-card sections missing from the expert-authored portion of the card. */
+  missingSections?: string[];
   issues: {
     partial: number;
     unusable: number;
@@ -93,6 +97,7 @@ export type ModuleCardDigest = {
     missingFunctions: number;
     missingGlobals: number;
     unmatched: number;
+    unindexed?: number;
     drift?: number;
   };
 };

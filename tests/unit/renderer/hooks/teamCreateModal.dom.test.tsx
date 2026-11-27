@@ -649,6 +649,20 @@ describe('TeamCreateModal', () => {
       expect(roles[1].rules).not.toContain('Module brief from the code index');
       expect(roles[1].rules).toContain('Learning your module.');
     });
+
+    it('falls back to loaded card states when brief refresh fails transiently so ready experts are not re-onboarded', async () => {
+      expertsMocks.cards.mockResolvedValueOnce(cards).mockRejectedValueOnce(new Error('Index lock busy'));
+      await startExpertTeam();
+      await screen.findByTestId('team-expert-card-ui');
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm Create' }));
+      await waitFor(() => expect(sendToAgentMock).toHaveBeenCalledTimes(1));
+      // Only sensor (missing) is onboarded; ui (ready in loaded state) is not sent back to onboarding.
+      expect(sendToAgentMock).toHaveBeenCalledExactlyOnceWith({
+        team_id: 'team-1',
+        slot_id: 'slot-sensor',
+        input: 'team.experts.onboardMessage',
+      });
+    });
   });
 
   it('starts from feature cards, requires every expert to be complete, and saves the list first', async () => {

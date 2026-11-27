@@ -195,4 +195,36 @@ describe('module expert team roles', () => {
     // The verifier gets no brief.
     expect(roles[3].rules).not.toContain('Module brief');
   });
+
+  it('surfaces external global writes, unindexed disk files and incomplete card sections in expert rules', () => {
+    const roles = buildExpertTeamRoles({
+      ...plan,
+      briefs: {
+        sensor: {
+          state: 'ready',
+          digest: {
+            files: 2,
+            entries: [],
+            provides: [],
+            writtenOutside: [],
+            writesExternal: ['g_StatusWord'],
+            missingSections: ['parameters', 'switches'],
+            issues: {
+              partial: 0,
+              unusable: 0,
+              changed: 0,
+              missingFunctions: 0,
+              missingGlobals: 0,
+              unmatched: 0,
+              unindexed: 2,
+            },
+          },
+        },
+      },
+    });
+    expect(roles[1].rules).toContain('- External globals this module writes: g_StatusWord');
+    expect(roles[1].rules).toContain('- Incomplete card sections: parameters, switches.');
+    expect(roles[1].rules).toContain('2 files on disk under your paths are not in the index');
+    expect(roles[1].rules).toContain('Account for every .c and .h file you own');
+  });
 });
